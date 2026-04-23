@@ -53,3 +53,4 @@ server/quantum_ai/uat_results/
 server/quantum_ai/verification_results/
 server/quantum_ai/public/uploads/
 server/quantum_ai/public/videos/
+.github/workflows/
