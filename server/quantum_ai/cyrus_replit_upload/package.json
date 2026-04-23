@@ -1,0 +1,25 @@
+{
+  "name": "cyrus-ai-replit",
+  "version": "3.0.0",
+  "description": "CYRUS AI System with Replit AI Integrations",
+  "main": "simple_flask_server.py",
+  "scripts": {
+    "start": "python simple_flask_server.py",
+    "dev": "python simple_flask_server.py",
+    "deploy": "./deploy_replit.sh"
+  },
+  "keywords": [
+    "ai",
+    "super-intelligence",
+    "replit",
+    "replit-ai",
+    "chatbot",
+    "medical-ai",
+    "robotics"
+  ],
+  "author": "CYRUS Development Team",
+  "license": "MIT",
+  "engines": {
+    "python": "3.12.x"
+  }
+}

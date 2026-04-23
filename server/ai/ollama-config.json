@@ -1,0 +1,13 @@
+{
+  "models": [
+    "llama3.2:3b",
+    "mistral:7b",
+    "qwen2.5:7b",
+    "codellama:7b"
+  ],
+  "endpoints": {
+    "chat": "http://localhost:11434/api/chat",
+    "generate": "http://localhost:11434/api/generate",
+    "embeddings": "http://localhost:11434/api/embeddings"
+  }
+}

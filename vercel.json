@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "dist/server/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "dist/server/index.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "CYRUS_LIVE_PORT": "3105",
+    "PORT": "3105"
+  }
+}

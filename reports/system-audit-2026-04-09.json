@@ -1,0 +1,77 @@
+{
+    "auditDate": "2026-04-09",
+    "workspace": "/Users/cronet/Downloads/cyrus-part2-assets-fullzip",
+    "runtimeHealth": {
+        "status": "healthy",
+        "checks": [
+            {
+                "path": "/health",
+                "statusCode": 200
+            },
+            {
+                "path": "/health/ready",
+                "statusCode": 200
+            },
+            {
+                "path": "/comms",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/cyrus/status",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/cyrus/domains",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/drone/state",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/device/capabilities",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/nav/fix",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/voice/conversations",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/comms/users",
+                "statusCode": 200
+            },
+            {
+                "path": "/api/auth/user",
+                "statusCode": 401,
+                "note": "Expected unauthenticated response"
+            }
+        ],
+        "healthScript": {
+            "command": "npm run health:check http://127.0.0.1:3105",
+            "result": "passed"
+        }
+    },
+    "buildHealth": {
+        "status": "degraded",
+        "typescriptErrorCount": 112,
+        "summary": "Build currently fails due to TypeScript typing/contract issues across multiple subsystems"
+    },
+    "dependencyHealth": {
+        "status": "partiallyVerified",
+        "notes": [
+            "Top-level install resolves",
+            "Extraneous wasm/runtime packages detected before cleanup",
+            "Registry policy may block outdated/audit endpoints"
+        ]
+    },
+    "nextActions": [
+        "Clean extraneous dependencies and verify lockfile health",
+        "Fix TypeScript hotspots starting with routes/signaling/integrations",
+        "Re-run build and iterate until clean",
+        "Re-run runtime smoke and health check"
+    ]
+}

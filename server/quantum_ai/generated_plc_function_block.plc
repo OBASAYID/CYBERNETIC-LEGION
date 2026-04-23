@@ -1,0 +1,26 @@
+// Generated_FBD_Program
+// Generated Function Block Diagram
+// Description: Conveyor belt sequencing logic
+
+// Function Block Network:
+// Input_Start (BOOL) --> AND_Block --> Output_Motor (BOOL)
+// Input_Stop (BOOL) --> AND_Block
+// Emergency_Stop (BOOL) --> NOT_Block --> AND_Block
+
+PROGRAM Generated_FBD_Program
+VAR
+    Input_Start AT %IX0.0 : BOOL;
+    Input_Stop AT %IX0.1 : BOOL;
+    Emergency_Stop AT %IX0.2 : BOOL;
+    Output_Motor AT %QX0.0 : BOOL;
+    AND_Block : AND;  // AND function block
+    NOT_Block : NOT;  // NOT function block
+END_VAR
+
+// Connect function blocks
+NOT_Block.IN := Emergency_Stop;
+AND_Block.IN1 := Input_Start;
+AND_Block.IN2 := NOT_Block.OUT;
+Output_Motor := AND_Block.OUT;
+
+END_PROGRAM

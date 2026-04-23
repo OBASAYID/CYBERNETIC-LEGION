@@ -1,0 +1,1 @@
+// Placeholder IntroSequence.tsx. Restore full content from original-cyrus-ui-extracted/client/src/components/IntroSequence.tsx if missing.

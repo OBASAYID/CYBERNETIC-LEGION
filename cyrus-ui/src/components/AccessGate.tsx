@@ -1,0 +1,1 @@
+// Placeholder AccessGate.tsx. Restore full content from original-cyrus-ui-extracted/client/src/components/AccessGate.tsx if missing.

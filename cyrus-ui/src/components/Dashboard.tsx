@@ -1,0 +1,1 @@
+// Placeholder Dashboard.tsx. Restore full content from original-cyrus-ui-extracted/client/src/components/Dashboard.tsx if missing.

@@ -1,0 +1,28 @@
+// Generated_Ladder_Program
+// Generated Ladder Logic Program
+// Description: Motor control with start/stop and emergency stop
+
+PROGRAM Generated_Ladder_Program
+VAR
+    Start_Button AT %IX0.0 : BOOL;     // Start button input
+    Stop_Button AT %IX0.1 : BOOL;      // Stop button input
+    Motor_Run AT %QX0.0 : BOOL;        // Motor run output
+    Emergency_Stop AT %IX0.2 : BOOL;   // Emergency stop
+    Timer_Run AT %QX0.1 : BOOL;        // Timer output
+    Timer_Preset : TIME := T#5S;       // 5 second timer
+    Timer_Current : TIME;
+END_VAR
+
+// Ladder Rung 1: Motor Start/Stop Logic
+Start_Button   Stop_Button   Emergency_Stop   Motor_Run
+------| |--------| |------------| |-------------( )
+
+// Ladder Rung 2: Timer Logic
+Motor_Run      Timer_Run
+------| |---------( )
+
+// Ladder Rung 3: Timer Reset
+Stop_Button    Emergency_Stop
+------| |--------| |-------------( )
+
+END_PROGRAM

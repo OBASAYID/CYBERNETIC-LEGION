@@ -1,0 +1,227 @@
+{
+  "training_stats": {
+    "domains_trained": 13,
+    "total_entries": 120,
+    "start_time": "2026-03-08T23:45:45.485897",
+    "end_time": "2026-03-08T23:47:46.730150"
+  },
+  "domain_results": [
+    {
+      "domain": "military_intelligence",
+      "entries_added": 9,
+      "processing_time": 10.092034816741943,
+      "status": "success"
+    },
+    {
+      "domain": "combat_tactics",
+      "entries_added": 9,
+      "processing_time": 8.983155250549316,
+      "status": "success"
+    },
+    {
+      "domain": "criminal_investigation",
+      "entries_added": 9,
+      "processing_time": 8.992696046829224,
+      "status": "success"
+    },
+    {
+      "domain": "corruption_investigation",
+      "entries_added": 9,
+      "processing_time": 9.157872915267944,
+      "status": "success"
+    },
+    {
+      "domain": "fraud_investigation",
+      "entries_added": 9,
+      "processing_time": 8.921459197998047,
+      "status": "success"
+    },
+    {
+      "domain": "financial_intelligence",
+      "entries_added": 9,
+      "processing_time": 9.099799871444702,
+      "status": "success"
+    },
+    {
+      "domain": "legal_advocacy",
+      "entries_added": 9,
+      "processing_time": 9.008490085601807,
+      "status": "success"
+    },
+    {
+      "domain": "economic_crime",
+      "entries_added": 9,
+      "processing_time": 8.929840803146362,
+      "status": "success"
+    },
+    {
+      "domain": "human_rights",
+      "entries_added": 10,
+      "processing_time": 10.117467164993286,
+      "status": "success"
+    },
+    {
+      "domain": "international_law",
+      "entries_added": 10,
+      "processing_time": 9.941118955612183,
+      "status": "success"
+    },
+    {
+      "domain": "botswana_law",
+      "entries_added": 10,
+      "processing_time": 10.026702880859375,
+      "status": "success"
+    },
+    {
+      "domain": "living_means_assessment",
+      "entries_added": 9,
+      "processing_time": 8.9825279712677,
+      "status": "success"
+    },
+    {
+      "domain": "indemnity_law",
+      "entries_added": 9,
+      "processing_time": 8.9891939163208,
+      "status": "success"
+    }
+  ],
+  "final_knowledge_stats": {
+    "total_entries": 298,
+    "average_confidence": 0.9281879194630871,
+    "domains_covered": 21,
+    "domain_breakdown": [
+      {
+        "domain": "medicine",
+        "entries": 41,
+        "avg_confidence": 0.9024390243902439,
+        "last_updated": "2026-03-08 21:34:54"
+      },
+      {
+        "domain": "science",
+        "entries": 34,
+        "avg_confidence": 0.9058823529411765,
+        "last_updated": "2026-03-08 21:34:37"
+      },
+      {
+        "domain": "engineering",
+        "entries": 33,
+        "avg_confidence": 0.9045454545454545,
+        "last_updated": "2026-03-08 21:34:45"
+      },
+      {
+        "domain": "technology",
+        "entries": 33,
+        "avg_confidence": 0.9030303030303031,
+        "last_updated": "2026-03-08 21:34:28"
+      },
+      {
+        "domain": "arts_humanities",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:49"
+      },
+      {
+        "domain": "botswana_law",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:47:28"
+      },
+      {
+        "domain": "business",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:40"
+      },
+      {
+        "domain": "human_rights",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:47:08"
+      },
+      {
+        "domain": "international_law",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:47:18"
+      },
+      {
+        "domain": "combat_tactics",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:04"
+      },
+      {
+        "domain": "corruption_investigation",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:22"
+      },
+      {
+        "domain": "criminal_investigation",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:13"
+      },
+      {
+        "domain": "economic_crime",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:58"
+      },
+      {
+        "domain": "financial_intelligence",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:40"
+      },
+      {
+        "domain": "fraud_investigation",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:31"
+      },
+      {
+        "domain": "indemnity_law",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:47:46"
+      },
+      {
+        "domain": "legal_advocacy",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:46:49"
+      },
+      {
+        "domain": "living_means_assessment",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:47:37"
+      },
+      {
+        "domain": "military_intelligence",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:45:55"
+      },
+      {
+        "domain": "social_sciences",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:32:50"
+      },
+      {
+        "domain": "law",
+        "entries": 8,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:38"
+      }
+    ],
+    "query_statistics": {
+      "total_queries": 5,
+      "avg_query_confidence": 0,
+      "avg_response_time": 0.0005070209503173828
+    }
+  },
+  "completion_time": "2026-03-08T23:47:46.735868"
+}

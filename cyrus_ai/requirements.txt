@@ -1,0 +1,17 @@
+# FastAPI backend and AI integrations for cyrus_ai (OpenAI, Whisper, LangChain, speech)
+openai
+whisper
+sounddevice
+numpy
+pyttsx3
+pydantic
+fastapi
+uvicorn
+langchain
+faiss-cpu
+python-dotenv
+tiktoken
+scipy
+speechrecognition
+elevenlabs
+transformers

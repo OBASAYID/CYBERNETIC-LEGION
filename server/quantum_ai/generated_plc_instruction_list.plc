@@ -1,0 +1,19 @@
+// Generated_IL_Program
+// Generated Instruction List Program
+// Description: Basic I/O mapping and control
+
+PROGRAM Generated_IL_Program
+VAR
+    Start_Button AT %IX0.0 : BOOL;
+    Stop_Button AT %IX0.1 : BOOL;
+    Motor_Run AT %QX0.0 : BOOL;
+    Emergency_Stop AT %IX0.2 : BOOL;
+END_VAR
+
+// Instruction List Logic
+LD    Start_Button      // Load Start Button
+ANDN  Stop_Button       // AND NOT Stop Button
+ANDN  Emergency_Stop    // AND NOT Emergency Stop
+ST    Motor_Run         // Store to Motor Run
+
+END_PROGRAM

@@ -1,0 +1,47 @@
+// Generated_SFC_Program
+// Generated Sequential Function Chart
+// Description: Batch process control with steps
+
+PROGRAM Generated_SFC_Program
+VAR
+    Start_Command AT %IX0.0 : BOOL;
+    Step_Complete AT %IX0.1 : BOOL;
+    Reset_Command AT %IX0.2 : BOOL;
+    Step1_Active AT %QX0.0 : BOOL;
+    Step2_Active AT %QX0.1 : BOOL;
+    Step3_Active AT %QX0.2 : BOOL;
+END_VAR
+
+// Sequential Function Chart
+INITIAL_STEP Start:
+    Step1_Active := TRUE;
+END_STEP
+
+TRANSITION Start_TO_Step1:
+    Start_Command
+END_TRANSITION
+
+STEP Step1:
+    // Step 1 actions
+    Step1_Active := TRUE;
+END_STEP
+
+TRANSITION Step1_TO_Step2:
+    Step_Complete
+END_TRANSITION
+
+STEP Step2:
+    // Step 2 actions
+    Step2_Active := TRUE;
+END_STEP
+
+TRANSITION Step2_TO_Step3:
+    Step_Complete
+END_TRANSITION
+
+STEP Step3:
+    // Step 3 actions - Final step
+    Step3_Active := TRUE;
+END_STEP
+
+END_PROGRAM

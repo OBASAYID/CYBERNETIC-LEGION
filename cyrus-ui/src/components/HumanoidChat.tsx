@@ -1,0 +1,1 @@
+// Placeholder HumanoidChat.tsx. Restore full content from original-cyrus-ui-extracted/client/src/components/HumanoidChat.tsx if missing.

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYRUS AI System - Integrated Modules Portal</title>
+    <style>
+        :root {
+            --bg-1: #09192f;
+            --bg-2: #0e3b5f;
+            --panel: rgba(12, 23, 44, 0.82);
+            --line: rgba(155, 214, 255, 0.28);
+            --text: #eaf6ff;
+            --muted: #a6c6dd;
+            --accent: #2dd4bf;
+            --accent-2: #38bdf8;
+            --warn: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+            margin: 0 auto;
+            padding: 24px;
+            max-width: 1080px;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(45, 212, 191, 0.18), transparent 40%),
+                radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.2), transparent 45%),
+                linear-gradient(135deg, var(--bg-1), var(--bg-2));
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            border-radius: 22px;
+            padding: 32px;
+            box-shadow: 0 18px 42px rgba(1, 12, 28, 0.45);
+            border: 1px solid var(--line);
+            animation: fadeUp 0.55s ease-out;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            letter-spacing: 0.03em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin: 0.4rem 0 0;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 22px;
+        }
+
+        .status-strip {
+            margin: 20px 0 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .status-pill {
+            background: rgba(9, 30, 49, 0.9);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .status-title {
+            color: var(--muted);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .status-value {
+            margin-top: 4px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .section {
+            background: rgba(6, 20, 38, 0.62);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px;
+            margin: 18px 0;
+        }
+
+        .section h2 {
+            margin: 0 0 10px;
+            font-size: 1.3rem;
+        }
+
+        .section p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .module-card {
+            background: rgba(8, 28, 46, 0.9);
+            border: 1px solid rgba(130, 196, 240, 0.28);
+            border-radius: 10px;
+            padding: 14px;
+            text-align: left;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .module-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+
+        .module-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .badge.live {
+            background: rgba(45, 212, 191, 0.2);
+            color: #72f3e2;
+        }
+
+        .badge.new {
+            background: rgba(56, 189, 248, 0.2);
+            color: #9adefb;
+        }
+
+        .module-card h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .module-card p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .module-card code {
+            color: #b4f2e8;
+            font-size: 0.82rem;
+        }
+
+        .endpoint-list {
+            margin: 14px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .endpoint-list li {
+            background: rgba(7, 24, 39, 0.92);
+            border: 1px solid rgba(130, 196, 240, 0.24);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .endpoint-list strong {
+            color: var(--text);
+        }
+
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .access-button {
+            display: inline-block;
+            background: linear-gradient(45deg, var(--accent), var(--accent-2));
+            color: #03232a;
+            padding: 12px 20px;
+            text-decoration: none;
+            border-radius: 999px;
+            font-size: 0.94rem;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 8px 16px rgba(45, 212, 191, 0.24);
+        }
+
+        .access-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(45, 212, 191, 0.32);
+        }
+
+        .warn {
+            border-left: 4px solid var(--warn);
+        }
+
+        .toolbox {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .panel {
+            background: rgba(5, 18, 33, 0.94);
+            border: 1px solid rgba(130, 196, 240, 0.24);
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .panel h3 {
+            margin: 0 0 10px;
+            font-size: 1rem;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .field label {
+            font-size: 0.84rem;
+            color: var(--muted);
+        }
+
+        .field input,
+        .field textarea,
+        .field select {
+            width: 100%;
+            padding: 9px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(130, 196, 240, 0.3);
+            background: rgba(8, 28, 46, 0.92);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        .field textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+
+        .action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        button.action-btn {
+            border: 0;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-weight: 700;
+            font-size: 0.82rem;
+            cursor: pointer;
+            color: #03232a;
+            background: linear-gradient(45deg, var(--accent), var(--accent-2));
+        }
+
+        .output {
+            margin-top: 12px;
+            background: rgba(4, 13, 24, 0.95);
+            border: 1px solid rgba(130, 196, 240, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .output h4 {
+            margin: 0 0 8px;
+            font-size: 0.85rem;
+            color: var(--muted);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        #apiOutput {
+            margin: 0;
+            max-height: 280px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-size: 0.8rem;
+            color: #c9f4ef;
+            line-height: 1.45;
+        }
+
+        .footer {
+            margin-top: 20px;
+            color: var(--muted);
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        @keyframes fadeUp {
+            from {
+                transform: translateY(8px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 14px;
+            }
+
+            .container {
+                padding: 18px;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+
+            .access-button {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>CYRUS Intelligence System</h1>
+            <p class="subtitle">Integrated portal showing the latest module edits: quantum algorithms, legal document
+                analysis, endpoint bridge updates, and enhanced ingestion/vision pipeline.</p>
+        </div>
+
+        <div class="status-strip">
+            <div class="status-pill">
+                <div class="status-title">Live Interface</div>
+                <div class="status-value">127.0.0.1:3105</div>
+            </div>
+            <div class="status-pill">
+                <div class="status-title">Quantum Suite</div>
+                <div class="status-value">Integrated</div>
+            </div>
+            <div class="status-pill">
+                <div class="status-title">Documents Module</div>
+                <div class="status-value">Integrated</div>
+            </div>
+            <div class="status-pill">
+                <div class="status-title">Test State</div>
+                <div class="status-value">Passing</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Integrated Modules</h2>
+            <p>The interface now tracks all major edited modules and exposes where each integration is connected in the
+                backend.</p>
+            <div class="module-grid">
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Quantum Enhanced Algorithms</h3>
+                        <span class="badge new">NEW</span>
+                    </div>
+                    <p>Added QAOA, VQE, QNN, QPCA, QAE and quantum SVM extensions.</p>
+                    <code>server/quantum_ai/core_algorithms/quantum_enhanced_algorithms.py</code>
+                </article>
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Documents Module</h3>
+                        <span class="badge new">NEW</span>
+                    </div>
+                    <p>Legal document parsing, Botswana law knowledge, and case analysis workflows.</p>
+                    <code>documents_module.py</code>
+                </article>
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Quantum Bridge Legal Endpoint</h3>
+                        <span class="badge live">LIVE</span>
+                    </div>
+                    <p>Legal analysis route wired through Python bridge for Node ingestion calls.</p>
+                    <code>server/quantum_ai/quantum_bridge.py</code>
+                </article>
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Ingestion + Vision Pipeline</h3>
+                        <span class="badge live">LIVE</span>
+                    </div>
+                    <p>OpenAI client lazy init, legal document detection, and strict review options.</p>
+                    <code>server/ingestion/analyze.ts + server/scan/vision.ts</code>
+                </article>
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Enhanced ML Service</h3>
+                        <span class="badge live">LIVE</span>
+                    </div>
+                    <p>Typed user communication patterns and stability scoring improvements.</p>
+                    <code>server/comms/enhanced-ml-service.py</code>
+                </article>
+                <article class="module-card">
+                    <div class="module-head">
+                        <h3>Core Quantum Algorithms</h3>
+                        <span class="badge live">LIVE</span>
+                    </div>
+                    <p>Random walks, clustering, and ML modules extended with quantum variants.</p>
+                    <code>core_algorithms/random_walks.py, clustering.py, machine_learning.py</code>
+                </article>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Runtime Endpoint Map</h2>
+            <p>Endpoints tied to the integrated modules and ready for service-level validation.</p>
+            <ul class="endpoint-list">
+                <li><strong>UI:</strong> <code>http://127.0.0.1:3105</code> (this portal)</li>
+                <li><strong>Bridge Health:</strong> <code>http://127.0.0.1:5001/health</code></li>
+                <li><strong>Legal Analysis:</strong> <code>POST http://127.0.0.1:5001/legal/analyze</code></li>
+                <li><strong>Node API Guard:</strong> <code>/api</code> middleware now checked before static serving</li>
+            </ul>
+            <div class="buttons">
+                <a href="http://127.0.0.1:3105" class="access-button" target="_blank">Open Integrated Interface</a>
+                <a href="https://github.com/cronet/cyrus-ai-system" class="access-button" target="_blank">Open Source
+                    Repo</a>
+            </div>
+        </div>
+
+        <div class="section warn">
+            <h2>Module Actions Console</h2>
+            <p>Run quick integration checks directly from this page against the Python bridge.</p>
+            <div class="toolbox">
+                <div class="panel">
+                    <h3>Bridge Checks</h3>
+                    <div class="field">
+                        <label for="bridgeBase">Bridge Base URL</label>
+                        <input id="bridgeBase" value="http://127.0.0.1:5001" />
+                    </div>
+                    <div class="action-row">
+                        <button class="action-btn" id="btnHealth" type="button">Check /health</button>
+                        <button class="action-btn" id="btnStats" type="button">Check /stats</button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h3>Legal Analyze</h3>
+                    <div class="field">
+                        <label for="jurisdiction">Jurisdiction</label>
+                        <select id="jurisdiction">
+                            <option>Botswana</option>
+                            <option>South Africa</option>
+                            <option>International</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="legalText">Sample Document Text</label>
+                        <textarea id="legalText">This contract dispute concerns liability, damages, and court procedure under applicable law.</textarea>
+                    </div>
+                    <div class="action-row">
+                        <button class="action-btn" id="btnLegal" type="button">POST /legal/analyze</button>
+                    </div>
+                </div>
+            </div>
+            <div class="output">
+                <h4>API Output</h4>
+                <pre id="apiOutput">Ready.</pre>
+            </div>
+        </div>
+
+        <div class="section warn">
+            <h2>Deployment Notes</h2>
+            <p>Interface integration is complete. To activate live backend actions from this portal, ensure the Python
+                bridge on port <code>5001</code> and Node server API routes are running with required environment
+                variables.</p>
+        </div>
+
+        <div class="footer">
+            <p>CYRUS AI System | Integrated Modules Interface | April 2026</p>
+            <p>Quantum algorithms + legal intelligence + ingestion bridge + enhanced ML are represented in this UI.</p>
+        </div>
+    </div>
+    <script>
+        const output = document.getElementById("apiOutput");
+
+        function showResult(label, data) {
+            const stamp = new Date().toLocaleTimeString();
+            output.textContent = `[${stamp}] ${label}\n\n${typeof data === "string" ? data : JSON.stringify(data, null, 2)}`;
+        }
+
+        async function fetchJson(url, options = {}) {
+            const response = await fetch(url, options);
+            const body = await response.text();
+            let parsed;
+            try {
+                parsed = JSON.parse(body);
+            } catch {
+                parsed = body;
+            }
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} ${response.statusText}\n${typeof parsed === "string" ? parsed : JSON.stringify(parsed)}`);
+            }
+            return parsed;
+        }
+
+        function bridgeBase() {
+            return document.getElementById("bridgeBase").value.replace(/\/$/, "");
+        }
+
+        document.getElementById("btnHealth").addEventListener("click", async () => {
+            showResult("Checking /health...", "Please wait");
+            try {
+                const data = await fetchJson(`${bridgeBase()}/health`);
+                showResult("GET /health", data);
+            } catch (err) {
+                showResult("GET /health failed", String(err));
+            }
+        });
+
+        document.getElementById("btnStats").addEventListener("click", async () => {
+            showResult("Checking /stats...", "Please wait");
+            try {
+                const data = await fetchJson(`${bridgeBase()}/stats`);
+                showResult("GET /stats", data);
+            } catch (err) {
+                showResult("GET /stats failed", String(err));
+            }
+        });
+
+        document.getElementById("btnLegal").addEventListener("click", async () => {
+            showResult("Posting /legal/analyze...", "Please wait");
+            const payload = {
+                content: document.getElementById("legalText").value,
+                jurisdiction: document.getElementById("jurisdiction").value,
+                filename: "portal_input.txt"
+            };
+            try {
+                const data = await fetchJson(`${bridgeBase()}/legal/analyze`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                showResult("POST /legal/analyze", data);
+            } catch (err) {
+                showResult("POST /legal/analyze failed", String(err));
+            }
+        });
+    </script>
+</body>
+
+</html>

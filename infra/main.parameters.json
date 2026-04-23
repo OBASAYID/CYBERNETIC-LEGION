@@ -1,0 +1,30 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "eastus"
+        },
+        "appServicePlanName": {
+            "value": "cyrus-app-plan"
+        },
+        "webAppName": {
+            "value": "cyrus-web-app"
+        },
+        "openAiName": {
+            "value": "cyrus-openai"
+        },
+        "documentIntelligenceName": {
+            "value": "cyrus-doc-intel"
+        },
+        "managedIdentityName": {
+            "value": "cyrus-managed-identity"
+        },
+        "appInsightsName": {
+            "value": "cyrus-app-insights"
+        },
+        "sku": {
+            "value": "B1"
+        }
+    }
+}

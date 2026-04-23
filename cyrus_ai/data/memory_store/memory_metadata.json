@@ -1,0 +1,250 @@
+[
+  {
+    "text": "explain for a kid why the sky is blue",
+    "metadata": {
+      "source": "smoke",
+      "mode": "kids",
+      "timestamp": "2026-04-14T06:45:51.271314"
+    }
+  },
+  {
+    "text": "prepare a legal compliance summary for this contract",
+    "metadata": {
+      "source": "smoke",
+      "mode": "professional",
+      "timestamp": "2026-04-14T06:45:51.548407"
+    }
+  },
+  {
+    "text": "let us debate whether AI regulation should be strict",
+    "metadata": {
+      "source": "smoke",
+      "mode": "professional",
+      "timestamp": "2026-04-14T06:45:51.691531"
+    }
+  },
+  {
+    "text": "execute status check and return short command output",
+    "metadata": {
+      "source": "smoke",
+      "mode": "ops",
+      "timestamp": "2026-04-14T06:45:51.830346"
+    }
+  },
+  {
+    "text": "check mission operations status",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-14T06:45:57.041314"
+    }
+  },
+  {
+    "text": "let us debate whether AI regulation should be strict",
+    "metadata": {
+      "source": "smoke",
+      "mode": "debate",
+      "timestamp": "2026-04-14T06:46:42.635489"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:03:10.878139"
+    }
+  },
+  {
+    "text": "for a kid explain photosynthesis simply",
+    "metadata": {
+      "source": "smoke",
+      "mode": "kids",
+      "timestamp": "2026-04-14T07:03:14.427787"
+    }
+  },
+  {
+    "text": "prepare legal court compliant summary",
+    "metadata": {
+      "source": "smoke",
+      "mode": "professional",
+      "timestamp": "2026-04-14T07:03:14.561048"
+    }
+  },
+  {
+    "text": "debate the strongest argument for AI regulation",
+    "metadata": {
+      "source": "smoke",
+      "mode": "debate",
+      "timestamp": "2026-04-14T07:03:14.692519"
+    }
+  },
+  {
+    "text": "check drone mission status and report now",
+    "metadata": {
+      "source": "smoke",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:03:14.823249"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:05:27.825666+00:00"
+    }
+  },
+  {
+    "text": "check drone mission status and report now",
+    "metadata": {
+      "source": "smoke",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:05:51.204178+00:00"
+    }
+  },
+  {
+    "text": "check drone mission status and report now",
+    "metadata": {
+      "source": "smoke",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:06:29.408949+00:00"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:06:49.689052+00:00"
+    }
+  },
+  {
+    "text": "hey cyrus can you tell a joke",
+    "metadata": {
+      "source": "browser",
+      "mode": "default",
+      "timestamp": "2026-04-14T07:24:50.716479+00:00"
+    }
+  },
+  {
+    "text": "what is law",
+    "metadata": {
+      "source": "browser",
+      "mode": "default",
+      "timestamp": "2026-04-14T07:25:04.363510+00:00"
+    }
+  },
+  {
+    "text": "Tell me a joke for kids",
+    "metadata": {
+      "source": "browser",
+      "mode": "kids",
+      "timestamp": "2026-04-14T07:25:13.358621+00:00"
+    }
+  },
+  {
+    "text": "Explain quantum computing professionally",
+    "metadata": {
+      "source": "browser",
+      "mode": "default",
+      "timestamp": "2026-04-14T07:25:22.798201+00:00"
+    }
+  },
+  {
+    "text": "Is climate change real? Debate me.",
+    "metadata": {
+      "source": "browser",
+      "mode": "debate",
+      "timestamp": "2026-04-14T07:25:26.071982+00:00"
+    }
+  },
+  {
+    "text": "Launch drone for mission reconnaissance",
+    "metadata": {
+      "source": "browser",
+      "mode": "default",
+      "timestamp": "2026-04-14T07:25:29.046005+00:00"
+    }
+  },
+  {
+    "text": "Tell me a joke for kids",
+    "metadata": {
+      "source": "test",
+      "mode": "kids",
+      "timestamp": "2026-04-14T07:25:35.607639+00:00"
+    }
+  },
+  {
+    "text": "Explain quantum computing in a professional manner",
+    "metadata": {
+      "source": "test",
+      "mode": "default",
+      "timestamp": "2026-04-14T07:25:55.357327+00:00"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-14T07:33:35.996793+00:00"
+    }
+  },
+  {
+    "text": "Launch drone for reconnaissance mission",
+    "metadata": {
+      "source": "smoke",
+      "mode": "default",
+      "timestamp": "2026-04-14T08:09:58.935551+00:00"
+    }
+  },
+  {
+    "text": "search for availlable drones",
+    "metadata": {
+      "source": "web",
+      "mode": "default",
+      "timestamp": "2026-04-14T08:10:16.957216+00:00"
+    }
+  },
+  {
+    "text": "Explain quantum computing professionally",
+    "metadata": {
+      "source": "web",
+      "mode": "default",
+      "timestamp": "2026-04-14T08:10:26.846173+00:00"
+    }
+  },
+  {
+    "text": "Launch drone for reconnaissance mission",
+    "metadata": {
+      "source": "smoke",
+      "mode": "default",
+      "timestamp": "2026-04-14T08:13:17.927082+00:00"
+    }
+  },
+  {
+    "text": "Launch drone for reconnaissance mission",
+    "metadata": {
+      "source": "smoke",
+      "mode": "ops",
+      "timestamp": "2026-04-14T08:14:21.800173+00:00"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-16T09:01:47.045473+00:00"
+    }
+  },
+  {
+    "text": "execute status check",
+    "metadata": {
+      "source": "api",
+      "mode": "ops",
+      "timestamp": "2026-04-16T09:30:02.388037+00:00"
+    }
+  }
+]

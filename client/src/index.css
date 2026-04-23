@@ -1,0 +1,219 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import './styles/premium-aerospace.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+    --card: 220 20% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 20% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 190 100% 50%;
+    --primary-foreground: 220 20% 4%;
+    --secondary: 24 95% 60%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 15% 12%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 190 100% 50%;
+    --accent-foreground: 220 20% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 15% 15%;
+    --input: 220 15% 10%;
+    --ring: 190 100% 50%;
+    --radius: 0.625rem;
+    --chart-1: 190 100% 50%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 35 92% 50%;
+    --chart-4: 24 95% 60%;
+    --chart-5: 340 82% 52%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+    font-feature-settings: 'ss01' on, 'ss02' on, 'cv01' on;
+    background: radial-gradient(circle at 12% 15%, #12283c 0%, rgba(18, 40, 60, 0) 36%),
+      radial-gradient(circle at 84% 76%, #3a2013 0%, rgba(58, 32, 19, 0) 34%),
+      linear-gradient(150deg, #06080c 0%, #090d13 52%, #050709 100%);
+    min-height: 100vh;
+  }
+}
+
+@keyframes slowDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(2%, -1%, 0) scale(1.02);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+  .text-gradient-premium {
+    background: linear-gradient(90deg, #22d3ee 0%, #60a5fa 50%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(90deg, #fbbf24 0%, #fde047 50%, #fb923c 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.15), 0 0 80px rgba(0, 212, 255, 0.05);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 40px rgba(124, 58, 237, 0.15), 0 0 80px rgba(124, 58, 237, 0.05);
+  }
+
+  .glass-ultra {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-panel-premium {
+    background: rgba(18, 18, 26, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .app-shell {
+    background: linear-gradient(170deg, rgba(6, 10, 14, 0.9) 0%, rgba(8, 12, 18, 0.85) 100%);
+    animation: riseIn 0.5s ease-out;
+  }
+
+  .app-shell-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(93, 187, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(93, 187, 255, 0.07) 1px, transparent 1px),
+      radial-gradient(circle at 12% 24%, rgba(41, 176, 255, 0.16) 0%, rgba(41, 176, 255, 0) 32%),
+      radial-gradient(circle at 87% 72%, rgba(255, 146, 43, 0.13) 0%, rgba(255, 146, 43, 0) 31%);
+    background-size: 48px 48px, 48px 48px, auto, auto;
+    mix-blend-mode: screen;
+    opacity: 0.5;
+    animation: slowDrift 18s ease-in-out infinite;
+  }
+
+  /* Custom Scrollbar Styles */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3c transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #3a3a3c;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #48484a;
+  }
+
+  .scrollbar-thumb-\[\#3a3a3c\]::-webkit-scrollbar-thumb {
+    background: #3a3a3c;
+  }
+
+  .hover\:scrollbar-thumb-\[\#48484a\]:hover::-webkit-scrollbar-thumb {
+    background: #48484a;
+  }
+}
+
+/* Comms: orange light sweep when starting a new chat (5s) */
+@keyframes comms-cascade-up {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.85;
+  }
+  20% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+}
+
+.comms-chat-cascade {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 30;
+}
+
+.comms-chat-cascade__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 55%;
+  background: linear-gradient(
+    0deg,
+    rgba(249, 115, 22, 0.5) 0%,
+    rgba(251, 191, 36, 0.25) 35%,
+    rgba(34, 211, 238, 0.08) 70%,
+    transparent 100%
+  );
+  filter: blur(2px);
+  animation: comms-cascade-up 5s ease-out forwards;
+  box-shadow: 0 -20px 60px -10px rgba(249, 115, 22, 0.45);
+}

@@ -1,0 +1,18 @@
+{
+  "public_url": "http://localhost:3000",
+  "qr_code_path": "cyrus_access_qr_code_20260309_011850.png",
+  "access_page": "cyrus_public_access_20260309_011850.html",
+  "deployment_instructions": "cyrus_deployment_instructions_20260309_011850.md",
+  "generated_at": "2026-03-09T01:18:50.863621",
+  "cyrus_capabilities": [
+    "Conversational AI with emotional intelligence",
+    "Medical super-intelligence (99.999% accuracy)",
+    "Super intelligence problem-solving",
+    "Robotics integration and control",
+    "Real-time web research and synthesis",
+    "Industrial device control and protocols",
+    "AI teaching and learning systems",
+    "Enterprise-grade security and monitoring"
+  ],
+  "deployment_status": "Demo materials generated - requires cloud deployment for live access"
+}

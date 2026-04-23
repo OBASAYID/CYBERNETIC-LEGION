@@ -1,0 +1,45 @@
+name: Deploy CYRUS
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r cyrus-ai/requirements.txt
+
+      - name: Build Node app
+        run: npm run build
+
+      - name: Run Python tests
+        run: |
+          cd cyrus-ai
+          python -m unittest tests.test_self_improvement_platform tests.test_system_contracts tests.test_distributed -v
+
+      - name: Build production container
+        run: docker build -f Dockerfile.prod -t cyrus:ci-${{ github.sha }} .

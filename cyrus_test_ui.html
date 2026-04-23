@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYRUS AI System Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 700px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .status {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 25px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-value.online {
+            color: #4caf50;
+        }
+
+        .content {
+            padding: 25px;
+        }
+
+        .chat-box {
+            height: 350px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            align-self: flex-end;
+            margin-left: 15%;
+        }
+
+        .message.cyrus {
+            background: #e8e8e8;
+            color: #333;
+            align-self: flex-start;
+            margin-right: 15%;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            color: #856404;
+            align-self: center;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .modes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .mode-btn {
+            padding: 8px 15px;
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn:hover {
+            border-color: #667eea;
+            background: #f8f8ff;
+        }
+
+        .loading {
+            display: inline-block;
+            animation: spinner 1s linear infinite;
+        }
+
+        @keyframes spinner {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 CYRUS AI System</h1>
+            <p>Advanced AI Assistant with Voice & Context Awareness</p>
+        </div>
+
+        <div class="status">
+            <div class="status-item">
+                <div class="status-label">API Status</div>
+                <div class="status-value online" id="statusApi">Online</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Current Mode</div>
+                <div class="status-value" id="statusMode">Waiting...</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Confidence</div>
+                <div class="status-value" id="statusConfidence">-</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="chat-box" id="chatBox">
+                <div class="message system">
+                    CYRUS AI ready. Try: "Kids joke!", "Explain quantum physics", "Let's debate", or "Launch drone"
+                </div>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+
+            <div class="modes">
+                <div style="width: 100%; font-size: 12px; font-weight: bold; color: #667eea;">Quick Test Messages:</div>
+                <button class="mode-btn" onclick="quickTest('Tell me a joke for kids')">👶 Kids Mode</button>
+                <button class="mode-btn" onclick="quickTest('Explain quantum computing professionally')">💼
+                    Professional</button>
+                <button class="mode-btn" onclick="quickTest('Is climate change real? Debate me.')">🎤 Debate</button>
+                <button class="mode-btn" onclick="quickTest('Launch drone for mission reconnaissance')">🚁 Ops
+                    Mode</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const messageInput = document.getElementById('messageInput');
+
+        // Check API status on load
+        async function checkStatus() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/health');
+                if (response.ok) {
+                    document.getElementById('statusApi').textContent = '✓ Online';
+                    document.getElementById('statusApi').className = 'status-value online';
+                }
+            } catch (e) {
+                document.getElementById('statusApi').textContent = '✗ Offline';
+                document.getElementById('statusApi').className = 'status-value';
+            }
+        }
+
+        // Send message to CYRUS
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            messageInput.value = '';
+
+            // Show loading indicator
+            const loadingMsg = addMessage('Thinking... 🧠', 'system');
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        source: 'browser'
+                    })
+                });
+
+                // Remove loading message
+                loadingMsg.remove();
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Add CYRUS response
+                    addMessage(data.response, 'cyrus');
+
+                    // Update status
+                    document.getElementById('statusMode').textContent = data.mode || 'unknown';
+                    document.getElementById('statusConfidence').textContent =
+                        (data.confidence ? (data.confidence * 100).toFixed(0) + '%' : 'N/A');
+
+                    // Add metadata
+                    if (data.needs_clarification) {
+                        addMessage('(Needs clarification)', 'system');
+                    }
+                } else {
+                    loadingMsg.remove();
+                    addMessage('Error: ' + response.status, 'system');
+                }
+            } catch (error) {
+                loadingMsg.remove();
+                addMessage('Connection error: ' + error.message, 'system');
+            }
+        }
+
+        function addMessage(text, type) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message ' + type;
+            msgEl.textContent = text;
+            chatBox.appendChild(msgEl);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return msgEl;
+        }
+
+        function quickTest(message) {
+            messageInput.value = message;
+            sendMessage();
+        }
+
+        // Allow Enter key to send
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Check status on load
+        checkStatus();
+    </script>
+</body>
+
+</html>

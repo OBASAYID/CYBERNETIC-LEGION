@@ -1,0 +1,15 @@
+{
+  "folders": [
+    { "name": "cyrus-monorepo", "path": "." },
+    { "name": "cyrus-ui (Replit-style)", "path": "cyrus-ui" },
+    { "name": "cyrus-ai (Python)", "path": "cyrus-ai" }
+  ],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/.venv": true
+    }
+  }
+}

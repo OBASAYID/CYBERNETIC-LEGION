@@ -1,0 +1,95 @@
+{
+  "training_stats": {
+    "domains_trained": 4,
+    "total_entries": 39,
+    "start_time": "2026-03-08T23:34:19.211256",
+    "end_time": "2026-03-08T23:34:54.975831"
+  },
+  "domain_results": [
+    {
+      "domain": "technology",
+      "entries_added": 10,
+      "processing_time": 9.594162940979004,
+      "status": "success"
+    },
+    {
+      "domain": "science",
+      "entries_added": 10,
+      "processing_time": 9.097463130950928,
+      "status": "success"
+    },
+    {
+      "domain": "engineering",
+      "entries_added": 9,
+      "processing_time": 7.91185188293457,
+      "status": "success"
+    },
+    {
+      "domain": "medicine",
+      "entries_added": 10,
+      "processing_time": 9.160637855529785,
+      "status": "success"
+    }
+  ],
+  "final_knowledge_stats": {
+    "total_entries": 178,
+    "average_confidence": 0.9134831460674157,
+    "domains_covered": 8,
+    "domain_breakdown": [
+      {
+        "domain": "medicine",
+        "entries": 41,
+        "avg_confidence": 0.9024390243902439,
+        "last_updated": "2026-03-08 21:34:54"
+      },
+      {
+        "domain": "science",
+        "entries": 34,
+        "avg_confidence": 0.9058823529411765,
+        "last_updated": "2026-03-08 21:34:37"
+      },
+      {
+        "domain": "engineering",
+        "entries": 33,
+        "avg_confidence": 0.9045454545454545,
+        "last_updated": "2026-03-08 21:34:45"
+      },
+      {
+        "domain": "technology",
+        "entries": 33,
+        "avg_confidence": 0.9030303030303031,
+        "last_updated": "2026-03-08 21:34:28"
+      },
+      {
+        "domain": "arts_humanities",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:49"
+      },
+      {
+        "domain": "business",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:40"
+      },
+      {
+        "domain": "social_sciences",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:32:50"
+      },
+      {
+        "domain": "law",
+        "entries": 8,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:38"
+      }
+    ],
+    "query_statistics": {
+      "total_queries": 0,
+      "avg_query_confidence": 0,
+      "avg_response_time": 0
+    }
+  },
+  "completion_time": "2026-03-08T23:34:54.976280"
+}

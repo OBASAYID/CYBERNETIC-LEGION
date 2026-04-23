@@ -1,0 +1,74 @@
+{
+    "python.defaultInterpreterPath": "/Users/cronet/Downloads/cyrus-part2-assets-fullzip/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.extraPaths": [
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip/server",
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip/server/quantum_ai"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.includeFileSpecs": [
+        "**/*.py"
+    ],
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        "**/.venv",
+        "**/node_modules"
+    ],
+    "python.languageServer": "None",
+    "python.analysis.indexing": true,
+    "python.analysis.packageIndexDepths": [
+        {
+            "name": "pyserial",
+            "depth": 2
+        },
+        {
+            "name": "pyusb",
+            "depth": 2
+        },
+        {
+            "name": "paho-mqtt",
+            "depth": 2
+        },
+        {
+            "name": "pymodbus",
+            "depth": 2
+        }
+    ],
+    "python.analysis.stubPath": "/Users/cronet/Downloads/cyrus-part2-assets-fullzip-4/.venv/lib/python3.14/site-packages",
+    "python.analysis.typeshedPaths": [
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip-4/.venv/lib/python3.14/site-packages"
+    ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnknownMemberType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownLambdaType": "none",
+        "reportMissingTypeStubs": "none"
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "cursorpyright.analysis.autoImportCompletions": true,
+    "cursorpyright.analysis.diagnosticMode": "workspace",
+    "cursorpyright.analysis.diagnosticSeverityOverrides": {
+        "reportUnknownMemberType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownLambdaType": "none",
+        "reportMissingTypeStubs": "none"
+    },
+    "cursorpyright.analysis.exclude": [
+        "**/__pycache__",
+        "**/.venv",
+        "**/node_modules"
+    ],
+    "cursorpyright.analysis.extraPaths": [
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip/server",
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip/server/quantum_ai"
+    ],
+    "cursorpyright.analysis.stubPath": "/Users/cronet/Downloads/cyrus-part2-assets-fullzip-4/.venv/lib/python3.14/site-packages",
+    "cursorpyright.analysis.typeCheckingMode": "basic",
+    "cursorpyright.analysis.typeshedPaths": [
+        "/Users/cronet/Downloads/cyrus-part2-assets-fullzip-4/.venv/lib/python3.14/site-packages"
+    ]
+}

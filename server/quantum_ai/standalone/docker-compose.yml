@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cyrus-db
+    environment:
+      POSTGRES_USER: cyrus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyrus_secure_password}
+      POSTGRES_DB: cyrus
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyrus -d cyrus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - cyrus-net
+
+  schema-init:
+    build:
+      context: ..
+      dockerfile: standalone/Dockerfile
+    container_name: cyrus-schema-init
+    environment:
+      DATABASE_URL: postgresql://cyrus:${POSTGRES_PASSWORD:-cyrus_secure_password}@postgres:5432/cyrus
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["npx", "drizzle-kit", "push", "--force"]
+    networks:
+      - cyrus-net
+    restart: "no"
+
+  cyrus:
+    build:
+      context: ..
+      dockerfile: standalone/Dockerfile
+    container_name: cyrus-app
+    ports:
+      - "${PORT:-5000}:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://cyrus:${POSTGRES_PASSWORD:-cyrus_secure_password}@postgres:5432/cyrus
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_GEOCODING_API_KEY: ${GOOGLE_GEOCODING_API_KEY:-}
+      GOOGLE_GEOLOCATION_API_KEY: ${GOOGLE_GEOLOCATION_API_KEY:-}
+      NEWS_API_KEY: ${NEWS_API_KEY:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      ADMIN_ACCESS_CODE: ${ADMIN_ACCESS_CODE:-71580019}
+      USER_ACCESS_CODE: ${USER_ACCESS_CODE:-170392}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-DELTA UNIFORM 00}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      schema-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - cyrus-net
+
+volumes:
+  pgdata:
+
+networks:
+  cyrus-net:
+    driver: bridge

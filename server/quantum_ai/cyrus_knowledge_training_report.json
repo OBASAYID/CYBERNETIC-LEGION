@@ -1,0 +1,120 @@
+{
+  "training_stats": {
+    "domains_processed": 0,
+    "subdomains_processed": 0,
+    "total_entries_added": 0,
+    "start_time": "2026-03-08T23:32:12.252440",
+    "end_time": "2026-03-08T23:33:33.837406",
+    "errors": [
+      "Failed to train domain medicine: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain technology: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain engineering: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain health_sciences: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain environmental_sciences: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain science: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain business: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain law: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain social_sciences: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "Failed to train domain arts_humanities: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint"
+    ]
+  },
+  "final_knowledge_stats": {
+    "total_entries": 37,
+    "average_confidence": 0.95,
+    "domains_covered": 4,
+    "domain_breakdown": [
+      {
+        "domain": "arts_humanities",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:49"
+      },
+      {
+        "domain": "business",
+        "entries": 10,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:40"
+      },
+      {
+        "domain": "social_sciences",
+        "entries": 9,
+        "avg_confidence": 0.9499999999999998,
+        "last_updated": "2026-03-08 21:32:50"
+      },
+      {
+        "domain": "law",
+        "entries": 8,
+        "avg_confidence": 0.95,
+        "last_updated": "2026-03-08 21:32:38"
+      }
+    ],
+    "query_statistics": {
+      "total_queries": 0,
+      "avg_query_confidence": 0,
+      "avg_response_time": 0
+    }
+  },
+  "domain_results": [
+    {
+      "domain": "medicine",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.257940"
+    },
+    {
+      "domain": "technology",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.259111"
+    },
+    {
+      "domain": "engineering",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.260218"
+    },
+    {
+      "domain": "health_sciences",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.261176"
+    },
+    {
+      "domain": "environmental_sciences",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.262336"
+    },
+    {
+      "domain": "science",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:12.263511"
+    },
+    {
+      "domain": "business",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:48.978841"
+    },
+    {
+      "domain": "law",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:32:49.568151"
+    },
+    {
+      "domain": "social_sciences",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:33:30.550893"
+    },
+    {
+      "domain": "arts_humanities",
+      "status": "error",
+      "error": "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint",
+      "timestamp": "2026-03-08T23:33:33.837043"
+    }
+  ],
+  "completion_time": "2026-03-08T23:33:33.839660"
+}

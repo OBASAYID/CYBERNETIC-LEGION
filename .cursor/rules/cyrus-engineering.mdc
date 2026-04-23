@@ -1,0 +1,27 @@
+---
+description: CYRUS monorepo — UI/server fusion, auth split, and agent-neutral wording
+alwaysApply: true
+---
+
+# CYRUS engineering (Cursor / multi-agent)
+
+## Stack
+
+- **Single dev process:** `npm run dev` from repo root — one public port via **`CYRUS_LIVE_PORT`** (`PORT` synced at boot; default 3020); Vite middleware serves `cyrus-ui` on the same origin.
+- **API surface:** Use `systemFetch` / `systemApiUrl` from `cyrus-ui/src/lib/system-api.ts` for new browser→server calls. Do not add parallel “base URL” helpers.
+- **Lazy Command Center:** `client/` pages rely on same-origin `/api/*` or the fused `fetch` patch when `VITE_CYRUS_API_BASE` is set.
+
+## Auth
+
+- **`REPL_ID` set:** `server/replit_integrations/auth`.
+- **Otherwise:** `standalone/auth-adapter.ts` (session + `/api/login` + `/api/auth/user`).
+
+## Wording
+
+- Describe optional **split-origin** or **secondary API** hosts; avoid framing features as “Replit AI” or “Copilot” unless the file is Replit-specific runtime (`REPL_ID`).
+- Keep comments concise; put long onboarding in **AGENTS.md** or **README**, not scattered in code.
+
+## Safety
+
+- Respect `systemReady` / `GET /api/ready` 503 with `SYSTEM_INITIALIZING` for client retries.
+- Run **`npm run typecheck:all`** after non-trivial TypeScript changes.

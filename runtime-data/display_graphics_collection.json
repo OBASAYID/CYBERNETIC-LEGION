@@ -1,0 +1,10 @@
+{
+  "source": "original-cyrus-ui-extracted/client/public",
+  "syncedAt": "2026-04-15T18:28:38Z",
+  "images": [
+    "public/images/login-background.png"
+  ],
+  "videos": [
+    "public/videos/intro.mp4"
+  ]
+}

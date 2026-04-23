@@ -1,0 +1,55 @@
+scanned_files=98193
+duplicate_group_count=40578
+duplicate_file_count_total=85356
+files_to_delete=44778
+reclaimable_bytes=1575704456
+
+top_20_largest_groups:
+[1] size=449498880 count=2 keep=.venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
+  del=nexus_env/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
+[2] size=69339728 count=2 keep=.venv/lib/python3.12/site-packages/numpy/.dylibs/libopenblas64_.0.dylib
+  del=nexus_env/lib/python3.12/site-packages/numpy/.dylibs/libopenblas64_.0.dylib
+[3] size=47040802 count=2 keep=server/quantum_ai/attached_assets/BLACKTALON-MCN-1:_Complete_Engineering_Doctrine_|_Magnum_Maste_1769658866725.pdf
+  del=attached_assets/BLACKTALON-MCN-1:_Complete_Engineering_Doctrine_|_Magnum_Maste_1769658866725.pdf
+[4] size=45272778 count=2 keep=server/quantum_ai/cyrus_replit_upload.zip
+  del=cyrus_replit_upload.zip
+[5] size=26214400 count=3 keep=server/quantum_ai/attached_assets/quantum_nexus_smaller_aa_1770945865603
+  del=quantum_nexus_smaller_aa
+  del=attached_assets/quantum_nexus_smaller_aa_1770945865603
+[6] size=26214400 count=3 keep=server/quantum_ai/attached_assets/quantum_nexus_smaller_ad_1770953006400
+  del=attached_assets/quantum_nexus_smaller_ad_1770953006400
+  del=quantum_nexus_smaller_ad
+[7] size=26214400 count=3 keep=server/quantum_ai/attached_assets/quantum_nexus_smaller_ac_1770952074280
+  del=attached_assets/quantum_nexus_smaller_ac_1770952074280
+  del=quantum_nexus_smaller_ac
+[8] size=26214400 count=3 keep=server/quantum_ai/attached_assets/quantum_nexus_smaller_ab_1770950210037
+  del=attached_assets/quantum_nexus_smaller_ab_1770950210037
+  del=quantum_nexus_smaller_ab
+[9] size=24078640 count=2 keep=.venv/lib/python3.12/site-packages/torch/lib/libtorch_python.dylib
+  del=nexus_env/lib/python3.12/site-packages/torch/lib/libtorch_python.dylib
+[10] size=18932301 count=4 keep=server/quantum_ai/attached_assets/quantum_nexus_smaller_ae_1770953569122
+  del=attached_assets/quantum_nexus_smaller_ae_1770953569122
+  del=quantum_nexus_smaller_ae
+  del=quantum_nexus_part_ac
+[11] size=6786304 count=2 keep=.venv/lib/python3.12/site-packages/numpy/.dylibs/libgfortran.5.dylib
+  del=nexus_env/lib/python3.12/site-packages/numpy/.dylibs/libgfortran.5.dylib
+[12] size=6571584 count=2 keep=server/quantum_ai/venv/lib/python3.14/site-packages/numpy/_core/_multiarray_umath.cpython-314-darwin.so
+  del=venv/lib/python3.14/site-packages/numpy/_core/_multiarray_umath.cpython-314-darwin.so
+[13] size=5677632 count=2 keep=.venv/lib/python3.12/site-packages/scipy/optimize/_highspy/_core.cpython-312-darwin.so
+  del=nexus_env/lib/python3.12/site-packages/scipy/optimize/_highspy/_core.cpython-312-darwin.so
+[14] size=5611008 count=2 keep=.venv/lib/python3.12/site-packages/numpy/core/_multiarray_umath.cpython-312-darwin.so
+  del=nexus_env/lib/python3.12/site-packages/numpy/core/_multiarray_umath.cpython-312-darwin.so
+[15] size=4918048 count=2 keep=.venv/lib/python3.12/site-packages/lxml/etree.cpython-312-darwin.so
+  del=nexus_env/lib/python3.12/site-packages/lxml/etree.cpython-312-darwin.so
+[16] size=4659416 count=2 keep=.venv/lib/python3.12/site-packages/scipy/sparse/_sparsetools.cpython-312-darwin.so
+  del=nexus_env/lib/python3.12/site-packages/scipy/sparse/_sparsetools.cpython-312-darwin.so
+[17] size=4627168 count=2 keep=.venv/lib/python3.12/site-packages/PIL/.dylibs/libavif.16.3.0.dylib
+  del=nexus_env/lib/python3.12/site-packages/PIL/.dylibs/libavif.16.3.0.dylib
+[18] size=4180680 count=4 keep=.venv/lib/python3.12/site-packages/torch/bin/protoc-3.13.0.0
+  del=.venv/lib/python3.12/site-packages/torch/bin/protoc
+  del=nexus_env/lib/python3.12/site-packages/torch/bin/protoc-3.13.0.0
+  del=nexus_env/lib/python3.12/site-packages/torch/bin/protoc
+[19] size=3459472 count=2 keep=.venv/lib/python3.12/site-packages/scipy/.dylibs/libgfortran.5.dylib
+  del=nexus_env/lib/python3.12/site-packages/scipy/.dylibs/libgfortran.5.dylib
+[20] size=3125426 count=2 keep=server/quantum_ai/attached_assets/WhatsApp_Audio_2026-02-27_at_04.40.54_1772160448825.mpeg
+  del=attached_assets/WhatsApp_Audio_2026-02-27_at_04.40.54_1772160448825.mpeg

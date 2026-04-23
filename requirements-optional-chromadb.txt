@@ -1,0 +1,3 @@
+# Optional: Python Chroma CLI + HttpClient (PyPI name is chromadb, not "chroma")
+#   python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-optional-chromadb.txt
+chromadb>=0.4.24

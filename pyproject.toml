@@ -1,0 +1,118 @@
+[project]
+name = "quantum_ai"
+version = "2.0.0"
+description = "Quantum AI Core - Comprehensive data science and ML framework"
+readme = "README.md"
+authors = [{name = "crypton980"}]
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = [
+    "machine learning",
+    "deep learning",
+    "data science",
+    "explainable ai",
+    "xai",
+    "shap",
+    "lime",
+    "pytorch",
+    "tensorflow",
+    "visualization",
+    "preprocessing",
+    "eda",
+]
+dependencies = [
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "scikit-learn>=1.0.1",
+    "networkx>=2.6.0",
+    "matplotlib>=3.4.0",
+    "pandas>=1.3.0",
+    "joblib>=1.0.0",
+]
+
+[project.optional-dependencies]
+deep-learning = [
+    "torch>=1.9.0",
+    "torchvision>=0.16.0",
+    "tensorflow>=2.6.0",
+]
+explainability = [
+    "shap>=0.40.0",
+    "lime>=0.2.0",
+]
+web = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "requests>=2.31.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.6.0",
+]
+media-docs = [
+    "pillow>=10.2.0",
+    "opencv-python>=4.9.0",
+    "python-docx>=1.1.0",
+    "pypdf2>=3.0.0",
+    "qrcode>=7.4.0",
+    "psutil>=5.9.0",
+]
+quantum = [
+    "qiskit-ibm-runtime>=0.22.0",
+]
+visualization = [
+    "plotly>=5.0.0",
+    "seaborn>=0.11.0",
+]
+all = [
+    "torch>=1.9.0",
+    "torchvision>=0.16.0",
+    "tensorflow>=2.6.0",
+    "shap>=0.40.0",
+    "lime>=0.2.0",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "requests>=2.31.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.6.0",
+    "pillow>=10.2.0",
+    "opencv-python>=4.9.0",
+    "python-docx>=1.1.0",
+    "pypdf2>=3.0.0",
+    "qrcode>=7.4.0",
+    "psutil>=5.9.0",
+    "qiskit-ibm-runtime>=0.22.0",
+    "plotly>=5.0.0",
+    "seaborn>=0.11.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/crypton980/quantum-ai-core"
+Source = "https://github.com/crypton980/quantum-ai-core"
+Tracker = "https://github.com/crypton980/quantum-ai-core/issues"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["server"]
+include = ["quantum_ai*", "core_algorithms*", "quantum_ai_core*"]
