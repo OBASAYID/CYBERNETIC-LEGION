@@ -25,8 +25,8 @@
     "dev:cyrus-ui": "CYRUS_SINGLE_ORIGIN=1 NODE_ENV=development CYRUS_UI_ROOT=cyrus-ui TMPDIR=/tmp tsx server/index.ts",
     "dev:dashboard-ui": "npm run dev:cyrus-ui",
     "dev:split-origin": "NODE_ENV=development CYRUS_UI_ROOT=cyrus-ui TMPDIR=/tmp tsx server/index.ts",
-    "dev:stack:replit": "echo 'NOTE: two services (Python + Node); browser should still use Node PORT only. Prefer: npm run dev' >&2; concurrently -n cyrus-ai,web -c magenta,green \"python3 cyrus-ai/api.py\" \"npm run dev\"",
-    "dev:stack:cyrus-ui": "echo 'NOTE: two services (Python + Node). Prefer single-port: npm run dev' >&2; concurrently -n cyrus-ai,web -c magenta,green \"python3 cyrus-ai/api.py\" \"npm run dev:cyrus-ui\"",
+    "dev:stack:replit": "echo 'NOTE: two services (Python + Node); browser should still use Node PORT only. Prefer: npm run dev' >&2; concurrently -n cyrus-ai,web -c magenta,green \"python3 cyrus-[...]",
+    "dev:stack:cyrus-ui": "echo 'NOTE: two services (Python + Node). Prefer single-port: npm run dev' >&2; concurrently -n cyrus-ai,web -c magenta,green \"python3 cyrus-ai/api.py\" \"npm run dev:c[...]",
     "cyrus:up": "bash scripts/cyrus-up.sh",
     "build:cyrus-ui": "CYRUS_UI_ROOT=cyrus-ui npm run build",
     "start:cluster": "TMPDIR=/tmp tsx server/cluster.ts",
@@ -34,7 +34,7 @@
     "start:prod": "NODE_ENV=production TMPDIR=/tmp tsx server/index.ts",
     "start:prod:cluster": "NODE_ENV=production TMPDIR=/tmp tsx server/cluster.ts",
     "start:prod:dist": "NODE_ENV=production node --experimental-specifier-resolution=node dist/server/index.js",
-    "start:all": "echo 'NOTE: start:all runs Python + Node on different ports. For one public port use: npm run dev or npm run start (built)' >&2; concurrently \"python3 cyrus-ai/api.py\" \"npm run start\"",
+    "start:all": "echo 'NOTE: start:all runs Python + Node on different ports. For one public port use: npm run dev or npm run start (built)' >&2; concurrently \"python3 cyrus-ai/api.py\" \"npm ru[...]",
     "chroma:server": "bash scripts/chroma-server.sh",
     "health:check": "bash scripts/health-check.sh",
     "verify:gate": "bash scripts/verify-gate.sh",
@@ -57,7 +57,7 @@
   "author": "CYRUS Development Team",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.1.0",
