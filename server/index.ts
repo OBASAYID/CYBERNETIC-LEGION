@@ -109,7 +109,7 @@ function findDistPublic(): string | null {
     if (fs.existsSync(path.join(resolvedDir, "index.html"))) {
       return resolvedDir;
     }
-    console.warn(`[Static] FRONTEND_STATIC_DIR is set but invalid: ${resolvedDir}. Falling back to auto-detection.`);
+    throw new Error(`FRONTEND_STATIC_DIR is set but invalid: ${resolvedDir}`);
   }
 
   const candidates = [
