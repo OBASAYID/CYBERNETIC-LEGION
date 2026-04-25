@@ -2,7 +2,7 @@ import { startTransition, useDeferredValue, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Activity, Cpu, RefreshCw, Send, Sparkles } from "lucide-react";
 
-import { cyrusApi, type CognitiveResponse } from "../api/cyrusApi.js";
+import { cyrusApi, type CognitiveResponse } from "../api/cyrusApi";
 
 type FeedEntry = {
   id: string;

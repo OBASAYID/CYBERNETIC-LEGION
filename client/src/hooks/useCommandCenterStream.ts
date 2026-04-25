@@ -7,7 +7,7 @@ import {
   normalizeAuditLogs,
   normalizeMissions,
   normalizePerformance,
-} from "../api/cyrusApi.js";
+} from "../api/cyrusApi";
 
 type StreamState = {
   connected: boolean;

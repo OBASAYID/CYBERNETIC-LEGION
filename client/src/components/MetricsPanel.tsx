@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Gauge, TrendingUp } from "lucide-react";
 
-import { cyrusApi } from "../api/cyrusApi.js";
+import { cyrusApi } from "../api/cyrusApi";
 
 function toPercent(value: number) {
   return `${Math.round(value * 100)}%`;

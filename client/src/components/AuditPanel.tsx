@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ScrollText } from "lucide-react";
 
-import { cyrusApi } from "../api/cyrusApi.js";
+import { cyrusApi } from "../api/cyrusApi";
 
 export function AuditPanel() {
   const auditQuery = useQuery({ queryKey: ["audit-logs"], queryFn: () => cyrusApi.getAuditLogs(30) });

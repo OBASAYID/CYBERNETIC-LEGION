@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Clock3, ShieldCheck, XCircle } from "lucide-react";
 
-import { cyrusApi } from "../api/cyrusApi.js";
+import { cyrusApi } from "../api/cyrusApi";
 
 type ApprovalPanelProps = {
   operatorName: string;

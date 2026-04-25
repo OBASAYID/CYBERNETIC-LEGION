@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Brain, RefreshCw } from "lucide-react";
 
-import { cyrusApi } from "../api/cyrusApi.js";
+import { cyrusApi } from "../api/cyrusApi";
 
 export function FusionPanel() {
   const [query, setQuery] = useState("Assess current system posture and active safeguards");

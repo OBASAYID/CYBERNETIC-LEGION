@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Shield, ShieldAlert, Workflow } from "lucide-react";
 
-import { cyrusApi } from "../api/cyrusApi.js";
+import { cyrusApi } from "../api/cyrusApi";
 
 function ratioToPercent(value: unknown) {
   if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
