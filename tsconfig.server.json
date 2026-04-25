@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist"
+  },
+  "include": [
+    "server/**/*",
+    "shared/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "server/quantum_ai/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "client/**/*",
+    "cyrus-ui/**/*",
+    "original-cyrus-ui-extracted/**/*"
+  ]
+}
