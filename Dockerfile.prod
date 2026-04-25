@@ -13,7 +13,7 @@ ENV VITE_API_FETCH_TIMEOUT_MS=$VITE_API_FETCH_TIMEOUT_MS
 # (e.g. PaaS "Root Directory" set to `cyrus-ui/`), `package-lock.json` will be missing and
 # `npm ci` fails with EUSAGE — set the service root to the repository root for this Dockerfile.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 RUN npm run build && npm prune --omit=dev
