@@ -1,5 +1,6 @@
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
+RUN npm install -g npm@11.13.0
 
 # Vite bakes `VITE_*` at build time — pass from CI / `docker build --build-arg ...` for production maps, etc.
 ARG VITE_GOOGLE_MAPS_API_KEY=
@@ -23,6 +24,7 @@ RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
+RUN npm install -g npm@11.13.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
