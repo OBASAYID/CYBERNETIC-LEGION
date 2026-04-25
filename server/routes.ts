@@ -2166,6 +2166,7 @@ Format your response in a clear, structured manner.`
   // CYRUS AI Inference endpoint - generates intelligent responses using OpenAI
   // Now with integrated autonomous agent capabilities
   const handleCyrusInfer = async (req: Request, res: any) => {
+    let taskTrackingId: string | null = null;
     const jsonInferError = (apology: string) => {
       try {
         const identity = cyrusSoul.getIdentity();
@@ -2208,6 +2209,14 @@ Format your response in a clear, structured manner.`
         return res.status(400).json({ error: "Message is required" });
       }
 
+      // Track each inference so learning/evolution metrics reflect real usage.
+      taskTrackingId = adaptiveLearning.generateTaskId();
+      adaptiveLearning.startTaskTracking(taskTrackingId, "general_conversation", {
+        message,
+        hasImage: Boolean(imageData),
+        hasConversationHistory: Array.isArray(conversationHistory) && conversationHistory.length > 0,
+      });
+
       // AUTONOMOUS AGENT DETECTION - Check if this command requires agent execution
       const requiresAgentExecution = isAgentCommand(message);
 
@@ -2218,6 +2227,16 @@ Format your response in a clear, structured manner.`
 
         // Process thought through CYRUS Soul
         cyrusSoul.processThought(message, "agent_execution");
+        await adaptiveLearning.learnFromConversation(String(message), String(response), {
+          moduleContext: "agent_execution",
+        });
+        await adaptiveLearning.endTaskTracking(
+          taskTrackingId,
+          true,
+          { responseLength: String(response).length, agentResult },
+          "autonomous_agent_execution",
+        );
+        taskTrackingId = null;
 
         const identity = cyrusSoul.getIdentity();
         return res.json({
@@ -2233,6 +2252,16 @@ Format your response in a clear, structured manner.`
 
       if (!openai) {
         const hasImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        await adaptiveLearning.learnFromConversation(String(message), "offline_mode_no_api_key", {
+          moduleContext: "offline_mode",
+        });
+        await adaptiveLearning.endTaskTracking(
+          taskTrackingId,
+          true,
+          { offlineMode: true, hasImage },
+          "offline_fallback_response",
+        );
+        taskTrackingId = null;
         return jsonOfflineNoKey(String(message), hasImage);
       }
 
@@ -2332,6 +2361,16 @@ If you detect a command that requires physical device interaction, inform the op
 
       // Process thought through CYRUS Soul for learning
       cyrusSoul.processThought(message, context?.summary);
+      await adaptiveLearning.learnFromConversation(String(message), String(response), {
+        moduleContext: context?.summary || "general_conversation",
+      });
+      await adaptiveLearning.endTaskTracking(
+        taskTrackingId,
+        true,
+        { responseLength: String(response).length },
+        "openai_chat_completion",
+      );
+      taskTrackingId = null;
 
       res.json({
         response,
@@ -2343,6 +2382,14 @@ If you detect a command that requires physical device interaction, inform the op
       });
     } catch (error) {
       console.error("Error in CYRUS inference:", error);
+      if (taskTrackingId) {
+        await adaptiveLearning.endTaskTracking(
+          taskTrackingId,
+          false,
+          { error: error instanceof Error ? error.message : String(error) },
+          "inference_error",
+        );
+      }
       return jsonInferError(
         "I apologize, I encountered an error processing your request. Systems are recalibrating."
       );
