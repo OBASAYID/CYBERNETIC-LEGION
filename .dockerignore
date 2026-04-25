@@ -66,3 +66,12 @@ yarn-error.log
 *.swo
 *~
 .DS_Store
+
+# Local/runtime artifacts not required to build the production image.
+cyrus-ai/chroma-data/
+cyrus-ai/runtime-data/
+build/
+dist/
+reports/
+tiiny-build.zip
+ziOyq6MR/
