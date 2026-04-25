@@ -8,6 +8,7 @@ ARG VITE_API_FETCH_TIMEOUT_MS=
 ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
 ENV VITE_CYRUS_API_BASE=$VITE_CYRUS_API_BASE
 ENV VITE_API_FETCH_TIMEOUT_MS=$VITE_API_FETCH_TIMEOUT_MS
+ENV CYRUS_UI_ROOT=cyrus-ui
 
 # Install deps from the repo root lockfile. If your Docker build context is a subdirectory
 # (e.g. PaaS "Root Directory" set to `cyrus-ui/`), `package-lock.json` will be missing and
