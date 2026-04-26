@@ -80,112 +80,192 @@ let depsLoaded = false;
 async function loadDependencies() {
   if (depsLoaded) return;
 
-  const storageM = await import("./storage");
-  storage = storageM.storage;
-  const schemaM = await import("../shared/schema");
-  insertConversationSchema = schemaM.insertConversationSchema;
-  insertMemorySchema = schemaM.insertMemorySchema;
-  insertUploadedFileSchema = schemaM.insertUploadedFileSchema;
+  try {
+    const storageM = await import("./storage");
+    storage = storageM.storage;
+    const schemaM = await import("../shared/schema");
+    insertConversationSchema = schemaM.insertConversationSchema;
+    insertMemorySchema = schemaM.insertMemorySchema;
+    insertUploadedFileSchema = schemaM.insertUploadedFileSchema;
+  } catch (e) {
+    console.warn("[Routes] Failed to load storage/schema:", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const nfM = await import("./ai/neural-fusion");
-  neuralFusionEngine = nfM.neuralFusionEngine;
+  try {
+    const nfM = await import("./ai/neural-fusion");
+    neuralFusionEngine = nfM.neuralFusionEngine;
+  } catch (e) {
+    console.warn("[Routes] Failed to load neural-fusion (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const csM = await import("./ai/cyrus-soul");
-  cyrusSoul = csM.cyrusSoul;
+  try {
+    const csM = await import("./ai/cyrus-soul");
+    cyrusSoul = csM.cyrusSoul;
+  } catch (e) {
+    console.warn("[Routes] Failed to load cyrus-soul (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const qcM = await import("./ai/quantum-core");
-  quantumCore = qcM.quantumCore;
+  try {
+    const qcM = await import("./ai/quantum-core");
+    quantumCore = qcM.quantumCore;
+  } catch (e) {
+    console.warn("[Routes] Failed to load quantum-core (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const brM = await import("./ai/branches/index");
-  domainSummary = brM.domainSummary;
-  allBranches = brM.allBranches;
+  try {
+    const brM = await import("./ai/branches/index");
+    domainSummary = brM.domainSummary;
+    allBranches = brM.allBranches;
+  } catch (e) {
+    console.warn("[Routes] Failed to load branches (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const arM = await import("./replit_integrations/audio/routes");
-  registerAudioRoutes = arM.registerAudioRoutes;
-  const acM = await import("./replit_integrations/audio/client");
-  speechToText = acM.speechToText;
-  ensureCompatibleFormat = acM.ensureCompatibleFormat;
-  const elM = await import("./elevenlabs/client");
-  textToSpeechElevenLabs = elM.textToSpeechElevenLabs;
-  textToSpeechStreamElevenLabs = elM.textToSpeechStreamElevenLabs;
-  ELEVENLABS_VOICES = elM.ELEVENLABS_VOICES;
-  getEmotionVoiceSettings = elM.getEmotionVoiceSettings;
+  try {
+    const arM = await import("./replit_integrations/audio/routes");
+    registerAudioRoutes = arM.registerAudioRoutes;
+    const acM = await import("./replit_integrations/audio/client");
+    speechToText = acM.speechToText;
+    ensureCompatibleFormat = acM.ensureCompatibleFormat;
+  } catch (e) {
+    console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const elM = await import("./elevenlabs/client");
+    textToSpeechElevenLabs = elM.textToSpeechElevenLabs;
+    textToSpeechStreamElevenLabs = elM.textToSpeechStreamElevenLabs;
+    ELEVENLABS_VOICES = elM.ELEVENLABS_VOICES;
+    getEmotionVoiceSettings = elM.getEmotionVoiceSettings;
+  } catch (e) {
+    console.warn("[Routes] Failed to load ElevenLabs client (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const auM = await import("./autonomy/run");
-  runAutonomy = auM.runAutonomy;
-  const drM = await import("./device/routes");
-  registerDeviceRoutes = drM.registerDeviceRoutes;
-  const nvM = await import("./nav/routes");
-  registerNavRoutes = nvM.registerNavRoutes;
+  try {
+    const auM = await import("./autonomy/run");
+    runAutonomy = auM.runAutonomy;
+  } catch (e) {
+    console.warn("[Routes] Failed to load autonomy/run (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const drM = await import("./device/routes");
+    registerDeviceRoutes = drM.registerDeviceRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load device routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const nvM = await import("./nav/routes");
+    registerNavRoutes = nvM.registerNavRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load nav routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const dtM = await import("./ingestion/detect");
-  detectFile = dtM.detectFile;
-  const exM = await import("./ingestion/extract");
-  extractFile = exM.extractFile;
-  const anM = await import("./ingestion/analyze");
-  analyzeExtraction = anM.analyzeExtraction;
-  const rpM = await import("./ingestion/report");
-  buildReport = rpM.buildReport;
-  const jobsM = await import("./ingestion/jobs");
-  createAnalysisJob = jobsM.createAnalysisJob;
-  getAnalysisJob = jobsM.getAnalysisJob;
-  listAnalysisReports = jobsM.listAnalysisReports;
-  const dgM = await import("./docgen/generate");
-  generateDocument = dgM.generateDocument;
-  const dgJobsM = await import("./docgen/jobs");
-  createDocgenJob = dgJobsM.createDocgenJob;
-  getDocgenJob = dgJobsM.getDocgenJob;
-  listDocgenJobs = dgJobsM.listDocgenJobs;
-  cancelDocgenJob = dgJobsM.cancelDocgenJob;
-  resumeDocgenJob = dgJobsM.resumeDocgenJob;
+  try {
+    const dtM = await import("./ingestion/detect");
+    detectFile = dtM.detectFile;
+    const exM = await import("./ingestion/extract");
+    extractFile = exM.extractFile;
+    const anM = await import("./ingestion/analyze");
+    analyzeExtraction = anM.analyzeExtraction;
+    const rpM = await import("./ingestion/report");
+    buildReport = rpM.buildReport;
+    const jobsM = await import("./ingestion/jobs");
+    createAnalysisJob = jobsM.createAnalysisJob;
+    getAnalysisJob = jobsM.getAnalysisJob;
+    listAnalysisReports = jobsM.listAnalysisReports;
+  } catch (e) {
+    console.warn("[Routes] Failed to load ingestion modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const dgM = await import("./docgen/generate");
+    generateDocument = dgM.generateDocument;
+    const dgJobsM = await import("./docgen/jobs");
+    createDocgenJob = dgJobsM.createDocgenJob;
+    getDocgenJob = dgJobsM.getDocgenJob;
+    listDocgenJobs = dgJobsM.listDocgenJobs;
+    cancelDocgenJob = dgJobsM.cancelDocgenJob;
+    resumeDocgenJob = dgJobsM.resumeDocgenJob;
+  } catch (e) {
+    console.warn("[Routes] Failed to load docgen modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const sgM = await import("./comms/signaling");
-  initSignalingServer = sgM.initSignalingServer;
-  const ssM = await import("./comms/socket-signaling");
-  initSocketSignaling = ssM.initSocketSignaling;
-  const stM = await import("./comms/store");
-  enqueueMessage = stM.enqueueMessage;
-  dequeueMessages = stM.dequeueMessages;
-  addReminder = stM.addReminder;
-  listReminders = stM.listReminders;
-  const crM = await import("./comms/comms-routes");
-  registerCommsRoutes = crM.registerCommsRoutes;
+  try {
+    const sgM = await import("./comms/signaling");
+    initSignalingServer = sgM.initSignalingServer;
+    const ssM = await import("./comms/socket-signaling");
+    initSocketSignaling = ssM.initSocketSignaling;
+    const stM = await import("./comms/store");
+    enqueueMessage = stM.enqueueMessage;
+    dequeueMessages = stM.dequeueMessages;
+    addReminder = stM.addReminder;
+    listReminders = stM.listReminders;
+    const crM = await import("./comms/comms-routes");
+    registerCommsRoutes = crM.registerCommsRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const scM = await import("./scan/analyze");
-  analyzeScan = scM.analyzeScan;
-  const qrM = await import("./scan/qr");
-  decodeQr = qrM.decodeQr;
-  const drnM = await import("./drone/routes");
-  registerDroneRoutes = drnM.registerDroneRoutes;
+  try {
+    const scM = await import("./scan/analyze");
+    analyzeScan = scM.analyzeScan;
+    const qrM = await import("./scan/qr");
+    decodeQr = qrM.decodeQr;
+    const drnM = await import("./drone/routes");
+    registerDroneRoutes = drnM.registerDroneRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load scan/drone modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const emM = await import("./ai/experience-memory");
-  experienceMemory = emM.experienceMemory;
+  try {
+    const emM = await import("./ai/experience-memory");
+    experienceMemory = emM.experienceMemory;
+  } catch (e) {
+    console.warn("[Routes] Failed to load experience-memory (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const alM = await import("./ai/adaptive-learning");
-  adaptiveLearning = alM.adaptiveLearning;
+  try {
+    const alM = await import("./ai/adaptive-learning");
+    adaptiveLearning = alM.adaptiveLearning;
+  } catch (e) {
+    console.warn("[Routes] Failed to load adaptive-learning (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const aurM = await import("./ai/upgrades/routes");
-  registerAdvancedUpgradeRoutes = aurM.registerAdvancedUpgradeRoutes;
+  try {
+    const aurM = await import("./ai/upgrades/routes");
+    registerAdvancedUpgradeRoutes = aurM.registerAdvancedUpgradeRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load upgrade routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const moM = await import("./ai/upgrades/module-orchestrator");
-  moduleOrchestrator = moM.moduleOrchestrator;
+  try {
+    const moM = await import("./ai/upgrades/module-orchestrator");
+    moduleOrchestrator = moM.moduleOrchestrator;
+  } catch (e) {
+    console.warn("[Routes] Failed to load module-orchestrator (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const irM = await import("./ai/interactive/routes");
-  registerInteractiveRoutes = irM.registerInteractiveRoutes;
+  try {
+    const irM = await import("./ai/interactive/routes");
+    registerInteractiveRoutes = irM.registerInteractiveRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load interactive routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
   autonomyRoutes = null;
@@ -197,39 +277,68 @@ async function loadDependencies() {
   }
   await tick();
 
-  const dcM = await import("./data-collection/routes");
-  dataCollectionRoutes = dcM.default;
+  try {
+    const dcM = await import("./data-collection/routes");
+    dataCollectionRoutes = dcM.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load data-collection routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const qbM = await import("./ai/quantum-bridge-client");
-  quantumBridge = qbM.quantumBridge;
-  const qrfM = await import("./ai/quantum-response-formatter");
-  quantumResponseFormatter = qrfM.quantumResponseFormatter;
+  try {
+    const qbM = await import("./ai/quantum-bridge-client");
+    quantumBridge = qbM.quantumBridge;
+    const qrfM = await import("./ai/quantum-response-formatter");
+    quantumResponseFormatter = qrfM.quantumResponseFormatter;
+  } catch (e) {
+    console.warn("[Routes] Failed to load quantum bridge/formatter (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const hiM = await import("./health/integrations");
-  healthIntegrations = hiM.healthIntegrations;
-  validateState = hiM.validateState;
-  const imgRM = await import("./replit_integrations/image/routes");
-  registerImageRoutes = imgRM.registerImageRoutes;
-  const imgCM = await import("./replit_integrations/image/client");
-  generateImage = imgCM.generateImage;
+  try {
+    const hiM = await import("./health/integrations");
+    healthIntegrations = hiM.healthIntegrations;
+    validateState = hiM.validateState;
+  } catch (e) {
+    console.warn("[Routes] Failed to load health integrations (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const imgRM = await import("./replit_integrations/image/routes");
+    registerImageRoutes = imgRM.registerImageRoutes;
+    const imgCM = await import("./replit_integrations/image/client");
+    generateImage = imgCM.generateImage;
+  } catch (e) {
+    console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const srM = await import("./ai/system-refinement-engine");
-  systemRefinementEngine = srM.systemRefinementEngine;
+  try {
+    const srM = await import("./ai/system-refinement-engine");
+    systemRefinementEngine = srM.systemRefinementEngine;
+  } catch (e) {
+    console.warn("[Routes] Failed to load system-refinement-engine (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const efM = await import("./humanoid/emotion-fusion");
-  emotionFusion = efM.emotionFusion;
-  const vpM = await import("./humanoid/voice-prosody");
-  voiceProsody = vpM.voiceProsody;
-  const humanoidM = await import("./humanoid/routes");
-  humanoidRoutes = humanoidM.default;
+  try {
+    const efM = await import("./humanoid/emotion-fusion");
+    emotionFusion = efM.emotionFusion;
+    const vpM = await import("./humanoid/voice-prosody");
+    voiceProsody = vpM.voiceProsody;
+    const humanoidM = await import("./humanoid/routes");
+    humanoidRoutes = humanoidM.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load humanoid modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const brainModule = await import("./ai/brain-routes");
-  brainRoutes = brainModule.default;
+  try {
+    const brainModule = await import("./ai/brain-routes");
+    brainRoutes = brainModule.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load brain-routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
   depsLoaded = true;
@@ -418,20 +527,34 @@ export async function registerRoutes(
 ): Promise<Server> {
   await loadDependencies();
 
-  initSignalingServer(httpServer);
-  initSocketSignaling(httpServer);
+  if (initSignalingServer) {
+    try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (initSocketSignaling) {
+    try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
   console.log("[Socket.IO] Real-time communication server active");
-  registerCommsRoutes(app);
-  registerAdvancedUpgradeRoutes(app);
-  registerInteractiveRoutes(app);
+  if (registerCommsRoutes) {
+    try { registerCommsRoutes(app); } catch (e) { console.warn("[Routes] registerCommsRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerAdvancedUpgradeRoutes) {
+    try { registerAdvancedUpgradeRoutes(app); } catch (e) { console.warn("[Routes] registerAdvancedUpgradeRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerInteractiveRoutes) {
+    try { registerInteractiveRoutes(app); } catch (e) { console.warn("[Routes] registerInteractiveRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
 
   // Autonomy Agent System
   if (autonomyRoutes) {
     app.use('/api/autonomy', autonomyRoutes);
   }
 
-  // CYRUS Brain API
-  app.use('/api/brain', brainRoutes);
+  // CYRUS Brain API — provide a minimal fallback if brain-routes failed to load
+  if (brainRoutes) {
+    app.use('/api/brain', brainRoutes);
+  } else {
+    app.get('/api/brain/status', (_req, res) => res.json({ status: 'unavailable', reason: 'Brain module failed to load' }));
+  }
 
   // Health Device Integration Routes
   app.get("/api/health/providers", async (req, res) => {
