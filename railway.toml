@@ -1,9 +1,9 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile.prod"
+dockerfilePath = "Dockerfile.railway"
 
 [deploy]
-startCommand = "/app/scripts/entrypoint.prod.sh"
+startCommand = "bun dist/server/index.js"
 healthcheckPath = "/health/ready"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

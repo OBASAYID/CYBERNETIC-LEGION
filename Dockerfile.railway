@@ -1,0 +1,30 @@
+FROM oven/bun:1 AS builder
+WORKDIR /app
+
+# Install dependencies with Bun.
+COPY package.json package-lock.json ./
+RUN bun install --no-progress
+
+COPY . .
+
+# Keep build behavior aligned with production defaults.
+ENV NODE_OPTIONS=--max-old-space-size=3072
+ENV CYRUS_UI_ROOT=cyrus-ui
+
+RUN bun run build
+
+FROM oven/bun:1-slim AS runtime
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN bun install --production --no-progress
+
+COPY --from=builder /app/dist /app/dist
+
+ENV NODE_ENV=production
+ENV CYRUS_ENABLE_PYTHON=0
+ENV SERVER_HOST=0.0.0.0
+
+EXPOSE 8080
+
+CMD ["bun", "dist/server/index.js"]
