@@ -1,9 +1,13 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
-# Install dependencies with Bun.
+# Install root dependencies with Bun.
 COPY package.json package-lock.json ./
 RUN bun install --no-progress
+
+# Install cyrus-ui dependencies so Vite can resolve all imports at build time.
+COPY cyrus-ui/package.json ./cyrus-ui/package.json
+RUN cd cyrus-ui && bun install --no-progress
 
 COPY . .
 
