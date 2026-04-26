@@ -26,7 +26,16 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Long-lived cache for hashed JS/CSS assets; no-cache for HTML so the app shell is always fresh
+  app.use(express.static(distPath, {
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }));
 
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath!, "index.html"));
