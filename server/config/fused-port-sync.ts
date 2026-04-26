@@ -17,13 +17,34 @@ export function syncFusedStackPortEnv(): void {
   const portRaw = process.env.PORT?.trim();
 
   if (liveRaw && portRaw && liveRaw !== portRaw) {
+    const portNum = parseInt(portRaw, 10);
+    const liveNum = parseInt(liveRaw, 10);
+
     // PaaS (Render, Fly, etc.) injects PORT for routing. Never let CYRUS_LIVE_PORT
     // override it or the proxy will return 502 while the app listens elsewhere.
+    if (Number.isFinite(portNum) && portNum > 0) {
+      console.warn(
+        `[CYRUS Fused] PORT (${portRaw}) != CYRUS_LIVE_PORT (${liveRaw}); using PORT for HTTP bind (platform compatibility).`,
+      );
+      process.env.CYRUS_LIVE_PORT = String(portNum);
+      process.env.PORT = String(portNum);
+      return;
+    }
+
+    if (Number.isFinite(liveNum) && liveNum > 0) {
+      console.warn(
+        `[CYRUS Fused] PORT (${portRaw}) is invalid while CYRUS_LIVE_PORT (${liveRaw}) is valid; using CYRUS_LIVE_PORT.`,
+      );
+      process.env.CYRUS_LIVE_PORT = String(liveNum);
+      process.env.PORT = String(liveNum);
+      return;
+    }
+
     console.warn(
-      `[CYRUS Fused] PORT (${portRaw}) != CYRUS_LIVE_PORT (${liveRaw}); using PORT for HTTP bind (platform compatibility).`,
+      `[CYRUS Fused] Both PORT (${portRaw}) and CYRUS_LIVE_PORT (${liveRaw}) are invalid; falling back to ${DEFAULT_LIVE_PORT}.`,
     );
-    process.env.CYRUS_LIVE_PORT = portRaw;
-    process.env.PORT = portRaw;
+    process.env.CYRUS_LIVE_PORT = String(DEFAULT_LIVE_PORT);
+    process.env.PORT = String(DEFAULT_LIVE_PORT);
     return;
   }
 
