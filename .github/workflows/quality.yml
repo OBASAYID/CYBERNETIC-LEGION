@@ -20,6 +20,7 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
+        continue-on-error: true
         with:
           python-version: "3.12"
           cache: "pip"
