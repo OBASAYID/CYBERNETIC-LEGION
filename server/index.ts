@@ -544,7 +544,7 @@ async function initializeSystem() {
   systemReady = true;
   log("All systems initialized - accepting API traffic");
 
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" && process.env.CYRUS_ENABLE_PYTHON === "1") {
     try {
       const { spawn } = await import("child_process");
       const pythonServices = [
