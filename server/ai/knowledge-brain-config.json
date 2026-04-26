@@ -1,74 +1,30 @@
 {
   "vectorDb": {
-    "type": "chromadb",
-    "persistDirectory": "./data/knowledge/chroma",
-    "collectionName": "cyrus_knowledge"
+    "type": "memory",
+    "enabled": false
   },
-  "knowledgeGraph": {
-    "type": "neo4j",
-    "uri": "bolt://localhost:7687",
-    "user": "neo4j",
-    "password": "cyrus_brain_2026"
+  "semanticSearch": {
+    "enabled": false,
+    "minSimilarity": 0.7,
+    "maxResults": 10
   },
-  "learning": {
-    "modelPath": "./models/cyrus-brain",
-    "embeddingModel": "sentence-transformers/all-MiniLM-L6-v2",
-    "adaptationRate": 0.01,
-    "memoryRetention": 0.95
+  "knowledgeAcquisition": {
+    "autoLearn": false,
+    "sources": [],
+    "updateInterval": 3600
   },
   "dataSources": {
     "web": {
-      "enabled": true,
-      "domains": [
-        "wikipedia.org",
-        "arxiv.org",
-        "nature.com",
-        "science.org",
-        "ieee.org"
-      ],
-      "crawlDepth": 3,
-      "rateLimit": 1
+      "enabled": false
     },
     "youtube": {
-      "enabled": true,
-      "channels": [
-        "Vsauce",
-        "Kurzgesagt",
-        "TED-Ed",
-        "3Blue1Brown",
-        "SciShow"
-      ],
-      "maxVideos": 1000,
-      "transcriptOnly": true
+      "enabled": false
     },
     "academic": {
-      "enabled": true,
-      "sources": [
-        "arxiv",
-        "pubmed",
-        "google_scholar"
-      ],
-      "keywords": [
-        "artificial intelligence",
-        "machine learning",
-        "neural networks",
-        "cognitive science"
-      ]
+      "enabled": false
     },
     "news": {
-      "enabled": true,
-      "sources": [
-        "bbc",
-        "reuters",
-        "nature_news",
-        "science_daily"
-      ],
-      "categories": [
-        "science",
-        "technology",
-        "engineering",
-        "psychology"
-      ]
+      "enabled": false
     }
   },
   "relevanceFilter": {
@@ -76,17 +32,7 @@
       "artificial intelligence",
       "machine learning",
       "neural networks",
-      "cognitive science",
-      "psychology",
-      "engineering",
-      "aerospace",
-      "robotics",
-      "human-computer interaction",
-      "natural language processing",
-      "computer vision",
-      "quantum computing",
-      "biotechnology",
-      "materials science"
+      "cognitive science"
     ],
     "minRelevanceScore": 0.7,
     "maxNoiseWords": 0.3

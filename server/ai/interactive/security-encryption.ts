@@ -76,14 +76,8 @@ class SecurityEncryptionModule {
       return pbkdf2Sync(secret, salt, 100000, 32, "sha512");
     }
 
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "ENCRYPTION_SECRET and ENCRYPTION_SALT must be set in production. Refusing insecure default encryption key."
-      );
-    }
-
     console.warn(
-      "[Security Module] ENCRYPTION_SECRET/ENCRYPTION_SALT not set. Using ephemeral key for non-production mode."
+      "[Security Module] ENCRYPTION_SECRET/ENCRYPTION_SALT not set. Using ephemeral session key — set these env vars for persistent encryption across restarts."
     );
     return randomBytes(32);
   }

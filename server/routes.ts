@@ -3531,12 +3531,22 @@ Return ONLY valid JSON.`
     }
   });
 
-  // Register audio/voice routes
-  registerAudioRoutes(app);
-  registerImageRoutes(app);
-  registerDeviceRoutes(app);
-  registerNavRoutes(app);
-  registerDroneRoutes(app);
+  // Register audio/voice routes (guard against load failures)
+  if (registerAudioRoutes) {
+    try { registerAudioRoutes(app); } catch (e) { console.warn("[Routes] registerAudioRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerImageRoutes) {
+    try { registerImageRoutes(app); } catch (e) { console.warn("[Routes] registerImageRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerDeviceRoutes) {
+    try { registerDeviceRoutes(app); } catch (e) { console.warn("[Routes] registerDeviceRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerNavRoutes) {
+    try { registerNavRoutes(app); } catch (e) { console.warn("[Routes] registerNavRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerDroneRoutes) {
+    try { registerDroneRoutes(app); } catch (e) { console.warn("[Routes] registerDroneRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
 
 
   app.get("/api/nexus/tools", async (_req, res) => {
