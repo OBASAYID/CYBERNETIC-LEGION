@@ -13,6 +13,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import { logger } from "./observability/logger.js";
+import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
 
@@ -226,8 +227,26 @@ How can I assist you today? Please specify the type of help you need (medical, t
 app.get("/__health", (_req, res) => res.status(200).send("ok"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
 app.get("/health/live", (_req, res) => res.status(200).json({ status: "alive" }));
-app.get("/health/ready", (_req, res) => {
-  res.status(systemReady ? 200 : 503).json({ status: systemReady ? "ready" : "initializing" });
+app.get("/health/ready", async (_req, res) => {
+  if (!systemReady) {
+    return res.status(503).json({ status: "initializing" });
+  }
+  // Verify database connectivity as part of readiness
+  let dbOk = false;
+  try {
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+  const status = dbOk ? "ready" : "degraded";
+  return res.status(dbOk ? 200 : 503).json({
+    status,
+    database: dbOk ? "connected" : "unavailable",
+    uptime: process.uptime(),
+  });
 });
 /** Same semantics as `/health/ready` for clients that only probe `/api/*` (single-channel stacks). */
 app.get("/api/ready", (_req, res) => {
@@ -250,8 +269,8 @@ app.get("/api/status", (_req, res) => {
       "Industrial device control and protocols",
       "AI teaching and learning systems",
     ],
-    accuracy: "99.999%",
-    uptime: "100%",
+    uptime: process.uptime(),
+    metrics: getMetrics(),
   });
 });
 app.post("/api/cyrus", express.json({ limit: "2mb" }), (req, res, next) => {
@@ -457,9 +476,9 @@ app.use((req, res, next) => {
         response: capturedJsonResponse,
         summary: logLine,
       });
+      recordApiRequest(`${req.method} ${reqPath}`, res.statusCode, duration);
     }
   });
-  next();
 });
 
 const listenOptions: { port: number; host: string; reusePort?: boolean } = {
