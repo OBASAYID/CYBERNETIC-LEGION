@@ -8,7 +8,22 @@ export class DataIngestionPipeline {
   private isRunning: boolean = false;
 
   constructor(configPath = './server/ai/knowledge-brain-config.json') {
-    this.config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    try {
+      this.config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (err) {
+      console.warn('[DataIngestionPipeline] Config file not found or invalid, using safe defaults:', err instanceof Error ? err.message : String(err));
+      this.config = {
+        vectorDb: { type: 'memory', enabled: false },
+        semanticSearch: { enabled: false, minSimilarity: 0.7, maxResults: 10 },
+        knowledgeAcquisition: { autoLearn: false, sources: [], updateInterval: 3600 },
+        dataSources: {
+          web: { enabled: false },
+          youtube: { enabled: false },
+          academic: { enabled: false },
+          news: { enabled: false }
+        }
+      };
+    }
   }
 
   async startIngestion(): Promise<void> {

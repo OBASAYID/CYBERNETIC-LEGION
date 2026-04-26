@@ -2,10 +2,26 @@ import OpenAI from 'openai';
 import { experienceMemory } from '../experience-memory.js';
 import { getCyrusChatModel } from '../cyrus-model.js';
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI | null {
+  if (openai) return openai;
+  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.warn('[Emotional Cognition] OpenAI API key not configured — AI-powered emotion analysis disabled, using keyword fallback.');
+    return null;
+  }
+  try {
+    openai = new OpenAI({
+      apiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    });
+  } catch (err) {
+    console.warn('[Emotional Cognition] Failed to initialize OpenAI client:', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+  return openai;
+}
 
 export interface EmotionState {
   primary: EmotionType;
@@ -135,18 +151,23 @@ export class EmotionalCognitionEngine {
     }
 
     try {
-      const response = await openai.chat.completions.create({
+      const client = getOpenAIClient();
+      if (!client) {
+        return {
+          primary: this.getHighestEmotion(emotionScores),
+          secondary: null,
+          intensity: 0.5,
+          valence: 0,
+          arousal: 0.5,
+          dominance: 0.5
+        };
+      }
+      const response = await client.chat.completions.create({
         model: getCyrusChatModel(),
         messages: [
           {
             role: 'system',
-            content: `Analyze the emotional content of the text. Return a JSON object with:
-- primary_emotion: one of [joy, trust, fear, surprise, sadness, disgust, anger, anticipation, love, awe, remorse, optimism, neutral]
-- secondary_emotion: optional secondary emotion or null
-- intensity: 0-1 scale of emotional intensity
-- valence: -1 to 1 (-1 = very negative, 1 = very positive)
-- arousal: 0-1 scale of emotional activation/energy
-Return only valid JSON.`
+            content: `Analyze the emotional content of the text. Return a JSON object with:\n- primary_emotion: one of [joy, trust, fear, surprise, sadness, disgust, anger, anticipation, love, awe, remorse, optimism, neutral]\n- secondary_emotion: optional secondary emotion or null\n- intensity: 0-1 scale of emotional intensity\n- valence: -1 to 1 (-1 = very negative, 1 = very positive)\n- arousal: 0-1 scale of emotional activation/energy\nReturn only valid JSON.`
           },
           { role: 'user', content: text }
         ],
@@ -201,23 +222,23 @@ Return only valid JSON.`
 
   async analyzeSentiment(text: string): Promise<SentimentAnalysis> {
     try {
-      const response = await openai.chat.completions.create({
+      const client = getOpenAIClient();
+      if (!client) {
+        return { sentiment: 'neutral', score: 0, confidence: 0.3, aspects: [] };
+      }
+      const response = await client.chat.completions.create({
         model: getCyrusChatModel(),
         messages: [
           {
             role: 'system',
-            content: `Analyze the sentiment of the text. Return a JSON object with:
-- sentiment: "positive", "negative", "neutral", or "mixed"
-- score: -1 to 1 scale
-- confidence: 0-1 scale
-- aspects: array of {aspect: string, sentiment: string, score: number} for different topics mentioned
-Return only valid JSON.`
+            content: `Analyze the sentiment of the text. Return a JSON object with:\n- sentiment: "positive", "negative", "neutral", or "mixed"\n- score: -1 to 1 scale\n- confidence: 0-1 scale\n- aspects: array of {aspect: string, sentiment: string, score: number} for different topics mentioned\nReturn only valid JSON.`
           },
           { role: 'user', content: text }
         ],
         max_tokens: 300,
         temperature: 0.3
       });
+
 
       const content = response.choices[0].message.content || '{}';
       const parsed = JSON.parse(content.replace(/```json\n?|\n?```/g, ''));
