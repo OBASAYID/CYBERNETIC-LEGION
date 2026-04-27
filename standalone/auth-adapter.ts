@@ -14,11 +14,32 @@ function resolveSessionCookieSecure(): boolean {
   return String(process.env.PUBLIC_PROTOCOL || "").trim().toLowerCase() === "https";
 }
 
+function isRailwayEnvironment(): boolean {
+  return !!process.env.RAILWAY_ENVIRONMENT_ID || !!process.env.RAILWAY_DEPLOYMENT_ID;
+}
+
+function resolveTrustProxy(): boolean {
+  if (process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || ""))) {
+    return true;
+  }
+  if (isRailwayEnvironment()) {
+    console.log("[Auth] Railway environment detected — enabling trust proxy automatically");
+    return true;
+  }
+  return false;
+}
+
 function resolveSessionSameSite(): "lax" | "strict" | "none" {
-  const raw = String(process.env.SESSION_SAME_SITE || "lax").trim().toLowerCase();
+  const raw = String(process.env.SESSION_SAME_SITE || "").trim().toLowerCase();
   if (raw === "strict") return "strict";
   if (raw === "none") return "none";
-  return "lax";
+  if (raw === "lax") return "lax";
+
+  // Default: use "lax" for HTTP, "none" for HTTPS (requires secure flag)
+  const isHttps =
+    String(process.env.PUBLIC_PROTOCOL || "").trim().toLowerCase() === "https" ||
+    String(process.env.BASE_URL || "").trim().startsWith("https://");
+  return isHttps ? "none" : "lax";
 }
 
 function resolveSessionSecret(): string {
@@ -88,16 +109,24 @@ export async function setupAuth(app: Express): Promise<void> {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
-    proxy: process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || "")),
+    proxy: resolveTrustProxy(),
     cookie: {
       httpOnly: true,
-      secure: sameSite === "none" ? true : cookieSecure,
+      secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
+      sameSite: sameSite as "lax" | "strict" | "none",
+      path: "/",
     },
   };
   app.use(session(sessionOpts as Parameters<typeof session>[0]));
 
+  console.log(`[Auth] Session cookie config:`, {
+    secure: sessionOpts.cookie.secure,
+    sameSite: sessionOpts.cookie.sameSite,
+    httpOnly: sessionOpts.cookie.httpOnly,
+    maxAge: sessionOpts.cookie.maxAge,
+    trustProxy: sessionOpts.proxy,
+  });
   console.log(`[Auth] Gate ready: admin+user codes loaded; session=${store ? "postgresql" : "memory"}`);
 
   app.post("/api/login", (req: any, res) => {
@@ -171,12 +200,13 @@ export function getSession() {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
-    proxy: process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || "")),
+    proxy: resolveTrustProxy(),
     cookie: {
       httpOnly: true,
-      secure: sameSite === "none" ? true : cookieSecure,
+      secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
+      sameSite: sameSite as "lax" | "strict" | "none",
+      path: "/",
     },
   } as Parameters<typeof session>[0]);
 }
