@@ -22,9 +22,11 @@ export function resolveCyrusApiCredentials(): RequestCredentials {
   if (typeof window === "undefined") return "same-origin";
   if (!base) return "include";
   try {
-    return new URL(base).origin === window.location.origin ? "include" : "omit";
+    // When an explicit API base is configured (split-origin deployments),
+    // auth/session cookies must be sent cross-origin.
+    return "include";
   } catch {
-    return "omit";
+    return "include";
   }
 }
 
