@@ -174,21 +174,21 @@ export function ModuleWorkspaceSection({
         <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
         <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
       </div>
-    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/50 via-slate-950/75 to-orange-950/40 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)]">
-      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950" aria-hidden />
+    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/30 via-slate-950/45 to-orange-950/25 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-md">
+      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/30" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.1]"
+        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.08]"
         style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.38) 1px, transparent 0)`,
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-200/5 via-yellow-400/4 to-orange-500/10" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-200/4 via-yellow-400/3 to-orange-500/8" />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.07),transparent_58%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.06),transparent_58%)]"
         aria-hidden
       />
-      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/35 via-slate-950/55 to-orange-950/30 p-4 shadow-inner shadow-black/15 backdrop-blur-sm">
+      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/20 via-slate-950/35 to-orange-950/18 p-4 shadow-inner shadow-black/10 backdrop-blur-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
@@ -253,7 +253,7 @@ export function ModuleWorkspaceSection({
                   />
                   <div className="mb-1.5 flex items-center gap-2">
                     <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-slate-900/55 ${t.icon}`}
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-slate-900/70 ${t.icon}`}
                     >
                       <item.Icon className="h-3.5 w-3.5" />
                     </span>
