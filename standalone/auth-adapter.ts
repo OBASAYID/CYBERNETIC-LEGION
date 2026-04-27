@@ -99,9 +99,34 @@ export async function setupAuth(app: Express): Promise<void> {
       secure: sameSite === "none" ? true : cookieSecure,
       maxAge: SESSION_TTL,
       sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
+      path: "/",
     },
   };
+
+  // Log the cookie configuration for debugging
+  console.log(`[Auth] Session cookie config:`, {
+    secure: sessionOpts.cookie.secure,
+    sameSite: sessionOpts.cookie.sameSite,
+    httpOnly: sessionOpts.cookie.httpOnly,
+    path: sessionOpts.cookie.path,
+    maxAge: sessionOpts.cookie.maxAge,
+    trustProxy: sessionOpts.proxy,
+  });
+
   app.use(session(sessionOpts as Parameters<typeof session>[0]));
+
+  // Add middleware to log Set-Cookie headers for debugging
+  app.use((req, res, next) => {
+    const originalSend = res.send;
+    res.send = function (data) {
+      const setCookie = res.getHeader("set-cookie");
+      if (setCookie) {
+        console.log("[Auth] Set-Cookie header sent:", setCookie);
+      }
+      return originalSend.call(this, data);
+    };
+    next();
+  });
 
   console.log(`[Auth] Gate ready: admin+user codes loaded; session=${store ? "postgresql" : "memory"}`);
 
@@ -140,6 +165,11 @@ export async function setupAuth(app: Express): Promise<void> {
             "Set CYRUS_SESSION_STORE=memory in .env and restart, or fix DATABASE_URL / Postgres for the `sessions` table.",
         });
       }
+
+      // Log successful session creation
+      console.log(`[Auth] Session created for user: ${username} (${role})`);
+      console.log(`[Auth] Session ID: ${req.sessionID}`);
+
       res.json({ success: true, user: { id: userId, username, role } });
     });
   });
@@ -185,6 +215,7 @@ export function getSession() {
       secure: sameSite === "none" ? true : cookieSecure,
       maxAge: SESSION_TTL,
       sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
+      path: "/",
     },
   } as Parameters<typeof session>[0]);
 }
