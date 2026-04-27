@@ -19,12 +19,14 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useWildlifeBackground } from "@/hooks/use-wildlife-background";
 
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
   const role = useUserRole();
   const isAdmin = role === "admin";
+  const wildlifeBg = useWildlifeBackground();
   const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
   const [adminTab, setAdminTab] = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
@@ -56,15 +58,22 @@ export default function DashboardFresh() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden text-white">
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/88 to-orange-950/22" />
+      {/* Wildlife full-screen background image */}
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${wildlifeBg})` }}
+        aria-hidden
+      />
+      {/* Dark overlay to keep UI readable over the wildlife scene */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/72" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/55 to-orange-950/22" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
         <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
         <div className="absolute left-1/2 top-[8%] h-[min(90vw,520px)] w-[min(95vw,720px)] -translate-x-1/2 rounded-full bg-amber-300/[0.07] blur-3xl" />
-        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.1] blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.11] blur-3xl" />
+        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.08] blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.09] blur-3xl" />
         <div className="absolute bottom-0 left-1/2 h-[40vh] w-[min(80rem,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_80%_70%_at_50%_100%,rgba(16,185,129,0.05),rgba(14,165,233,0.04)_40%,transparent_70%)] blur-2xl" />
       </div>
       <div className="pointer-events-none fixed top-4 left-4 z-20 flex items-center gap-2 sm:top-5 sm:left-5">
@@ -76,7 +85,7 @@ export default function DashboardFresh() {
       </div>
 
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/12 bg-slate-950/82 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.7)] backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-2">
             <HeaderTitle variant={headerOperator ? "operator" : "default"} />
             <div className="flex shrink-0 items-center gap-2">

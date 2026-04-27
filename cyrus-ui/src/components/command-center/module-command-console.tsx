@@ -265,12 +265,12 @@ export function ModuleCommandConsole({
     return (
       <section
         className={cn(
-          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)]",
+          "relative z-20 overflow-hidden rounded-3xl bg-slate-950/55 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl",
           className,
         )}
         aria-label="CYRUS command console (minimized)"
       >
-        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-sky-50/95 via-sky-100/70 to-slate-100/85 px-3 py-2.5 shadow-inner shadow-sky-300/35 sm:px-4">
+        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-slate-900/50 px-3 py-2.5 shadow-inner shadow-cyan-500/10 backdrop-blur-sm sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-cyan-500/10">
               <Terminal className="h-4 w-4 text-cyan-300" aria-hidden />
@@ -283,7 +283,7 @@ export function ModuleCommandConsole({
                 Cyrus AI
               </p>
               <p
-                className="truncate text-sm font-semibold text-slate-900"
+                className="truncate text-sm font-semibold text-white/90"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Command console
@@ -307,38 +307,38 @@ export function ModuleCommandConsole({
   return (
     <section
       className={cn(
-        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] sm:min-h-[26rem]",
+        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-slate-950/55 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:min-h-[26rem]",
         className,
       )}
       aria-label="CYRUS command console"
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-sky-50/90"
+        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/40"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.06]"
+        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.07]"
         style={{
-          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.22) 1px, transparent 0)",
+          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.38) 1px, transparent 0)",
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-sky-200/55 via-white/40 to-sky-100/55" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-cyan-500/8 via-transparent to-orange-500/6" />
       <div
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.05),transparent_55%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,rgba(255,255,255,0.07),rgba(255,255,255,0.02)_40%,transparent_65%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,rgba(34,211,238,0.04),transparent_65%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(255,255,255,0.04)_0%,transparent_38%,rgba(255,255,255,0.01)_100%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(34,211,238,0.03)_0%,transparent_38%,rgba(251,191,36,0.02)_100%)]"
         aria-hidden
       />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-sky-50/90 via-sky-100/55 to-slate-100/80 p-4 shadow-inner shadow-sky-300/30 backdrop-blur-sm sm:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-slate-900/40 p-4 shadow-inner shadow-cyan-500/10 backdrop-blur-sm sm:p-5">
         <div
-          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(255,255,255,0.04),transparent_58%)]"
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(34,211,238,0.04),transparent_58%)]"
           aria-hidden
         />
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col">

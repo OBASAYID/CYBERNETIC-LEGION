@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FieldDateTimeHud } from "./field-datetime-hud";
 import { ModuleCommandConsole, ModuleCommandConsoleDock } from "./module-command-console";
+import { useWildlifeBackground } from "@/hooks/use-wildlife-background";
 
 /** Lucide icons — use wide component type to avoid dual node_modules @types/react ref identity issues. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,17 +37,25 @@ export type ModuleWorkspacePageShellProps = {
 };
 
 function ModuleWorkspaceBackdrop() {
+  const wildlifeBg = useWildlifeBackground();
   return (
     <>
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/88 to-orange-950/22" />
+      {/* Wildlife full-screen background image */}
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${wildlifeBg})` }}
+        aria-hidden
+      />
+      {/* Dark overlay to keep module UI readable */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/75" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/55 to-orange-950/22" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
         <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
         <div className="absolute left-1/2 top-[8%] h-[min(90vw,520px)] w-[min(95vw,720px)] -translate-x-1/2 rounded-full bg-amber-300/[0.07] blur-3xl" />
-        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.1] blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.11] blur-3xl" />
+        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.08] blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.09] blur-3xl" />
       </div>
       <div className="pointer-events-none fixed left-4 top-4 z-20 flex items-center gap-2 sm:left-5 sm:top-5">
         <div className="h-2 w-2 animate-pulse rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
@@ -129,7 +138,7 @@ export function ModuleWorkspacePageShell({
       >
         <section
           className={cn(
-            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-900/30 via-slate-950/72 to-sky-950/35 p-1 shadow-[0_0_48px_-22px_rgba(56,189,248,0.2),0_0_50px_-30px_rgba(186,230,253,0.08)]",
+            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-900/20 via-slate-950/50 to-sky-950/22 p-1 shadow-[0_0_48px_-22px_rgba(56,189,248,0.2),0_0_50px_-30px_rgba(186,230,253,0.08)] backdrop-blur-md",
             frameClassName,
           )}
         >
@@ -145,7 +154,7 @@ export function ModuleWorkspacePageShell({
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.07),transparent_58%)]"
             aria-hidden
           />
-          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-sky-950/35 via-slate-950/55 to-sky-950/30 p-4 backdrop-blur-sm sm:p-5">
+          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-sky-950/22 via-slate-950/38 to-sky-950/18 p-4 backdrop-blur-sm sm:p-5">
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <Link href={backHref}>
