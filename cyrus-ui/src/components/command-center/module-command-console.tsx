@@ -265,12 +265,12 @@ export function ModuleCommandConsole({
     return (
       <section
         className={cn(
-          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-white via-slate-100 to-white p-1 shadow-[0_0_40px_-24px_rgba(148,163,184,0.45),0_10px_28px_rgba(15,23,42,0.22)]",
+          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)]",
           className,
         )}
         aria-label="CYRUS command console (minimized)"
       >
-        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-inner shadow-slate-300/45 sm:px-4">
+        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-sky-50/95 via-sky-100/70 to-slate-100/85 px-3 py-2.5 shadow-inner shadow-sky-300/35 sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-cyan-500/10">
               <Terminal className="h-4 w-4 text-cyan-300" aria-hidden />
@@ -307,13 +307,13 @@ export function ModuleCommandConsole({
   return (
     <section
       className={cn(
-        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-white via-slate-100 to-white p-1 shadow-[0_0_40px_-24px_rgba(148,163,184,0.45),0_10px_28px_rgba(15,23,42,0.22)] sm:min-h-[26rem]",
+        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] sm:min-h-[26rem]",
         className,
       )}
       aria-label="CYRUS command console"
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-white"
+        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-sky-50/90"
         aria-hidden
       />
       <div
@@ -323,7 +323,7 @@ export function ModuleCommandConsole({
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-slate-200/60 via-white/40 to-slate-100/70" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-sky-200/55 via-white/40 to-sky-100/55" />
       <div
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.05),transparent_55%)]"
         aria-hidden
@@ -336,7 +336,7 @@ export function ModuleCommandConsole({
         className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(255,255,255,0.04)_0%,transparent_38%,rgba(255,255,255,0.01)_100%)]"
         aria-hidden
       />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-white via-slate-50 to-slate-100 p-4 shadow-inner shadow-slate-300/45 backdrop-blur-sm sm:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-sky-50/90 via-sky-100/55 to-slate-100/80 p-4 shadow-inner shadow-sky-300/30 backdrop-blur-sm sm:p-5">
         <div
           className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(255,255,255,0.04),transparent_58%)]"
           aria-hidden

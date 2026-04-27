@@ -129,7 +129,7 @@ export function ModuleWorkspacePageShell({
       >
         <section
           className={cn(
-            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/50 via-slate-950/75 to-orange-950/40 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07)]",
+            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-900/30 via-slate-950/72 to-sky-950/35 p-1 shadow-[0_0_48px_-22px_rgba(56,189,248,0.2),0_0_50px_-30px_rgba(186,230,253,0.08)]",
             frameClassName,
           )}
         >
@@ -140,12 +140,12 @@ export function ModuleWorkspacePageShell({
               backgroundSize: "24px 24px",
             }}
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-200/5 via-yellow-400/4 to-orange-500/10" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-300/10 via-white/4 to-sky-500/12" />
           <div
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.07),transparent_58%)]"
             aria-hidden
           />
-          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-amber-950/35 via-slate-950/55 to-orange-950/30 p-4 backdrop-blur-sm sm:p-5">
+          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-sky-950/35 via-slate-950/55 to-sky-950/30 p-4 backdrop-blur-sm sm:p-5">
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <Link href={backHref}>
