@@ -161,38 +161,60 @@ export function PasswordGate({
           ? loginJson.sessionToken.trim()
           : `cyrus-session-${Date.now()}`;
 
-      // Confirm the session cookie before leaving the gate (run before fusion handshake so a slow
-      // /api/fusion/handshake cannot block sign-in).
-      let sessionOk = false;
-      const SESSION_VERIFY_ATTEMPTS = 10;
-      const sessionFetchMs = getApiFetchTimeoutMs();
-      for (let verifyAttempt = 0; verifyAttempt < SESSION_VERIFY_ATTEMPTS; verifyAttempt++) {
-        try {
-          const ctrl = new AbortController();
-          const timer = window.setTimeout(() => ctrl.abort(), sessionFetchMs);
-          const who = await systemFetch("/api/auth/user", {
-            cache: "no-store",
-            signal: ctrl.signal,
-            headers: {
-              "x-cyrus-session-token": issuedSessionToken,
-              authorization: `Bearer ${issuedSessionToken}`,
-            },
-          });
-          window.clearTimeout(timer);
-          if (who.ok) {
-            sessionOk = true;
-            break;
+      // Do not gate successful login on cookie propagation. If the server issued a signed session
+      // token, proceed immediately and verify session in the background.
+      const hasSignedToken = !issuedSessionToken.startsWith("cyrus-session-");
+      if (!hasSignedToken) {
+        let sessionOk = false;
+        const SESSION_VERIFY_ATTEMPTS = 10;
+        const sessionFetchMs = getApiFetchTimeoutMs();
+        for (let verifyAttempt = 0; verifyAttempt < SESSION_VERIFY_ATTEMPTS; verifyAttempt++) {
+          try {
+            const ctrl = new AbortController();
+            const timer = window.setTimeout(() => ctrl.abort(), sessionFetchMs);
+            const who = await systemFetch("/api/auth/user", {
+              cache: "no-store",
+              signal: ctrl.signal,
+              headers: {
+                "x-cyrus-session-token": issuedSessionToken,
+                authorization: `Bearer ${issuedSessionToken}`,
+              },
+            });
+            window.clearTimeout(timer);
+            if (who.ok) {
+              sessionOk = true;
+              break;
+            }
+          } catch {
+            /* retry */
           }
-        } catch {
-          /* retry */
+          await new Promise((r) => setTimeout(r, 180 * (verifyAttempt + 1)));
         }
-        await new Promise((r) => setTimeout(r, 180 * (verifyAttempt + 1)));
-      }
-      if (!sessionOk) {
-        setError(
-          "Signed in, but session verification failed in this browser context. Refresh and retry; if it continues, clear site data and disable strict cookie/privacy blocking for this site.",
-        );
-        return;
+        if (!sessionOk) {
+          setError(
+            "Signed in, but session verification failed in this browser context. Refresh and retry; if it continues, clear site data and disable strict cookie/privacy blocking for this site.",
+          );
+          return;
+        }
+      } else {
+        // Best-effort verification only; never block sign-in when token is already valid.
+        void (async () => {
+          try {
+            const ctrl = new AbortController();
+            const timer = window.setTimeout(() => ctrl.abort(), getApiFetchTimeoutMs());
+            await systemFetch("/api/auth/user", {
+              cache: "no-store",
+              signal: ctrl.signal,
+              headers: {
+                "x-cyrus-session-token": issuedSessionToken,
+                authorization: `Bearer ${issuedSessionToken}`,
+              },
+            });
+            window.clearTimeout(timer);
+          } catch {
+            /* non-blocking */
+          }
+        })();
       }
 
       void postFusionHandshake({
