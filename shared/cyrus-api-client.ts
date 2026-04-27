@@ -52,6 +52,8 @@ export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Resp
         const token = localStorage.getItem("cyrus_session_token");
         if (token) {
           headers.set("x-cyrus-session-token", token);
+          // Some proxy/CDN layers are stricter with custom headers than Authorization.
+          if (!headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
         }
       }
     } catch {

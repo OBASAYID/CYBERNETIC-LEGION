@@ -175,6 +175,7 @@ export function PasswordGate({
             signal: ctrl.signal,
             headers: {
               "x-cyrus-session-token": issuedSessionToken,
+              authorization: `Bearer ${issuedSessionToken}`,
             },
           });
           window.clearTimeout(timer);
