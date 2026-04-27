@@ -38,15 +38,15 @@ export type ModuleWorkspacePageShellProps = {
 function ModuleWorkspaceBackdrop() {
   return (
     <>
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/88 to-orange-950/22" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
+      <div
+        className="pointer-events-none fixed inset-0 bg-center bg-cover bg-no-repeat"
+        style={{ backgroundImage: 'url("/images/botswana-dashboard-wildlife.jpg")' }}
+      />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/28 via-black/34 to-black/38" />
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(90vw,520px)] w-[min(95vw,720px)] -translate-x-1/2 rounded-full bg-amber-300/[0.07] blur-3xl" />
-        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.1] blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.11] blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.08] blur-3xl" />
       </div>
       <div className="pointer-events-none fixed left-4 top-4 z-20 flex items-center gap-2 sm:left-5 sm:top-5">
         <div className="h-2 w-2 animate-pulse rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
@@ -129,7 +129,7 @@ export function ModuleWorkspacePageShell({
       >
         <section
           className={cn(
-            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/50 via-slate-950/75 to-orange-950/40 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07)]",
+            "relative overflow-hidden rounded-3xl bg-black/18 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.14),0_0_50px_-30px_rgba(255,255,255,0.05)] backdrop-blur-[2px]",
             frameClassName,
           )}
         >
@@ -140,12 +140,12 @@ export function ModuleWorkspacePageShell({
               backgroundSize: "24px 24px",
             }}
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-200/5 via-yellow-400/4 to-orange-500/10" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-300/8 via-white/4 to-transparent" />
           <div
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.07),transparent_58%)]"
             aria-hidden
           />
-          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-amber-950/35 via-slate-950/55 to-orange-950/30 p-4 backdrop-blur-sm sm:p-5">
+          <div className="relative rounded-[1.4rem] bg-black/20 p-4 backdrop-blur-[1px] sm:p-5">
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <Link href={backHref}>

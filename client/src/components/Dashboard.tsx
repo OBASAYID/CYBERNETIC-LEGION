@@ -98,6 +98,7 @@ function getEmotionStyle(emotion: string) {
 }
 
 export function Dashboard() {
+  const dashboardBackgroundImage = "/images/botswana-dashboard-wildlife.jpg";
   const [input, setInput] = useState("");
   const [micActive, setMicActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -765,11 +766,19 @@ export function Dashboard() {
   const currentUserEmotion = getEmotionStyle(emotionState.dominant);
 
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden">
+    <div className="relative h-full flex flex-col lg:flex-row overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute inset-0 bg-center bg-cover bg-no-repeat"
+          style={{ backgroundImage: `url("${dashboardBackgroundImage}")` }}
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/45 via-black/25 to-black/45" />
+      </div>
       {/* Main Chat Panel */}
-      <div className="flex-1 flex flex-col min-w-0 bg-black overflow-hidden">
+      <div className="relative z-10 flex-1 lg:flex-[1.85] flex flex-col min-w-0 bg-black/18 backdrop-blur-[1px] overflow-hidden">
         {/* Panel Header */}
-        <div className="px-4 py-3 border-b border-[rgba(84,84,88,0.65)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-cyan-500/30 bg-black/18 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-colors duration-700 ${
@@ -822,7 +831,7 @@ export function Dashboard() {
 
         {/* Emotion Awareness Panel */}
         {showEmotionPanel && (
-          <div className="px-4 py-3 border-b border-[rgba(84,84,88,0.4)] bg-[rgba(20,20,25,0.8)]">
+          <div className="relative z-10 px-4 py-3 border-b border-cyan-500/25 bg-black/22 backdrop-blur-[1px]">
             <div className="flex items-center gap-2 mb-2">
               <Brain className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">Emotional Awareness</span>
@@ -1038,7 +1047,7 @@ export function Dashboard() {
         )}
 
         {/* Bottom Action Bar */}
-        <div className="px-4 py-2 border-t border-[rgba(84,84,88,0.65)]">
+        <div className="px-4 py-2 border-t border-cyan-500/30 bg-black/16">
           <div className="flex justify-center gap-2">
             <button
               onClick={toggleCamera}
@@ -1112,9 +1121,9 @@ export function Dashboard() {
         </div>
 
         {/* Input Bar */}
-        <div className="p-4 border-t border-[rgba(84,84,88,0.65)]">
+        <div className="p-4 border-t border-cyan-500/30 bg-black/14">
           <form onSubmit={handleSubmit}>
-            <div className="flex items-center gap-2 bg-[#2c2c2e] rounded-xl px-3 py-2">
+            <div className="flex items-center gap-2 bg-black/35 rounded-xl px-3 py-2 border border-cyan-500/30 backdrop-blur-sm">
               <input type="file" ref={chatFileInputRef} onChange={handleChatFileUpload} className="hidden" />
               <button
                 type="button"
@@ -1154,9 +1163,9 @@ export function Dashboard() {
       </div>
 
       {/* Right Panel */}
-      <div className="hidden xl:flex w-[420px] flex-col bg-[#1c1c1e] border-l border-[rgba(84,84,88,0.65)]">
+      <div className="relative z-10 hidden xl:flex w-[420px] flex-col bg-black/20 backdrop-blur-[1px] border-l border-cyan-500/35">
         {/* Research Panel */}
-        <div className="p-4 border-b border-[rgba(84,84,88,0.65)]">
+        <div className="p-4 border-b border-cyan-500/30 bg-black/14">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">Research Portal</h3>
           </div>
@@ -1190,7 +1199,7 @@ export function Dashboard() {
         </div>
 
         {/* Files Panel */}
-        <div className="h-[45%] p-4 flex flex-col overflow-hidden border-b border-[rgba(84,84,88,0.65)]">
+        <div className="h-[45%] p-4 flex flex-col overflow-hidden border-b border-cyan-500/30 bg-black/12">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">File Workspace</h3>
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
@@ -1227,7 +1236,7 @@ export function Dashboard() {
         </div>
 
         {/* CYRUS Vision Panel */}
-        <div className="flex-1 p-4 flex flex-col overflow-hidden">
+        <div className="flex-1 p-4 flex flex-col overflow-hidden bg-black/16">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">CYRUS Vision</h3>
