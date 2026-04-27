@@ -1,5 +1,3 @@
-import wildlifeBackgroundUrl from "../assets/generated/wildlife_background.svg";
-
 /**
  * useWildlifeBackground
  *
@@ -7,9 +5,10 @@ import wildlifeBackgroundUrl from "../assets/generated/wildlife_background.svg";
  * the dashboard and module workspace shells. Centralised here so the asset
  * path is changed in one place if the image is ever swapped out.
  *
- * Uses a direct ES module import so Vite resolves and hashes the asset at
- * build time, producing a reliable URL that works in the browser at runtime.
+ * The SVG is served from the Vite public directory as a static file, so the
+ * path is a simple root-relative string that the browser can load directly
+ * without relying on Vite's module resolution or asset hashing pipeline.
  */
 export function useWildlifeBackground(): string {
-  return wildlifeBackgroundUrl;
+  return "/wildlife_background.svg";
 }
