@@ -114,6 +114,7 @@ export function PasswordGate({
         code?: string;
         status?: string;
         user?: { role?: string };
+        sessionToken?: string;
       };
       let loginJson: LoginJson = {};
 
@@ -155,6 +156,10 @@ export function PasswordGate({
       }
 
       const role: "admin" | "user" = loginJson.user?.role === "admin" ? "admin" : "user";
+      const issuedSessionToken =
+        typeof loginJson.sessionToken === "string" && loginJson.sessionToken.trim().length > 0
+          ? loginJson.sessionToken.trim()
+          : `cyrus-session-${Date.now()}`;
 
       // Confirm the session cookie before leaving the gate (run before fusion handshake so a slow
       // /api/fusion/handshake cannot block sign-in).
@@ -165,7 +170,13 @@ export function PasswordGate({
         try {
           const ctrl = new AbortController();
           const timer = window.setTimeout(() => ctrl.abort(), sessionFetchMs);
-          const who = await systemFetch("/api/auth/user", { cache: "no-store", signal: ctrl.signal });
+          const who = await systemFetch("/api/auth/user", {
+            cache: "no-store",
+            signal: ctrl.signal,
+            headers: {
+              "x-cyrus-session-token": issuedSessionToken,
+            },
+          });
           window.clearTimeout(timer);
           if (who.ok) {
             sessionOk = true;
@@ -178,7 +189,7 @@ export function PasswordGate({
       }
       if (!sessionOk) {
         setError(
-          "Signed in, but your browser is not keeping the server session cookie. Use the exact same host in the address bar as the app URL (127.0.0.1 and localhost are different sites) and allow cookies.",
+          "Signed in, but session verification failed in this browser context. Refresh and retry; if it continues, clear site data and disable strict cookie/privacy blocking for this site.",
         );
         return;
       }
@@ -195,7 +206,7 @@ export function PasswordGate({
         }
       });
 
-      onAuthenticated("cyrus-session-" + Date.now(), {
+      onAuthenticated(issuedSessionToken, {
         displayName: loginUsername,
         role,
       });
