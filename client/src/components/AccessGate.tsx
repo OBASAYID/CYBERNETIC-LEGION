@@ -38,25 +38,45 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
     setIsInitializing(true);
     setError("");
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      // Call backend /api/login endpoint
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // CRITICAL: Send cookies
+        body: JSON.stringify({
+          username: username.trim(),
+          code: accessCode.trim(),
+        }),
+      });
 
-    const isAdmin = username.trim() === "DELTA UNIFORM 00";
-    const validAdminCode = accessCode === "71580019";
-    const validUserCode = accessCode === "170392";
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.message || "Login failed";
+        setError(`ACCESS DENIED - ${message}`);
+        setIsInitializing(false);
+        return;
+      }
 
-    if ((isAdmin && validAdminCode) || (!isAdmin && validUserCode)) {
+      const data = await response.json();
+
+      // Store auth data in localStorage
       localStorage.setItem("cyrus_authenticated", "true");
       localStorage.setItem("cyrus-display-name", username.trim());
-      localStorage.setItem("cyrus-user-role", isAdmin ? "admin" : "user");
+      localStorage.setItem("cyrus-user-role", data.user?.role || "user");
+
+      // Store session token if provided
+      if (data.sessionToken) {
+        localStorage.setItem("cyrus_session_token", data.sessionToken);
+      }
+
+      // Success - call onAuthenticated
       onAuthenticated();
-    } else if (isAdmin && !validAdminCode) {
-      setError("ACCESS DENIED - Invalid ADMIN authorization code");
-      setIsInitializing(false);
-    } else if (!isAdmin && !validUserCode) {
-      setError("ACCESS DENIED - Invalid OPERATOR authorization code");
-      setIsInitializing(false);
-    } else {
-      setError("ACCESS DENIED - Invalid authorization code");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error";
+      setError(`ACCESS DENIED - ${message}`);
       setIsInitializing(false);
     }
   };

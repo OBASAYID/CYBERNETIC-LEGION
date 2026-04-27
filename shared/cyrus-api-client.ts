@@ -43,7 +43,6 @@ export function systemCredentials(): RequestCredentials {
 
 export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
   const url = systemApiUrl(pathOrUrl);
-  const credentials = init?.credentials ?? systemCredentials();
   const headers = new Headers(init?.headers ?? undefined);
 
   if (typeof window !== "undefined") {
@@ -51,12 +50,18 @@ export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Resp
       const parsed = new URL(url, window.location.origin);
       if (parsed.pathname.startsWith("/api") && !headers.has("x-cyrus-session-token")) {
         const token = localStorage.getItem("cyrus_session_token");
-        if (token) headers.set("x-cyrus-session-token", token);
+        if (token) {
+          headers.set("x-cyrus-session-token", token);
+        }
       }
     } catch {
       // Keep fetch resilient even if URL parsing fails.
     }
   }
 
-  return fetch(url, { ...init, headers, credentials });
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: "include", // ALWAYS include credentials
+  });
 }
