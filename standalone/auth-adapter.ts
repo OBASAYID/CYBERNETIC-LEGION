@@ -9,13 +9,15 @@ function resolveSessionCookieSecure(): boolean {
   const v = String(process.env.SESSION_COOKIE_SECURE || "").trim().toLowerCase();
   if (v === "true" || v === "1") return true;
   if (v === "false" || v === "0") return false;
+  if (process.env.NODE_ENV === "production") return true;
   const base = String(process.env.BASE_URL || "").trim();
   if (base.startsWith("https://")) return true;
   return String(process.env.PUBLIC_PROTOCOL || "").trim().toLowerCase() === "https";
 }
 
 function resolveSessionSameSite(): "lax" | "strict" | "none" {
-  const raw = String(process.env.SESSION_SAME_SITE || "lax").trim().toLowerCase();
+  const defaultSameSite = process.env.NODE_ENV === "production" ? "none" : "lax";
+  const raw = String(process.env.SESSION_SAME_SITE || defaultSameSite).trim().toLowerCase();
   if (raw === "strict") return "strict";
   if (raw === "none") return "none";
   return "lax";
@@ -88,7 +90,10 @@ export async function setupAuth(app: Express): Promise<void> {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
-    proxy: process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || "")),
+    proxy:
+      process.env.NODE_ENV === "production" ||
+      process.env.TRUST_PROXY === "1" ||
+      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: sameSite === "none" ? true : cookieSecure,
@@ -171,7 +176,10 @@ export function getSession() {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
-    proxy: process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || "")),
+    proxy:
+      process.env.NODE_ENV === "production" ||
+      process.env.TRUST_PROXY === "1" ||
+      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: sameSite === "none" ? true : cookieSecure,
