@@ -281,6 +281,48 @@ export const pshareLikes = pgTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] })]
 );
 
+// ---------------------------------------------------------------------------
+// calls — canonical call record (one row per call attempt)
+// ---------------------------------------------------------------------------
+
+export const calls = pgTable("calls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callerId: varchar("caller_id").notNull(),
+  callerName: varchar("caller_name"),
+  recipientId: varchar("recipient_id").notNull(),
+  recipientName: varchar("recipient_name"),
+  roomId: varchar("room_id").notNull(),
+  /** "audio" | "video" */
+  callType: varchar("call_type").notNull().default("audio"),
+  /** "ringing" | "connected" | "ended" | "missed" | "rejected" | "failed" */
+  status: varchar("status").notNull().default("ringing"),
+  startTime: timestamp("start_time").defaultNow(),
+  endTime: timestamp("end_time"),
+  /** Duration in seconds — populated on call end */
+  durationSeconds: integer("duration_seconds"),
+  /** Peak connection quality observed during the call */
+  peakQuality: varchar("peak_quality"),
+  /** Network type hint from the client (wifi / cellular / unknown) */
+  networkType: varchar("network_type"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// call_logs — granular event log for analytics / debugging
+// ---------------------------------------------------------------------------
+
+export const callLogs = pgTable("call_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  /** e.g. "initiated" | "ringing" | "accepted" | "rejected" | "connected" |
+   *       "ice_failed" | "reconnected" | "ended" | "error" */
+  event: varchar("event").notNull(),
+  /** Free-form JSON payload (ICE state, error message, quality metrics, …) */
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type OnlineUser = typeof onlineUsers.$inferSelect;
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type CallHistory = typeof callHistory.$inferSelect;
@@ -300,3 +342,5 @@ export type CommsMlModel = typeof commsMlModels.$inferSelect;
 export type PsharePost = typeof psharePosts.$inferSelect;
 export type PshareComment = typeof pshareComments.$inferSelect;
 export type PshareLike = typeof pshareLikes.$inferSelect;
+export type Call = typeof calls.$inferSelect;
+export type CallLog = typeof callLogs.$inferSelect;
