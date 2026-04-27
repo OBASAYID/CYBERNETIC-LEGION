@@ -12,7 +12,7 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [currentDate, setCurrentDate] = useState("");
   const [error, setError] = useState("");
-  const [backgroundVersion] = useState(() => Date.now());
+  const loginBackgroundImage = "/images/botswana-dashboard-wildlife.jpg";
 
   useEffect(() => {
     const now = new Date();
@@ -92,10 +92,10 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url('/images/login-background.png?v=${backgroundVersion}')`,
+          backgroundImage: `url("${loginBackgroundImage}")`,
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/50" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/32 to-black/50" />
 
       <div className="relative z-10 flex-1 flex flex-col px-6 py-4">
         <div className="flex justify-between items-center">
