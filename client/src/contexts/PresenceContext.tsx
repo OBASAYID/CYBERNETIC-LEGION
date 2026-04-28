@@ -329,14 +329,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     
     const socket = io(socketUrl, {
       path: "/cyrus-io",
-      transports: ["polling"],
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 20,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
       timeout: 60_000,
-      upgrade: false,
+      upgrade: true,
       forceNew: true,
       withCredentials: true,
       autoConnect: true,
