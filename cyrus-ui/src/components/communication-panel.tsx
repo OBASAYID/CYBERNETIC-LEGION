@@ -44,12 +44,11 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-  Info
+  Info,
   Database,
   DatabaseZap,
   CloudOff,
   CloudUpload,
-  Clock
 } from "lucide-react";
 import { webRTCService, OnlineUser, ChatMessage, ConnectionStats, CallHistoryEntry } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
