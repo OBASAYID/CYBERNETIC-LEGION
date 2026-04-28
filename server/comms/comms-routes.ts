@@ -84,7 +84,12 @@ router.get("/api/comms/users", async (req: any, res) => {
     const users = await db.select().from(onlineUsers).where(eq(onlineUsers.isOnline, true));
     const filteredUsers = users.filter(u => u.id !== userId);
     res.json(filteredUsers);
-  } catch (error) {
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching online users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -105,7 +110,12 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     });
     const filteredUsers = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
     res.json(filteredUsers);
-  } catch (error) {
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching all users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -175,7 +185,15 @@ router.get("/api/comms/messages", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: if the table doesn't exist yet, return empty array
+    // instead of a 500 so the UI doesn't break on first boot.
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -214,7 +232,14 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -243,7 +268,23 @@ router.post("/api/comms/messages", async (req: any, res) => {
       timestamp: message.createdAt?.toISOString() || new Date().toISOString(),
       read: false
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready — message not persisted");
+      // Return a synthetic response so the UI doesn't break
+      return res.json({
+        id: `tmp_${Date.now()}`,
+        senderId: getUserId(req) || "unknown",
+        recipientId: req.body?.recipientId || "broadcast",
+        content: req.body?.content || "",
+        timestamp: new Date().toISOString(),
+        read: false,
+        _persisted: false,
+      });
+    }
     console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
   }

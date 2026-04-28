@@ -200,6 +200,14 @@ async function loadDependencies() {
   await tick();
 
   try {
+    // Auto-heal missing comms DB tables before loading comms routes
+    const dbInitM = await import("./comms/db-init");
+    await dbInitM.initCommsDatabase();
+  } catch (e) {
+    console.warn("[Routes] Comms DB init failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
     const sgM = await import("./comms/signaling");
     initSignalingServer = sgM.initSignalingServer;
     const ssM = await import("./comms/socket-signaling");
