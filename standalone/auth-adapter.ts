@@ -175,6 +175,47 @@ function buildSessionStore() {
 export async function setupAuth(app: Express): Promise<void> {
   const { adminCode, userCode } = resolveAccessConfig();
 
+  // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
+  app.post("/api/login", (req: any, res) => {
+    const username = String((req.body || {}).username ?? "").trim();
+    const code = String((req.body || {}).code ?? "").trim();
+    if (!username || !code) {
+      return res.status(400).json({ message: "Username and access code required" });
+    }
+
+    let role: "admin" | "user";
+    if (code === adminCode) {
+      role = "admin";
+    } else if (code === userCode) {
+      role = "user";
+    } else {
+      return res.status(401).json({ message: "Invalid access code" });
+    }
+
+    const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
+    const user: SessionUser = {
+      id: userId,
+      username,
+      role,
+      claims: { sub: userId },
+    };
+    const sessionToken = issueSessionToken(user);
+    res.json({ success: true, user: { id: userId, username, role }, sessionToken });
+  });
+
+  app.get("/api/auth/user", (req: any, res, next) => {
+    const token = readSessionTokenFromRequest(req);
+    if (token) {
+      const tokenUser = verifySessionToken(token);
+      if (tokenUser) return res.json(tokenUser);
+    }
+    return next();
+  });
+
+  app.post("/api/logout", (_req: any, res) => {
+    res.json({ success: true });
+  });
+
   const store = buildSessionStore();
   const cookieSecure = resolveSessionCookieSecure();
   const sameSite = resolveSessionSameSite();
@@ -229,57 +270,6 @@ export async function setupAuth(app: Express): Promise<void> {
   });
 
   console.log(`[Auth] Gate ready: admin+user codes loaded; session=${store ? "postgresql" : "memory"}`);
-
-  app.post("/api/login", (req: any, res) => {
-    const username = String((req.body || {}).username ?? "").trim();
-    const code = String((req.body || {}).code ?? "").trim();
-    if (!username || !code) {
-      return res.status(400).json({ message: "Username and access code required" });
-    }
-
-    let role: "admin" | "user";
-    if (code === adminCode) {
-      role = "admin";
-    } else if (code === userCode) {
-      role = "user";
-    } else {
-      return res.status(401).json({ message: "Invalid access code" });
-    }
-
-    const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
-
-    const user: SessionUser = {
-      id: userId,
-      username,
-      role,
-      claims: { sub: userId },
-    };
-    req.session.user = user;
-    const sessionToken = issueSessionToken(user);
-    // Respond immediately with token auth so login can never hang on session-store I/O.
-    res.json({ success: true, user: { id: userId, username, role }, sessionToken });
-
-    // Persist server-side session opportunistically; token auth already succeeded.
-    try {
-      req.session.save((err: any) => {
-        if (err) {
-          console.error("[Auth] Session save error after successful token login:", err);
-          return;
-        }
-        console.log(`[Auth] Session created for user: ${username} (${role})`);
-        console.log(`[Auth] Session ID: ${req.sessionID}`);
-      });
-    } catch (err) {
-      console.error("[Auth] Session save threw after successful token login:", err);
-    }
-  });
-
-  app.post("/api/logout", (req: any, res) => {
-    req.session.destroy((err: any) => {
-      if (err) console.error("[Auth] Session destroy error:", err);
-      res.json({ success: true });
-    });
-  });
 
   app.get("/api/auth/user", (req: any, res) => {
     if (req.session?.user) {
