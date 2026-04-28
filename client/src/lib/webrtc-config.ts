@@ -17,6 +17,47 @@ export const ENTERPRISE_ICE_SERVERS: RTCIceServer[] = [
   { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
+function getRuntimeIceServers(): RTCIceServer[] {
+  if (typeof window === "undefined") return ENTERPRISE_ICE_SERVERS;
+  try {
+    const raw = window.localStorage.getItem("cyrus-ice-servers");
+    if (!raw) return ENTERPRISE_ICE_SERVERS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return ENTERPRISE_ICE_SERVERS;
+    const valid = parsed.filter(
+      (s): s is RTCIceServer =>
+        !!s &&
+        typeof s === "object" &&
+        "urls" in s &&
+        (typeof (s as RTCIceServer).urls === "string" || Array.isArray((s as RTCIceServer).urls))
+    );
+    return valid.length > 0 ? valid : ENTERPRISE_ICE_SERVERS;
+  } catch {
+    return ENTERPRISE_ICE_SERVERS;
+  }
+}
+
+function shouldPreferRelayTransport(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const forced = window.localStorage.getItem("cyrus-force-relay");
+    if (forced === "1" || forced === "true") return true;
+  } catch {
+    // Ignore storage errors; continue with runtime checks.
+  }
+
+  const connection = (navigator as any).connection;
+  if (!connection) return false;
+  const type = String(connection.type || "").toLowerCase();
+  const effectiveType = String(connection.effectiveType || "").toLowerCase();
+  return (
+    type === "cellular" ||
+    effectiveType === "2g" ||
+    effectiveType === "3g" ||
+    effectiveType === "slow-2g"
+  );
+}
+
 export interface CallQualityMetrics {
   bitrate: number;
   packetsLost: number;
@@ -109,12 +150,14 @@ export const MEDIA_CONSTRAINTS = {
 };
 
 export function createPeerConnectionConfig(): RTCConfiguration {
+  const iceServers = getRuntimeIceServers();
+  const preferRelay = shouldPreferRelayTransport();
   return {
-    iceServers: ENTERPRISE_ICE_SERVERS,
-    iceTransportPolicy: "all",
+    iceServers,
+    iceTransportPolicy: preferRelay ? "relay" : "all",
     bundlePolicy: "max-bundle",
     rtcpMuxPolicy: "require",
-    iceCandidatePoolSize: 10,
+    iceCandidatePoolSize: 20,
   };
 }
 
@@ -140,7 +183,12 @@ export function getOptimalVideoConstraints(): MediaTrackConstraints {
 }
 
 export function getAudioConstraints(): MediaTrackConstraints {
-  return MEDIA_CONSTRAINTS.audio;
+  return {
+    ...MEDIA_CONSTRAINTS.audio,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
 }
 
 export async function getCallQualityMetrics(

@@ -13,6 +13,7 @@ import { AppRoutes } from "./app-routes";
 import { ArrowLeft } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
+import { CallProvider } from "@/contexts/CallContext";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -102,6 +103,21 @@ function App() {
                     onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
                     apiKeyConfigured={apiKeyConfigured}
                   />
+                  <CallProvider
+                    webRTCOptions={{
+                      userId:
+                        localStorage.getItem("cyrus_comm_user_id") ||
+                        (() => {
+                          const id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                          localStorage.setItem("cyrus_comm_user_id", id);
+                          return id;
+                        })(),
+                      displayName:
+                        localStorage.getItem("cyrus-display-name") || "Operator",
+                    }}
+                  >
+                    <AppRoutes />
+                  </CallProvider>
                 </AppErrorBoundary>
                 <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
               </TooltipProvider>
