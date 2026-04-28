@@ -136,9 +136,10 @@ export function CommsPage() {
   useEffect(() => {
     const savedName = localStorage.getItem("cyrus-display-name") || "CYRUS User";
     setDisplayName(savedName);
-    if (!isConnected) {
-      connectPresence(savedName);
-    }
+    // Always ask Presence to connect on mount; it no-ops if already connected (avoids stale
+    // `isConnected` from a previous mount under React Strict Mode leaving the socket disconnected).
+    connectPresence(savedName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap; connectPresence is stable enough for first paint
   }, []);
 
   useEffect(() => {

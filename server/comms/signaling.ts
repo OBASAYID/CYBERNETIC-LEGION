@@ -6,6 +6,8 @@ interface SignalMessage {
   type: string;
   roomId?: string;
   payload?: any;
+  /** Client `webrtc-service` sends `data` for register/ping payloads. */
+  data?: any;
   sender?: string;
   target?: string;
   targetUserId?: string;
@@ -136,12 +138,22 @@ export function initSignalingServer(httpServer: Server) {
         }
 
         switch (msg.type) {
-          case "register":
-            if (user && msg.payload?.displayName) {
-              user.displayName = msg.payload.displayName;
+          case "ping":
+            ws.send(JSON.stringify({ type: "pong", data: msg.data ?? {} }));
+            break;
+
+          case "register": {
+            const d = msg.data ?? msg.payload;
+            if (user && d) {
+              if (typeof d.userName === "string" && d.userName.trim()) {
+                user.displayName = d.userName.trim();
+              } else if (typeof d.displayName === "string" && d.displayName.trim()) {
+                user.displayName = d.displayName.trim();
+              }
               broadcastPresence();
             }
             break;
+          }
 
           case "call-user":
             console.log(`[Signaling] Call request from ${user?.displayName} to ${msg.targetUserId}`);

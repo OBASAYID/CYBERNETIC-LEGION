@@ -469,8 +469,21 @@ class WebRTCService {
 
   private createWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (this.socket) {
+        try {
+          this.socket.close();
+        } catch {
+          /* ignore */
+        }
+        this.socket = null;
+      }
+
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const q = new URLSearchParams();
+      if (this.userId) q.set("userId", this.userId);
+      if (this.userName) q.set("name", this.userName);
+      q.set("deviceId", this.deviceId);
+      const wsUrl = `${protocol}//${window.location.host}/ws?${q.toString()}`;
 
       console.log("[WebRTC] Connecting to signaling server:", wsUrl);
 
@@ -610,6 +623,21 @@ class WebRTCService {
       case "user-list":
         if (this.onUserList) this.onUserList(message.data);
         break;
+
+      case "presence-update": {
+        const raw = message.users;
+        if (Array.isArray(raw) && this.onUserList) {
+          const mapped: OnlineUser[] = raw.map((u: any) => ({
+            id: u.id,
+            name: u.displayName ?? u.name ?? String(u.id),
+            deviceId: u.deviceId ?? "",
+            status: u.inCall ? "in_call" : "online",
+            lastSeen: u.lastActivity ? new Date(u.lastActivity).getTime() : Date.now(),
+          }));
+          this.onUserList(mapped);
+        }
+        break;
+      }
 
       case "text-message":
         if (this.onMessage) {
