@@ -256,47 +256,22 @@ export async function setupAuth(app: Express): Promise<void> {
     };
     req.session.user = user;
     const sessionToken = issueSessionToken(user);
+    // Respond immediately with token auth so login can never hang on session-store I/O.
+    res.json({ success: true, user: { id: userId, username, role }, sessionToken });
 
-    const sessionSaveTimeoutMs = Math.max(
-      500,
-      Number.parseInt(String(process.env.CYRUS_SESSION_SAVE_TIMEOUT_MS || "2500"), 10) || 2500,
-    );
-    let settled = false;
-    const finalize = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutId);
-      fn();
-    };
-    const timeoutId = setTimeout(() => {
-      finalize(() => {
-        console.error(`[Auth] Session save timed out after ${sessionSaveTimeoutMs}ms; issuing token login fallback`);
-        res.json({
-          success: true,
-          user: { id: userId, username, role },
-          sessionToken,
-          sessionFallback: true,
-        });
-      });
-    }, sessionSaveTimeoutMs);
-
-    req.session.save((err: any) => {
-      finalize(() => {
+    // Persist server-side session opportunistically; token auth already succeeded.
+    try {
+      req.session.save((err: any) => {
         if (err) {
-          console.error("[Auth] Session save error; issuing token login fallback:", err);
-          return res.json({
-            success: true,
-            user: { id: userId, username, role },
-            sessionToken,
-            sessionFallback: true,
-          });
+          console.error("[Auth] Session save error after successful token login:", err);
+          return;
         }
-
         console.log(`[Auth] Session created for user: ${username} (${role})`);
         console.log(`[Auth] Session ID: ${req.sessionID}`);
-        res.json({ success: true, user: { id: userId, username, role }, sessionToken });
       });
-    });
+    } catch (err) {
+      console.error("[Auth] Session save threw after successful token login:", err);
+    }
   });
 
   app.post("/api/logout", (req: any, res) => {
