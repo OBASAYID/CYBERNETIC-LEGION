@@ -89,12 +89,34 @@ function resolveSessionCookieSecure(): boolean {
   return String(process.env.PUBLIC_PROTOCOL || "").trim().toLowerCase() === "https";
 }
 
+function isRailwayEnvironment(): boolean {
+  return !!process.env.RAILWAY_ENVIRONMENT_ID || !!process.env.RAILWAY_DEPLOYMENT_ID;
+}
+
+function resolveTrustProxy(): boolean {
+  if (process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || ""))) {
+    return true;
+  }
+  if (isRailwayEnvironment()) {
+    console.log("[Auth] Railway environment detected — enabling trust proxy automatically");
+    return true;
+  }
+  return false;
+}
+
 function resolveSessionSameSite(): "lax" | "strict" | "none" {
+  const raw = String(process.env.SESSION_SAME_SITE || "").trim().toLowerCase();
   const defaultSameSite = process.env.NODE_ENV === "production" ? "none" : "lax";
   const raw = String(process.env.SESSION_SAME_SITE || defaultSameSite).trim().toLowerCase();
   if (raw === "strict") return "strict";
   if (raw === "none") return "none";
-  return "lax";
+  if (raw === "lax") return "lax";
+
+  // Default: use "lax" for HTTP, "none" for HTTPS (requires secure flag)
+  const isHttps =
+    String(process.env.PUBLIC_PROTOCOL || "").trim().toLowerCase() === "https" ||
+    String(process.env.BASE_URL || "").trim().startsWith("https://");
+  return isHttps ? "none" : "lax";
 }
 
 function resolveSessionSecret(): string {
@@ -164,14 +186,16 @@ export async function setupAuth(app: Express): Promise<void> {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
+    proxy: resolveTrustProxy(),
     proxy:
       process.env.NODE_ENV === "production" ||
       process.env.TRUST_PROXY === "1" ||
       /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
-      secure: sameSite === "none" ? true : cookieSecure,
+      secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
+      sameSite: sameSite as "lax" | "strict" | "none",
       sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
@@ -189,6 +213,13 @@ export async function setupAuth(app: Express): Promise<void> {
 
   app.use(session(sessionOpts as Parameters<typeof session>[0]));
 
+  console.log(`[Auth] Session cookie config:`, {
+    secure: sessionOpts.cookie.secure,
+    sameSite: sessionOpts.cookie.sameSite,
+    httpOnly: sessionOpts.cookie.httpOnly,
+    maxAge: sessionOpts.cookie.maxAge,
+    trustProxy: sessionOpts.proxy,
+  });
   // Add middleware to log Set-Cookie headers for debugging
   app.use((req, res, next) => {
     const originalSend = res.send;
@@ -296,14 +327,16 @@ export function getSession() {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
+    proxy: resolveTrustProxy(),
     proxy:
       process.env.NODE_ENV === "production" ||
       process.env.TRUST_PROXY === "1" ||
       /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
-      secure: sameSite === "none" ? true : cookieSecure,
+      secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
+      sameSite: sameSite as "lax" | "strict" | "none",
       sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
