@@ -483,6 +483,7 @@ app.use((req, res, next) => {
       recordApiRequest(`${req.method} ${reqPath}`, res.statusCode, duration);
     }
   });
+  next();
 });
 
 const listenOptions: { port: number; host: string; reusePort?: boolean } = {
