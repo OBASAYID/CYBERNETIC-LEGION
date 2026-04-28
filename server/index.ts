@@ -61,7 +61,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 
-if (process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || ""))) {
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.TRUST_PROXY === "1" ||
+  /^true$/i.test(String(process.env.TRUST_PROXY || ""))
+) {
   app.set("trust proxy", 1);
 }
 

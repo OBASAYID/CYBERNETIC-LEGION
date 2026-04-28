@@ -265,12 +265,12 @@ export function ModuleCommandConsole({
     return (
       <section
         className={cn(
-          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/40 via-slate-950/82 to-orange-950/32 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_0_44px_-32px_rgba(251,191,36,0.03),0_8px_40px_rgba(0,0,0,0.5)]",
+          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)]",
           className,
         )}
         aria-label="CYRUS command console (minimized)"
       >
-        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-amber-950/30 via-slate-950/78 to-slate-950/92 px-3 py-2.5 shadow-inner shadow-black/35 sm:px-4">
+        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-sky-50/95 via-sky-100/70 to-slate-100/85 px-3 py-2.5 shadow-inner shadow-sky-300/35 sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-cyan-500/10">
               <Terminal className="h-4 w-4 text-cyan-300" aria-hidden />
@@ -283,7 +283,7 @@ export function ModuleCommandConsole({
                 Cyrus AI
               </p>
               <p
-                className="truncate text-sm font-semibold text-white/90"
+                className="truncate text-sm font-semibold text-slate-900"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Command console
@@ -307,13 +307,13 @@ export function ModuleCommandConsole({
   return (
     <section
       className={cn(
-        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/40 via-slate-950/82 to-orange-950/32 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_0_44px_-32px_rgba(251,191,36,0.03),0_8px_40px_rgba(0,0,0,0.5)] sm:min-h-[26rem]",
+        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-sky-50/95 via-sky-100/80 to-sky-50/95 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] sm:min-h-[26rem]",
         className,
       )}
       aria-label="CYRUS command console"
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950"
+        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-sky-50/90"
         aria-hidden
       />
       <div
@@ -323,7 +323,7 @@ export function ModuleCommandConsole({
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-300/4 via-yellow-500/2 to-orange-500/8" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-sky-200/55 via-white/40 to-sky-100/55" />
       <div
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.05),transparent_55%)]"
         aria-hidden
@@ -336,7 +336,7 @@ export function ModuleCommandConsole({
         className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(255,255,255,0.04)_0%,transparent_38%,rgba(255,255,255,0.01)_100%)]"
         aria-hidden
       />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-amber-950/25 via-slate-950/52 to-orange-950/22 p-4 shadow-inner shadow-black/30 backdrop-blur-sm sm:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-sky-50/90 via-sky-100/55 to-slate-100/80 p-4 shadow-inner shadow-sky-300/30 backdrop-blur-sm sm:p-5">
         <div
           className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(255,255,255,0.04),transparent_58%)]"
           aria-hidden
@@ -372,7 +372,7 @@ export function ModuleCommandConsole({
               }
               className={cn(
                 "relative flex h-[4.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-2 border-cyan-400/45 bg-slate-900/80 px-1.5 pb-1.5 pt-1.5 shadow-[0_0_20px_rgba(34,211,238,0.16)] transition focus:outline-none focus:ring-2 focus:ring-cyan-400/50 disabled:opacity-50 sm:h-[5.25rem] sm:w-[5.25rem]",
-                isListening && "border-orange-400/60 shadow-[0_0_24px_rgba(251,146,60,0.18)]",
+                isListening && "border-sky-300/70 shadow-[0_0_24px_rgba(125,211,252,0.24)]",
               )}
             >
               <img
@@ -382,7 +382,7 @@ export function ModuleCommandConsole({
                 draggable={false}
               />
               <Mic
-                className={cn("h-3.5 w-3.5 shrink-0 text-cyan-200/95", isListening && "text-orange-300")}
+                className={cn("h-3.5 w-3.5 shrink-0 text-cyan-200/95", isListening && "text-sky-200")}
                 aria-hidden
               />
             </button>
@@ -442,7 +442,7 @@ export function ModuleCommandConsole({
         {handoffHint && <p className="mb-2 text-[11px] text-amber-300/90">{handoffHint}</p>}
 
         <div
-          className="mb-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/8 bg-black/30 px-2.5 py-2 font-mono text-xs leading-relaxed text-slate-200/90 sm:px-3 sm:py-2.5 sm:text-[13px]"
+            className="mb-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 font-mono text-xs leading-relaxed text-slate-200/90 sm:px-3 sm:py-2.5 sm:text-[13px]"
         >
           {log.length === 0 && !send.isPending && (
             <p className="text-slate-500/90">Prompt CYRUS — query, plan, or ask anything in this module.</p>
@@ -454,7 +454,7 @@ export function ModuleCommandConsole({
             </div>
           ))}
           {send.isPending && (
-            <div className="flex items-center gap-1.5 text-orange-200/80">
+            <div className="flex items-center gap-1.5 text-sky-100/85">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span>Processing…</span>
             </div>
