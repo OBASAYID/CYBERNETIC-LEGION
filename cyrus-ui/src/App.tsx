@@ -120,23 +120,6 @@ function App() {
                   {/* CallProvider wraps all authenticated routes so incoming/active
                       call overlays are globally available regardless of current page. */}
                   <CallProvider userId={callUserId} displayName={callDisplayName}>
-                  <AppRoutes
-                    onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
-                    apiKeyConfigured={apiKeyConfigured}
-                  />
-                  <CallProvider
-                    webRTCOptions={{
-                      userId:
-                        localStorage.getItem("cyrus_comm_user_id") ||
-                        (() => {
-                          const id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                          localStorage.setItem("cyrus_comm_user_id", id);
-                          return id;
-                        })(),
-                      displayName:
-                        localStorage.getItem("cyrus-display-name") || "Operator",
-                    }}
-                  >
                     <AppRoutes />
                   </CallProvider>
                 </AppErrorBoundary>

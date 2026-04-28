@@ -44,42 +44,10 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-  Info,
-  Database,
-  DatabaseZap,
-  CloudOff,
-  CloudUpload,
+  Info
 } from "lucide-react";
-import { OnlineUser } from "@/lib/webrtc-service";
-import { useWebRTC } from "@/hooks/useWebRTC";
 import { webRTCService, OnlineUser, ChatMessage, ConnectionStats, CallHistoryEntry } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
-
-interface DbHealthStatus {
-  ok: boolean;
-  dbConnected: boolean;
-  fallbackMode: boolean;
-  circuitOpen: boolean;
-  consecutiveFailures: number;
-  lastError: string | null;
-  lastCheckedAt: string | null;
-  queue: {
-    size: number;
-    oldestAgeMs: number;
-    totalEnqueued: number;
-    totalFlushed: number;
-    totalDropped: number;
-    successRate: number;
-  };
-  fallbackStoreSizes: {
-    messages: number;
-    calls: number;
-    rooms: number;
-    users: number;
-    groups: number;
-  };
-  checkedAt: string;
-}
 
 interface CommunicationPanelProps {
   operatorName?: string;
@@ -229,10 +197,6 @@ export function CommunicationPanel({
   operatorId,
   isAuthenticated
 }: CommunicationPanelProps) {
-  const [activeTab, setActiveTab] = useState<"users" | "chat">("users");
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [messageInput, setMessageInput] = useState("");
-
   const { toast } = useToast();
 
   // ── Connection state ──────────────────────────────────────────────────────
@@ -256,12 +220,29 @@ export function CommunicationPanel({
   } | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [isCallConnecting, setIsCallConnecting] = useState(false);
-  const [dbHealth, setDbHealth] = useState<DbHealthStatus | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  
+  const [connectionQuality, setConnectionQuality] = useState<
+    "excellent" | "good" | "fair" | "poor" | "connecting"
+  >("connecting");
+
+  // ── Advanced features ─────────────────────────────────────────────────────
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [liveStats, setLiveStats] = useState<ConnectionStats | null>(null);
+  const [showStats, setShowStats] = useState(false);
+  const [callHistory, setCallHistory] = useState<CallHistoryEntry[]>([]);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"users" | "chat" | "history">("users");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Refs ──────────────────────────────────────────────────────────────────
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const callContainerRef = useRef<HTMLDivElement>(null);
+  const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Stable user ID ────────────────────────────────────────────────────────
@@ -275,42 +256,6 @@ export function CommunicationPanel({
     return stableId;
   }, [operatorId]);
 
-  const stableUserId = getStableUserId();
-
-  // ─── useWebRTC hook — handles all WebRTC state and audio/video streams ───────
-  const {
-    isConnected,
-    isReconnecting,
-    reconnectAttempt,
-    onlineUsers,
-    messages,
-    isInCall,
-    callType,
-    isMuted,
-    isVideoOff,
-    isCallConnecting,
-    incomingCall,
-    callDuration,
-    connectionQuality,
-    selectedUser,
-    localVideoRef,
-    remoteVideoRef,
-    remoteAudioRef,
-    startCall: startCallHook,
-    acceptCall: acceptCallHook,
-    rejectCall: rejectCallHook,
-    endCall: endCallHook,
-    toggleMute,
-    toggleVideo,
-    sendMessage: sendMessageHook,
-    setSelectedUser,
-  } = useWebRTC({
-    userId: stableUserId,
-    userName: operatorName || "Operator",
-    isAuthenticated,
-  });
-
-  // Scroll to bottom of messages
   // ── Status helpers ─────────────────────────────────────────────────────────
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -445,7 +390,6 @@ export function CommunicationPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fullscreen handling
   // ── Call timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isInCall && !isCallConnecting) {
@@ -469,82 +413,7 @@ export function CommunicationPanel({
     if (!isFullscreen) {
       setShowControls(true);
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
-  // DB health polling — every 30 s when authenticated
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchDbHealth = async () => {
-      try {
-        const res = await fetch("/api/health/db");
-        if (res.ok) {
-          const data: DbHealthStatus = await res.json();
-          const prev = dbHealth;
-          setDbHealth(data);
-
-          // Detect transition into / out of fallback mode
-          if (prev && !prev.fallbackMode && data.fallbackMode) {
-            toast({
-              title: "Offline Mode Activated",
-              description: "Database unavailable — messages will sync when connection is restored.",
-              variant: "destructive",
-            });
-          } else if (prev && prev.fallbackMode && !data.fallbackMode) {
-            setIsSyncing(true);
-            toast({
-              title: "Database Reconnected",
-              description: "Syncing pending messages…",
-            });
-            // Give the server a moment to flush, then clear syncing indicator
-            setTimeout(() => setIsSyncing(false), 4_000);
-          }
-        }
-      } catch {
-        // Network error — don't crash the panel
-      }
-    };
-
-    fetchDbHealth();
-    const interval = setInterval(fetchDbHealth, 30_000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-  
-  const formatDuration = (seconds: number) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const getQualityIcon = () => {
-    switch (connectionQuality) {
-      case "excellent": return <SignalHigh className="w-4 h-4 text-green-400" />;
-      case "good": return <SignalMedium className="w-4 h-4 text-green-400" />;
-      case "fair": return <SignalMedium className="w-4 h-4 text-yellow-400" />;
-      case "poor": return <SignalLow className="w-4 h-4 text-red-400" />;
-      case "connecting": return <Radio className="w-4 h-4 text-blue-400 animate-pulse" />;
-    }
-  };
-
-  const getQualityLabel = () => {
-    switch (connectionQuality) {
-      case "excellent": return "EXCELLENT";
-      case "good": return "GOOD";
-      case "fair": return "FAIR";
-      case "poor": return "POOR";
-      case "connecting": return "CONNECTING";
-    }
-  };
-
-  const startCall = async (user: OnlineUser, type: "voice" | "video") => {
-    await startCallHook(user, type);
-  };
-
-  const acceptCall = async () => {
-    await acceptCallHook();
   }, [isFullscreen]);
 
   // ── Call actions ───────────────────────────────────────────────────────────
@@ -589,15 +458,13 @@ export function CommunicationPanel({
   };
 
   const rejectCall = () => {
-    rejectCallHook();
+    if (incomingCall) {
+      webRTCService.rejectCall(incomingCall.from);
+      setIncomingCall(null);
+    }
   };
 
   const endCall = useCallback((sendSignal: boolean = true) => {
-    endCallHook(sendSignal);
-    if (isFullscreen && document.fullscreenElement) {
-      document.exitFullscreen();
-    }
-  }, [endCallHook, isFullscreen]);
     webRTCService.endCall(sendSignal);
     setIsInCall(false);
     setCallType(null);
@@ -625,13 +492,6 @@ export function CommunicationPanel({
       await callContainerRef.current.requestFullscreen();
     } else {
       await document.exitFullscreen();
-    }
-  };
-
-  const sendMessage = () => {
-    if (messageInput.trim() && selectedUser) {
-      sendMessageHook(messageInput.trim());
-      setMessageInput("");
     }
   };
 
@@ -693,41 +553,6 @@ export function CommunicationPanel({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      {/*
-       * Hidden <audio> element for remote audio playback.
-       *
-       * This is the primary fix for the "no sound during calls" bug.
-       * Previously, the remote stream was only attached to the <video> element,
-       * which is only rendered during video calls. Voice calls had no audio
-       * output element at all.
-       *
-       * This element handles audio for BOTH voice and video calls.
-       * It is visually hidden (not display:none, which can pause playback in
-       * some browsers) and is explicitly NOT muted.
-       */}
-      <audio
-        ref={remoteAudioRef}
-        autoPlay
-        playsInline
-        style={{
-          position: "absolute",
-          width: 0,
-          height: 0,
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-        aria-hidden="true"
-        data-testid="audio-remote"
-      />
-
-      {/* Premium Status Bar */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-background via-muted/30 to-background p-3 rounded-lg border">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} ${isReconnecting ? 'animate-pulse' : ''}`} />
-            {isConnected && (
-              <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
     <TooltipProvider>
       <div className="space-y-4">
 
@@ -785,69 +610,6 @@ export function CommunicationPanel({
                     <div className="absolute -bottom-1 -right-1">
                       <PhoneIncoming className="w-6 h-6 text-primary animate-bounce" />
                     </div>
-      </div>
-
-      {/* DB / Offline Mode Status Bar */}
-      {dbHealth && (
-        <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-mono transition-all ${
-          dbHealth.fallbackMode
-            ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
-            : isSyncing
-            ? "bg-blue-500/10 border-blue-500/40 text-blue-400"
-            : "bg-muted/20 border-muted/30 text-muted-foreground"
-        }`}>
-          <div className="flex items-center gap-2">
-            {dbHealth.fallbackMode ? (
-              <>
-                <CloudOff className="w-3.5 h-3.5 animate-pulse" />
-                <span className="font-semibold">OFFLINE MODE</span>
-                <span className="opacity-70">— DB unavailable, operating from memory</span>
-              </>
-            ) : isSyncing ? (
-              <>
-                <CloudUpload className="w-3.5 h-3.5 animate-bounce" />
-                <span className="font-semibold">SYNCING</span>
-                <span className="opacity-70">— Flushing queued data to database…</span>
-              </>
-            ) : (
-              <>
-                <Database className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-green-400">DB CONNECTED</span>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {dbHealth.fallbackMode && dbHealth.queue.size > 0 && (
-              <Badge variant="outline" className="gap-1 text-xs border-amber-500/40 text-amber-400">
-                <Clock className="w-3 h-3" />
-                {dbHealth.queue.size} PENDING
-              </Badge>
-            )}
-            {dbHealth.lastError && dbHealth.fallbackMode && (
-              <span className="opacity-60 truncate max-w-[180px]" title={dbHealth.lastError}>
-                {dbHealth.lastError.slice(0, 40)}{dbHealth.lastError.length > 40 ? "…" : ""}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-      
-      {/* Incoming Call Modal */}
-      {incomingCall && (
-        <Card className="border-2 border-primary bg-gradient-to-br from-primary/10 via-background to-primary/5 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 animate-pulse" />
-          <CardContent className="p-6 relative">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Avatar className="w-16 h-16 border-2 border-primary">
-                    <AvatarFallback className="text-2xl font-bold bg-primary/20">
-                      {incomingCall.callerName[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="absolute -bottom-1 -right-1">
-                    <PhoneIncoming className="w-6 h-6 text-primary animate-bounce" />
                   </div>
                   <div>
                     <p className="font-bold text-xl">{incomingCall.callerName}</p>
@@ -1353,41 +1115,6 @@ export function CommunicationPanel({
                             <Badge variant="outline" className={`text-xs font-mono ${qualityColor(entry.quality)}`}>
                               {entry.quality.toUpperCase()}
                             </Badge>
-                
-                <ScrollArea className="h-72 border rounded-xl p-4 bg-muted/10">
-                  <div className="space-y-3">
-                    {messages
-                      .filter(m => 
-                        (m.from === selectedUser.id && m.to === stableUserId) ||
-                        (m.from === stableUserId && m.to === selectedUser.id)
-                      )
-                      .map((msg, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                              msg.isOwn 
-                                ? "bg-primary text-primary-foreground rounded-br-md" 
-                                : "bg-muted rounded-bl-md"
-                            }`}
-                          >
-                            <p className="text-sm">{msg.text}</p>
-                            <div className="flex items-center justify-end gap-1 mt-1">
-                              <p className="text-xs opacity-60">
-                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              {msg.isOwn && dbHealth?.fallbackMode && (
-                                <Clock className="w-3 h-3 opacity-60 text-amber-300" title="Pending sync" />
-                              )}
-                              {msg.isOwn && !dbHealth?.fallbackMode && !isSyncing && (
-                                <Activity className="w-3 h-3 opacity-40 text-green-300" title="Synced" />
-                              )}
-                              {msg.isOwn && isSyncing && (
-                                <RefreshCw className="w-3 h-3 opacity-60 animate-spin text-blue-300" title="Syncing…" />
-                              )}
-                            </div>
                           </div>
                         </div>
                       ))}

@@ -4,9 +4,6 @@
 // adaptive bitrate, redundant TURN servers, and professional features.
 
 // ─── Public Interfaces ────────────────────────────────────────────────────────
-// Premium Military-Grade Real-Time Communication System
-// Enhanced with reconnection, heartbeat, crystal-clear quality,
-// multi-provider TURN coverage, and long-distance NAT traversal
 
 export interface PeerConnection {
   userId: string;
@@ -119,41 +116,6 @@ type AudioLevelHandler = (level: number) => void;
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     // Google STUN – primary
-// ---------------------------------------------------------------------------
-// ICE / TURN configuration
-// ---------------------------------------------------------------------------
-// Multi-provider TURN coverage ensures connectivity across:
-//   • Symmetric NAT (corporate firewalls, carrier-grade NAT)
-//   • Mobile networks that block UDP (TCP/TLS fallback)
-//   • Long-distance calls across different regions
-//
-// Server priority order (browser tries them in parallel):
-//   1. Google STUN  – free, global, no relay overhead
-//   2. Cloudflare STUN – anycast, low-latency worldwide
-//   3. Metered TURN (UDP 80/3478, TCP 443, TLS 443) – primary relay
-//   4. Twilio TURN  – enterprise-grade, global PoPs
-//   5. Open-relay fallback – last-resort public relay
-//
-// To use your own TURN server set VITE_TURN_URL / VITE_TURN_USER /
-// VITE_TURN_CREDENTIAL in the environment (see TURN_STUN_CONFIG.md).
-// ---------------------------------------------------------------------------
-
-/** Detect mobile browsers so we can prioritise TCP/TLS TURN endpoints. */
-const isMobileNetwork = (): boolean => {
-  if (typeof navigator === "undefined") return false;
-  const conn = (navigator as any).connection;
-  if (conn) {
-    const type: string = conn.effectiveType || conn.type || "";
-    if (/2g|3g|4g|5g|cellular/i.test(type)) return true;
-  }
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-};
-
-/** Build the ICE server list, optionally injecting env-configured TURN. */
-const buildIceServers = (): RTCIceServer[] => {
-  const servers: RTCIceServer[] = [
-    // ── STUN servers (no credentials needed) ──────────────────────────────
-    // Google – 5 global anycast endpoints
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
@@ -165,126 +127,34 @@ const buildIceServers = (): RTCIceServer[] => {
     { urls: "stun:stun.stunprotocol.org:3478" },
     { urls: "stun:stun.voip.blackberry.com:3478" },
     // Metered TURN – UDP (lowest latency)
-    // Cloudflare – anycast, excellent latency worldwide
-    { urls: "stun:stun.cloudflare.com:3478" },
-    // Additional public STUN for redundancy
-    { urls: "stun:stun.stunprotocol.org:3478" },
-    { urls: "stun:stun.voip.blackberry.com:3478" },
-    { urls: "stun:stun.services.mozilla.com:3478" },
-
-    // ── Metered TURN – primary relay (UDP + TCP + TLS) ────────────────────
-    // UDP port 80 – works through most firewalls
     {
       urls: "turn:openrelay.metered.ca:80",
       username: "openrelayproject",
-      credential: "openrelayproject",
+      credential: "openrelayproject"
     },
     // Metered TURN – TLS (firewall bypass)
     {
       urls: "turn:openrelay.metered.ca:443",
-    // UDP port 3478 – standard TURN port
-    {
-      urls: "turn:openrelay.metered.ca:3478",
       username: "openrelayproject",
-      credential: "openrelayproject",
+      credential: "openrelayproject"
     },
     // Metered TURN – TCP (deep packet inspection bypass)
-    // TCP port 443 – bypasses UDP-blocking firewalls & mobile networks
     {
       urls: "turn:openrelay.metered.ca:443?transport=tcp",
       username: "openrelayproject",
-      credential: "openrelayproject",
+      credential: "openrelayproject"
     },
     // Metered TURNS – encrypted relay
-    // TLS port 443 – encrypted relay, works through deep-packet inspection
     {
       urls: "turns:openrelay.metered.ca:443",
       username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-
-    // ── Twilio TURN – enterprise-grade, global PoPs ───────────────────────
-    // Credentials are public demo values; replace with your Twilio account
-    // credentials (VITE_TWILIO_TURN_USER / VITE_TWILIO_TURN_CREDENTIAL) for
-    // production use.  See TURN_STUN_CONFIG.md for setup instructions.
-    {
-      urls: "turn:global.turn.twilio.com:3478?transport=udp",
-      username: import.meta.env.VITE_TWILIO_TURN_USER || "cyrus-turn-demo",
-      credential: import.meta.env.VITE_TWILIO_TURN_CREDENTIAL || "cyrus-turn-demo",
-    },
-    {
-      urls: "turn:global.turn.twilio.com:3478?transport=tcp",
-      username: import.meta.env.VITE_TWILIO_TURN_USER || "cyrus-turn-demo",
-      credential: import.meta.env.VITE_TWILIO_TURN_CREDENTIAL || "cyrus-turn-demo",
-    },
-    {
-      urls: "turn:global.turn.twilio.com:443?transport=tcp",
-      username: import.meta.env.VITE_TWILIO_TURN_USER || "cyrus-turn-demo",
-      credential: import.meta.env.VITE_TWILIO_TURN_CREDENTIAL || "cyrus-turn-demo",
-    },
-
-    // ── Fallback: Numb TURN (Citrix) ──────────────────────────────────────
-    {
-      urls: "turn:numb.viagenie.ca:3478",
-      username: "webrtc@live.com",
-      credential: "muazkh",
-    },
-    {
-      urls: "turn:numb.viagenie.ca:3478?transport=tcp",
-      username: "webrtc@live.com",
-      credential: "muazkh",
-    },
-  ];
-
-  // ── Optional: self-hosted / custom TURN from environment ─────────────────
-  const customTurnUrl = import.meta.env.VITE_TURN_URL;
-  if (customTurnUrl) {
-    servers.push({
-      urls: customTurnUrl,
-      username: import.meta.env.VITE_TURN_USER || "",
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || "",
-    });
-    console.log("[WebRTC] Custom TURN server configured:", customTurnUrl);
-  }
-
-  // On mobile, move TCP/TLS TURN entries to the front so the browser
-  // prefers them over UDP (which is frequently blocked on cellular networks).
-  if (isMobileNetwork()) {
-    console.log("[WebRTC] Mobile network detected – prioritising TCP/TLS TURN endpoints");
-    const tcpTls = servers.filter(
-      (s) => typeof s.urls === "string" && (s.urls.includes("transport=tcp") || s.urls.startsWith("turns:"))
-    );
-    const rest = servers.filter(
-      (s) => !(typeof s.urls === "string" && (s.urls.includes("transport=tcp") || s.urls.startsWith("turns:")))
-    );
-    return [...tcpTls, ...rest];
-  }
-
-  return servers;
-};
-
-// ICE gathering timeout: if no viable candidate is found within this window
-// we log a diagnostic warning.  The connection attempt continues – the
-// browser may still succeed with a later candidate.
-const ICE_GATHERING_TIMEOUT_MS = 20_000; // 20 seconds
-
-// How long to wait before declaring a disconnected peer connection dead and
-// triggering cleanup / call-end.
-const CONNECTION_FAILURE_GRACE_MS = 5_000; // 5 seconds
-
-// Maximum number of ICE restart attempts before giving up.
-const MAX_ICE_RESTART_ATTEMPTS = 3;
-
-// Pre-allocate a large candidate pool so gathering starts immediately when
-// the call begins, reducing connection setup latency.
-const ICE_CANDIDATE_POOL_SIZE = 50;
-
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: buildIceServers(),
-  iceCandidatePoolSize: ICE_CANDIDATE_POOL_SIZE,
+      credential: "openrelayproject"
+    }
+  ],
+  iceCandidatePoolSize: 10,
   iceTransportPolicy: "all",
   bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require",
+  rtcpMuxPolicy: "require"
 };
 
 // ─── Media Constraints ────────────────────────────────────────────────────────
@@ -330,16 +200,12 @@ const getMediaConstraints = async (
 
   // Mobile: 480p/15fps to conserve battery and data
   // Desktop: 720p/30fps as baseline (adaptive bitrate handles degradation)
-  // On mobile networks use lower resolution to conserve bandwidth and
-  // reduce the chance of relay congestion on long-distance TURN paths.
-  const mobile = isMobileNetwork();
   const videoConstraints: MediaTrackConstraints = mobile
     ? {
         width: { ideal: 640, min: 320 },
         height: { ideal: 480, min: 240 },
         frameRate: { ideal: 15, max: 20 },
         facingMode: "user"
-        facingMode: "user",
       }
     : {
         width: { ideal: 1280, min: 640 },
@@ -347,12 +213,6 @@ const getMediaConstraints = async (
         frameRate: { ideal: 30, max: 30 },
         facingMode: "user"
       };
-        facingMode: "user",
-      };
-
-  if (mobile) {
-    console.log("[WebRTC] Mobile network – using reduced video constraints (640×480 @ 15fps)");
-  }
 
   return { audio: audioConstraints, video: videoConstraints };
 };
@@ -472,22 +332,6 @@ class WebRTCService {
   private onDeviceList: DeviceListHandler | null = null;
   private onAudioLevel: AudioLevelHandler | null = null;
 
-  
-  // Call state
-  private currentCallUserId: string | null = null;
-  private pendingCandidates: RTCIceCandidateInit[] = [];
-  private pendingCallType: "voice" | "video" | null = null;
-  private isInitiator: boolean = false;
-  private statsTimer: NodeJS.Timeout | null = null;
-  private iceGatheringComplete: boolean = false;
-  private connectionEstablished: boolean = false;
-
-  // ICE diagnostics & restart tracking
-  private iceGatheringTimer: NodeJS.Timeout | null = null;
-  private iceRestartAttempts: number = 0;
-  private connectionFailureTimer: NodeJS.Timeout | null = null;
-  private webrtcHandshakeTimer: NodeJS.Timeout | null = null;
-  
   constructor() {
     this.deviceId = this.getOrCreateDeviceId();
     this.loadCallHistory();
@@ -833,9 +677,6 @@ class WebRTCService {
 
   private async createPeerConnection(): Promise<RTCPeerConnection> {
     console.log("[WebRTC] Creating enterprise peer connection");
-    console.log(
-      `[WebRTC] Creating peer connection (pool=${ICE_CANDIDATE_POOL_SIZE}, mobile=${isMobileNetwork()})`
-    );
 
     const pc = new RTCPeerConnection(ICE_SERVERS);
     this.iceGatheringComplete = false;
@@ -844,55 +685,12 @@ class WebRTCService {
     // ── ICE Candidates ──────────────────────────────────────────────────────
     pc.onicecandidate = (event) => {
       if (event.candidate && this.currentCallUserId) {
-    this.iceRestartAttempts = 0;
-
-    // ── ICE gathering timeout ──────────────────────────────────────────────
-    // If gathering hasn't completed within ICE_GATHERING_TIMEOUT_MS we emit
-    // a diagnostic warning.  The connection attempt is NOT aborted – the
-    // browser may still find a viable candidate via a slower TURN server.
-    this.clearIceGatheringTimer();
-    this.iceGatheringTimer = setTimeout(() => {
-      if (!this.iceGatheringComplete) {
-        console.warn(
-          `[WebRTC] ICE gathering still incomplete after ${ICE_GATHERING_TIMEOUT_MS / 1000}s. ` +
-          "Check TURN server reachability. Candidates gathered so far may still succeed."
-        );
-        // Emit diagnostic to help operators identify TURN issues
-        this.send({
-          type: "ice-diagnostic",
-          from: this.userId,
-          data: {
-            event: "gathering-timeout",
-            timeoutMs: ICE_GATHERING_TIMEOUT_MS,
-            iceGatheringState: pc.iceGatheringState,
-            iceConnectionState: pc.iceConnectionState,
-            connectionState: pc.connectionState,
-          },
-        });
-      }
-    }, ICE_GATHERING_TIMEOUT_MS);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && this.currentCallUserId) {
-        // Filter mDNS candidates (.local hostnames) to avoid leaking LAN IPs
-        const addr = event.candidate.address || "";
-        if (addr.endsWith(".local")) {
-          console.log("[WebRTC] Skipping mDNS candidate (local IP leak prevention):", addr);
-          return;
-        }
-        console.log(
-          `[WebRTC] Sending ICE candidate – type=${event.candidate.type} ` +
-          `protocol=${event.candidate.protocol} addr=${addr}`
-        );
         this.send({
           type: "ice-candidate",
           from: this.userId,
           to: this.currentCallUserId,
-          data: event.candidate.toJSON(),
+          data: event.candidate.toJSON()
         });
-      } else if (!event.candidate) {
-        // null candidate = end-of-candidates signal
-        console.log("[WebRTC] ICE candidate gathering complete (end-of-candidates)");
       }
     };
 
@@ -906,73 +704,25 @@ class WebRTCService {
       console.log("[WebRTC] ICE state:", pc.iceConnectionState);
 
       switch (pc.iceConnectionState) {
-      console.log("[WebRTC] ICE gathering state →", pc.iceGatheringState);
-      if (pc.iceGatheringState === "complete") {
-        this.iceGatheringComplete = true;
-        this.clearIceGatheringTimer();
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      const state = pc.iceConnectionState;
-      console.log(`[WebRTC] ICE connection state → ${state}`);
-
-      switch (state) {
-        case "new":
-          console.log("[WebRTC] ICE: initialising candidate gathering");
-          break;
-
-        case "checking":
-          console.log("[WebRTC] ICE: checking candidates (STUN/TURN negotiation in progress)");
-          if (this.onConnectionQuality) this.onConnectionQuality("connecting");
-          break;
-
         case "connected":
-          console.log("[WebRTC] ICE: connected – media path established");
+        case "completed":
           this.connectionEstablished = true;
           if (this.onConnectionQuality) this.onConnectionQuality("excellent");
           this.startStatsMonitoring();
           break;
         case "checking":
           if (this.onConnectionQuality) this.onConnectionQuality("connecting");
-          this.iceRestartAttempts = 0;
-          this.clearConnectionFailureTimer();
-          if (this.onConnectionQuality) this.onConnectionQuality("excellent");
-          this.startStatsMonitoring();
           break;
-
-        case "completed":
-          console.log("[WebRTC] ICE: completed – optimal candidate pair selected");
-          this.connectionEstablished = true;
-          this.iceRestartAttempts = 0;
-          this.clearConnectionFailureTimer();
-          if (this.onConnectionQuality) this.onConnectionQuality("excellent");
-          break;
-
         case "disconnected":
           if (this.onConnectionQuality) this.onConnectionQuality("poor");
-          console.warn("[WebRTC] ICE: disconnected – network interruption detected, attempting ICE restart");
-          if (this.onConnectionQuality) this.onConnectionQuality("poor");
-          // Schedule ICE restart after a short grace period
-          this.scheduleConnectionFailureCheck(pc);
           this.attemptIceRestart();
           break;
-
         case "failed":
           console.log("[WebRTC] ICE failed – attempting restart");
-          console.error(
-            `[WebRTC] ICE: failed after ${this.iceRestartAttempts} restart attempt(s). ` +
-            "Possible causes: symmetric NAT without TURN, TURN server unreachable, " +
-            "UDP blocked on mobile network."
-          );
           this.attemptIceRestart();
           break;
-
         case "closed":
-          console.log("[WebRTC] ICE: closed");
           this.stopStatsMonitoring();
-          this.clearIceGatheringTimer();
-          this.clearConnectionFailureTimer();
           break;
       }
     };
@@ -994,14 +744,6 @@ class WebRTCService {
             if (this.onCallEnd) this.onCallEnd();
           }
         }, 5000);
-    pc.onconnectionstatechange = () => {
-      const state = pc.connectionState;
-      console.log(`[WebRTC] Peer connection state → ${state}`);
-
-      if (state === "disconnected" || state === "failed") {
-        this.scheduleConnectionFailureCheck(pc);
-      } else if (state === "connected") {
-        this.clearConnectionFailureTimer();
       }
     };
 
@@ -1078,66 +820,21 @@ class WebRTCService {
   }
 
   // ── ICE Restart ────────────────────────────────────────────────────────────
-  
-  // ── Timer helpers ──────────────────────────────────────────────────────
-
-  private clearIceGatheringTimer() {
-    if (this.iceGatheringTimer) {
-      clearTimeout(this.iceGatheringTimer);
-      this.iceGatheringTimer = null;
-    }
-  }
-
-  private clearConnectionFailureTimer() {
-    if (this.connectionFailureTimer) {
-      clearTimeout(this.connectionFailureTimer);
-      this.connectionFailureTimer = null;
-    }
-  }
-
-  /** Wait CONNECTION_FAILURE_GRACE_MS then tear down if still disconnected. */
-  private scheduleConnectionFailureCheck(pc: RTCPeerConnection) {
-    this.clearConnectionFailureTimer();
-    this.connectionFailureTimer = setTimeout(() => {
-      if (
-        this.peerConnection === pc &&
-        (pc.connectionState === "disconnected" || pc.connectionState === "failed" ||
-         pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed")
-      ) {
-        console.error("[WebRTC] Connection lost permanently – ending call");
-        this.cleanupCall(true);
-        if (this.onCallEnd) this.onCallEnd();
-      }
-    }, CONNECTION_FAILURE_GRACE_MS);
-  }
-
-  // ── ICE restart ────────────────────────────────────────────────────────
 
   private async attemptIceRestart() {
     if (!this.peerConnection || !this.currentCallUserId || !this.isInitiator) return;
 
     console.log("[WebRTC] Attempting ICE restart");
-    if (this.iceRestartAttempts >= MAX_ICE_RESTART_ATTEMPTS) {
-      console.error(
-        `[WebRTC] ICE restart limit (${MAX_ICE_RESTART_ATTEMPTS}) reached – giving up`
-      );
-      return;
-    }
-
-    this.iceRestartAttempts++;
-    console.log(
-      `[WebRTC] ICE restart attempt ${this.iceRestartAttempts}/${MAX_ICE_RESTART_ATTEMPTS}`
-    );
 
     try {
       const offer = await this.peerConnection.createOffer({ iceRestart: true });
       await this.peerConnection.setLocalDescription(offer);
 
       this.send({
-        type: "ice-restart",
+        type: "offer",
         from: this.userId,
         to: this.currentCallUserId,
-        data: offer,
+        data: offer
       });
     } catch (error) {
       console.error("[WebRTC] ICE restart failed:", error);
@@ -1414,22 +1111,6 @@ class WebRTCService {
     console.log(`[WebRTC] Initiating WebRTC for ${callType}`);
 
     this.callStartTime = Date.now();
-    console.log(`[WebRTC] Initiating WebRTC connection for ${callType}`);
-
-    // 30-second handshake timeout: if the peer connection hasn't reached
-    // "connected" state within this window we log a diagnostic and clean up.
-    const HANDSHAKE_TIMEOUT_MS = 30_000;
-    if (this.webrtcHandshakeTimer) clearTimeout(this.webrtcHandshakeTimer);
-    this.webrtcHandshakeTimer = setTimeout(() => {
-      if (!this.connectionEstablished) {
-        console.error(
-          `[WebRTC] Handshake timeout after ${HANDSHAKE_TIMEOUT_MS / 1000}s – ` +
-          "no media path established. Check TURN server availability."
-        );
-        this.cleanupCall(true);
-        if (this.onCallEnd) this.onCallEnd();
-      }
-    }, HANDSHAKE_TIMEOUT_MS);
 
     try {
       this.localStream = await getMediaWithFallback(callType);
@@ -1440,18 +1121,6 @@ class WebRTCService {
       this.peerConnection = await this.createPeerConnection();
 
       this.localStream.getTracks().forEach(track => {
-
-      console.log("[WebRTC] Local media acquired for initiator");
-
-      if (this.onLocalStream) {
-        this.onLocalStream(this.localStream);
-      }
-
-      // Create peer connection
-      this.peerConnection = await this.createPeerConnection();
-
-      // Add local tracks
-      this.localStream.getTracks().forEach((track) => {
         console.log("[WebRTC] Adding local track:", track.kind);
         this.peerConnection!.addTrack(track, this.localStream!);
       });
@@ -1459,10 +1128,9 @@ class WebRTCService {
       this.applyCodecPreferences(this.peerConnection);
       this.startAudioLevelMonitoring();
 
-      // Create and send offer
       const offer = await this.peerConnection.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: callType === "video",
+        offerToReceiveVideo: callType === "video"
       });
 
       await this.peerConnection.setLocalDescription(offer);
@@ -1472,7 +1140,7 @@ class WebRTCService {
         type: "offer",
         from: this.userId,
         to: targetUserId,
-        data: offer,
+        data: offer
       });
 
       return this.localStream;
@@ -1595,7 +1263,7 @@ class WebRTCService {
         type: "call-end",
         from: this.userId,
         to: this.currentCallUserId,
-        data: {},
+        data: {}
       });
     }
 
@@ -1608,16 +1276,10 @@ class WebRTCService {
       this.screenStream.getTracks().forEach(t => t.stop());
       this.screenStream = null;
       if (this.onScreenShare) this.onScreenShare(null);
-    this.clearIceGatheringTimer();
-    this.clearConnectionFailureTimer();
-
-    if (this.webrtcHandshakeTimer) {
-      clearTimeout(this.webrtcHandshakeTimer);
-      this.webrtcHandshakeTimer = null;
     }
 
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
+      this.localStream.getTracks().forEach(track => {
         track.stop();
         console.log("[WebRTC] Stopped local track:", track.kind);
       });
@@ -1639,7 +1301,6 @@ class WebRTCService {
     this.connectionEstablished = false;
     this.callStartTime = 0;
     this.statsHistory = [];
-    this.iceRestartAttempts = 0;
   }
 
   /** Toggle local audio mute. Returns new muted state (true = muted). */
