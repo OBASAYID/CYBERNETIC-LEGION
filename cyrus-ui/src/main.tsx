@@ -13,6 +13,8 @@ console.log("[CYRUS] Environment:", {
 });
 
 let bootFailureShown = false;
+/** After first paint, errors/rejections are logged only — never replace the whole shell (WebRTC can reject ICE/SDP). */
+let cyrusAppCommitted = false;
 
 function showBootFailure(message: string, detail?: string) {
   if (bootFailureShown) return;
@@ -39,23 +41,27 @@ function showBootFailure(message: string, detail?: string) {
   `;
 }
 
-// Catch synchronous JS errors (e.g. import failures, syntax errors in chunks)
+// Catch synchronous JS errors during initial boot only (never nuke the app mid-session).
 window.addEventListener("error", (event) => {
   console.error("[CYRUS] Global error:", event.error ?? event.message, event);
-  showBootFailure(
-    `Error: ${event.error?.message ?? event.message ?? "Unknown error"}`,
-    event.error?.stack,
-  );
+  if (!cyrusAppCommitted) {
+    showBootFailure(
+      `Error: ${event.error?.message ?? event.message ?? "Unknown error"}`,
+      event.error?.stack,
+    );
+  }
 });
 
-// Catch unhandled promise rejections (e.g. dynamic import failures)
+// Unhandled rejections during calls (e.g. ICE "Expect line: candidate:") must not replace #root.
 window.addEventListener("unhandledrejection", (event) => {
   const reason = event.reason;
   console.error("[CYRUS] Unhandled rejection:", reason);
-  showBootFailure(
-    `Promise rejection: ${reason instanceof Error ? reason.message : String(reason ?? "Unknown")}`,
-    reason instanceof Error ? reason.stack : undefined,
-  );
+  if (!cyrusAppCommitted) {
+    showBootFailure(
+      `Promise rejection: ${reason instanceof Error ? reason.message : String(reason ?? "Unknown")}`,
+      reason instanceof Error ? reason.stack : undefined,
+    );
+  }
 });
 
 const rootEl = document.getElementById("root");
@@ -77,6 +83,14 @@ try {
   console.log("[CYRUS] Calling createRoot().render()...");
   createRoot(rootEl).render(<App />);
   window.clearTimeout(bootTimeout);
+  // Defer: first tick + frame so startup async work still counts as "boot", then runtime errors only log.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        cyrusAppCommitted = true;
+      }, 400);
+    });
+  });
   console.log("[CYRUS] React render initiated successfully.");
 } catch (error) {
   window.clearTimeout(bootTimeout);

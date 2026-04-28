@@ -99,6 +99,36 @@ function generateNotificationId(): string {
   return `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 }
 
+/** Socket-delivered ICE may be mangled; RTCIceCandidate ctor throws "Expect line: candidate:" on bad lines. */
+function toIceCandidateInit(raw: unknown): RTCIceCandidateInit | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const candVal = o.candidate;
+  if (candVal !== null && typeof candVal !== "string") return null;
+  const c = candVal as string | undefined | null;
+  if (c == null) return null;
+  if (c === "") return null;
+  if (!c.startsWith("candidate:")) {
+    console.warn("[WebRTC-Presence] Skipping malformed ICE candidate line");
+    return null;
+  }
+  const init: RTCIceCandidateInit = { candidate: c };
+  if (typeof o.sdpMid === "string" || o.sdpMid === null) init.sdpMid = o.sdpMid as string | null;
+  if (typeof o.sdpMLineIndex === "number") init.sdpMLineIndex = o.sdpMLineIndex;
+  if (typeof o.usernameFragment === "string") init.usernameFragment = o.usernameFragment;
+  return init;
+}
+
+async function addIceCandidateSafe(pc: RTCPeerConnection, raw: unknown): Promise<void> {
+  const init = toIceCandidateInit(raw);
+  if (!init) return;
+  try {
+    await pc.addIceCandidate(init);
+  } catch (e) {
+    console.warn("[WebRTC-Presence] addIceCandidate failed (ignored):", e);
+  }
+}
+
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -117,7 +147,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream>(new MediaStream());
-  const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -242,7 +272,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
       pc.onicecandidate = (event) => {
         if (event.candidate && socket.connected) {
-          socket.emit('webrtc-ice-candidate', { roomId, candidate: event.candidate });
+          const plain =
+            typeof event.candidate.toJSON === "function"
+              ? event.candidate.toJSON()
+              : event.candidate;
+          socket.emit("webrtc-ice-candidate", { roomId, candidate: plain });
         }
       };
 
@@ -253,35 +287,49 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      socket.on('webrtc-offer', async (data: { offer: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        console.log("[WebRTC-Presence] Received offer");
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
-        for (const candidate of pendingCandidatesRef.current) {
-          await peerConnectionRef.current.addIceCandidate(candidate);
+      socket.on("webrtc-offer", async (data: { offer: any; roomId: string }) => {
+        try {
+          if (data.roomId !== roomId || !peerConnectionRef.current) return;
+          console.log("[WebRTC-Presence] Received offer");
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
+          for (const candidate of pendingCandidatesRef.current) {
+            await addIceCandidateSafe(peerConnectionRef.current, candidate);
+          }
+          pendingCandidatesRef.current = [];
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          socket.emit("webrtc-answer", { roomId, answer });
+        } catch (e) {
+          console.warn("[WebRTC-Presence] webrtc-offer handler failed:", e);
         }
-        pendingCandidatesRef.current = [];
-        const answer = await peerConnectionRef.current.createAnswer();
-        await peerConnectionRef.current.setLocalDescription(answer);
-        socket.emit('webrtc-answer', { roomId, answer });
       });
 
-      socket.on('webrtc-answer', async (data: { answer: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        console.log("[WebRTC-Presence] Received answer");
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
-        for (const candidate of pendingCandidatesRef.current) {
-          await peerConnectionRef.current.addIceCandidate(candidate);
+      socket.on("webrtc-answer", async (data: { answer: any; roomId: string }) => {
+        try {
+          if (data.roomId !== roomId || !peerConnectionRef.current) return;
+          console.log("[WebRTC-Presence] Received answer");
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+          for (const candidate of pendingCandidatesRef.current) {
+            await addIceCandidateSafe(peerConnectionRef.current, candidate);
+          }
+          pendingCandidatesRef.current = [];
+        } catch (e) {
+          console.warn("[WebRTC-Presence] webrtc-answer handler failed:", e);
         }
-        pendingCandidatesRef.current = [];
       });
 
-      socket.on('webrtc-ice-candidate', async (data: { candidate: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        if (peerConnectionRef.current.remoteDescription) {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } else {
-          pendingCandidatesRef.current.push(new RTCIceCandidate(data.candidate));
+      socket.on("webrtc-ice-candidate", async (data: { candidate: any; roomId: string }) => {
+        try {
+          if (data.roomId !== roomId || !peerConnectionRef.current) return;
+          const pc = peerConnectionRef.current;
+          if (pc.remoteDescription) {
+            await addIceCandidateSafe(pc, data.candidate);
+          } else {
+            const init = toIceCandidateInit(data.candidate);
+            if (init) pendingCandidatesRef.current.push(init);
+          }
+        } catch (e) {
+          console.warn("[WebRTC-Presence] webrtc-ice-candidate handler failed:", e);
         }
       });
 

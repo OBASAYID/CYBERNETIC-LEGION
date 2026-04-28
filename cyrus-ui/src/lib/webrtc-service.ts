@@ -261,6 +261,32 @@ const getMediaWithFallback = async (callType: "voice" | "video"): Promise<MediaS
   }
 };
 
+/** Avoid `new RTCIceCandidate()` on socket payloads — ctor throws "Expect line: candidate:" if malformed. */
+function normalizeIceCandidateInit(raw: unknown): RTCIceCandidateInit | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const candVal = o.candidate;
+  if (candVal !== null && typeof candVal !== "string") return null;
+  const c = candVal as string | undefined | null;
+  if (c == null || c === "") return null;
+  if (!c.startsWith("candidate:")) return null;
+  const init: RTCIceCandidateInit = { candidate: c };
+  if (typeof o.sdpMid === "string" || o.sdpMid === null) init.sdpMid = o.sdpMid as string | null;
+  if (typeof o.sdpMLineIndex === "number") init.sdpMLineIndex = o.sdpMLineIndex;
+  if (typeof o.usernameFragment === "string") init.usernameFragment = o.usernameFragment;
+  return init;
+}
+
+async function addIceCandidateLoose(pc: RTCPeerConnection, raw: unknown): Promise<void> {
+  const init = normalizeIceCandidateInit(raw);
+  if (!init) return;
+  try {
+    await pc.addIceCandidate(init);
+  } catch (e) {
+    console.warn("[WebRTC] addIceCandidate failed (ignored):", e);
+  }
+}
+
 // ─── Enterprise WebRTC Service ────────────────────────────────────────────────
 
 class WebRTCService {
@@ -713,11 +739,15 @@ class WebRTCService {
     // ── ICE Candidates ──────────────────────────────────────────────────────
     pc.onicecandidate = (event) => {
       if (event.candidate && this.currentCallUserId) {
+        const payload =
+          typeof event.candidate.toJSON === "function"
+            ? event.candidate.toJSON()
+            : event.candidate;
         this.send({
           type: "ice-candidate",
           from: this.userId,
           to: this.currentCallUserId,
-          data: event.candidate.toJSON()
+          data: payload,
         });
       }
     };
@@ -1205,11 +1235,7 @@ class WebRTCService {
       console.log("[WebRTC] Remote description set");
 
       for (const candidate of this.pendingCandidates) {
-        try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error("[WebRTC] Failed to add pending ICE candidate:", err);
-        }
+        await addIceCandidateLoose(this.peerConnection, candidate);
       }
       this.pendingCandidates = [];
 
@@ -1243,11 +1269,7 @@ class WebRTCService {
       console.log("[WebRTC] Remote description set from answer");
 
       for (const candidate of this.pendingCandidates) {
-        try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error("[WebRTC] Failed to add pending ICE candidate:", err);
-        }
+        await addIceCandidateLoose(this.peerConnection, candidate);
       }
       this.pendingCandidates = [];
     } catch (error) {
@@ -1256,25 +1278,22 @@ class WebRTCService {
   }
 
   private async handleIceCandidate(message: any) {
-    const candidate = message.data;
+    const init = normalizeIceCandidateInit(message.data);
+    if (!init) return;
 
     if (!this.peerConnection) {
       console.log("[WebRTC] Queuing ICE candidate – no peer connection");
-      this.pendingCandidates.push(candidate);
+      this.pendingCandidates.push(init);
       return;
     }
 
     if (!this.peerConnection.remoteDescription) {
       console.log("[WebRTC] Queuing ICE candidate – no remote description");
-      this.pendingCandidates.push(candidate);
+      this.pendingCandidates.push(init);
       return;
     }
 
-    try {
-      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (error) {
-      console.error("[WebRTC] Failed to add ICE candidate:", error);
-    }
+    await addIceCandidateLoose(this.peerConnection, init);
   }
 
   // ── Public Call Controls ───────────────────────────────────────────────────
