@@ -11,6 +11,8 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
 import { ArrowLeft } from "lucide-react";
+import { ApiKeyModal } from "@/components/ApiKeyModal";
+import { useApiKey } from "@/hooks/use-api-key";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -42,6 +44,8 @@ function App() {
     () => readGateDraft(readStoredDisplayName()).password,
   );
   const prevAuthenticatedRef = useRef<boolean | null>(null);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const { isConfigured: apiKeyConfigured } = useApiKey();
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -56,6 +60,19 @@ function App() {
       clearGateDraft();
     }
     prevAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        setApiKeyModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
   return (
@@ -81,8 +98,12 @@ function App() {
               <TooltipProvider>
                 <Toaster />
                 <AppErrorBoundary>
-                  <AppRoutes />
+                  <AppRoutes
+                    onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
+                    apiKeyConfigured={apiKeyConfigured}
+                  />
                 </AppErrorBoundary>
+                <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
               </TooltipProvider>
             )}
           </div>
