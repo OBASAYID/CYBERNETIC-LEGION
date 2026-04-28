@@ -140,7 +140,12 @@ export function getOptimalVideoConstraints(): MediaTrackConstraints {
 }
 
 export function getAudioConstraints(): MediaTrackConstraints {
-  return MEDIA_CONSTRAINTS.audio;
+  return {
+    ...MEDIA_CONSTRAINTS.audio,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
 }
 
 export async function getCallQualityMetrics(

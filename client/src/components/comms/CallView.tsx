@@ -153,8 +153,13 @@ function ParticipantVideo({
   useEffect(() => {
     if (videoRef.current && participant.stream) {
       videoRef.current.srcObject = participant.stream;
+      videoRef.current.muted = !!isSelf;
+      videoRef.current.volume = 1;
+      void videoRef.current.play().catch(() => {
+        // Browser autoplay policies may require explicit user interaction.
+      });
     }
-  }, [participant.stream]);
+  }, [participant.stream, isSelf]);
 
   const qualityColor =
     participant.connectionQuality === "excellent"
