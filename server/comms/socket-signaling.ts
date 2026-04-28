@@ -1376,6 +1376,16 @@ export function initSocketSignaling(server: HttpServer) {
       socket.emit("user-list", { users: userList, total: userList.length });
     });
 
+    // ── Colon-style event aliases (call:initiate, call:accept, etc.) ─────────
+    // These mirror the hyphenated events above so that both the legacy
+    // PresenceContext and the new useWebRTC hook can share the same server.
+
+    socket.on("call:initiate", (data: { targetUserId: string; callType: "audio" | "video"; callerName?: string }) => {
+      // Alias → call-user
+      socket.emit("_alias_call-user", data); // internal marker (unused)
+      const callerId = (socket as any).userId;
+      const caller = users.get(callerId);
+      if (!caller) { socket.emit("call:failed", { reason: "not-registered" }); return; }
     // -----------------------------------------------------------------------
     // Namespaced call events (call:* / webrtc:*)
     // These are the canonical event names used by the useWebRTC hook and the
@@ -1393,6 +1403,7 @@ export function initSocketSignaling(server: HttpServer) {
       if (!target) { socket.emit("call:failed", { reason: "user-offline" }); return; }
 
       const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const pendingCall: PendingCall = {
 
       pendingCalls.set(roomId, {
         callerId,
@@ -1401,6 +1412,11 @@ export function initSocketSignaling(server: HttpServer) {
         roomId,
         callType: data.callType,
         timestamp: new Date(),
+      };
+      pendingCalls.set(roomId, pendingCall);
+      caller.inCall = true;
+      caller.currentRoomId = roomId;
+
       });
 
       caller.inCall = true;
@@ -1430,6 +1446,19 @@ export function initSocketSignaling(server: HttpServer) {
         roomId,
         callType: data.callType,
       });
+      // Also emit legacy event for backward compat
+      io.to(target.socketId).emit("incoming-call", {
+        callerId,
+        callerName: caller.displayName,
+        roomId,
+        callType: data.callType,
+      });
+
+      socket.emit("call:ringing", { roomId, targetName: target.displayName, callType: data.callType });
+      socket.emit("call-ringing", { roomId, targetName: target.displayName, callType: data.callType });
+      emitPresenceUpdate();
+    });
+
 
       socket.emit("call:ringing", { roomId, targetName: target.displayName, callType: data.callType });
       console.log(`[Socket.IO] call:initiate ${caller.displayName} -> ${target.displayName} (${data.callType}) room:${roomId}`);
@@ -1441,6 +1470,7 @@ export function initSocketSignaling(server: HttpServer) {
       const userId = (socket as any).userId;
       const user = users.get(userId);
       const pendingCall = pendingCalls.get(data.roomId);
+      if (!pendingCall || !user) { socket.emit("call:failed", { reason: "call-not-found" }); return; }
 
       if (!pendingCall || !user) { socket.emit("call:failed", { reason: "call-not-found" }); return; }
 
@@ -1476,6 +1506,22 @@ export function initSocketSignaling(server: HttpServer) {
           startTime: new Date(),
         });
       } catch (err) {
+        console.error("[Socket.IO] call:accept — Failed to persist call session:", err);
+      }
+
+      const callType = pendingCall.callType;
+      // Emit both colon and hyphen variants for full compat
+      io.to(caller.socketId).emit("call:accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
+      io.to(caller.socketId).emit("call-accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
+      socket.emit("call:connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
+      socket.emit("call-connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
+
+      pendingCalls.delete(data.roomId);
+      emitPresenceUpdate();
+    });
+
+    socket.on("call:reject", (data: { roomId: string }) => {
+      const pendingCall = pendingCalls.get(data.roomId);
         console.error("[Socket.IO] call:accept persist error:", err);
       }
 
@@ -1509,6 +1555,10 @@ export function initSocketSignaling(server: HttpServer) {
         if (caller) {
           caller.inCall = false;
           caller.currentRoomId = undefined;
+          io.to(caller.socketId).emit("call:rejected", { roomId: data.roomId });
+          io.to(caller.socketId).emit("call-declined", { roomId: data.roomId });
+        }
+        pendingCalls.delete(data.roomId);
           io.to(caller.socketId).emit("call:rejected", { roomId: data.roomId, reason: data.reason ?? "declined" });
         }
         pendingCalls.delete(data.roomId);
@@ -1524,6 +1574,9 @@ export function initSocketSignaling(server: HttpServer) {
       }
     });
 
+    socket.on("call:end", async (data: { roomId: string }) => {
+      const userId = (socket as any).userId;
+      const user = users.get(userId);
     /** call:end — either party ends the active call */
     socket.on("call:end", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
@@ -1539,6 +1592,9 @@ export function initSocketSignaling(server: HttpServer) {
           const now = new Date();
           const durationSeconds = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
           try {
+            await db.update(callSessions).set({ endTime: now, durationSeconds }).where(eq(callSessions.callId, data.roomId));
+          } catch (err) {
+            console.error("[Socket.IO] call:end — Failed to update call session:", err);
             await db.update(calls).set({ status: "ended", endTime: now, durationSeconds }).where(eq(calls.roomId, data.roomId));
             await db.update(callSessions).set({ endTime: now, durationSeconds }).where(eq(callSessions.callId, data.roomId));
             await db.insert(callLogs).values({ callId: data.roomId, userId, event: "ended", metadata: { durationSeconds } });
@@ -1549,6 +1605,55 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       socket.to(data.roomId).emit("call:ended", { roomId: data.roomId, userId });
+      socket.to(data.roomId).emit("call-ended", { roomId: data.roomId, userId });
+      socket.leave(data.roomId);
+      emitPresenceUpdate();
+    });
+
+    socket.on("webrtc:offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      if (data.targetPeerId) {
+        const targetUser = users.get(data.targetPeerId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+          io.to(targetUser.socketId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+        }
+      } else {
+        socket.to(data.roomId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+        socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+      }
+    });
+
+    socket.on("webrtc:answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      if (data.targetPeerId) {
+        const targetUser = users.get(data.targetPeerId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+          io.to(targetUser.socketId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+        }
+      } else {
+        socket.to(data.roomId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+        socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+      }
+    });
+
+    socket.on("webrtc:ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      if (data.targetPeerId) {
+        const targetUser = users.get(data.targetPeerId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+          io.to(targetUser.socketId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+        }
+      } else {
+        socket.to(data.roomId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+        socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+      }
+    });
+
+    // ── End colon-style aliases ───────────────────────────────────────────────
+
       socket.leave(data.roomId);
       console.log(`[Socket.IO] call:end room:${data.roomId} by ${user?.displayName ?? userId}`);
       emitPresenceUpdate();
