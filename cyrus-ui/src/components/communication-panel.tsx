@@ -36,8 +36,8 @@ import {
   Shield,
   Activity
 } from "lucide-react";
-import { webRTCService, OnlineUser, ChatMessage } from "@/lib/webrtc-service";
-import { useToast } from "@/hooks/use-toast";
+import { OnlineUser } from "@/lib/webrtc-service";
+import { useWebRTC } from "@/hooks/useWebRTC";
 
 interface CommunicationPanelProps {
   operatorName?: string;
@@ -50,31 +50,12 @@ export function CommunicationPanel({
   operatorId,
   isAuthenticated 
 }: CommunicationPanelProps) {
-  const { toast } = useToast();
-  const [isConnected, setIsConnected] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [messageInput, setMessageInput] = useState("");
-  const [isInCall, setIsInCall] = useState(false);
-  const [callType, setCallType] = useState<"voice" | "video" | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [incomingCall, setIncomingCall] = useState<{from: string; callerName: string; callType: "voice" | "video"} | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
   const [activeTab, setActiveTab] = useState<"users" | "chat">("users");
-  const [connectionQuality, setConnectionQuality] = useState<"excellent" | "good" | "fair" | "poor" | "connecting">("connecting");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isCallConnecting, setIsCallConnecting] = useState(false);
-  
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [messageInput, setMessageInput] = useState("");
+
   const callContainerRef = useRef<HTMLDivElement>(null);
-  const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
 
   // Generate stable device-based user ID
   const getStableUserId = useCallback(() => {
@@ -87,149 +68,46 @@ export function CommunicationPanel({
     return stableId;
   }, [operatorId]);
 
-  // Connect to signaling server
-  useEffect(() => {
-    if (isAuthenticated) {
-      const userId = getStableUserId();
-      const userName = operatorName || "Operator";
-      
-      webRTCService.connect(userId, userName)
-        .then(() => {
-          setIsConnected(true);
-          setIsReconnecting(false);
-          toast({
-            title: "CYRUS COMMS Online",
-            description: "Secure channel established - Ready for communication",
-          });
-        })
-        .catch((error) => {
-          console.error("Failed to connect:", error);
-          toast({
-            title: "Connection Failed",
-            description: "Could not establish secure channel",
-            variant: "destructive"
-          });
-        });
-      
-      // Set up handlers
-      webRTCService.setOnUserList((users) => {
-        setOnlineUsers(users.filter(u => u.id !== userId));
-      });
-      
-      webRTCService.setOnMessage((message) => {
-        setMessages(prev => [...prev, message]);
-      });
-      
-      webRTCService.setOnIncomingCall((data) => {
-        setIncomingCall(data);
-        toast({
-          title: "Incoming Transmission",
-          description: `${data.callerName} requesting ${data.callType} link`,
-        });
-      });
-      
-      webRTCService.setOnCallResponse((data) => {
-        if (data.accepted) {
-          setIsCallConnecting(true);
-          toast({
-            title: "Link Accepted",
-            description: "Establishing secure connection...",
-          });
-        } else {
-          toast({
-            title: "Link Declined",
-            description: data.reason || "Connection request denied",
-            variant: "destructive"
-          });
-          setIsInCall(false);
-          setCallType(null);
-          setIsCallConnecting(false);
-        }
-      });
-      
-      webRTCService.setOnCallEnd(() => {
-        endCall(false);
-        toast({
-          title: "Transmission Ended",
-          description: "Secure channel closed",
-        });
-      });
-      
-      webRTCService.setOnRemoteStream((stream) => {
-        console.log("[CommPanel] Remote stream received");
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = stream;
-          remoteVideoRef.current.play().catch(e => console.log("Remote play error:", e));
-        }
-        setIsCallConnecting(false);
-      });
-      
-      webRTCService.setOnLocalStream((stream) => {
-        console.log("[CommPanel] Local stream received");
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(e => console.log("Local play error:", e));
-        }
-      });
-      
-      webRTCService.setOnConnectionQuality((quality) => {
-        setConnectionQuality(quality);
-      });
-      
-      webRTCService.setOnReconnecting((attempt) => {
-        setIsReconnecting(true);
-        setReconnectAttempt(attempt);
-        toast({
-          title: "Reconnecting",
-          description: `Attempt ${attempt}/10...`,
-        });
-      });
-      
-      webRTCService.setOnReconnected(() => {
-        setIsReconnecting(false);
-        setReconnectAttempt(0);
-        setIsConnected(true);
-        toast({
-          title: "Reconnected",
-          description: "Secure channel restored",
-        });
-      });
-      
-      webRTCService.setOnDisconnected(() => {
-        setIsConnected(false);
-      });
-      
-      return () => {
-        webRTCService.disconnect();
-        setIsConnected(false);
-      };
-    }
-  }, [isAuthenticated, operatorName, getStableUserId, toast]);
-  
+  const stableUserId = getStableUserId();
+
+  // ─── useWebRTC hook — handles all WebRTC state and audio/video streams ───────
+  const {
+    isConnected,
+    isReconnecting,
+    reconnectAttempt,
+    onlineUsers,
+    messages,
+    isInCall,
+    callType,
+    isMuted,
+    isVideoOff,
+    isCallConnecting,
+    incomingCall,
+    callDuration,
+    connectionQuality,
+    selectedUser,
+    localVideoRef,
+    remoteVideoRef,
+    remoteAudioRef,
+    startCall: startCallHook,
+    acceptCall: acceptCallHook,
+    rejectCall: rejectCallHook,
+    endCall: endCallHook,
+    toggleMute,
+    toggleVideo,
+    sendMessage: sendMessageHook,
+    setSelectedUser,
+  } = useWebRTC({
+    userId: stableUserId,
+    userName: operatorName || "Operator",
+    isAuthenticated,
+  });
+
   // Scroll to bottom of messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-  
-  // Call timer
-  useEffect(() => {
-    if (isInCall && !isCallConnecting) {
-      callTimerRef.current = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current);
-      }
-      setCallDuration(0);
-    }
-    return () => {
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current);
-      }
-    };
-  }, [isInCall, isCallConnecting]);
-  
+
   // Fullscreen handling
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -238,7 +116,7 @@ export function CommunicationPanel({
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
-  
+
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -248,7 +126,7 @@ export function CommunicationPanel({
     }
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
-  
+
   const getQualityIcon = () => {
     switch (connectionQuality) {
       case "excellent": return <SignalHigh className="w-4 h-4 text-green-400" />;
@@ -258,7 +136,7 @@ export function CommunicationPanel({
       case "connecting": return <Radio className="w-4 h-4 text-blue-400 animate-pulse" />;
     }
   };
-  
+
   const getQualityLabel = () => {
     switch (connectionQuality) {
       case "excellent": return "EXCELLENT";
@@ -268,117 +146,42 @@ export function CommunicationPanel({
       case "connecting": return "CONNECTING";
     }
   };
-  
+
   const startCall = async (user: OnlineUser, type: "voice" | "video") => {
-    setSelectedUser(user);
-    setCallType(type);
-    setIsInCall(true);
-    setIsCallConnecting(true);
-    setConnectionQuality("connecting");
-    
-    await webRTCService.startCall(user.id, user.name, type);
+    await startCallHook(user, type);
   };
-  
+
   const acceptCall = async () => {
-    if (incomingCall) {
-      setCallType(incomingCall.callType);
-      setIsInCall(true);
-      setIsCallConnecting(true);
-      setConnectionQuality("connecting");
-      
-      const callerUser = onlineUsers.find(u => u.id === incomingCall.from);
-      if (callerUser) {
-        setSelectedUser(callerUser);
-      } else {
-        setSelectedUser({
-          id: incomingCall.from,
-          name: incomingCall.callerName,
-          deviceId: "unknown",
-          status: "in_call",
-          lastSeen: Date.now()
-        });
-      }
-      
-      try {
-        await webRTCService.acceptCall(incomingCall.from, incomingCall.callType);
-      } catch (error) {
-        console.error("Failed to accept call:", error);
-        toast({
-          title: "Connection Failed",
-          description: "Could not access camera/microphone",
-          variant: "destructive"
-        });
-        setIsInCall(false);
-        setCallType(null);
-        setIsCallConnecting(false);
-      }
-      
-      setIncomingCall(null);
-    }
+    await acceptCallHook();
   };
-  
+
   const rejectCall = () => {
-    if (incomingCall) {
-      webRTCService.rejectCall(incomingCall.from);
-      setIncomingCall(null);
-    }
+    rejectCallHook();
   };
-  
+
   const endCall = useCallback((sendSignal: boolean = true) => {
-    webRTCService.endCall(sendSignal);
-    setIsInCall(false);
-    setCallType(null);
-    setIsMuted(false);
-    setIsVideoOff(false);
-    setIsCallConnecting(false);
-    setConnectionQuality("connecting");
-    
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-    
+    endCallHook(sendSignal);
     if (isFullscreen && document.fullscreenElement) {
       document.exitFullscreen();
     }
-  }, [isFullscreen]);
-  
-  const toggleMute = () => {
-    const muted = webRTCService.toggleMute();
-    setIsMuted(muted);
-  };
-  
-  const toggleVideo = () => {
-    const off = webRTCService.toggleVideo();
-    setIsVideoOff(off);
-  };
-  
+  }, [endCallHook, isFullscreen]);
+
   const toggleFullscreen = async () => {
     if (!callContainerRef.current) return;
-    
     if (!document.fullscreenElement) {
       await callContainerRef.current.requestFullscreen();
     } else {
       await document.exitFullscreen();
     }
   };
-  
+
   const sendMessage = () => {
     if (messageInput.trim() && selectedUser) {
-      webRTCService.sendTextMessage(selectedUser.id, messageInput.trim());
-      setMessages(prev => [...prev, {
-        from: operatorId || "",
-        to: selectedUser.id,
-        text: messageInput.trim(),
-        timestamp: Date.now(),
-        isOwn: true
-      }]);
+      sendMessageHook(messageInput.trim());
       setMessageInput("");
     }
   };
-  
+
   const selectUserForChat = (user: OnlineUser) => {
     setSelectedUser(user);
     setActiveTab("chat");
@@ -423,6 +226,33 @@ export function CommunicationPanel({
 
   return (
     <div className="space-y-4">
+      {/*
+       * Hidden <audio> element for remote audio playback.
+       *
+       * This is the primary fix for the "no sound during calls" bug.
+       * Previously, the remote stream was only attached to the <video> element,
+       * which is only rendered during video calls. Voice calls had no audio
+       * output element at all.
+       *
+       * This element handles audio for BOTH voice and video calls.
+       * It is visually hidden (not display:none, which can pause playback in
+       * some browsers) and is explicitly NOT muted.
+       */}
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+        data-testid="audio-remote"
+      />
+
       {/* Premium Status Bar */}
       <div className="flex items-center justify-between bg-gradient-to-r from-background via-muted/30 to-background p-3 rounded-lg border">
         <div className="flex items-center gap-3">
@@ -845,8 +675,8 @@ export function CommunicationPanel({
                   <div className="space-y-3">
                     {messages
                       .filter(m => 
-                        (m.from === selectedUser.id && m.to === operatorId) ||
-                        (m.from === operatorId && m.to === selectedUser.id)
+                        (m.from === selectedUser.id && m.to === stableUserId) ||
+                        (m.from === stableUserId && m.to === selectedUser.id)
                       )
                       .map((msg, idx) => (
                         <div
