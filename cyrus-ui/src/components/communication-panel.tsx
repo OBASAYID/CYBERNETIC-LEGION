@@ -34,10 +34,41 @@ import {
   Radio,
   Zap,
   Shield,
-  Activity
+  Activity,
+  Database,
+  DatabaseZap,
+  CloudOff,
+  CloudUpload,
+  Clock
 } from "lucide-react";
 import { webRTCService, OnlineUser, ChatMessage } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
+
+interface DbHealthStatus {
+  ok: boolean;
+  dbConnected: boolean;
+  fallbackMode: boolean;
+  circuitOpen: boolean;
+  consecutiveFailures: number;
+  lastError: string | null;
+  lastCheckedAt: string | null;
+  queue: {
+    size: number;
+    oldestAgeMs: number;
+    totalEnqueued: number;
+    totalFlushed: number;
+    totalDropped: number;
+    successRate: number;
+  };
+  fallbackStoreSizes: {
+    messages: number;
+    calls: number;
+    rooms: number;
+    users: number;
+    groups: number;
+  };
+  checkedAt: string;
+}
 
 interface CommunicationPanelProps {
   operatorName?: string;
@@ -68,6 +99,8 @@ export function CommunicationPanel({
   const [connectionQuality, setConnectionQuality] = useState<"excellent" | "good" | "fair" | "poor" | "connecting">("connecting");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCallConnecting, setIsCallConnecting] = useState(false);
+  const [dbHealth, setDbHealth] = useState<DbHealthStatus | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -238,6 +271,46 @@ export function CommunicationPanel({
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
+
+  // DB health polling — every 30 s when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const fetchDbHealth = async () => {
+      try {
+        const res = await fetch("/api/health/db");
+        if (res.ok) {
+          const data: DbHealthStatus = await res.json();
+          const prev = dbHealth;
+          setDbHealth(data);
+
+          // Detect transition into / out of fallback mode
+          if (prev && !prev.fallbackMode && data.fallbackMode) {
+            toast({
+              title: "Offline Mode Activated",
+              description: "Database unavailable — messages will sync when connection is restored.",
+              variant: "destructive",
+            });
+          } else if (prev && prev.fallbackMode && !data.fallbackMode) {
+            setIsSyncing(true);
+            toast({
+              title: "Database Reconnected",
+              description: "Syncing pending messages…",
+            });
+            // Give the server a moment to flush, then clear syncing indicator
+            setTimeout(() => setIsSyncing(false), 4_000);
+          }
+        }
+      } catch {
+        // Network error — don't crash the panel
+      }
+    };
+
+    fetchDbHealth();
+    const interval = setInterval(fetchDbHealth, 30_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
   
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -463,6 +536,52 @@ export function CommunicationPanel({
           </Badge>
         </div>
       </div>
+
+      {/* DB / Offline Mode Status Bar */}
+      {dbHealth && (
+        <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-mono transition-all ${
+          dbHealth.fallbackMode
+            ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
+            : isSyncing
+            ? "bg-blue-500/10 border-blue-500/40 text-blue-400"
+            : "bg-muted/20 border-muted/30 text-muted-foreground"
+        }`}>
+          <div className="flex items-center gap-2">
+            {dbHealth.fallbackMode ? (
+              <>
+                <CloudOff className="w-3.5 h-3.5 animate-pulse" />
+                <span className="font-semibold">OFFLINE MODE</span>
+                <span className="opacity-70">— DB unavailable, operating from memory</span>
+              </>
+            ) : isSyncing ? (
+              <>
+                <CloudUpload className="w-3.5 h-3.5 animate-bounce" />
+                <span className="font-semibold">SYNCING</span>
+                <span className="opacity-70">— Flushing queued data to database…</span>
+              </>
+            ) : (
+              <>
+                <Database className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-green-400">DB CONNECTED</span>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {dbHealth.fallbackMode && dbHealth.queue.size > 0 && (
+              <Badge variant="outline" className="gap-1 text-xs border-amber-500/40 text-amber-400">
+                <Clock className="w-3 h-3" />
+                {dbHealth.queue.size} PENDING
+              </Badge>
+            )}
+            {dbHealth.lastError && dbHealth.fallbackMode && (
+              <span className="opacity-60 truncate max-w-[180px]" title={dbHealth.lastError}>
+                {dbHealth.lastError.slice(0, 40)}{dbHealth.lastError.length > 40 ? "…" : ""}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       
       {/* Incoming Call Modal */}
       {incomingCall && (
@@ -861,9 +980,20 @@ export function CommunicationPanel({
                             }`}
                           >
                             <p className="text-sm">{msg.text}</p>
-                            <p className="text-xs opacity-60 mt-1 text-right">
-                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                            <div className="flex items-center justify-end gap-1 mt-1">
+                              <p className="text-xs opacity-60">
+                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              {msg.isOwn && dbHealth?.fallbackMode && (
+                                <Clock className="w-3 h-3 opacity-60 text-amber-300" title="Pending sync" />
+                              )}
+                              {msg.isOwn && !dbHealth?.fallbackMode && !isSyncing && (
+                                <Activity className="w-3 h-3 opacity-40 text-green-300" title="Synced" />
+                              )}
+                              {msg.isOwn && isSyncing && (
+                                <RefreshCw className="w-3 h-3 opacity-60 animate-spin text-blue-300" title="Syncing…" />
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
