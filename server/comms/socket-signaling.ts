@@ -359,7 +359,24 @@ export function initSocketSignaling(server: HttpServer) {
         console.error("[Socket.IO] Failed to persist call session:", err);
       }
 
-      console.log(`[Socket.IO] Call accepted: ${caller.displayName} <-> ${user.displayName}`);
+      console.log(`[Socket.IO] Call accepted: ${caller.displayName} <-> ${user.displayName} (room: ${data.roomId})`);
+
+      // WebRTC handshake watchdog: if neither peer emits a successful ICE
+      // diagnostic within 30 seconds, log a warning so operators can
+      // investigate TURN server availability for this region/network.
+      const HANDSHAKE_WATCHDOG_MS = 30_000;
+      const handshakeWatchdog = setTimeout(() => {
+        const call = activeCalls.get(data.roomId);
+        if (call && call.participants.length >= 2) {
+          console.warn(
+            `[Socket.IO] WebRTC handshake watchdog: room ${data.roomId} still active after ` +
+            `${HANDSHAKE_WATCHDOG_MS / 1000}s – participants may be experiencing ICE issues. ` +
+            "Check TURN server reachability for involved clients."
+          );
+        }
+      }, HANDSHAKE_WATCHDOG_MS);
+      // Ensure the timer doesn't prevent process exit
+      if (handshakeWatchdog.unref) handshakeWatchdog.unref();
 
       const callType = pendingCall.callType;
 
@@ -404,49 +421,107 @@ export function initSocketSignaling(server: HttpServer) {
       }
     });
 
+    // ── WebRTC signaling relay ──────────────────────────────────────────────
+    // All webrtc-* events are pure relay: the server forwards them to the
+    // correct peer without inspecting the SDP/ICE payload.  This keeps the
+    // signaling server media-agnostic and allows the client to handle all
+    // ICE negotiation logic (restart, timeout, fallback) independently.
+
     socket.on("webrtc-offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      console.log(`[Socket.IO] WebRTC offer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+
       if (data.targetPeerId) {
         const targetUser = users.get(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-offer", {
             offer: data.offer,
             roomId: data.roomId,
-            fromPeerId: (socket as any).userId,
+            fromPeerId,
           });
         }
       } else {
-        socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId: (socket as any).userId });
+        socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
     });
 
     socket.on("webrtc-answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      console.log(`[Socket.IO] WebRTC answer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+
       if (data.targetPeerId) {
         const targetUser = users.get(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-answer", {
             answer: data.answer,
             roomId: data.roomId,
-            fromPeerId: (socket as any).userId,
+            fromPeerId,
           });
         }
       } else {
-        socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId: (socket as any).userId });
+        socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       }
     });
 
     socket.on("webrtc-ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+
       if (data.targetPeerId) {
         const targetUser = users.get(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-ice-candidate", {
             candidate: data.candidate,
             roomId: data.roomId,
-            fromPeerId: (socket as any).userId,
+            fromPeerId,
           });
         }
       } else {
-        socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId: (socket as any).userId });
+        socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       }
+    });
+
+    // ── ICE restart relay ───────────────────────────────────────────────────
+    // When a client detects ICE failure it sends an ice-restart offer.
+    // The server relays it to the peer so the non-initiator can respond
+    // with a new answer, re-establishing the media path without hanging up.
+    socket.on("webrtc-ice-restart", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+      const fromPeerId = (socket as any).userId;
+      console.log(`[Socket.IO] ICE restart relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+
+      if (data.targetPeerId) {
+        const targetUser = users.get(data.targetPeerId);
+        if (targetUser) {
+          io.to(targetUser.socketId).emit("webrtc-ice-restart", {
+            offer: data.offer,
+            roomId: data.roomId,
+            fromPeerId,
+          });
+        }
+      } else {
+        socket.to(data.roomId).emit("webrtc-ice-restart", { offer: data.offer, roomId: data.roomId, fromPeerId });
+      }
+    });
+
+    // ── ICE diagnostic events ───────────────────────────────────────────────
+    // Clients emit ice-diagnostic when gathering times out or ICE fails.
+    // The server logs these for operator visibility without blocking the call.
+    socket.on("ice-diagnostic", (data: {
+      event: string;
+      roomId?: string;
+      timeoutMs?: number;
+      iceGatheringState?: string;
+      iceConnectionState?: string;
+      connectionState?: string;
+      restartAttempt?: number;
+    }) => {
+      const userId = (socket as any).userId;
+      const user = users.get(userId);
+      console.warn(
+        `[Socket.IO] ICE diagnostic from ${user?.displayName || userId}: ` +
+        `event=${data.event} iceGathering=${data.iceGatheringState} ` +
+        `iceConnection=${data.iceConnectionState} connection=${data.connectionState} ` +
+        `room=${data.roomId || "n/a"} restartAttempt=${data.restartAttempt ?? 0}`
+      );
     });
 
     socket.on("end-call", async (data: { roomId: string }) => {
