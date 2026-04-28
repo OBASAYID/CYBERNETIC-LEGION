@@ -1,10 +1,14 @@
 import OpenAI from 'openai';
 import { getCyrusChatModel } from '../cyrus-model.js';
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+const openaiApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+
+const openai = openaiApiKey
+  ? new OpenAI({
+      apiKey: openaiApiKey,
+      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    })
+  : null;
 
 export interface LanguageDetection {
   language: string;
@@ -145,24 +149,22 @@ export class UniversalLanguageEngine {
     }
 
     try {
+      if (!openai) {
+        return { language: 'English', languageCode: 'en', confidence: 0.5, script: 'Latin' };
+      }
       const response = await openai.chat.completions.create({
         model: getCyrusChatModel(),
         messages: [
           {
             role: 'system',
-            content: `Detect the language of the text. Return JSON with:
-- language: full language name
-- languageCode: ISO 639-1 code
-- confidence: 0-1
-- script: writing system name
-- region: optional regional variant
-Return only valid JSON.`
+            content: `Detect the language of the text. Return JSON with:\n- language: full language name\n- languageCode: ISO 639-1 code\n- confidence: 0-1\n- script: writing system name\n- region: optional regional variant\nReturn only valid JSON.`
           },
           { role: 'user', content: text }
         ],
         max_tokens: 100,
         temperature: 0.1
       });
+
 
       const content = response.choices[0].message.content || '{}';
       const parsed = JSON.parse(content.replace(/```json\n?|\n?```/g, ''));
@@ -216,6 +218,18 @@ Return only valid JSON.`
       : await this.detectLanguage(text);
 
     try {
+      if (!openai) {
+        return {
+          originalText: text,
+          translatedText: text,
+          sourceLanguage: sourceDetection,
+          targetLanguage,
+          confidence: 0,
+          alternatives: [],
+          culturalNotes: ['Translation unavailable — OPENAI_API_KEY not configured']
+        };
+      }
+
       const formalityInstruction = options?.formalityLevel 
         ? `Use ${options.formalityLevel} register.` 
         : '';
@@ -299,11 +313,15 @@ Return only valid JSON.`
     termsExplained: TerminologyResult[];
   }> {
     try {
+      if (!openai) {
+        return { originalText: text, simplifiedText: text, termsExplained: [] };
+      }
       const response = await openai.chat.completions.create({
         model: getCyrusChatModel(),
         messages: [
           {
             role: 'system',
+
             content: `You are an expert at simplifying ${domain} terminology for general audiences.
 Analyze the text and:
 1. Rewrite it in plain, simple language
