@@ -177,6 +177,7 @@ export async function setupAuth(app: Express): Promise<void> {
 
   // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
   app.post("/api/login", (req: any, res) => {
+    console.log("[Auth] /api/login token-first handler invoked");
     const username = String((req.body || {}).username ?? "").trim();
     const code = String((req.body || {}).code ?? "").trim();
     if (!username || !code) {
@@ -200,10 +201,12 @@ export async function setupAuth(app: Express): Promise<void> {
       claims: { sub: userId },
     };
     const sessionToken = issueSessionToken(user);
+    console.log(`[Auth] /api/login token-first success for ${username} (${role})`);
     res.json({ success: true, user: { id: userId, username, role }, sessionToken });
   });
 
   app.get("/api/auth/user", (req: any, res, next) => {
+    console.log("[Auth] /api/auth/user token-first handler invoked");
     const token = readSessionTokenFromRequest(req);
     if (token) {
       const tokenUser = verifySessionToken(token);
