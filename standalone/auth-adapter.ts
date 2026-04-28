@@ -105,7 +105,6 @@ function resolveTrustProxy(): boolean {
 }
 
 function resolveSessionSameSite(): "lax" | "strict" | "none" {
-  const raw = String(process.env.SESSION_SAME_SITE || "").trim().toLowerCase();
   const defaultSameSite = process.env.NODE_ENV === "production" ? "none" : "lax";
   const raw = String(process.env.SESSION_SAME_SITE || defaultSameSite).trim().toLowerCase();
   if (raw === "strict") return "strict";
@@ -187,16 +186,11 @@ export async function setupAuth(app: Express): Promise<void> {
     resave: false,
     saveUninitialized: false,
     proxy: resolveTrustProxy(),
-    proxy:
-      process.env.NODE_ENV === "production" ||
-      process.env.TRUST_PROXY === "1" ||
-      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
       sameSite: sameSite as "lax" | "strict" | "none",
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
   };
@@ -328,16 +322,11 @@ export function getSession() {
     resave: false,
     saveUninitialized: false,
     proxy: resolveTrustProxy(),
-    proxy:
-      process.env.NODE_ENV === "production" ||
-      process.env.TRUST_PROXY === "1" ||
-      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
       sameSite: sameSite as "lax" | "strict" | "none",
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
   } as Parameters<typeof session>[0]);
