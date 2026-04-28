@@ -46,7 +46,11 @@ export function createCyrusCorsOriginAccess(): CorsOptions["origin"] {
         callback(null, true);
         return;
       }
-      callback(null, explicit.includes(origin));
+      if (explicit.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS origin not allowed: ${origin}`), false);
     };
   }
 
@@ -62,7 +66,11 @@ export function createCyrusCorsOriginAccess(): CorsOptions["origin"] {
       callback(null, true);
       return;
     }
-    callback(null, !!trusted && origin === trusted);
+    if (!!trusted && origin === trusted) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS origin not allowed: ${origin}`), false);
   };
 }
 
