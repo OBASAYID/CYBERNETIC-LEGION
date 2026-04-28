@@ -31,6 +31,53 @@ function inferredOriginFromPublicEnv(): string | null {
   }
 }
 
+/** Origins derived from env (BASE_URL, public env, Railway networking vars). */
+function collectProductionAllowlistOrigins(): string[] {
+  const out = new Set<string>();
+  const add = (raw?: string | null) => {
+    if (!raw?.trim()) return;
+    try {
+      out.add(new URL(raw.trim()).origin);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  add(process.env.BASE_URL);
+
+  const inferred = inferredOriginFromPublicEnv();
+  if (inferred) out.add(inferred);
+
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railwayDomain) {
+    add(`https://${railwayDomain}`);
+  }
+
+  add(process.env.RAILWAY_STATIC_URL?.trim());
+
+  return [...out];
+}
+
+/** True when running in a Railway container (env names vary by service / era). */
+function isRailwayRuntime(): boolean {
+  return Object.keys(process.env).some((k) => k.startsWith("RAILWAY_"));
+}
+
+/**
+ * When the app runs on Railway, the browser origin is typically `https://*.up.railway.app`
+ * while BASE_URL may still point at localhost from defaults. Allow same-tab Railway HTTPS
+ * origins so Socket.IO / credentialed API calls are not denied.
+ */
+function isRailwayBrowserOrigin(origin: string): boolean {
+  if (!isRailwayRuntime()) return false;
+  try {
+    const u = new URL(origin);
+    return u.protocol === "https:" && u.hostname.endsWith(".up.railway.app");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Dynamic CORS origin for Express and Socket.IO when `credentials: true`.
  * Wildcard `*` is invalid with credentialed requests; this reflects allowed origins instead.
@@ -60,13 +107,17 @@ export function createCyrusCorsOriginAccess(): CorsOptions["origin"] {
     };
   }
 
-  const trusted = baseUrlOrigin() ?? inferredOriginFromPublicEnv();
+  const allowlist = collectProductionAllowlistOrigins();
   return (origin, callback) => {
     if (!origin) {
       callback(null, true);
       return;
     }
-    if (!!trusted && origin === trusted) {
+    if (allowlist.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    if (isRailwayBrowserOrigin(origin)) {
       callback(null, true);
       return;
     }

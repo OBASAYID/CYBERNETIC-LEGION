@@ -329,14 +329,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     
     const socket = io(socketUrl, {
       path: "/cyrus-io",
-      transports: ["websocket", "polling"],
+      // Match server: polling-only (Railway / Bun often fail Engine.IO WS upgrade).
+      transports: ["polling"],
       reconnection: true,
       reconnectionAttempts: 20,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
       timeout: 60_000,
-      upgrade: true,
+      upgrade: false,
       forceNew: true,
       withCredentials: true,
       autoConnect: true,
@@ -346,6 +347,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect', () => {
       console.log("[Presence] CONNECTED - Socket ID:", socket.id);
+      // Show live status as soon as the transport is up; `registered` still confirms server-side presence.
+      setIsConnected(true);
       const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
       socket.emit("register", {
         userId,
@@ -492,6 +495,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect_error', (error) => {
       console.error("[Presence] Connection error:", error.message);
+      setIsConnected(false);
     });
 
   }, [addNotification, setupWebRTCMedia, cleanupMedia]);

@@ -116,13 +116,14 @@ export function initSocketSignaling(server: HttpServer) {
       credentials: true,
     },
     path: "/cyrus-io",
-    transports: ["polling", "websocket"],
+    // Polling-only + no WS upgrade: Railway edge / Bun often break Engine.IO WebSocket upgrade; polling is reliable.
+    transports: ["polling"],
     allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000,
     connectTimeout: 60000,
     maxHttpBufferSize: 1e6,
-    allowUpgrades: true,
+    allowUpgrades: false,
   });
 
   ioInstance = io;
