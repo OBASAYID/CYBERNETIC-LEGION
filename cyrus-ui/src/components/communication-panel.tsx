@@ -44,12 +44,11 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-  Info
+  Info,
   Database,
   DatabaseZap,
   CloudOff,
   CloudUpload,
-  Clock
 } from "lucide-react";
 import { OnlineUser } from "@/lib/webrtc-service";
 import { useWebRTC } from "@/hooks/useWebRTC";
