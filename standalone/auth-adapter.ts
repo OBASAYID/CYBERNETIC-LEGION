@@ -271,7 +271,6 @@ export async function setupAuth(app: Express): Promise<void> {
       console.log(`[Auth] Session created for user: ${username} (${role})`);
       console.log(`[Auth] Session ID: ${req.sessionID}`);
 
-      res.json({ success: true, user: { id: userId, username, role } });
       res.json({ success: true, user: { id: userId, username, role }, sessionToken });
     });
   });
