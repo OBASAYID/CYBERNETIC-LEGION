@@ -10,7 +10,6 @@ import { PasswordGate, type GateProfile, readStoredDisplayName } from "@/compone
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
-import { CallProvider } from "@/context/CallContext";
 import { ArrowLeft } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
@@ -119,7 +118,13 @@ function App() {
                 <AppErrorBoundary>
                   {/* CallProvider wraps all authenticated routes so incoming/active
                       call overlays are globally available regardless of current page. */}
-                  <CallProvider userId={callUserId} displayName={callDisplayName}>
+                  <CallProvider
+                    webRTCOptions={{
+                      userId: callUserId,
+                      userName: callDisplayName,
+                      isAuthenticated,
+                    }}
+                  >
                     <AppRoutes />
                   </CallProvider>
                 </AppErrorBoundary>
