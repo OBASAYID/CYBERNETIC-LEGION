@@ -49,6 +49,7 @@ function verifySessionToken(token: string): SessionUser | null {
   const [payloadB64, sig] = token.split(".");
   if (!payloadB64 || !sig) return null;
   const expected = crypto.createHmac("sha256", getSessionTokenSecret()).update(payloadB64).digest("base64url");
+  if (sig.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
 
   try {
@@ -256,22 +257,45 @@ export async function setupAuth(app: Express): Promise<void> {
     req.session.user = user;
     const sessionToken = issueSessionToken(user);
 
-    req.session.save((err: any) => {
-      if (err) {
-        console.error("[Auth] Session save error:", err);
-        return res.status(500).json({
-          message: "Session error — could not persist login.",
-          code: "SESSION_SAVE_FAILED",
-          hint:
-            "Set CYRUS_SESSION_STORE=memory in .env and restart, or fix DATABASE_URL / Postgres for the `sessions` table.",
+    const sessionSaveTimeoutMs = Math.max(
+      500,
+      Number.parseInt(String(process.env.CYRUS_SESSION_SAVE_TIMEOUT_MS || "2500"), 10) || 2500,
+    );
+    let settled = false;
+    const finalize = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      fn();
+    };
+    const timeoutId = setTimeout(() => {
+      finalize(() => {
+        console.error(`[Auth] Session save timed out after ${sessionSaveTimeoutMs}ms; issuing token login fallback`);
+        res.json({
+          success: true,
+          user: { id: userId, username, role },
+          sessionToken,
+          sessionFallback: true,
         });
-      }
+      });
+    }, sessionSaveTimeoutMs);
 
-      // Log successful session creation
-      console.log(`[Auth] Session created for user: ${username} (${role})`);
-      console.log(`[Auth] Session ID: ${req.sessionID}`);
+    req.session.save((err: any) => {
+      finalize(() => {
+        if (err) {
+          console.error("[Auth] Session save error; issuing token login fallback:", err);
+          return res.json({
+            success: true,
+            user: { id: userId, username, role },
+            sessionToken,
+            sessionFallback: true,
+          });
+        }
 
-      res.json({ success: true, user: { id: userId, username, role }, sessionToken });
+        console.log(`[Auth] Session created for user: ${username} (${role})`);
+        console.log(`[Auth] Session ID: ${req.sessionID}`);
+        res.json({ success: true, user: { id: userId, username, role }, sessionToken });
+      });
     });
   });
 
