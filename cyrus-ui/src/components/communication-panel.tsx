@@ -51,6 +51,8 @@ import {
   CloudUpload,
   Clock
 } from "lucide-react";
+import { OnlineUser } from "@/lib/webrtc-service";
+import { useWebRTC } from "@/hooks/useWebRTC";
 import { webRTCService, OnlineUser, ChatMessage, ConnectionStats, CallHistoryEntry } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
 
@@ -228,6 +230,10 @@ export function CommunicationPanel({
   operatorId,
   isAuthenticated
 }: CommunicationPanelProps) {
+  const [activeTab, setActiveTab] = useState<"users" | "chat">("users");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [messageInput, setMessageInput] = useState("");
+
   const { toast } = useToast();
 
   // ── Connection state ──────────────────────────────────────────────────────
@@ -257,7 +263,6 @@ export function CommunicationPanel({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const callContainerRef = useRef<HTMLDivElement>(null);
-  const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Stable user ID ────────────────────────────────────────────────────────
@@ -271,6 +276,42 @@ export function CommunicationPanel({
     return stableId;
   }, [operatorId]);
 
+  const stableUserId = getStableUserId();
+
+  // ─── useWebRTC hook — handles all WebRTC state and audio/video streams ───────
+  const {
+    isConnected,
+    isReconnecting,
+    reconnectAttempt,
+    onlineUsers,
+    messages,
+    isInCall,
+    callType,
+    isMuted,
+    isVideoOff,
+    isCallConnecting,
+    incomingCall,
+    callDuration,
+    connectionQuality,
+    selectedUser,
+    localVideoRef,
+    remoteVideoRef,
+    remoteAudioRef,
+    startCall: startCallHook,
+    acceptCall: acceptCallHook,
+    rejectCall: rejectCallHook,
+    endCall: endCallHook,
+    toggleMute,
+    toggleVideo,
+    sendMessage: sendMessageHook,
+    setSelectedUser,
+  } = useWebRTC({
+    userId: stableUserId,
+    userName: operatorName || "Operator",
+    isAuthenticated,
+  });
+
+  // Scroll to bottom of messages
   // ── Status helpers ─────────────────────────────────────────────────────────
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -405,6 +446,7 @@ export function CommunicationPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Fullscreen handling
   // ── Call timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isInCall && !isCallConnecting) {
@@ -477,7 +519,7 @@ export function CommunicationPanel({
     }
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
-  
+
   const getQualityIcon = () => {
     switch (connectionQuality) {
       case "excellent": return <SignalHigh className="w-4 h-4 text-green-400" />;
@@ -487,7 +529,7 @@ export function CommunicationPanel({
       case "connecting": return <Radio className="w-4 h-4 text-blue-400 animate-pulse" />;
     }
   };
-  
+
   const getQualityLabel = () => {
     switch (connectionQuality) {
       case "excellent": return "EXCELLENT";
@@ -496,6 +538,14 @@ export function CommunicationPanel({
       case "poor": return "POOR";
       case "connecting": return "CONNECTING";
     }
+  };
+
+  const startCall = async (user: OnlineUser, type: "voice" | "video") => {
+    await startCallHook(user, type);
+  };
+
+  const acceptCall = async () => {
+    await acceptCallHook();
   }, [isFullscreen]);
 
   // ── Call actions ───────────────────────────────────────────────────────────
@@ -540,13 +590,15 @@ export function CommunicationPanel({
   };
 
   const rejectCall = () => {
-    if (incomingCall) {
-      webRTCService.rejectCall(incomingCall.from);
-      setIncomingCall(null);
-    }
+    rejectCallHook();
   };
 
   const endCall = useCallback((sendSignal: boolean = true) => {
+    endCallHook(sendSignal);
+    if (isFullscreen && document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  }, [endCallHook, isFullscreen]);
     webRTCService.endCall(sendSignal);
     setIsInCall(false);
     setCallType(null);
@@ -574,6 +626,13 @@ export function CommunicationPanel({
       await callContainerRef.current.requestFullscreen();
     } else {
       await document.exitFullscreen();
+    }
+  };
+
+  const sendMessage = () => {
+    if (messageInput.trim() && selectedUser) {
+      sendMessageHook(messageInput.trim());
+      setMessageInput("");
     }
   };
 
@@ -635,6 +694,41 @@ export function CommunicationPanel({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
+    <div className="space-y-4">
+      {/*
+       * Hidden <audio> element for remote audio playback.
+       *
+       * This is the primary fix for the "no sound during calls" bug.
+       * Previously, the remote stream was only attached to the <video> element,
+       * which is only rendered during video calls. Voice calls had no audio
+       * output element at all.
+       *
+       * This element handles audio for BOTH voice and video calls.
+       * It is visually hidden (not display:none, which can pause playback in
+       * some browsers) and is explicitly NOT muted.
+       */}
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+        data-testid="audio-remote"
+      />
+
+      {/* Premium Status Bar */}
+      <div className="flex items-center justify-between bg-gradient-to-r from-background via-muted/30 to-background p-3 rounded-lg border">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} ${isReconnecting ? 'animate-pulse' : ''}`} />
+            {isConnected && (
+              <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
     <TooltipProvider>
       <div className="space-y-4">
 
@@ -1265,8 +1359,8 @@ export function CommunicationPanel({
                   <div className="space-y-3">
                     {messages
                       .filter(m => 
-                        (m.from === selectedUser.id && m.to === operatorId) ||
-                        (m.from === operatorId && m.to === selectedUser.id)
+                        (m.from === selectedUser.id && m.to === stableUserId) ||
+                        (m.from === stableUserId && m.to === selectedUser.id)
                       )
                       .map((msg, idx) => (
                         <div
