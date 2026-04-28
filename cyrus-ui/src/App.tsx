@@ -11,6 +11,7 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
 import { ArrowLeft } from "lucide-react";
+import { CallProvider } from "@/contexts/CallContext";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -81,7 +82,21 @@ function App() {
               <TooltipProvider>
                 <Toaster />
                 <AppErrorBoundary>
-                  <AppRoutes />
+                  <CallProvider
+                    webRTCOptions={{
+                      userId:
+                        localStorage.getItem("cyrus_comm_user_id") ||
+                        (() => {
+                          const id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                          localStorage.setItem("cyrus_comm_user_id", id);
+                          return id;
+                        })(),
+                      displayName:
+                        localStorage.getItem("cyrus-display-name") || "Operator",
+                    }}
+                  >
+                    <AppRoutes />
+                  </CallProvider>
                 </AppErrorBoundary>
               </TooltipProvider>
             )}
