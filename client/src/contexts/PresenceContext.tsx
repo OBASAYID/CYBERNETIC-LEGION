@@ -116,6 +116,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const activeCallRef = useRef<ActiveCallState | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream>(new MediaStream());
   const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -171,6 +172,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socketRef.current.off('webrtc-ice-candidate');
     }
     pendingCandidatesRef.current = [];
+    remoteStreamRef.current = new MediaStream();
     setLocalStream(null);
     setRemoteStream(null);
     setCallDuration(0);
@@ -207,6 +209,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socket.off('webrtc-answer');
       socket.off('webrtc-ice-candidate');
       pendingCandidatesRef.current = [];
+      remoteStreamRef.current = new MediaStream();
 
       const videoConstraints = callType === "video" ? getOptimalVideoConstraints() : false;
       const audioConstraints = getAudioConstraints();
@@ -226,7 +229,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
       pc.ontrack = (event) => {
         console.log("[WebRTC-Presence] Remote track received:", event.track.kind);
-        setRemoteStream(event.streams[0]);
+        const inbound = remoteStreamRef.current;
+        const alreadyPresent = inbound
+          .getTracks()
+          .some((t) => t.id === event.track.id);
+        if (!alreadyPresent) {
+          inbound.addTrack(event.track);
+        }
+        setRemoteStream(new MediaStream(inbound.getTracks()));
         startCallTimer();
       };
 
@@ -319,14 +329,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     
     const socket = io(socketUrl, {
       path: "/cyrus-io",
-      transports: ["polling"],
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 20,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
       timeout: 60_000,
-      upgrade: false,
+      upgrade: true,
       forceNew: true,
       withCredentials: true,
       autoConnect: true,

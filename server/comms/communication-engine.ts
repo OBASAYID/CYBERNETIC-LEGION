@@ -1,11 +1,25 @@
-import { db } from "../db.js";
-import { 
-  directMessages, callHistory, meetingRooms, onlineUsers, 
-  contacts, groupChats 
-} from "../../shared/models/comms";
-import { eq, desc, asc, or, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";
+import {
+  dbInsertMessage,
+  dbGetConversation,
+  dbMarkAsRead,
+  dbAddReaction,
+  dbGetGroupMessages,
+  dbInsertGroupChat,
+  dbGetGroupChats,
+  dbInsertCall,
+  dbUpdateCall,
+  dbInsertMeetingRoom,
+  dbUpdateMeetingRoom,
+  dbUpsertOnlineUser,
+  dbEvents,
+  checkDbHealth,
+  getDbHealthState,
+  flushFallbackData,
+  getFallbackStoreSizes,
+} from "./db-service.js";
+import { messageQueue } from "./message-queue.js";
 
 type CallType = "voice" | "video" | "conference" | "screen_share";
 type CallStatus = "initiating" | "ringing" | "connected" | "on_hold" | "ended" | "declined" | "missed" | "failed";
@@ -98,8 +112,93 @@ class CommunicationEngine {
   private messageCount: number = 0;
   private callHistoryCache: ActiveCall[] = [];
 
+  /** True when the DB is unreachable and we are operating from in-memory fallback. */
+  public isUsingFallback: boolean = false;
+
+  /** Periodic health-check interval handle. */
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+
   constructor() {
-    console.log("[Communication Engine] Advanced Communication Engine v1.0 initialized");
+    console.log("[Communication Engine] Advanced Communication Engine v2.0 initialized");
+    this._bindDbEvents();
+    this._startHealthCheck();
+  }
+
+  // -------------------------------------------------------------------------
+  // DB event wiring & health monitoring
+  // -------------------------------------------------------------------------
+
+  private _bindDbEvents(): void {
+    dbEvents.on("db:down", (reason: string) => {
+      if (!this.isUsingFallback) {
+        this.isUsingFallback = true;
+        console.warn(`[CommEngine] Fallback mode ACTIVATED — DB offline: ${reason}`);
+      }
+    });
+
+    dbEvents.on("db:up", async () => {
+      if (this.isUsingFallback) {
+        console.log("[CommEngine] DB recovered — flushing queued operations…");
+        await this._syncOfflineQueue();
+        const flushed = await flushFallbackData();
+        console.log("[CommEngine] Fallback flush complete:", flushed);
+        this.isUsingFallback = false;
+        console.log("[CommEngine] Fallback mode DEACTIVATED — operating normally.");
+      }
+    });
+  }
+
+  private _startHealthCheck(): void {
+    // Probe every 30 s; if the circuit is open this is how we detect recovery.
+    this.healthCheckInterval = setInterval(async () => {
+      const healthy = await checkDbHealth();
+      if (healthy && this.isUsingFallback) {
+        // db:up event will be emitted by checkDbHealth → recordSuccess
+      }
+    }, 30_000);
+  }
+
+  /** Flush the message queue by re-running each queued operation against the DB. */
+  private async _syncOfflineQueue(): Promise<void> {
+    const ops = messageQueue.drain();
+    if (ops.length === 0) return;
+
+    console.log(`[CommEngine] Syncing ${ops.length} queued operation(s)…`);
+    let flushed = 0;
+
+    for (const op of ops) {
+      try {
+        switch (op.type) {
+          case "sendMessage":
+            await dbInsertMessage(op.payload as any);
+            break;
+          case "markAsRead":
+            await dbMarkAsRead(op.payload.messageId as string);
+            break;
+          case "addReaction":
+            await dbAddReaction(
+              op.payload.messageId as string,
+              op.payload.userId as string,
+              op.payload.reaction as string
+            );
+            break;
+          case "initiateCall":
+            await dbInsertCall(op.payload as any);
+            break;
+          case "updatePresence":
+            await dbUpsertOnlineUser(op.payload as any);
+            break;
+          default:
+            console.warn(`[CommEngine] Unknown queued op type: ${op.type}`);
+        }
+        flushed++;
+      } catch (err) {
+        console.error(`[CommEngine] Failed to sync queued op ${op.id} (${op.type}):`, err);
+      }
+    }
+
+    messageQueue.recordFlush(flushed);
+    console.log(`[CommEngine] Queue sync complete: ${flushed}/${ops.length} succeeded.`);
   }
 
   async sendMessage(
@@ -116,8 +215,8 @@ class CommunicationEngine {
     const hasKey = this.encryption.hasKey(senderId);
     const isEncrypted = hasKey;
     const storedContent = hasKey ? this.encryption.encrypt(senderId, content) : content;
-    
-    const [message] = await db.insert(directMessages).values({
+
+    const payload = {
       senderId,
       recipientId: recipientId || "broadcast",
       content: storedContent,
@@ -129,68 +228,87 @@ class CommunicationEngine {
       fileSizeBytes: fileSizeBytes || null,
       replyToId: replyToId || null,
       groupId: groupId || null,
-    }).returning();
+    };
+
+    // Queue for offline sync regardless — the db-service will also store in fallback
+    if (this.isUsingFallback) {
+      messageQueue.enqueue("sendMessage", payload as any);
+    }
+
+    const result = await dbInsertMessage(payload);
+    if (!result.success) {
+      console.error(`[CommEngine] sendMessage DB error: ${result.error}`);
+    }
 
     this.messageCount++;
-
     console.log(`[Comms] Message sent from ${senderId} to ${recipientId || groupId || "broadcast"} (${messageType})`);
-    return message;
+    return result.success ? result.data : null;
   }
 
   async getConversation(userId: string, otherUserId: string, limit: number = 50) {
-    return await db.select().from(directMessages)
-      .where(
-        or(
-          and(eq(directMessages.senderId, userId), eq(directMessages.recipientId, otherUserId)),
-          and(eq(directMessages.senderId, otherUserId), eq(directMessages.recipientId, userId))
-        )
-      )
-      .orderBy(asc(directMessages.createdAt))
-      .limit(limit);
+    const result = await dbGetConversation(userId, otherUserId, limit);
+    if (!result.success) {
+      console.error(`[CommEngine] getConversation error: ${result.error}`);
+      return [];
+    }
+    return result.data;
   }
 
   async markAsRead(messageId: string, readerId: string) {
-    await db.update(directMessages).set({ 
-      isRead: true,
-      readAt: new Date(),
-    }).where(eq(directMessages.id, messageId));
+    if (this.isUsingFallback) {
+      messageQueue.enqueue("markAsRead", { messageId, readerId });
+    }
+    const result = await dbMarkAsRead(messageId);
+    if (!result.success) {
+      console.error(`[CommEngine] markAsRead error: ${result.error}`);
+    }
     return { messageId, readerId, readAt: new Date().toISOString() };
   }
 
   async addReaction(messageId: string, userId: string, reaction: string) {
-    const [msg] = await db.select().from(directMessages).where(eq(directMessages.id, messageId)).limit(1);
-    if (!msg) return null;
-    const reactions = (msg.reactions as Record<string, string[]>) || {};
-    if (!reactions[reaction]) reactions[reaction] = [];
-    if (!reactions[reaction].includes(userId)) {
-      reactions[reaction].push(userId);
+    if (this.isUsingFallback) {
+      messageQueue.enqueue("addReaction", { messageId, userId, reaction });
     }
-    await db.update(directMessages).set({ reactions }).where(eq(directMessages.id, messageId));
-    return reactions;
+    const result = await dbAddReaction(messageId, userId, reaction);
+    if (!result.success) {
+      console.error(`[CommEngine] addReaction error: ${result.error}`);
+      return null;
+    }
+    return result.data;
   }
 
   async getGroupMessages(groupId: string, limit: number = 50) {
-    return await db.select().from(directMessages)
-      .where(eq(directMessages.groupId, groupId))
-      .orderBy(asc(directMessages.createdAt))
-      .limit(limit);
+    const result = await dbGetGroupMessages(groupId, limit);
+    if (!result.success) {
+      console.error(`[CommEngine] getGroupMessages error: ${result.error}`);
+      return [];
+    }
+    return result.data;
   }
 
   async createGroupChat(name: string, createdBy: string, members: string[]) {
     const allMembers = [createdBy, ...members.filter(m => m !== createdBy)];
-    const [group] = await db.insert(groupChats).values({
+    const result = await dbInsertGroupChat({
       name,
       createdBy,
       members: allMembers,
       isEncrypted: true,
-    }).returning();
+    });
+    if (!result.success) {
+      console.error(`[CommEngine] createGroupChat error: ${result.error}`);
+      return null;
+    }
     console.log(`[Comms] Group chat created: ${name} by ${createdBy} (${allMembers.length} members)`);
-    return group;
+    return result.data;
   }
 
   async getGroupChats(userId: string) {
-    const groups = await db.select().from(groupChats);
-    return groups.filter(g => {
+    const result = await dbGetGroupChats();
+    if (!result.success) {
+      console.error(`[CommEngine] getGroupChats error: ${result.error}`);
+      return [];
+    }
+    return result.data.filter(g => {
       const members = (g.members as string[]) || [];
       return members.includes(userId);
     });
@@ -220,13 +338,14 @@ class CommunicationEngine {
 
     this.activeCalls.set(callId, call);
 
-    await db.insert(callHistory).values({
-      callerId: initiatorId,
-      recipientId,
-      roomId,
-      callType,
-      status: "ringing",
-    });
+    const callPayload = { callerId: initiatorId, recipientId, roomId, callType, status: "ringing" };
+    if (this.isUsingFallback) {
+      messageQueue.enqueue("initiateCall", callPayload as any);
+    }
+    const result = await dbInsertCall(callPayload);
+    if (!result.success) {
+      console.error(`[CommEngine] initiateCall DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Call initiated: ${initiatorName} -> ${recipientId} (${callType})`);
     return call;
@@ -240,9 +359,10 @@ class CommunicationEngine {
     call.startedAt = new Date();
 
     const roomId = `call_${callId.substring(0, 8)}`;
-    await db.update(callHistory)
-      .set({ status: "connected", startedAt: call.startedAt })
-      .where(eq(callHistory.roomId, roomId));
+    const result = await dbUpdateCall(roomId, { status: "connected", startedAt: call.startedAt });
+    if (!result.success) {
+      console.error(`[CommEngine] acceptCall DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Call ${callId} accepted by ${acceptorId}`);
     return true;
@@ -257,9 +377,10 @@ class CommunicationEngine {
     this.callHistoryCache.push(call);
 
     const roomId = `call_${callId.substring(0, 8)}`;
-    await db.update(callHistory)
-      .set({ status: "declined", endedAt: new Date(), declinedBy: [declinerId] })
-      .where(eq(callHistory.roomId, roomId));
+    const result = await dbUpdateCall(roomId, { status: "declined", endedAt: new Date(), declinedBy: [declinerId] });
+    if (!result.success) {
+      console.error(`[CommEngine] declineCall DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Call ${callId} declined by ${declinerId}`);
     return true;
@@ -278,9 +399,10 @@ class CommunicationEngine {
     this.callHistoryCache.push(call);
 
     const roomId = `call_${callId.substring(0, 8)}`;
-    await db.update(callHistory)
-      .set({ status: "ended", endedAt: new Date(), duration: String(duration) })
-      .where(eq(callHistory.roomId, roomId));
+    const result = await dbUpdateCall(roomId, { status: "ended", endedAt: new Date(), duration: String(duration) });
+    if (!result.success) {
+      console.error(`[CommEngine] endCall DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Call ${callId} ended by ${endedBy} (duration: ${duration}s)`);
     return { ...call, status: "ended" };
@@ -316,7 +438,7 @@ class CommunicationEngine {
 
     this.activeConferences.set(conferenceId, conference);
 
-    await db.insert(meetingRooms).values({
+    const result = await dbInsertMeetingRoom({
       name: title,
       hostId,
       roomCode,
@@ -326,6 +448,9 @@ class CommunicationEngine {
       password: password || null,
       meetingLink,
     });
+    if (!result.success) {
+      console.error(`[CommEngine] createConference DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Conference created: "${title}" by ${hostName} (${conference.participants.length} participants)`);
     return conference;
@@ -340,9 +465,10 @@ class CommunicationEngine {
       conference.participants.push(userId);
     }
 
-    await db.update(meetingRooms)
-      .set({ participants: conference.participants })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, { participants: conference.participants });
+    if (!result.success) {
+      console.error(`[CommEngine] joinConference DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] ${userName} joined conference "${conference.title}" (${conference.participants.length} participants)`);
     return true;
@@ -358,12 +484,13 @@ class CommunicationEngine {
       conference.screenSharingBy = null;
     }
 
-    await db.update(meetingRooms)
-      .set({ 
-        participants: conference.participants,
-        screenSharingBy: conference.screenSharingBy,
-      })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, {
+      participants: conference.participants,
+      screenSharingBy: conference.screenSharingBy,
+    });
+    if (!result.success) {
+      console.error(`[CommEngine] leaveConference DB error: ${result.error}`);
+    }
 
     if (userId === conference.hostId || conference.participants.length === 0) {
       return this.endConference(conferenceId);
@@ -380,9 +507,15 @@ class CommunicationEngine {
       ? Math.round((Date.now() - conference.startedAt.getTime()) / 1000) 
       : 0;
 
-    await db.update(meetingRooms)
-      .set({ isActive: false, endedAt: new Date(), isRecording: false, screenSharingBy: null })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, {
+      isActive: false,
+      endedAt: new Date(),
+      isRecording: false,
+      screenSharingBy: null,
+    });
+    if (!result.success) {
+      console.error(`[CommEngine] endConference DB error: ${result.error}`);
+    }
 
     this.activeConferences.delete(conferenceId);
     console.log(`[Comms] Conference "${conference.title}" ended (duration: ${duration}s)`);
@@ -396,9 +529,10 @@ class CommunicationEngine {
 
     conference.screenSharingBy = userId;
 
-    await db.update(meetingRooms)
-      .set({ screenSharingBy: userId })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, { screenSharingBy: userId });
+    if (!result.success) {
+      console.error(`[CommEngine] startScreenShare DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Screen sharing started in "${conference.title}" by ${userId}`);
     return true;
@@ -410,9 +544,10 @@ class CommunicationEngine {
 
     conference.screenSharingBy = null;
 
-    await db.update(meetingRooms)
-      .set({ screenSharingBy: null })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, { screenSharingBy: null });
+    if (!result.success) {
+      console.error(`[CommEngine] stopScreenShare DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Screen sharing stopped in "${conference.title}"`);
     return true;
@@ -424,9 +559,10 @@ class CommunicationEngine {
 
     conference.isRecording = !conference.isRecording;
 
-    await db.update(meetingRooms)
-      .set({ isRecording: conference.isRecording })
-      .where(eq(meetingRooms.roomCode, conference.roomCode));
+    const result = await dbUpdateMeetingRoom(conference.roomCode, { isRecording: conference.isRecording });
+    if (!result.success) {
+      console.error(`[CommEngine] toggleRecording DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Recording ${conference.isRecording ? "started" : "stopped"} in "${conference.title}"`);
     return conference.isRecording;
@@ -452,21 +588,20 @@ class CommunicationEngine {
 
     this.userPresence.set(userId, presence);
 
-    await db.insert(onlineUsers).values({
+    const upsertPayload = {
       id: userId,
       displayName,
       isOnline: status !== "offline",
       lastSeen: new Date(),
       status,
-    }).onConflictDoUpdate({
-      target: onlineUsers.id,
-      set: {
-        displayName,
-        isOnline: status !== "offline",
-        lastSeen: new Date(),
-        status,
-      },
-    });
+    };
+    if (this.isUsingFallback) {
+      messageQueue.enqueue("updatePresence", upsertPayload as any);
+    }
+    const result = await dbUpsertOnlineUser(upsertPayload);
+    if (!result.success) {
+      console.error(`[CommEngine] updatePresence DB error: ${result.error}`);
+    }
 
     console.log(`[Comms] Presence updated: ${displayName} -> ${status}`);
     return presence;
@@ -481,6 +616,8 @@ class CommunicationEngine {
   }
 
   getStatistics() {
+    const dbHealth = getDbHealthState();
+    const queueMetrics = messageQueue.getMetrics();
     return {
       activeCalls: this.activeCalls.size,
       activeConferences: this.activeConferences.size,
@@ -502,8 +639,44 @@ class CommunicationEngine {
         screenSharing: !!c.screenSharingBy,
         recording: c.isRecording,
       })),
-      module: "Advanced Communication Engine v1.0",
-      status: "operational",
+      module: "Advanced Communication Engine v2.0",
+      status: this.isUsingFallback ? "fallback" : "operational",
+      fallback: {
+        active: this.isUsingFallback,
+        queueSize: queueMetrics.queueSize,
+        queueOldestAgeMs: queueMetrics.oldestAgeMs,
+        fallbackStoreSizes: getFallbackStoreSizes(),
+      },
+      db: {
+        healthy: dbHealth.isHealthy,
+        circuitOpen: dbHealth.circuitOpen,
+        consecutiveFailures: dbHealth.consecutiveFailures,
+        lastError: dbHealth.lastError,
+        lastCheckedAt: dbHealth.lastCheckedAt?.toISOString() ?? null,
+      },
+    };
+  }
+
+  /** Returns the current DB + fallback status for the health endpoint. */
+  getDbStatus() {
+    const dbHealth = getDbHealthState();
+    const queueMetrics = messageQueue.getMetrics();
+    return {
+      dbConnected: dbHealth.isHealthy,
+      fallbackMode: this.isUsingFallback,
+      circuitOpen: dbHealth.circuitOpen,
+      consecutiveFailures: dbHealth.consecutiveFailures,
+      lastError: dbHealth.lastError,
+      lastCheckedAt: dbHealth.lastCheckedAt?.toISOString() ?? null,
+      queue: {
+        size: queueMetrics.queueSize,
+        oldestAgeMs: queueMetrics.oldestAgeMs,
+        totalEnqueued: queueMetrics.totalEnqueued,
+        totalFlushed: queueMetrics.totalFlushed,
+        totalDropped: queueMetrics.totalDropped,
+        successRate: queueMetrics.successRate,
+      },
+      fallbackStoreSizes: getFallbackStoreSizes(),
     };
   }
 

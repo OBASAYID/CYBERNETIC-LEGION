@@ -564,6 +564,50 @@ export async function registerRoutes(
     app.get('/api/brain/status', (_req, res) => res.json({ status: 'unavailable', reason: 'Brain module failed to load' }));
   }
 
+  // ===============================================
+  // DB HEALTH CHECK ENDPOINT
+  // ===============================================
+
+  app.get("/api/health/db", async (_req, res) => {
+    try {
+      let commEngine: any = null;
+      try {
+        const ceM = await import("./comms/communication-engine.js");
+        commEngine = ceM.communicationEngine;
+      } catch (_e) {
+        // module not loaded yet — return basic status
+      }
+
+      if (commEngine) {
+        const status = commEngine.getDbStatus();
+        return res.json({
+          ok: status.dbConnected && !status.fallbackMode,
+          ...status,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback: probe the db-service directly
+      const { checkDbHealth, getDbHealthState } = await import("./comms/db-service.js");
+      const healthy = await checkDbHealth();
+      const state = getDbHealthState();
+      return res.json({
+        ok: healthy,
+        dbConnected: healthy,
+        fallbackMode: false,
+        circuitOpen: state.circuitOpen,
+        consecutiveFailures: state.consecutiveFailures,
+        lastError: state.lastError,
+        lastCheckedAt: state.lastCheckedAt?.toISOString() ?? null,
+        queue: { size: 0, oldestAgeMs: 0, totalEnqueued: 0, totalFlushed: 0, totalDropped: 0, successRate: 1 },
+        fallbackStoreSizes: { messages: 0, calls: 0, rooms: 0, users: 0, groups: 0 },
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: formatError(e), checkedAt: new Date().toISOString() });
+    }
+  });
+
   // Health Device Integration Routes
   app.get("/api/health/providers", async (req, res) => {
     try {

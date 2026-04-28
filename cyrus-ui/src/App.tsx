@@ -12,6 +12,9 @@ import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storag
 import { AppRoutes } from "./app-routes";
 import { CallProvider } from "@/context/CallContext";
 import { ArrowLeft } from "lucide-react";
+import { ApiKeyModal } from "@/components/ApiKeyModal";
+import { useApiKey } from "@/hooks/use-api-key";
+import { CallProvider } from "@/contexts/CallContext";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -43,6 +46,8 @@ function App() {
     () => readGateDraft(readStoredDisplayName()).password,
   );
   const prevAuthenticatedRef = useRef<boolean | null>(null);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const { isConfigured: apiKeyConfigured } = useApiKey();
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -65,6 +70,18 @@ function App() {
     (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
     `device_${Math.random().toString(36).substr(2, 9)}`;
   const callDisplayName = gateUsername || readStoredDisplayName() || "User";
+  // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        setApiKeyModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAuthenticated]);
 
   return (
     <ThemeProvider>
@@ -92,9 +109,27 @@ function App() {
                   {/* CallProvider wraps all authenticated routes so incoming/active
                       call overlays are globally available regardless of current page. */}
                   <CallProvider userId={callUserId} displayName={callDisplayName}>
+                  <AppRoutes
+                    onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
+                    apiKeyConfigured={apiKeyConfigured}
+                  />
+                  <CallProvider
+                    webRTCOptions={{
+                      userId:
+                        localStorage.getItem("cyrus_comm_user_id") ||
+                        (() => {
+                          const id = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                          localStorage.setItem("cyrus_comm_user_id", id);
+                          return id;
+                        })(),
+                      displayName:
+                        localStorage.getItem("cyrus-display-name") || "Operator",
+                    }}
+                  >
                     <AppRoutes />
                   </CallProvider>
                 </AppErrorBoundary>
+                <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
               </TooltipProvider>
             )}
           </div>

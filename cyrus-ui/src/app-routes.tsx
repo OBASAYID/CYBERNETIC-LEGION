@@ -13,10 +13,25 @@ import DeviceControl from "@/pages/device-control";
 import Navigation from "@/pages/navigation";
 import DocumentsIntelligence from "@/pages/documents-intelligence";
 import DocumentBuilder from "@/pages/document-builder";
+import { ApiKeyTriggerButton } from "@/components/ApiKeyModal";
 
-export function AppRoutes() {
+interface AppRoutesProps {
+  onOpenApiKeyModal?: () => void;
+  apiKeyConfigured?: boolean;
+}
+
+export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRoutesProps) {
   return (
     <PresenceProvider>
+      {/* Global API key trigger — fixed bottom-right, always accessible */}
+      {onOpenApiKeyModal && (
+        <div className="fixed bottom-4 right-4 z-[90]">
+          <ApiKeyTriggerButton
+            onClick={onOpenApiKeyModal}
+            isConfigured={apiKeyConfigured}
+          />
+        </div>
+      )}
       <Switch>
         <Route path="/" component={DashboardFresh} />
         <Route path="/dashboard-legacy" component={Dashboard} />
