@@ -56,8 +56,8 @@ export function useSocketComms(options: UseSocketCommsOptions) {
     
     const socket = io(window.location.origin, {
       path: "/cyrus-io",
-      transports: ["polling"],
-      upgrade: false,
+      transports: ["websocket", "polling"],
+      upgrade: true,
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: 20,
