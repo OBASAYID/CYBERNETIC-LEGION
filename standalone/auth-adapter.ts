@@ -4,6 +4,80 @@ import connectPg from "connect-pg-simple";
 import crypto from "crypto";
 
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
+const SESSION_TOKEN_TTL_MS = SESSION_TTL;
+
+type SessionUser = {
+  id: string;
+  username: string;
+  role: "admin" | "user";
+  claims: { sub: string };
+};
+
+function base64UrlEncode(input: string): string {
+  return Buffer.from(input, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function base64UrlDecode(input: string): string {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "===".slice((normalized.length + 3) % 4);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function getSessionTokenSecret(): string {
+  const explicit = String(process.env.CYRUS_SESSION_TOKEN_SECRET || "").trim();
+  if (explicit) return explicit;
+  return `${resolveSessionSecret()}::cyrus-session-token`;
+}
+
+function issueSessionToken(user: SessionUser): string {
+  const payload = {
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    exp: Date.now() + SESSION_TOKEN_TTL_MS,
+  };
+  const payloadB64 = base64UrlEncode(JSON.stringify(payload));
+  const sig = crypto.createHmac("sha256", getSessionTokenSecret()).update(payloadB64).digest("base64url");
+  return `${payloadB64}.${sig}`;
+}
+
+function verifySessionToken(token: string): SessionUser | null {
+  const [payloadB64, sig] = token.split(".");
+  if (!payloadB64 || !sig) return null;
+  const expected = crypto.createHmac("sha256", getSessionTokenSecret()).update(payloadB64).digest("base64url");
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+
+  try {
+    const parsed = JSON.parse(base64UrlDecode(payloadB64)) as {
+      sub?: string;
+      username?: string;
+      role?: string;
+      exp?: number;
+    };
+    if (!parsed.sub || !parsed.username || (parsed.role !== "admin" && parsed.role !== "user")) return null;
+    if (typeof parsed.exp !== "number" || parsed.exp < Date.now()) return null;
+    return {
+      id: parsed.sub,
+      username: parsed.username,
+      role: parsed.role,
+      claims: { sub: parsed.sub },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readSessionTokenFromRequest(req: any): string | null {
+  const header = String(req.get?.("x-cyrus-session-token") || "").trim();
+  if (header) return header;
+  const auth = String(req.get?.("authorization") || "").trim();
+  if (/^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, "").trim();
+  return null;
+}
 
 function resolveSessionCookieSecure(): boolean {
   const v = String(process.env.SESSION_COOKIE_SECURE || "").trim().toLowerCase();
@@ -148,12 +222,14 @@ export async function setupAuth(app: Express): Promise<void> {
 
     const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
 
-    req.session.user = {
+    const user: SessionUser = {
       id: userId,
       username,
       role,
       claims: { sub: userId },
     };
+    req.session.user = user;
+    const sessionToken = issueSessionToken(user);
 
     req.session.save((err: any) => {
       if (err) {
@@ -171,6 +247,7 @@ export async function setupAuth(app: Express): Promise<void> {
       console.log(`[Auth] Session ID: ${req.sessionID}`);
 
       res.json({ success: true, user: { id: userId, username, role } });
+      res.json({ success: true, user: { id: userId, username, role }, sessionToken });
     });
   });
 
@@ -185,6 +262,11 @@ export async function setupAuth(app: Express): Promise<void> {
     if (req.session?.user) {
       return res.json(req.session.user);
     }
+    const token = readSessionTokenFromRequest(req);
+    if (token) {
+      const tokenUser = verifySessionToken(token);
+      if (tokenUser) return res.json(tokenUser);
+    }
     res.status(401).json({ message: "Not authenticated" });
   });
 }
@@ -193,6 +275,14 @@ export const isAuthenticated: RequestHandler = (req: any, res, next) => {
   if (req.session?.user) {
     req.user = req.session.user;
     return next();
+  }
+  const token = readSessionTokenFromRequest(req);
+  if (token) {
+    const tokenUser = verifySessionToken(token);
+    if (tokenUser) {
+      req.user = tokenUser;
+      return next();
+    }
   }
   res.status(401).json({ message: "Authentication required" });
 };
