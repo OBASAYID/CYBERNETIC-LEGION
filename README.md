@@ -140,14 +140,69 @@ SECRET_KEY=your_secret_key_here
 └── README.md                # This file
 ```
 
+## ⚡ Quick Start
+
+```bash
+# 1. Clone and install
+git clone https://github.com/crypton980/cyrus-cybernetic.git
+cd cyrus-cybernetic
+npm ci
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — set DATABASE_URL, ADMIN_ACCESS_CODE, SESSION_SECRET, etc.
+
+# 3. Run locally (fused Express + Vite, single port)
+npm run dev
+# Open http://localhost:3020
+```
+
+For production Docker:
+```bash
+docker build -f Dockerfile.prod -t cyrus:prod .
+docker run --rm -p 8080:8080 --env-file .env cyrus:prod
+```
+
+## 🔌 API Reference
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health/live` | Liveness probe — always 200 when process is up |
+| `GET` | `/health/ready` | Readiness probe — checks DB connectivity |
+| `GET` | `/api/status` | Service status + live metrics snapshot |
+| `GET` | `/api/ready` | API-channel readiness (same as `/health/ready`) |
+| `POST` | `/api/login` | Authenticate with `ADMIN_ACCESS_CODE` or `USER_ACCESS_CODE` |
+| `POST` | `/api/cyrus` | Send a message to the CYRUS AI (requires auth) |
+| `GET` | `/api/demo/:capability` | Demo responses for `medical`, `robotics`, `intelligence` |
+
+Full route inventory is in `server/routes.ts` and the per-feature route files under `server/`.
+
+## 🛠 Troubleshooting
+
+**App won't start / `EADDRINUSE`**
+Set `CYRUS_LIVE_PORT` (or `PORT`) to a free port. Default is `3020` in dev, `8080` in production.
+
+**`DATABASE_URL` not set warning**
+The app runs without a database (in-memory fallback) but sessions and persistent data won't work. Set `DATABASE_URL` to a PostgreSQL connection string.
+
+**AI responses return errors**
+Set `OPENAI_API_KEY` in your environment. Without it the app falls back to local LLM stubs. Set `CYRUS_ENABLE_PYTHON=0` to disable Python AI services if they aren't needed.
+
+**Health check returns 503 `degraded`**
+The database is unreachable. Verify `DATABASE_URL` is correct and the PostgreSQL service is running. On Railway, ensure the database service is linked to the app service.
+
+**CORS errors in browser**
+Set `CORS_ORIGIN` to your exact frontend origin (e.g. `https://your-app.up.railway.app`). Do not include a trailing slash.
+
+**Session not persisting**
+`SESSION_SECRET` must be set and consistent across restarts. If using multiple replicas, ensure all share the same PostgreSQL session store.
+
 ## ✅ Quality Gates
 
 ```bash
-npm run verify:api-contracts
-npm run lint
-npm run build
-pytest -q
-pytest -q cyrus-ai/tests
+npm run typecheck   # TypeScript — server + shared
+npm run lint        # Alias for typecheck
+npm run build       # Compile server TS + Vite frontend bundle
 ```
 
 ## 🤝 Contributing

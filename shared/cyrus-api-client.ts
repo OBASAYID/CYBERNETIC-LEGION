@@ -22,9 +22,11 @@ export function resolveCyrusApiCredentials(): RequestCredentials {
   if (typeof window === "undefined") return "same-origin";
   if (!base) return "include";
   try {
-    return new URL(base).origin === window.location.origin ? "include" : "omit";
+    // When an explicit API base is configured (split-origin deployments),
+    // auth/session cookies must be sent cross-origin.
+    return "include";
   } catch {
-    return "omit";
+    return "include";
   }
 }
 
@@ -41,6 +43,27 @@ export function systemCredentials(): RequestCredentials {
 
 export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
   const url = systemApiUrl(pathOrUrl);
-  const credentials = init?.credentials ?? systemCredentials();
-  return fetch(url, { ...init, credentials });
+  const headers = new Headers(init?.headers ?? undefined);
+
+  if (typeof window !== "undefined") {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.pathname.startsWith("/api") && !headers.has("x-cyrus-session-token")) {
+        const token = localStorage.getItem("cyrus_session_token");
+        if (token) {
+          headers.set("x-cyrus-session-token", token);
+          // Some proxy/CDN layers are stricter with custom headers than Authorization.
+          if (!headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
+        }
+      }
+    } catch {
+      // Keep fetch resilient even if URL parsing fails.
+    }
+  }
+
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: "include", // ALWAYS include credentials
+  });
 }

@@ -44,6 +44,17 @@ function App() {
   const prevAuthenticatedRef = useRef<boolean | null>(null);
 
   useEffect(() => {
+    console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
+    return () => {
+      console.log("[CYRUS] App unmounted.");
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log("[CYRUS] Auth state changed:", isAuthenticated);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     if (isAuthenticated) return;
     writeGateDraft(gateUsername, gatePassword);
   }, [isAuthenticated, gateUsername, gatePassword]);
