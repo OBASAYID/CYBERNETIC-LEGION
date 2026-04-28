@@ -15,6 +15,7 @@ function sleep(ms: number): Promise<void> {
 async function waitForBackendReady(cancelled: () => boolean): Promise<void> {
   const fetchTimeoutMs = getApiFetchTimeoutMs();
   const deadline = Date.now() + 45_000;
+  console.log("[CYRUS] useAuthSession: waiting for backend ready...");
   while (!cancelled() && Date.now() < deadline) {
     try {
       const ctrl = new AbortController();
@@ -28,12 +29,17 @@ async function waitForBackendReady(cancelled: () => boolean): Promise<void> {
         r = await systemFetch("/health/ready", { cache: "no-store", signal: ctrl2.signal });
         window.clearTimeout(timer2);
       }
-      if (r.ok) return;
-    } catch {
-      /* ignore */
+      if (r.ok) {
+        console.log("[CYRUS] useAuthSession: backend ready.");
+        return;
+      }
+      console.log("[CYRUS] useAuthSession: backend not ready yet, status:", r.status);
+    } catch (err) {
+      console.warn("[CYRUS] useAuthSession: backend ready check failed:", err);
     }
     await sleep(400);
   }
+  console.warn("[CYRUS] useAuthSession: backend ready wait timed out.");
 }
 
 /**
@@ -51,6 +57,7 @@ export function useAuthSession() {
     async function verifySession() {
       try {
         const localValid = checkAuthValidity();
+        console.log("[CYRUS] useAuthSession: localValid =", localValid);
         if (!localValid) {
           startTransition(() => setIsAuthenticated(false));
           return;
@@ -65,6 +72,7 @@ export function useAuthSession() {
         const fetchTimeoutMs = getApiFetchTimeoutMs();
         for (let attempt = 0; attempt < AUTH_USER_MAX_ATTEMPTS && !cancelled; attempt++) {
           if (Date.now() - checkStartedAtRef.current > MAX_VERIFY_WINDOW_MS) {
+            console.warn("[CYRUS] useAuthSession: verify window exceeded, falling back to degraded.");
             outcome = "degraded";
             break;
           }
@@ -74,6 +82,8 @@ export function useAuthSession() {
             const res = await systemFetch("/api/auth/user", { signal: ctrl.signal });
             window.clearTimeout(timer);
             if (cancelled) return;
+
+            console.log("[CYRUS] useAuthSession: /api/auth/user attempt", attempt + 1, "→ status", res.status);
 
             if (res.ok) {
               outcome = "ok";
@@ -92,12 +102,14 @@ export function useAuthSession() {
             }
             outcome = "degraded";
             break;
-          } catch {
+          } catch (err) {
+            console.warn("[CYRUS] useAuthSession: /api/auth/user attempt", attempt + 1, "threw:", err);
             await sleep(250 + attempt * 150);
           }
         }
 
         if (cancelled) return;
+        console.log("[CYRUS] useAuthSession: outcome =", outcome);
         if (outcome === "ok") {
           markAuthWarmSession();
           startTransition(() => setIsAuthenticated(true));
@@ -106,10 +118,15 @@ export function useAuthSession() {
           clearAuthSessionStorage();
           startTransition(() => setIsAuthenticated(false));
         } else {
+          // Degraded: trust local storage rather than blocking the user
+          console.warn("[CYRUS] useAuthSession: degraded outcome — using localValid =", localValid);
           startTransition(() => setIsAuthenticated(localValid));
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        console.error("[CYRUS] useAuthSession: verifySession threw unexpectedly:", err);
+        // Fall back to local auth state so the UI doesn't stay blank
+        const localValid = checkAuthValidity();
+        startTransition(() => setIsAuthenticated(localValid));
       }
     }
 
