@@ -11,6 +11,7 @@ export const ENGINE_MODULE_ROUTE_MAP: Record<string, string> = {
   "emotional-cognition": "/comms",
   "universal-language": "/scan",
   "decentralized-intelligence": "/ops",
+  "iot-ntn-connectivity": "/comms",
   "ethical-governance": "/security",
   "self-evolution": "/ops",
   "quantum-neural": "/quantum",

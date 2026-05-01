@@ -95,9 +95,10 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/comms",
     dashboardLabel: "Comms",
-    dashboardDescription: "Secure Channels",
+    dashboardDescription: "NTN satellite IoT & secure channels",
     surfaceLabel: "Communications",
-    sublabel: "Chat, Pshare & secure channels",
+    sublabel:
+      "Chat + P2P+ tab (WebRTC /cyrus-comm-io), NTN roadmap — satellite IoT, messaging, tracking, emergency, verticals; Cortex-M4F + PSRAM/flash + cellular/sat RF",
     Icon: Phone,
   },
   {

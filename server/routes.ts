@@ -47,6 +47,7 @@ let cancelDocgenJob: any;
 let resumeDocgenJob: any;
 let initSignalingServer: any;
 let initSocketSignaling: any;
+let initCyrusCommSocketSignaling: any;
 let enqueueMessage: any;
 let dequeueMessages: any;
 let addReminder: any;
@@ -212,6 +213,15 @@ async function loadDependencies() {
     initSignalingServer = sgM.initSignalingServer;
     const ssM = await import("./comms/socket-signaling");
     initSocketSignaling = ssM.initSocketSignaling;
+    try {
+      const ccSock = await import("./comms/cyrus-comm-socket");
+      initCyrusCommSocketSignaling = ccSock.initCyrusCommSocketSignaling;
+    } catch (cce) {
+      console.warn(
+        "[Routes] cyrus-comm-socket failed (non-fatal):",
+        cce instanceof Error ? cce.message : String(cce),
+      );
+    }
     const stM = await import("./comms/store");
     enqueueMessage = stM.enqueueMessage;
     dequeueMessages = stM.dequeueMessages;
@@ -541,7 +551,23 @@ export async function registerRoutes(
   if (initSocketSignaling) {
     try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
+  if (initCyrusCommSocketSignaling) {
+    try {
+      initCyrusCommSocketSignaling(httpServer);
+    } catch (e) {
+      console.warn("[Routes] initCyrusCommSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  }
   console.log("[Socket.IO] Real-time communication server active");
+
+  app.get("/api/cyrus-comm/config/webrtc", async (_req, res) => {
+    try {
+      const m = await import("./comms/cyrus-comm-config.js");
+      res.json(m.getCyrusCommWebRtcConfigResponse());
+    } catch {
+      res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
+    }
+  });
   if (registerCommsRoutes) {
     try { registerCommsRoutes(app); } catch (e) { console.warn("[Routes] registerCommsRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }

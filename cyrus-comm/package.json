@@ -1,0 +1,7 @@
+{
+  "name": "cyrus-comm",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CYRUS real-time comms (isolated package; CommonJS server + shared config)",
+  "type": "commonjs"
+}

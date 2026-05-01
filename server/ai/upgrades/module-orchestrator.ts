@@ -19,7 +19,7 @@ let modulesLoaded = false;
 async function ensureModules() {
   if (modulesLoaded) return;
   try {
-    const [vkb, ec, ul, di, eg, se, qnn, ase, cda, ns, hr, bni, ahc] = await Promise.all([
+    const [vkb, ec, ul, di, eg, se, qnn, ase, cda, ns, hr, bni, ahc, iotNtn] = await Promise.all([
       import("./vector-knowledge-base"),
       import("./emotional-cognition"),
       import("./universal-language"),
@@ -33,6 +33,7 @@ async function ensureModules() {
       import("./hyperlinked-reality"),
       import("./bio-neural-interface"),
       import("./adaptive-hardware-controller"),
+      import("./iot-ntn-connectivity"),
     ]);
     modulesRef.vectorKnowledgeBase = vkb.vectorKnowledgeBase;
     modulesRef.emotionalCognition = ec.emotionalCognition;
@@ -47,6 +48,7 @@ async function ensureModules() {
     modulesRef.hyperlinkedReality = hr.hyperlinkedReality;
     modulesRef.bioNeuralInterface = bni.bioNeuralInterface;
     modulesRef.adaptiveHardwareController = ahc.adaptiveHardwareController;
+    modulesRef.iotNtnConnectivity = iotNtn.iotNtnConnectivity;
 
     const [bm, es, md, ri, tm, se2, bs] = await Promise.all([
       import("../interactive/biology-module"),
@@ -93,6 +95,7 @@ class ModuleOrchestrator {
     this.modules.set("emotional-cognition", { instance: modulesRef.emotionalCognition, category: "core", name: "Emotional Cognition" });
     this.modules.set("universal-language", { instance: modulesRef.universalLanguage, category: "core", name: "Universal Language" });
     this.modules.set("decentralized-intelligence", { instance: modulesRef.decentralizedIntelligence, category: "core", name: "Decentralized Intelligence" });
+    this.modules.set("iot-ntn-connectivity", { instance: modulesRef.iotNtnConnectivity, category: "core", name: "IoT–NTN Satellite Connectivity" });
     this.modules.set("ethical-governance", { instance: modulesRef.ethicalGovernance, category: "core", name: "Ethical Governance" });
     this.modules.set("self-evolution", { instance: modulesRef.selfEvolution, category: "core", name: "Self-Evolution Engine" });
     this.modules.set("quantum-neural", { instance: modulesRef.quantumNeuralNetworks, category: "advanced", name: "Quantum Neural Networks" });
@@ -184,6 +187,12 @@ class ModuleOrchestrator {
       case "decentralized-intelligence":
         metrics.workers = status.activeWorkers || 0;
         metrics.completed = status.tasksCompleted || 0;
+        break;
+      case "iot-ntn-connectivity":
+        metrics.endpoints = status.satelliteEndpoints ?? 0;
+        metrics.verticals = status.activeVerticals?.length ?? 0;
+        metrics.flashMb = status.memory?.flashMb ?? 0;
+        metrics.psramMb = status.memory?.psramMb ?? 0;
         break;
       case "ethical-governance":
         metrics.principles = status.principleCount || 0;
