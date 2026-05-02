@@ -28,6 +28,8 @@ export interface OnlineUser {
   deviceId: string;
   status: "online" | "busy" | "in_call";
   lastSeen: number;
+  /** Optional chat/profile photo for UI surfaces (e.g. CallDialog). */
+  profileImageUrl?: string | null;
 }
 
 export interface ChatMessage {

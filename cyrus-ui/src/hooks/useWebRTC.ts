@@ -13,6 +13,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { webRTCService, type OnlineUser, type ChatMessage } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
 
+/** Re-export for UI components (CallDialog, etc.) */
+export type { OnlineUser } from "@/lib/webrtc-service";
+export type CallType = "voice" | "video";
+
 export type IncomingCallInfo = {
   from: string;
   callerName: string;
@@ -52,11 +56,11 @@ export interface UseWebRTCReturn {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   /** Ref to attach to a local <video> element */
-  localVideoRef: React.RefObject<HTMLVideoElement>;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
   /** Ref to attach to a remote <video> element (video calls) */
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   /** Ref to attach to a hidden <audio> element for remote audio (all call types) */
-  remoteAudioRef: React.RefObject<HTMLAudioElement>;
+  remoteAudioRef: React.RefObject<HTMLAudioElement | null>;
   startCall: (user: OnlineUser, type: "voice" | "video") => Promise<void>;
   acceptCall: () => Promise<void>;
   rejectCall: () => void;
