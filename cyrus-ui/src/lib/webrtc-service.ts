@@ -1,7 +1,9 @@
+import { systemFetch } from "@/lib/system-api";
+
 // WebRTC Service for Voice and Video Calls
 // Enterprise-Grade Real-Time Communication System
-// Matching Zoom/WhatsApp quality with advanced audio/video processing,
-// adaptive bitrate, redundant TURN servers, and professional features.
+// Terrestrial + NTN/satellite-aware: fetches `/api/cyrus-comm/config/webrtc`, merges ICE,
+// applies outbound encoding caps (WhatsApp-class congestion friendliness on constrained paths).
 
 // ─── Public Interfaces ────────────────────────────────────────────────────────
 
@@ -111,53 +113,53 @@ type AudioLevelHandler = (level: number) => void;
 // ─── ICE / TURN Configuration ─────────────────────────────────────────────────
 
 /**
- * Enterprise-grade ICE configuration with redundant STUN + TURN servers.
- * Multiple TURN providers ensure connectivity across all network topologies
- * (symmetric NAT, corporate firewalls, cellular networks).
+ * Embedded STUN/TURN when API is down — merged after `GET /api/cyrus-comm/config/webrtc`.
+ * Covers symmetric NAT, firewalls, and IP-based satellite backhaul (Starlink / VSAT / NTN).
  */
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    // Google STUN – primary
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-    { urls: "stun:stun4.l.google.com:19302" },
-    // Cloudflare STUN
-    { urls: "stun:stun.cloudflare.com:3478" },
-    // Additional public STUN
-    { urls: "stun:stun.stunprotocol.org:3478" },
-    { urls: "stun:stun.voip.blackberry.com:3478" },
-    // Metered TURN – UDP (lowest latency)
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    // Metered TURN – TLS (firewall bypass)
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    // Metered TURN – TCP (deep packet inspection bypass)
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    // Metered TURNS – encrypted relay
-    {
-      urls: "turns:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject"
+const EMBEDDED_ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  { urls: "stun:stun4.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "stun:stun.stunprotocol.org:3478" },
+  { urls: "stun:stun.voip.blackberry.com:3478" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turns:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  }
+];
+
+function mergeIceServers(primary: RTCIceServer[], secondary: RTCIceServer[]): RTCIceServer[] {
+  const seen = new Set<string>();
+  const out: RTCIceServer[] = [];
+  for (const list of [primary, secondary]) {
+    for (const s of list) {
+      const key = JSON.stringify(s.urls) + String(s.username ?? "");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
     }
-  ],
-  iceCandidatePoolSize: 10,
-  iceTransportPolicy: "all",
-  bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require"
-};
+  }
+  return out;
+}
 
 // ─── Media Constraints ────────────────────────────────────────────────────────
 
@@ -171,13 +173,13 @@ const isMobile = (): boolean =>
  * Video: adaptive resolution/fps based on device type.
  */
 const getMediaConstraints = async (
-  callType: "voice" | "video"
+  callType: "voice" | "video",
+  linkProfile: "terrestrial" | "satellite" = "terrestrial"
 ): Promise<MediaStreamConstraints> => {
   const audioConstraints: MediaTrackConstraints = {
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-    // Prefer 48 kHz for Opus codec compatibility
     sampleRate: 48000,
     channelCount: 1
   };
@@ -186,7 +188,6 @@ const getMediaConstraints = async (
     return { audio: audioConstraints, video: false };
   }
 
-  // Enumerate devices to confirm camera availability
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const hasCamera = devices.some(d => d.kind === "videoinput");
@@ -199,22 +200,29 @@ const getMediaConstraints = async (
   }
 
   const mobile = isMobile();
+  const sat = linkProfile === "satellite";
 
-  // Mobile: 480p/15fps to conserve battery and data
-  // Desktop: 720p/30fps as baseline (adaptive bitrate handles degradation)
-  const videoConstraints: MediaTrackConstraints = mobile
+  // NTN / satellite IP: lower capture rate and resolution to match constrained uplink and high RTT.
+  const videoConstraints: MediaTrackConstraints = sat
     ? {
         width: { ideal: 640, min: 320 },
-        height: { ideal: 480, min: 240 },
-        frameRate: { ideal: 15, max: 20 },
+        height: { ideal: 360, min: 180 },
+        frameRate: { ideal: 12, max: 15 },
         facingMode: "user"
       }
-    : {
-        width: { ideal: 1280, min: 640 },
-        height: { ideal: 720, min: 480 },
-        frameRate: { ideal: 30, max: 30 },
-        facingMode: "user"
-      };
+    : mobile
+      ? {
+          width: { ideal: 640, min: 320 },
+          height: { ideal: 480, min: 240 },
+          frameRate: { ideal: 15, max: 20 },
+          facingMode: "user"
+        }
+      : {
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          frameRate: { ideal: 30, max: 30 },
+          facingMode: "user"
+        };
 
   return { audio: audioConstraints, video: videoConstraints };
 };
@@ -225,14 +233,18 @@ const getMediaConstraints = async (
  * 2. Reduced constraints (SD/15fps)
  * 3. Audio-only (if video device fails entirely)
  */
-const getMediaWithFallback = async (callType: "voice" | "video"): Promise<MediaStream> => {
-  const constraints = await getMediaConstraints(callType);
+const getMediaWithFallback = async (
+  callType: "voice" | "video",
+  linkProfile: "terrestrial" | "satellite" = "terrestrial"
+): Promise<MediaStream> => {
+  const constraints = await getMediaConstraints(callType, linkProfile);
 
   try {
     return await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
     console.warn("[WebRTC] Ideal constraints failed, trying SD fallback:", err);
 
+    const sat = linkProfile === "satellite";
     const sdConstraints: MediaStreamConstraints = {
       audio: {
         echoCancellation: true,
@@ -240,7 +252,9 @@ const getMediaWithFallback = async (callType: "voice" | "video"): Promise<MediaS
         autoGainControl: true
       },
       video: callType === "video"
-        ? { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }
+        ? sat
+          ? { width: { ideal: 426 }, height: { ideal: 240 }, frameRate: { ideal: 10, max: 12 } }
+          : { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }
         : false
     };
 
@@ -303,6 +317,10 @@ class WebRTCService {
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
+  /** ICE from `GET /api/cyrus-comm/config/webrtc` (TURN from env), merged with {@link EMBEDDED_ICE_SERVERS}. */
+  private remoteIceServers: RTCIceServer[] | null = null;
+  /** Terrestrial vs NTN/satellite IP — drives capture, encoding caps, and hangup windows. */
+  private linkProfile: "terrestrial" | "satellite" = "terrestrial";
 
   // ── Reconnection / Heartbeat ───────────────────────────────────────────────
   private reconnectAttempts: number = 0;
@@ -310,8 +328,13 @@ class WebRTCService {
   private reconnectDelay: number = 1000;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
-  private heartbeatInterval: number = 15000;
+  /** Application ping interval; keep below common proxy idle timeouts (~60s). */
+  private heartbeatInterval: number = 20000;
   private lastPong: number = Date.now();
+  /** Min ms between ICE restart offers (initiator) to avoid signaling storms. */
+  private iceRestartCooldownUntil: number = 0;
+  private pendingIceRestartTimer: ReturnType<typeof setTimeout> | null = null;
+  private callTeardownTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── Call State ─────────────────────────────────────────────────────────────
   private currentCallUserId: string | null = null;
@@ -482,17 +505,81 @@ class WebRTCService {
   // ── Connection ─────────────────────────────────────────────────────────────
 
   connect(userId: string, userName: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.userId = userId;
-      this.userName = userName;
+    this.userId = userId;
+    this.userName = userName;
+    return this.loadRemoteWebRtcConfig()
+      .catch((err) => {
+        console.warn("[WebRTC] Remote ICE / link config unavailable — embedded ICE only:", err);
+      })
+      .then(() => this.createWebSocket())
+      .then(() => {
+        this.startHeartbeat();
+      });
+  }
 
-      this.createWebSocket()
-        .then(() => {
-          this.startHeartbeat();
-          resolve();
-        })
-        .catch(reject);
-    });
+  /**
+   * Select terrestrial vs satellite/NTN-style backhaul for the next session.
+   * Persists `localStorage.cyrus_comm_link_profile` and selects `?link=satellite` on config fetch.
+   */
+  setCommLinkProfile(profile: "terrestrial" | "satellite" | "ntn"): void {
+    const normalized = profile === "ntn" ? "satellite" : profile;
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("cyrus_comm_link_profile", normalized);
+      }
+    } catch {
+      /* quota */
+    }
+    this.linkProfile = normalized === "satellite" ? "satellite" : "terrestrial";
+  }
+
+  getCommLinkProfile(): "terrestrial" | "satellite" {
+    return this.linkProfile;
+  }
+
+  private async loadRemoteWebRtcConfig(): Promise<void> {
+    let storagePref: "terrestrial" | "satellite" = "terrestrial";
+    try {
+      const ls = typeof localStorage !== "undefined" ? localStorage.getItem("cyrus_comm_link_profile") : null;
+      if (ls === "satellite" || ls === "ntn") storagePref = "satellite";
+    } catch {
+      /* ignore */
+    }
+
+    const url =
+      storagePref === "satellite"
+        ? "/api/cyrus-comm/config/webrtc?link=satellite"
+        : "/api/cyrus-comm/config/webrtc";
+
+    try {
+      const res = await systemFetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as {
+        iceServers?: RTCIceServer[];
+        linkHints?: { encodingProfile?: string };
+      };
+
+      if (Array.isArray(j.iceServers) && j.iceServers.length > 0) {
+        this.remoteIceServers = j.iceServers as RTCIceServer[];
+      } else {
+        this.remoteIceServers = null;
+      }
+
+      if (j.linkHints?.encodingProfile === "high_latency_ntn") {
+        this.linkProfile = "satellite";
+      } else {
+        this.linkProfile = storagePref;
+      }
+
+      const mergedLen = mergeIceServers(
+        this.remoteIceServers ?? [],
+        EMBEDDED_ICE_SERVERS
+      ).length;
+      console.log("[WebRTC] ICE config — link:", this.linkProfile, "candidate servers:", mergedLen);
+    } catch {
+      this.remoteIceServers = null;
+      this.linkProfile = storagePref;
+    }
   }
 
   private createWebSocket(): Promise<void> {
@@ -606,7 +693,7 @@ class WebRTCService {
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
         this.send({ type: "ping", data: { timestamp: Date.now() } });
 
-        if (Date.now() - this.lastPong > this.heartbeatInterval * 3) {
+        if (Date.now() - this.lastPong > this.heartbeatInterval * 5) {
           console.log("[WebRTC] Heartbeat timeout – reconnecting");
           this.socket.close();
         }
@@ -643,9 +730,11 @@ class WebRTCService {
   // ── Message Handling ───────────────────────────────────────────────────────
 
   private async handleMessage(message: any) {
+    // Any inbound frame proves the signaling socket is alive (not only `pong`).
+    this.lastPong = Date.now();
+
     switch (message.type) {
       case "pong":
-        this.lastPong = Date.now();
         break;
 
       case "user-list":
@@ -726,6 +815,13 @@ class WebRTCService {
         console.log("[WebRTC] ICE restart requested");
         await this.handleIceRestart(message);
         break;
+
+      case "ice-restart-needed":
+        if (this.isInitiator && this.peerConnection && this.currentCallUserId) {
+          console.log("[WebRTC] Peer requested ICE restart — sending new offer");
+          this.scheduleIceRestart();
+        }
+        break;
     }
   }
 
@@ -734,7 +830,17 @@ class WebRTCService {
   private async createPeerConnection(): Promise<RTCPeerConnection> {
     console.log("[WebRTC] Creating enterprise peer connection");
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const iceServers = this.remoteIceServers?.length
+      ? mergeIceServers(this.remoteIceServers, EMBEDDED_ICE_SERVERS)
+      : EMBEDDED_ICE_SERVERS;
+
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceCandidatePoolSize: this.linkProfile === "satellite" ? 18 : 10,
+      iceTransportPolicy: "all",
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require"
+    });
     this.iceGatheringComplete = false;
     this.connectionEstablished = false;
 
@@ -775,11 +881,11 @@ class WebRTCService {
           break;
         case "disconnected":
           if (this.onConnectionQuality) this.onConnectionQuality("poor");
-          this.attemptIceRestart();
+          this.scheduleIceRestart();
           break;
         case "failed":
           console.log("[WebRTC] ICE failed – attempting restart");
-          this.attemptIceRestart();
+          this.scheduleIceRestart();
           break;
         case "closed":
           this.stopStatsMonitoring();
@@ -791,19 +897,36 @@ class WebRTCService {
     pc.onconnectionstatechange = () => {
       console.log("[WebRTC] Connection state:", pc.connectionState);
 
+      if (pc.connectionState === "connected") {
+        if (this.callTeardownTimer) {
+          clearTimeout(this.callTeardownTimer);
+          this.callTeardownTimer = null;
+        }
+        return;
+      }
+
+      if (this.callTeardownTimer) {
+        clearTimeout(this.callTeardownTimer);
+        this.callTeardownTimer = null;
+      }
+
       if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-        setTimeout(() => {
+        const isFailed = pc.connectionState === "failed";
+        const sat = this.linkProfile === "satellite";
+        const hangupAfterMs = isFailed ? (sat ? 40_000 : 20_000) : sat ? 55_000 : 35_000;
+        this.callTeardownTimer = setTimeout(() => {
+          this.callTeardownTimer = null;
           if (
             this.peerConnection &&
             (this.peerConnection.connectionState === "disconnected" ||
               this.peerConnection.connectionState === "failed")
           ) {
-            console.log("[WebRTC] Connection lost permanently");
+            console.log("[WebRTC] Connection lost permanently after recovery window");
             this.recordCallHistory("poor");
             this.cleanupCall(true);
             if (this.onCallEnd) this.onCallEnd();
           }
-        }, 5000);
+        }, hangupAfterMs);
       }
     };
 
@@ -859,7 +982,6 @@ class WebRTCService {
         if (kind === "video") {
           const caps = RTCRtpSender.getCapabilities("video");
           if (caps) {
-            // Prefer VP9 > H264 > VP8
             const vp9 = caps.codecs.filter(c => c.mimeType.toLowerCase().includes("vp9"));
             const h264 = caps.codecs.filter(c => c.mimeType.toLowerCase().includes("h264"));
             const rest = caps.codecs.filter(
@@ -867,7 +989,11 @@ class WebRTCService {
                 !c.mimeType.toLowerCase().includes("vp9") &&
                 !c.mimeType.toLowerCase().includes("h264")
             );
-            const ordered = [...vp9, ...h264, ...rest];
+            // Satellite / NTN: hardware H.264 first (lower CPU, steadier on thin uplinks).
+            const ordered =
+              this.linkProfile === "satellite"
+                ? [...h264, ...vp9, ...rest]
+                : [...vp9, ...h264, ...rest];
             if (ordered.length > 0) {
               transceiver.setCodecPreferences(ordered);
             }
@@ -879,7 +1005,82 @@ class WebRTCService {
     }
   }
 
+  /**
+   * Outbound RTP caps so browser GCC adapts without overshooting thin uplinks
+   * (terrestrial vs NTN / satellite IP).
+   */
+  private async applyOutboundMediaTuning(pc: RTCPeerConnection, callType: "voice" | "video") {
+    const sat = this.linkProfile === "satellite";
+    const mobile = isMobile();
+
+    for (const sender of pc.getSenders()) {
+      const track = sender.track;
+      if (!track) continue;
+      try {
+        const params = sender.getParameters();
+        if (track.kind === "audio") {
+          const maxBr = sat ? 48_000 : 64_000;
+          const enc =
+            params.encodings?.length > 0
+              ? params.encodings.map((e) => ({ ...e, maxBitrate: maxBr }))
+              : [{ maxBitrate: maxBr }];
+          await sender.setParameters({ ...params, encodings: enc });
+        } else if (track.kind === "video" && callType === "video") {
+          const maxBr = sat ? 900_000 : mobile ? 1_600_000 : 2_500_000;
+          const maxFr = sat ? 15 : mobile ? 24 : 30;
+          const scale = sat ? 2 : 1;
+          const enc =
+            params.encodings?.length > 0
+              ? params.encodings.map((e, i) =>
+                  i === 0
+                    ? { ...e, maxBitrate: maxBr, maxFramerate: maxFr, scaleResolutionDownBy: scale }
+                    : e
+                )
+              : [{ maxBitrate: maxBr, maxFramerate: maxFr, scaleResolutionDownBy: scale }];
+          await sender.setParameters({
+            ...params,
+            encodings: enc,
+            degradationPreference: sat ? "maintain-framerate" : "balanced"
+          });
+        }
+      } catch (e) {
+        console.warn("[WebRTC] Outbound encoding tuning skipped:", e);
+      }
+    }
+  }
+
   // ── ICE Restart ────────────────────────────────────────────────────────────
+
+  /**
+   * Callee asks the caller to send an iceRestart offer; caller runs debounced restart.
+   */
+  private scheduleIceRestart() {
+    if (!this.peerConnection || !this.currentCallUserId || !this.userId) return;
+
+    if (!this.isInitiator) {
+      this.send({
+        type: "ice-restart-needed",
+        from: this.userId,
+        to: this.currentCallUserId,
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const wait = this.iceRestartCooldownUntil - now;
+    if (wait > 0) {
+      if (!this.pendingIceRestartTimer) {
+        this.pendingIceRestartTimer = setTimeout(() => {
+          this.pendingIceRestartTimer = null;
+          this.scheduleIceRestart();
+        }, wait + 50);
+      }
+      return;
+    }
+
+    this.iceRestartCooldownUntil = now + (this.linkProfile === "satellite" ? 14_000 : 10_000);
+    void this.attemptIceRestart();
+  }
 
   private async attemptIceRestart() {
     if (!this.peerConnection || !this.currentCallUserId || !this.isInitiator) return;
@@ -1000,23 +1201,29 @@ class WebRTCService {
           ? Math.round((totalLost / (totalPackets + totalLost)) * 100)
           : 0;
 
-        // MOS score estimate (E-model simplified)
-        // Perfect = 4.5, degrades with RTT and packet loss
+        const sat = this.linkProfile === "satellite";
+        const rttScale = sat ? 280 : 100;
         const mosScore = Math.max(
           1,
           Math.min(
             4.5,
-            4.5 - (roundTripTime / 100) * 0.5 - packetLossPercent * 0.1
+            4.5 - (roundTripTime / rttScale) * 0.5 - packetLossPercent * 0.1
           )
         );
 
-        // Quality tier
+        // Quality tier — NTN/satellite: tolerate higher RTT before labeling "poor"
         let quality: "excellent" | "good" | "fair" | "poor" = "excellent";
-        if (roundTripTime > 300 || packetLossPercent > 10 || jitter > 50) {
+        const poorRtt = sat ? 750 : 300;
+        const fairRtt = sat ? 400 : 150;
+        const goodRtt = sat ? 200 : 80;
+        const poorJit = sat ? 120 : 50;
+        const fairJit = sat ? 70 : 30;
+        const goodJit = sat ? 35 : 10;
+        if (roundTripTime > poorRtt || packetLossPercent > 10 || jitter > poorJit) {
           quality = "poor";
-        } else if (roundTripTime > 150 || packetLossPercent > 5 || jitter > 30) {
+        } else if (roundTripTime > fairRtt || packetLossPercent > 5 || jitter > fairJit) {
           quality = "fair";
-        } else if (roundTripTime > 80 || packetLossPercent > 2 || jitter > 10) {
+        } else if (roundTripTime > goodRtt || packetLossPercent > 2 || jitter > goodJit) {
           quality = "good";
         }
 
@@ -1124,21 +1331,15 @@ class WebRTCService {
     this.pendingCandidates = [];
 
     try {
-      this.localStream = await getMediaWithFallback(callType);
-      console.log("[WebRTC] Local media acquired");
+      this.localStream = await getMediaWithFallback(callType, this.linkProfile);
+      console.log("[WebRTC] Local media acquired (callee — peer connection opens on SDP offer)");
 
       if (this.onLocalStream) this.onLocalStream(this.localStream);
 
-      this.peerConnection = await this.createPeerConnection();
-
-      this.localStream.getTracks().forEach(track => {
-        console.log("[WebRTC] Adding local track:", track.kind);
-        this.peerConnection!.addTrack(track, this.localStream!);
-      });
-
-      this.applyCodecPreferences(this.peerConnection);
       this.startAudioLevelMonitoring();
 
+      // Defer RTCPeerConnection until the caller's offer arrives. Creating a PC + setParameters
+      // before setRemoteDescription(offer) breaks negotiation on several browsers (hang / no media).
       this.send({
         type: "call-response",
         from: this.userId,
@@ -1173,7 +1374,7 @@ class WebRTCService {
     this.callStartTime = Date.now();
 
     try {
-      this.localStream = await getMediaWithFallback(callType);
+      this.localStream = await getMediaWithFallback(callType, this.linkProfile);
       console.log("[WebRTC] Local media acquired (initiator)");
 
       if (this.onLocalStream) this.onLocalStream(this.localStream);
@@ -1194,6 +1395,7 @@ class WebRTCService {
       });
 
       await this.peerConnection.setLocalDescription(offer);
+      await this.applyOutboundMediaTuning(this.peerConnection, callType);
 
       console.log("[WebRTC] Sending offer");
       this.send({
@@ -1218,9 +1420,14 @@ class WebRTCService {
       console.log("[WebRTC] Creating peer connection for offer");
       this.peerConnection = await this.createPeerConnection();
 
-      if (!this.localStream && this.pendingCallType) {
+      if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+          console.log("[WebRTC] Adding local track (from accept):", track.kind);
+          this.peerConnection!.addTrack(track, this.localStream!);
+        });
+      } else if (this.pendingCallType) {
         try {
-          this.localStream = await getMediaWithFallback(this.pendingCallType);
+          this.localStream = await getMediaWithFallback(this.pendingCallType, this.linkProfile);
           if (this.onLocalStream) this.onLocalStream(this.localStream);
           this.localStream.getTracks().forEach(track => {
             this.peerConnection!.addTrack(track, this.localStream!);
@@ -1245,6 +1452,11 @@ class WebRTCService {
 
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
+
+      await this.applyOutboundMediaTuning(
+        this.peerConnection,
+        this.pendingCallType || "voice"
+      );
 
       console.log("[WebRTC] Sending answer");
       this.send({
@@ -1317,6 +1529,16 @@ class WebRTCService {
   }
 
   private cleanupCall(sendSignal: boolean) {
+    if (this.pendingIceRestartTimer) {
+      clearTimeout(this.pendingIceRestartTimer);
+      this.pendingIceRestartTimer = null;
+    }
+    if (this.callTeardownTimer) {
+      clearTimeout(this.callTeardownTimer);
+      this.callTeardownTimer = null;
+    }
+    this.iceRestartCooldownUntil = 0;
+
     if (sendSignal && this.currentCallUserId) {
       this.send({
         type: "call-end",

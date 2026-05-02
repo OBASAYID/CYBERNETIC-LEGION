@@ -560,10 +560,11 @@ export async function registerRoutes(
   }
   console.log("[Socket.IO] Real-time communication server active");
 
-  app.get("/api/cyrus-comm/config/webrtc", async (_req, res) => {
+  app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
     try {
       const m = await import("./comms/cyrus-comm-config.js");
-      res.json(m.getCyrusCommWebRtcConfigResponse());
+      const link = typeof req.query?.link === "string" ? req.query.link : undefined;
+      res.json(m.getCyrusCommWebRtcConfigResponse({ link }));
     } catch {
       res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
     }

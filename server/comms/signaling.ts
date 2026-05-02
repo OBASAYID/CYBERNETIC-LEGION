@@ -5,6 +5,8 @@ import { Server } from "http";
 interface SignalMessage {
   type: string;
   roomId?: string;
+  /** Direct P2P routing for `webrtc-service` (offer/answer/ICE, calls, chat). */
+  to?: string;
   payload?: any;
   /** Client `webrtc-service` sends `data` for register/ping payloads. */
   data?: any;
@@ -92,6 +94,20 @@ export function initSignalingServer(httpServer: Server) {
     });
   }
 
+  /** Forward JSON body to a connected user by id (CYRUS comms / WebRTC P2P). */
+  function forwardToPeer(targetUserId: string | undefined, body: Record<string, unknown>, label: string) {
+    if (!targetUserId || typeof targetUserId !== "string") {
+      console.warn(`[Signaling] ${label}: missing or invalid "to" user id`);
+      return;
+    }
+    const target = connectedUsers.get(targetUserId);
+    if (target?.ws.readyState === WebSocket.OPEN) {
+      target.ws.send(JSON.stringify(body));
+    } else {
+      console.warn(`[Signaling] ${label}: peer offline (${targetUserId})`);
+    }
+  }
+
   wss.on("connection", (ws, req) => {
     const url = new URL(req.url || "", `http://${req.headers.host}`);
     const roomId = url.searchParams.get("room");
@@ -154,6 +170,48 @@ export function initSignalingServer(httpServer: Server) {
             }
             break;
           }
+
+          // ── Direct peer relay (cyrus-ui `webrtc-service` — no roomId) ─────────
+          case "call-request":
+            forwardToPeer(
+              msg.to,
+              { type: "call-request", from: userId, data: msg.data ?? {} },
+              "call-request",
+            );
+            break;
+
+          case "call-response":
+            forwardToPeer(
+              msg.to,
+              { type: "call-response", from: userId, data: msg.data ?? {} },
+              "call-response",
+            );
+            break;
+
+          case "call-end":
+            forwardToPeer(
+              msg.to,
+              { type: "call-end", from: userId, data: msg.data ?? {} },
+              "call-end",
+            );
+            break;
+
+          case "text-message":
+            forwardToPeer(
+              msg.to,
+              {
+                type: "text-message",
+                from: userId,
+                to: msg.to,
+                data: msg.data ?? {},
+              },
+              "text-message",
+            );
+            break;
+
+          case "ice-restart-needed":
+            forwardToPeer(msg.to, { type: "ice-restart-needed", from: userId }, "ice-restart-needed");
+            break;
 
           case "call-user":
             console.log(`[Signaling] Call request from ${user?.displayName} to ${msg.targetUserId}`);
@@ -298,6 +356,7 @@ export function initSignalingServer(httpServer: Server) {
           case "offer":
           case "answer":
           case "ice-candidate":
+          case "ice-restart":
             if (msg.roomId) {
               const peers = roomMap.get(msg.roomId) || new Set();
               peers.forEach((peer) => {
@@ -309,6 +368,12 @@ export function initSignalingServer(httpServer: Server) {
                   }));
                 }
               });
+            } else if (msg.to) {
+              forwardToPeer(
+                msg.to,
+                { type: msg.type, from: userId, data: msg.data },
+                msg.type,
+              );
             }
             break;
 

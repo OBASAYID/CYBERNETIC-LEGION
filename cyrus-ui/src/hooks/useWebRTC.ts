@@ -179,6 +179,16 @@ export function useWebRTC({
 
     console.log("[useWebRTC] Connecting as", userName, "(", userId, ")");
 
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const link = q.get("commLink");
+      if (link === "satellite" || link === "ntn") {
+        webRTCService.setCommLinkProfile("satellite");
+      }
+    } catch {
+      /* ignore */
+    }
+
     webRTCService
       .connect(userId, userName)
       .then(() => {
