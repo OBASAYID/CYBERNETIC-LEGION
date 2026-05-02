@@ -1,4 +1,5 @@
-import { Camera, Check, Copy, Facebook, Mail, MessageCircle, Share2, X } from "lucide-react";
+import { Camera, Check, Copy, Mail, MessageCircle, Share2, X } from "lucide-react";
+import { FaFacebook } from "react-icons/fa";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -95,7 +96,7 @@ export function LegacyMessageFeed({
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-full text-xs font-medium transition-colors"
                           data-testid={`share-facebook-${message.id}`}
                         >
-                          <Facebook className="w-3.5 h-3.5" />
+                          <FaFacebook className="w-3.5 h-3.5" />
                           Facebook
                         </button>
                         <button

@@ -27,25 +27,33 @@ interface CallDialogProps {
 
 function statusColor(status: OnlineUser["status"]): string {
   switch (status) {
-    case "online": return "bg-green-500";
-    case "busy": return "bg-yellow-500";
-    case "away": return "bg-orange-400";
-    default: return "bg-slate-500";
+    case "online":
+      return "bg-green-500";
+    case "busy":
+      return "bg-yellow-500";
+    case "in_call":
+      return "bg-orange-400";
+    default:
+      return "bg-slate-500";
   }
 }
 
 function statusLabel(status: OnlineUser["status"]): string {
   switch (status) {
-    case "online": return "Online";
-    case "busy": return "Busy";
-    case "away": return "Away";
-    default: return "Offline";
+    case "online":
+      return "Online";
+    case "busy":
+      return "Busy";
+    case "in_call":
+      return "In call";
+    default:
+      return "Offline";
   }
 }
 
 export function CallDialog({ targetUser, onClose, onCall }: CallDialogProps) {
   const isOpen = targetUser !== null;
-  const initial = targetUser?.displayName?.[0]?.toUpperCase() ?? "?";
+  const initial = targetUser?.name?.[0]?.toUpperCase() ?? "?";
   const canCall = targetUser?.status === "online";
 
   const handleCall = (callType: CallType) => {
@@ -73,7 +81,7 @@ export function CallDialog({ targetUser, onClose, onCall }: CallDialogProps) {
                   {targetUser.profileImageUrl ? (
                     <img
                       src={targetUser.profileImageUrl}
-                      alt={targetUser.displayName}
+                      alt={targetUser.name}
                       className="w-full h-full object-cover rounded-full"
                     />
                   ) : (
@@ -88,7 +96,7 @@ export function CallDialog({ targetUser, onClose, onCall }: CallDialogProps) {
               </div>
 
               <div className="text-center">
-                <p className="font-bold text-lg">{targetUser.displayName}</p>
+                <p className="font-bold text-lg">{targetUser.name}</p>
                 <div className="flex items-center justify-center gap-1.5 mt-1">
                   <Wifi className="w-3 h-3 text-muted-foreground" />
                   <Badge variant="outline" className="text-xs font-mono">
@@ -103,7 +111,7 @@ export function CallDialog({ targetUser, onClose, onCall }: CallDialogProps) {
               <div className="flex gap-4 w-full">
                 <Button
                   className="flex-1 gap-2 rounded-xl h-14 bg-green-600 hover:bg-green-700 text-white border-0"
-                  onClick={() => handleCall("audio")}
+                  onClick={() => handleCall("voice")}
                   data-testid="btn-start-audio-call"
                 >
                   <Phone className="w-5 h-5" />
@@ -121,7 +129,7 @@ export function CallDialog({ targetUser, onClose, onCall }: CallDialogProps) {
             ) : (
               <div className="w-full rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {targetUser.inCall
+                  {targetUser.status === "in_call"
                     ? "This user is currently in another call."
                     : "This user is not available right now."}
                 </p>

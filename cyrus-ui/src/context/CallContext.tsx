@@ -48,11 +48,11 @@ export interface CallContextValue {
   remoteStream: MediaStream | null;
   localStream: MediaStream | null;
   /** Ref to the persistent hidden <audio> element for remote audio */
-  remoteAudioRef: React.RefObject<HTMLAudioElement>;
+  remoteAudioRef: React.RefObject<HTMLAudioElement | null>;
   /** Ref to attach to a local <video> element in the call UI */
-  localVideoRef: React.RefObject<HTMLVideoElement>;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
   /** Ref to attach to a remote <video> element in the call UI */
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   connectUser: (userId: string, userName: string) => Promise<void>;
   startCall: (user: OnlineUser, type: "voice" | "video") => Promise<void>;
   acceptCall: () => Promise<void>;
@@ -317,7 +317,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await webRTCService.acceptCall(incomingCall.from, incomingCall.callType);
+      await webRTCService.acceptCall(incomingCall.from, incomingCall.callerName, incomingCall.callType);
     } catch (error) {
       console.error("[CallContext] Failed to accept call:", error);
       setIsInCall(false);

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as tf from "@tensorflow/tfjs";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
-import { Send, Mic, MicOff, Camera, CameraOff, MapPin, Image as ImageIcon, X, Upload, Video, Square, Circle, Shield, Phone, Sparkles, Trash2, FileDown, Share2, Copy, Mail, MessageCircle, Facebook, Check, Paperclip, FileText } from "lucide-react";
+import { Send, Mic, MicOff, Camera, CameraOff, MapPin, Image as ImageIcon, X, Upload, Video, Square, Circle, Shield, Phone, Sparkles, Trash2, FileDown, Share2, Copy, Mail, MessageCircle, Check, Paperclip, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { FileUpload, FilePreviewModal } from "@/components/file-upload";
