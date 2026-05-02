@@ -109,6 +109,14 @@ textarea {
   border: 1px solid #334155;
 }
 
+.input {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  background: #0f1419;
+  color: #e8eaed;
+}
+
 .user-list {
   list-style: none;
   padding: 0;

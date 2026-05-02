@@ -12,6 +12,7 @@ import { ChatPanel } from "./components/ChatPanel.jsx";
 import { VideoViews } from "./components/VideoViews.jsx";
 import { CallControls } from "./components/CallControls.jsx";
 import { LocationTracker } from "./components/LocationTracker.jsx";
+import { SessionPanel } from "./components/SessionPanel.jsx";
 
 function useStableSocketRef() {
   const ref = useRef(null);
@@ -244,7 +245,7 @@ export default function App() {
       }
     });
     socket.on("ice-candidate", ({ candidate, fromUserId, callId }) => {
-      if (callIdRef.current && callId !== callIdRef.current) return;
+      if (callId != null && callIdRef.current != null && callId !== callIdRef.current) return;
       if (fromUserId !== remotePeerRef.current) return;
       void addRemoteIce(candidate);
     });
@@ -383,6 +384,8 @@ export default function App() {
         onSend={sendChat}
         disabled={!joined || !selectedPeer}
       />
+
+      <SessionPanel socket={socketRef.current} joined={joined} />
 
       <LocationTracker socket={socketRef.current} userId={selfId} enabled={joined} />
 

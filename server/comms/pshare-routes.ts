@@ -18,6 +18,10 @@ async function ensurePshareTables(): Promise<void> {
       file_url varchar,
       file_name varchar,
       file_mime_type varchar,
+      post_kind varchar NOT NULL DEFAULT 'general',
+      listing_title varchar,
+      listing_price varchar,
+      listing_currency varchar,
       visibility varchar NOT NULL DEFAULT 'all',
       allow_comments boolean NOT NULL DEFAULT true,
       allowed_user_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -40,6 +44,18 @@ async function ensurePshareTables(): Promise<void> {
       PRIMARY KEY (post_id, user_id)
     )`));
   await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS pshare_posts_created_idx ON pshare_posts(created_at DESC)`));
+  for (const alter of [
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS post_kind varchar NOT NULL DEFAULT 'general'`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_title varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_price varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_currency varchar`,
+  ]) {
+    try {
+      await db.execute(sql.raw(alter));
+    } catch (e: any) {
+      console.warn("[Pshare] column migrate (non-fatal):", e?.message || e);
+    }
+  }
   pshareTablesReady = true;
 }
 
@@ -144,6 +160,10 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
         fileUrl: p.fileUrl,
         fileName: p.fileName,
         fileMimeType: p.fileMimeType,
+        postKind: p.postKind || "general",
+        listingTitle: p.listingTitle ?? null,
+        listingPrice: p.listingPrice ?? null,
+        listingCurrency: p.listingCurrency ?? null,
         visibility: p.visibility,
         allowComments: p.allowComments,
         allowedUserIds: (p.allowedUserIds as string[]) || [],
@@ -198,6 +218,10 @@ router.get("/api/comms/pshare/posts/:id", async (req: any, res) => {
         fileUrl: row.fileUrl,
         fileName: row.fileName,
         fileMimeType: row.fileMimeType,
+        postKind: row.postKind || "general",
+        listingTitle: row.listingTitle ?? null,
+        listingPrice: row.listingPrice ?? null,
+        listingCurrency: row.listingCurrency ?? null,
         visibility: row.visibility,
         allowComments: row.allowComments,
         allowedUserIds: (row.allowedUserIds as string[]) || [],
@@ -223,6 +247,10 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
     fileUrl = null,
     fileName = null,
     fileMimeType = null,
+    postKind: postKindIn = "general",
+    listingTitle: listingTitleIn = null,
+    listingPrice: listingPriceIn = null,
+    listingCurrency: listingCurrencyIn = null,
     visibility = "all",
     allowComments = true,
     allowedUserIds = [],
@@ -240,8 +268,18 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
   const text = String(body || "").trim();
   const link = linkUrl ? String(linkUrl).trim() : "";
   const hasFile = !!(fileUrl && String(fileUrl).trim());
-  if (!text && !link && !hasFile) {
-    return res.status(400).json({ error: "Add text, a link, or an attachment." });
+  const postKind = String(postKindIn || "general").toLowerCase() === "listing" ? "listing" : "general";
+  const listingTitle = postKind === "listing" ? String(listingTitleIn || "").trim() : "";
+  const listingPrice = postKind === "listing" ? String(listingPriceIn || "").trim() : "";
+  const listingCurrency = postKind === "listing" ? String(listingCurrencyIn || "").trim() : "";
+  const hasListingFields = postKind === "listing" && !!(listingTitle || listingPrice);
+  if (!text && !link && !hasFile && !hasListingFields) {
+    return res.status(400).json({
+      error:
+        postKind === "listing"
+          ? "Add a title or price, or include a description, link, or photo."
+          : "Add text, a link, or an attachment.",
+    });
   }
 
   try {
@@ -255,6 +293,10 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
         fileUrl: fileUrl ? String(fileUrl).trim() : null,
         fileName: fileName ? String(fileName) : null,
         fileMimeType: fileMimeType ? String(fileMimeType) : null,
+        postKind,
+        listingTitle: listingTitle || null,
+        listingPrice: listingPrice || null,
+        listingCurrency: listingCurrency || null,
         visibility: v,
         allowComments: !!allowComments,
         allowedUserIds: v === "selected" ? allowed : [],
@@ -272,6 +314,10 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
         fileUrl: inserted.fileUrl,
         fileName: inserted.fileName,
         fileMimeType: inserted.fileMimeType,
+        postKind: inserted.postKind || "general",
+        listingTitle: inserted.listingTitle ?? null,
+        listingPrice: inserted.listingPrice ?? null,
+        listingCurrency: inserted.listingCurrency ?? null,
         visibility: inserted.visibility,
         allowComments: inserted.allowComments,
         allowedUserIds: (inserted.allowedUserIds as string[]) || [],

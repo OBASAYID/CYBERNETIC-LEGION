@@ -1,4 +1,4 @@
-/** WebRTC helpers for CYRUS Comm P2P tab (SDP offer/answer + trickle ICE). */
+/** WebRTC helpers for CYRUS Comm mesh layer (SDP offer/answer + trickle ICE). */
 
 const DEFAULT_ICE: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 

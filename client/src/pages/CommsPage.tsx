@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { readHandoff } from "@shared/module-handoff";
 import { systemFetch } from "@shared/cyrus-api-client";
@@ -18,7 +18,6 @@ import {
   Radio,
   Share2,
   Satellite,
-  Link2,
 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
@@ -34,7 +33,12 @@ import { CommsIntelligence } from "../components/comms/CommsIntelligence";
 import { PsharePanel } from "../components/comms/PsharePanel";
 import { useAnomalyAlerts } from "../hooks/useCommsIntelligence";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
-import { CyrusCommP2PPanel } from "../components/comms/CyrusCommP2PPanel";
+import { CommsP2PLayerProvider, useCommsP2PLayer } from "../components/comms/CommsP2PLayerContext";
+import {
+  CommsMeshLinkHeaderBadge,
+  CommsP2PUnifiedStrip,
+  CommsP2PCallDock,
+} from "../components/comms/CommsP2PUnifiedUI";
 import {
   fromSocketMessageSent,
   fromSocketNewMessage,
@@ -42,7 +46,7 @@ import {
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
 
-type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare" | "p2p";
+type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
 
 function conversationPreviewLine(msg: {
   content: string;
@@ -151,6 +155,9 @@ export function CommsPage() {
     const p = new URLSearchParams(window.location.search);
     if (p.get("tab") === "pshare") {
       setActiveTab("pshare");
+    }
+    if (p.get("tab") === "p2p") {
+      setActiveTab("calls");
     }
     const pid = p.get("post");
     if (pid) {
@@ -862,7 +869,6 @@ export function CommsPage() {
     { id: "people" as MainTab, icon: Users, label: "People" },
     { id: "streams" as MainTab, icon: Radio, label: "Streams" },
     { id: "monitor" as MainTab, icon: Activity, label: "Monitor" },
-    { id: "p2p" as MainTab, icon: Link2, label: "P2P+" },
   ];
 
   const socialChannelTab = activeTab === "chat" || activeTab === "pshare";
@@ -871,6 +877,7 @@ export function CommsPage() {
 
   return (
     <ModuleWorkspacePageShell mode="page">
+    <CommsP2PLayerProvider displayName={displayName}>
     <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
       {activeCall && activeCall.status === "connected" && (
         <CallView
@@ -970,9 +977,9 @@ export function CommsPage() {
                 >
                   NEXUS COMMS
                 </h1>
-                <p className="truncate text-[10px] font-mono text-cyan-100/50 sm:text-[11px]">
-                  {isConnected ? "Connected" : "Connecting…"} · {onlineUsers.length} online · Cortex-M4F + PSRAM/flash + cellular/sat RF
-                </p>
+                <CommsMeshLinkHeaderBadge
+                  presenceLinePrefix={`${isConnected ? "Connected" : "Connecting…"} · ${onlineUsers.length} online`}
+                />
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 sm:pl-2">
@@ -1015,6 +1022,8 @@ export function CommsPage() {
               close coverage gaps — from remote monitoring at scale to mission-critical reach-back.
             </p>
           </div>
+
+          <CommsP2PUnifiedStrip />
 
           <nav
             className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
@@ -1153,7 +1162,7 @@ export function CommsPage() {
 
                 {activeTab === "people" && (
                   <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <UserDiscovery
+                    <UserDiscoveryWithMesh
                       onlineUsers={onlineUsers}
                       allUsers={allUsers}
                       contacts={contacts}
@@ -1162,6 +1171,7 @@ export function CommsPage() {
                       onCall={handleUserCall}
                       onAddContact={handleAddContact}
                       onRemoveContact={handleRemoveContact}
+                      onOpenMeshCalls={() => setActiveTab("calls")}
                     />
                   </div>
                 )}
@@ -1183,12 +1193,6 @@ export function CommsPage() {
                   <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
                     <CommsIntelligence userId={myId} />
                     <AdminDashboard />
-                  </div>
-                )}
-
-                {activeTab === "p2p" && (
-                  <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
-                    <CyrusCommP2PPanel displayName={displayName} />
                   </div>
                 )}
 
@@ -1220,7 +1224,33 @@ export function CommsPage() {
         </div>
       )}
     </div>
+    </CommsP2PLayerProvider>
     </ModuleWorkspacePageShell>
+  );
+}
+
+function UserDiscoveryWithMesh(
+  props: Omit<React.ComponentProps<typeof UserDiscovery>, "meshPeerIds" | "meshLinkReady" | "meshInCall" | "onMeshCall"> & {
+    onOpenMeshCalls: () => void;
+  },
+) {
+  const { onOpenMeshCalls, ...rest } = props;
+  const { meshPeerIds, startMeshCall, linkConnected, linkJoined, inMeshCall } = useCommsP2PLayer();
+  const onMeshCall = useCallback(
+    (userId: string, _userName: string, type: "audio" | "video") => {
+      void startMeshCall(userId, type === "video");
+      onOpenMeshCalls();
+    },
+    [startMeshCall, onOpenMeshCalls],
+  );
+  return (
+    <UserDiscovery
+      {...rest}
+      meshPeerIds={meshPeerIds}
+      meshLinkReady={linkConnected && linkJoined}
+      meshInCall={inMeshCall}
+      onMeshCall={onMeshCall}
+    />
   );
 }
 
@@ -1239,6 +1269,7 @@ function CallHistoryPanel({
 
   return (
     <div className="space-y-6">
+      <CommsP2PCallDock />
       <div>
         <h3
           className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/90"

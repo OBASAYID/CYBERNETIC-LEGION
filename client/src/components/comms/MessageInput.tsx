@@ -43,7 +43,15 @@ export function MessageInput({
   const [sentiment, setSentiment] = useState<{ score: number; label: string; confidence: number }>({ score: 0, label: "neutral", confidence: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const filePickerAccept =
-    "image/*,video/*,audio/*,application/pdf,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
+    "image/*,video/*,audio/*," +
+    "application/pdf,application/zip," +
+    "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+    "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+    "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+    "text/plain,text/html,text/csv,text/markdown,application/json,application/xml," +
+    ".pdf,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp," +
+    ".txt,.csv,.md,.json,.xml,.zip," +
+    ".mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -257,7 +265,7 @@ export function MessageInput({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
                 className="rounded-full p-2 text-amber-200/50 transition hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-40"
-                title="Share photos, videos, music, or files"
+                title="Share photos, videos, documents (PDF, Word, Excel, HTML…), or other files"
               >
                 <Paperclip className="h-5 w-5" />
               </button>

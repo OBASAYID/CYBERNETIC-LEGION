@@ -8,6 +8,7 @@ import {
   UserPlus,
   UserMinus,
   Circle,
+  Link2,
 } from "lucide-react";
 
 interface UserProfileCardProps {
@@ -20,10 +21,15 @@ interface UserProfileCardProps {
   };
   isContact: boolean;
   isFavorite: boolean;
+  /** Peer is on /cyrus-comm-io mesh registry — show mesh call actions. */
+  meshReachable?: boolean;
+  meshInCall?: boolean;
   onClose: () => void;
   onMessage: () => void;
   onVoiceCall: () => void;
   onVideoCall: () => void;
+  onMeshVoiceCall?: () => void;
+  onMeshVideoCall?: () => void;
   onToggleContact: () => void;
 }
 
@@ -31,10 +37,14 @@ export function UserProfileCard({
   user,
   isContact,
   isFavorite,
+  meshReachable = false,
+  meshInCall = false,
   onClose,
   onMessage,
   onVoiceCall,
   onVideoCall,
+  onMeshVoiceCall,
+  onMeshVideoCall,
   onToggleContact,
 }: UserProfileCardProps) {
   const getInitials = (name: string) => {
@@ -85,6 +95,11 @@ export function UserProfileCard({
             {isContact && (
               <span className="text-[10px] font-medium text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded-full">
                 Contact
+              </span>
+            )}
+            {meshReachable && (
+              <span className="text-[10px] font-medium text-violet-300 bg-violet-500/25 px-2 py-0.5 rounded-full">
+                Mesh
               </span>
             )}
           </div>
@@ -149,6 +164,29 @@ export function UserProfileCard({
             </span>
           </button>
         </div>
+
+        {meshReachable && onMeshVoiceCall && onMeshVideoCall ? (
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            <button
+              type="button"
+              onClick={onMeshVoiceCall}
+              disabled={meshInCall}
+              className="flex flex-col items-center gap-1.5 p-3 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 rounded-xl transition-colors disabled:opacity-40 group"
+            >
+              <Link2 className="w-5 h-5 text-violet-300 group-hover:text-violet-200" />
+              <span className="text-[10px] text-violet-300">Mesh voice</span>
+            </button>
+            <button
+              type="button"
+              onClick={onMeshVideoCall}
+              disabled={meshInCall}
+              className="flex flex-col items-center gap-1.5 p-3 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/30 rounded-xl transition-colors disabled:opacity-40 group"
+            >
+              <Video className="w-5 h-5 text-fuchsia-300 group-hover:text-fuchsia-200" />
+              <span className="text-[10px] text-fuchsia-300">Mesh video</span>
+            </button>
+          </div>
+        ) : null}
 
         <button
           onClick={onToggleContact}

@@ -1,9 +1,11 @@
 /**
- * Socket.IO signaling: presence, WebRTC offers/answers/ICE, chat, live location.
+ * Socket.IO signaling: presence, WebRTC offers/answers/ICE, chat, live location,
+ * multi-user session rooms (join-session / leave-session).
  * Cleans up mappings on disconnect to avoid leaks.
  */
 
 const { randomUUID } = require("crypto");
+const { broadcastSessionMembers } = require("./services/sessionMembers");
 
 /**
  * @param {import('socket.io').Server} io
@@ -55,6 +57,7 @@ function attachSignaling(io, registry, messages) {
         }
         registry.register(userId, displayName, socket);
         socket.join("session:global");
+        socket.data.sessionRooms = socket.data.sessionRooms || new Set();
         log("join", userId);
         broadcastUsers();
         ack?.({ ok: true, userId, users: registry.getOnlineUsers() });
@@ -62,6 +65,70 @@ function attachSignaling(io, registry, messages) {
         console.error("[signaling] join error", e);
         ack?.({ ok: false, error: String(e.message || e) });
       }
+    });
+
+    /** Explicit leave (optional); same cleanup as disconnect for registered users. */
+    socket.on("leave", (ack) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        ack?.({ ok: false });
+        return;
+      }
+      const rooms = socket.data.sessionRooms ? [...socket.data.sessionRooms] : [];
+      for (const room of rooms) {
+        const sessionId = room.startsWith("sess:") ? room.slice(5) : room;
+        socket.leave(room);
+        socket.data.sessionRooms.delete(room);
+        broadcastSessionMembers(io, room, sessionId, socket.id);
+      }
+      socket.leave("session:global");
+      registry.removeBySocketId(socket.id);
+      clearCallsForUser(userId);
+      io.emit("user-left", { userId, reason: "leave" });
+      broadcastUsers();
+      log("leave", userId);
+      delete socket.data.userId;
+      delete socket.data.displayName;
+      ack?.({ ok: true });
+    });
+
+    /**
+     * Multi-user communication session (logical room). Starlink / UAV ops can map one mission to one sessionId.
+     */
+    socket.on("join-session", (payload, ack) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        ack?.({ ok: false, error: "join global session first" });
+        return;
+      }
+      socket.data.sessionRooms = socket.data.sessionRooms || new Set();
+      const raw = String(payload?.sessionId ?? "default").trim() || "default";
+      const sessionId = raw.replace(/[^\w\-:.]/g, "_").slice(0, 128);
+      const room = `sess:${sessionId}`;
+      socket.join(room);
+      socket.data.sessionRooms.add(room);
+      broadcastSessionMembers(io, room, sessionId);
+      log("join-session", sessionId);
+      ack?.({ ok: true, sessionId, room });
+    });
+
+    socket.on("leave-session", (payload, ack) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        ack?.({ ok: false });
+        return;
+      }
+      const raw = String(payload?.sessionId ?? "").trim();
+      if (!raw) {
+        ack?.({ ok: false, error: "sessionId required" });
+        return;
+      }
+      const room = `sess:${raw}`;
+      socket.leave(room);
+      socket.data.sessionRooms?.delete(room);
+      broadcastSessionMembers(io, room, raw, socket.id);
+      log("leave-session", raw);
+      ack?.({ ok: true, sessionId: raw });
     });
 
     socket.on("call-user", (payload) => {
@@ -185,7 +252,12 @@ function attachSignaling(io, registry, messages) {
     });
 
     socket.on("disconnect", (reason) => {
+      const rooms = socket.data.sessionRooms ? [...socket.data.sessionRooms] : [];
       const left = registry.removeBySocketId(socket.id);
+      for (const room of rooms) {
+        const sessionId = room.startsWith("sess:") ? room.slice(5) : room;
+        broadcastSessionMembers(io, room, sessionId, socket.id);
+      }
       if (left) {
         clearCallsForUser(left);
         io.emit("user-left", { userId: left, reason });

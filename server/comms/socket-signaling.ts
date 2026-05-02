@@ -43,7 +43,7 @@ interface ActiveCall {
   screenSharingBy?: string;
 }
 
-type MessageType = "text" | "emoji" | "media" | "voice-note" | "location" | "system";
+type MessageType = "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
 
 interface EnhancedMessage {
   targetUserId?: string;
@@ -573,7 +573,7 @@ export function initSocketSignaling(server: HttpServer) {
       if (!sender) return;
 
       const messageType = (data.messageType || "text") as MessageType;
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      let messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       let textBody = data.message;
       if (messageType === "location" && data.latitude != null && data.longitude != null) {
@@ -590,18 +590,24 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       try {
-        await db.insert(directMessages).values({
-          senderId: senderId,
-          recipientId: data.targetUserId || "",
-          groupId: data.groupId || null,
-          content: textBody,
-          messageType: messageType,
-          fileUrl: data.fileUrl || null,
-          fileName: data.fileName || null,
-          fileMimeType: data.fileMimeType || null,
-          fileSizeBytes: data.fileSizeBytes ?? null,
-          replyToId: data.replyToId || null,
-        });
+        const [inserted] = await db
+          .insert(directMessages)
+          .values({
+            senderId: senderId,
+            recipientId: data.targetUserId || "",
+            groupId: data.groupId || null,
+            content: textBody,
+            messageType: messageType,
+            fileUrl: data.fileUrl || null,
+            fileName: data.fileName || null,
+            fileMimeType: data.fileMimeType || null,
+            fileSizeBytes: data.fileSizeBytes ?? null,
+            replyToId: data.replyToId || null,
+          })
+          .returning({ id: directMessages.id });
+        if (inserted?.id) {
+          messageId = inserted.id;
+        }
       } catch (err) {
         console.error("[Socket.IO] Failed to persist message:", err);
       }

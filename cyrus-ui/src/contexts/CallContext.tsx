@@ -7,25 +7,15 @@
  *  - Any component can initiate a call via `useCallContext()`
  */
 
-import {
-  createContext,
-  useContext,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useWebRTC, type UseWebRTCOptions } from "@/hooks/useWebRTC";
 import { CallNotification } from "@/components/CallNotification";
 import { VideoCall } from "@/components/VideoCall";
 import { AudioCall } from "@/components/AudioCall";
+import type { ActiveCallInfo, ConnectionQuality, IncomingCallInfo } from "@/hooks/useWebRTC";
 
-// Re-export types for convenience
-export type {
-  CallType,
-  CallStatus,
-  ConnectionQuality,
-  OnlineUser,
-  IncomingCallInfo,
-  ActiveCallInfo,
-} from "@/hooks/useWebRTC";
+export type { ActiveCallInfo, ConnectionQuality, IncomingCallInfo, UseWebRTCOptions } from "@/hooks/useWebRTC";
+export type { OnlineUser, ChatMessage } from "@/lib/webrtc-service";
 
 type WebRTCReturn = ReturnType<typeof useWebRTC>;
 
@@ -44,80 +34,67 @@ interface CallProviderProps {
   webRTCOptions: UseWebRTCOptions;
 }
 
-/**
- * CallProvider
- *
- * Mount once at the top of the authenticated app tree.
- * Renders incoming-call notifications and active-call overlays automatically.
- *
- * @example
- * ```tsx
- * <CallProvider webRTCOptions={{ userId, displayName }}>
- *   <AppRoutes />
- * </CallProvider>
- * ```
- */
+function buildActiveCall(w: WebRTCReturn): ActiveCallInfo | null {
+  if (!w.isInCall || !w.selectedUser || !w.callType) return null;
+  return {
+    peerId: w.selectedUser.id,
+    peerName: w.selectedUser.name,
+    callType: w.callType,
+    status: w.isCallConnecting ? "connecting" : "connected",
+  };
+}
+
+function incomingForNotification(w: WebRTCReturn): IncomingCallInfo | null {
+  if (!w.incomingCall || w.isInCall) return null;
+  return {
+    from: w.incomingCall.from,
+    callerName: w.incomingCall.callerName,
+    callType: w.incomingCall.callType,
+  };
+}
+
 export function CallProvider({ children, webRTCOptions }: CallProviderProps) {
   const webRTC = useWebRTC(webRTCOptions);
-
-  const {
-    callStatus,
-    activeCall,
-    incomingCall,
-    localStream,
-    remoteStream,
-    isMuted,
-    isVideoOff,
-    connectionQuality,
-    callDuration,
-    acceptCall,
-    rejectCall,
-    endCall,
-    toggleMute,
-    toggleVideo,
-  } = webRTC;
-
-  const isInActiveCall = callStatus === "connecting" || callStatus === "connected";
+  const activeCall = useMemo(() => buildActiveCall(webRTC), [webRTC]);
+  const incoming = useMemo(() => incomingForNotification(webRTC), [webRTC]);
 
   return (
     <CallContext.Provider value={webRTC}>
       {children}
 
-      {/* Incoming call notification — floats above all content */}
-      {incomingCall && callStatus === "ringing-in" && (
+      {incoming && (
         <CallNotification
-          call={incomingCall}
-          onAccept={acceptCall}
-          onReject={rejectCall}
+          call={incoming}
+          onAccept={() => void webRTC.acceptCall()}
+          onReject={webRTC.rejectCall}
         />
       )}
 
-      {/* Active call overlay */}
-      {isInActiveCall && activeCall && (
-        activeCall.callType === "video" ? (
-          <VideoCall
-            activeCall={activeCall}
-            localStream={localStream}
-            remoteStream={remoteStream}
-            isMuted={isMuted}
-            isVideoOff={isVideoOff}
-            connectionQuality={connectionQuality}
-            callDuration={callDuration}
-            onToggleMute={toggleMute}
-            onToggleVideo={toggleVideo}
-            onEndCall={endCall}
-          />
-        ) : (
-          <AudioCall
-            activeCall={activeCall}
-            remoteStream={remoteStream}
-            isMuted={isMuted}
-            connectionQuality={connectionQuality}
-            callDuration={callDuration}
-            onToggleMute={toggleMute}
-            onEndCall={endCall}
-          />
-        )
+      {activeCall && activeCall.callType === "video" && (
+        <VideoCall
+          activeCall={activeCall}
+          localStream={webRTC.localStream}
+          remoteStream={webRTC.remoteStream}
+          isMuted={webRTC.isMuted}
+          isVideoOff={webRTC.isVideoOff}
+          connectionQuality={webRTC.connectionQuality as ConnectionQuality}
+          callDuration={webRTC.callDuration}
+          onToggleMute={webRTC.toggleMute}
+          onToggleVideo={webRTC.toggleVideo}
+          onEndCall={webRTC.endCall}
+        />
+      )}
+
+      {activeCall && activeCall.callType === "voice" && (
+        <AudioCall
+          activeCall={activeCall}
+          remoteStream={webRTC.remoteStream}
+          isMuted={webRTC.isMuted}
+          connectionQuality={webRTC.connectionQuality as ConnectionQuality}
+          callDuration={webRTC.callDuration}
+          onToggleMute={webRTC.toggleMute}
+          onEndCall={webRTC.endCall}
+        />
       )}
     </CallContext.Provider>
   );

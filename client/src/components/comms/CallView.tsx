@@ -123,8 +123,11 @@ export function IncomingCallOverlay({
             <PhoneOff className="w-7 h-7 text-white" />
           </button>
           <button
+            type="button"
+            data-testid="comms-accept-call"
             onClick={onAccept}
             className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-600/30 transition-all active:scale-95 animate-pulse"
+            aria-label="Accept call"
           >
             <Phone className="w-7 h-7 text-white" />
           </button>
@@ -595,8 +598,11 @@ export function CallView({
         )}
 
         <button
+          type="button"
+          data-testid="comms-end-call"
           onClick={onEndCall}
           className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-xl shadow-red-600/30 transition-all active:scale-95"
+          aria-label="End call"
         >
           <PhoneOff className="w-6 h-6 text-white" />
         </button>

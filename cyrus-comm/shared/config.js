@@ -1,8 +1,12 @@
 /**
  * CYRUS Comm — shared runtime configuration (STUN/TURN, ports, extension hooks).
- * Starlink / satellite: no special API — ensure TURN is reachable over public IP;
- * clients use standard WebRTC; high latency may require longer ICE timeouts (tune in webrtc.js).
- * Future: UAV telemetry (MCN-1) can reuse location-update / dedicated data channels.
+ *
+ * Satellite / Starlink: standard UDP/TCP to your signaling host + TURN; no proprietary API.
+ * Expect higher RTT — prefer resilient Socket.IO (polling + websocket) and test TURN on constrained CPE NAT.
+ *
+ * UAV / MCN-1: reuse `location-update` / `location-updated`, or add a binary DataChannel in webrtc.js for telemetry.
+ *
+ * SFU scale-out: see server/services/sfuAdapter.js — swap P2P for mediasoup Worker or Janus handle.
  */
 
 const path = require("path");
@@ -24,8 +28,14 @@ const ICE_SERVERS = [
   // },
 ];
 
-/** Socket.IO CORS origins */
-const CORS_ORIGINS = [CLIENT_ORIGIN, "http://127.0.0.1:5173", "http://localhost:3000"];
+/** Socket.IO / Express CORS origins (include API port when serving static SPA from same process). */
+const CORS_ORIGINS = [
+  CLIENT_ORIGIN,
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+];
 
 /** Future SFU (mediasoup / Janus) — signaling-only today; swap transport here when scaling */
 const SFU = {

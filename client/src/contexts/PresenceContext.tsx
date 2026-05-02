@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
+import { getCommsDeviceId } from "../lib/comms-device-id";
 import {
   createPeerConnectionConfig,
   getOptimalVideoConstraints,
@@ -49,7 +50,7 @@ export interface MediaCallControls {
 
 export type ChatOutboundPayload = {
   message: string;
-  messageType?: "text" | "emoji" | "media" | "voice-note" | "location" | "system";
+  messageType?: "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
   fileUrl?: string;
   fileName?: string;
   fileMimeType?: string;
@@ -363,10 +364,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
     }
 
-    const deviceId = localStorage.getItem('cyrus_device_id') || `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('cyrus_device_id', deviceId);
-    localStorage.setItem('cyrus-device-id', deviceId);
-    
+    const deviceId = getCommsDeviceId();
     const userId = deviceId;
     currentUserIdRef.current = userId;
 

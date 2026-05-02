@@ -17,27 +17,66 @@ export const ENTERPRISE_ICE_SERVERS: RTCIceServer[] = [
   { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
-function getRuntimeIceServers(): RTCIceServer[] {
-  if (typeof window === "undefined") return ENTERPRISE_ICE_SERVERS;
+function parseViteIceServers(): RTCIceServer[] {
   try {
-    const raw = window.localStorage.getItem("cyrus-ice-servers");
-    if (!raw) return ENTERPRISE_ICE_SERVERS;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return ENTERPRISE_ICE_SERVERS;
-    const valid = parsed.filter(
+    const raw = import.meta.env.VITE_RTC_ICE_SERVERS_JSON;
+    if (typeof raw !== "string" || !raw.trim()) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
       (s): s is RTCIceServer =>
         !!s &&
         typeof s === "object" &&
         "urls" in s &&
         (typeof (s as RTCIceServer).urls === "string" || Array.isArray((s as RTCIceServer).urls))
     );
-    return valid.length > 0 ? valid : ENTERPRISE_ICE_SERVERS;
   } catch {
-    return ENTERPRISE_ICE_SERVERS;
+    return [];
   }
 }
 
+function getRuntimeIceServers(): RTCIceServer[] {
+  const viteIce = parseViteIceServers();
+  const appendDefaults = import.meta.env.VITE_RTC_APPEND_DEFAULT_ICE !== "false";
+
+  let base: RTCIceServer[] = ENTERPRISE_ICE_SERVERS;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("cyrus-ice-servers");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter(
+            (s): s is RTCIceServer =>
+              !!s &&
+              typeof s === "object" &&
+              "urls" in s &&
+              (typeof (s as RTCIceServer).urls === "string" || Array.isArray((s as RTCIceServer).urls))
+          );
+          if (valid.length > 0) base = valid;
+        }
+      }
+    } catch {
+      base = ENTERPRISE_ICE_SERVERS;
+    }
+  }
+
+  if (viteIce.length === 0) return base;
+  if (!appendDefaults) return viteIce;
+
+  const seen = new Set<string>();
+  const out: RTCIceServer[] = [];
+  for (const s of [...viteIce, ...base]) {
+    const key = `${JSON.stringify(s.urls)}|${s.username || ""}|${s.credential || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out.length > 0 ? out : base;
+}
+
 function shouldPreferRelayTransport(): boolean {
+  if (import.meta.env.VITE_RTC_PREFER_RELAY === "true") return true;
   if (typeof window === "undefined") return false;
   try {
     const forced = window.localStorage.getItem("cyrus-force-relay");

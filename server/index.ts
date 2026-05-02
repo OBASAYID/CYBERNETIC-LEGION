@@ -31,10 +31,6 @@ function validateEnvironment(): string[] {
     warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
   }
 
-  if (!process.env.DATABASE_URL) {
-    warnings.push('⚠️ DATABASE_URL not set. Using in-memory storage.');
-  }
-
   if (warnings.length > 0) {
     warnings.forEach(w => console.warn(`[Environment] ${w}`));
   }
@@ -685,13 +681,20 @@ async function initializeSystem() {
   systemReady = true;
   log("All systems initialized - accepting API traffic");
 
-  if (process.env.NODE_ENV === "production" && process.env.CYRUS_ENABLE_PYTHON === "1") {
+  const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
+  /** Lightweight Comms ML only (ml_service.py); does not start the heavy quantum bridge. */
+  const enableCommsMl = process.env.CYRUS_ENABLE_COMMS_ML === "1";
+
+  if (process.env.NODE_ENV === "production" && (enableFullPython || enableCommsMl)) {
     try {
       const { spawn } = await import("child_process");
-      const pythonServices = [
-        ["python3", ["server/quantum_ai/quantum_bridge.py"]],
-        ["python3", ["server/comms/ml_service.py"]],
-      ] as const;
+      const pythonServices: [string, string[]][] = [];
+      if (enableFullPython) {
+        pythonServices.push(["python3", ["server/quantum_ai/quantum_bridge.py"]]);
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      } else if (enableCommsMl) {
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      }
 
       for (const [command, args] of pythonServices) {
         const alreadyRunning = managedChildProcesses.some(

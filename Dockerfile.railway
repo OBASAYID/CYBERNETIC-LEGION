@@ -20,13 +20,26 @@ RUN bun run build
 FROM oven/bun:1-slim AS runtime
 WORKDIR /app
 
+# Python + Comms ML sidecar files (ml_service.py). Enable with CYRUS_ENABLE_COMMS_ML=1 on Railway.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN bun install --production --no-progress
 
 COPY --from=builder /app/dist /app/dist
 
+COPY server/comms/requirements-ml.txt /app/server/comms/requirements-ml.txt
+COPY server/comms/ml_service.py /app/server/comms/ml_service.py
+RUN pip3 install --no-cache-dir --break-system-packages -r /app/server/comms/requirements-ml.txt \
+  || pip3 install --no-cache-dir -r /app/server/comms/requirements-ml.txt
+
 ENV NODE_ENV=production
 ENV CYRUS_ENABLE_PYTHON=0
+# Set to 1 in Railway to start Comms ML (sentiment, anomalies, etc.) on 127.0.0.1:5002
+ENV CYRUS_ENABLE_COMMS_ML=0
 ENV SERVER_HOST=0.0.0.0
 
 EXPOSE 8080

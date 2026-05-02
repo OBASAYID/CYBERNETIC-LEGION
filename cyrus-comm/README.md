@@ -1,6 +1,6 @@
 # CYRUS Comm
 
-**Integrated into the main CYRUS stack:** the fused app mounts the same signaling at **`/cyrus-comm-io`** and REST **`/api/cyrus-comm/config/webrtc`**. Use **Comms → P2P+** in the Command Center, or run this folder standalone for isolated demos.
+**Integrated into the main CYRUS stack:** the fused app mounts the same signaling at **`/cyrus-comm-io`** and REST **`/api/cyrus-comm/config/webrtc`**. In the Command Center, **Comms** weaves mesh controls into the main module (header, strip, **People**, **Calls**); or run this folder standalone for isolated demos.
 
 Production-oriented **real-time communications** stack for CYRUS AI: **WebRTC** (voice/video), **Socket.IO** signaling, **live chat**, and **GPS-style location sharing**. Structured for later **TURN/coturn**, **SFU (mediasoup/Janus)**, **DB persistence**, and **satellite / Starlink** deployments (standard IP + WebRTC; add TURN for constrained NATs).
 
@@ -57,12 +57,24 @@ Vite dev server: **http://localhost:5173** (proxies `/api` and `/socket.io` to p
 
 ## Test with two clients
 
-1. Start **server** then **client**.
+1. Start **server** then **client** (or use **single port** mode below).
 2. Browser A: User ID `alice`, click **Join**.
 3. Browser B: User ID `bob`, click **Join** — both should appear under **Online users**.
-4. **Chat:** select peer, send messages (timestamped; history stored in-memory on server).
-5. **Call:** click **Voice** or **Video** on a peer; accept media permissions on both sides.
-6. **Location:** **Start sharing** on one client; the other sees updates in **Live location (debug)**.
+4. **Multi-user session:** enter the same session ID (e.g. `mission-alpha`) on both, **Join session** — member lists stay in sync via `session-members`.
+5. **Chat:** select peer, send messages (timestamped; history stored in-memory on server).
+6. **Call:** click **Voice** or **Video** on a peer; accept media permissions on both sides.
+7. **Location:** **Start sharing** on one client; the other sees updates in **Live location (debug)**.
+
+## Single-port deployment (optional)
+
+After building the client:
+
+```bash
+cd cyrus-comm/client && npm run build
+cd ../server && CYRUS_COMM_SERVE_STATIC=1 node index.js
+```
+
+Open **http://localhost:5050** — static UI and Socket.IO share the same origin (no Vite proxy). Ensure `shared/config.js` CORS list includes your public URL when fronting with TLS.
 
 ## WebRTC / network
 
@@ -75,6 +87,10 @@ Vite dev server: **http://localhost:5173** (proxies `/api` and `/socket.io` to p
 | Event | Direction | Purpose |
 |-------|-----------|---------|
 | `join` | C→S | Register `userId` / `displayName` |
+| `leave` | C→S | Unregister (socket stays open; call `join` again to re-auth) |
+| `join-session` | C→S | Enter multi-user room `sess:<sessionId>` |
+| `leave-session` | C→S | Leave room; others get `session-members` |
+| `session-members` | S→C | `{ sessionId, members[], count, ts }` |
 | `call-user` | C→S | SDP offer + `callId` to callee |
 | `incoming-call` | S→C | Offer to callee |
 | `answer-call` | C→S | SDP answer |
@@ -86,6 +102,10 @@ Vite dev server: **http://localhost:5173** (proxies `/api` and `/socket.io` to p
 | `fetch-messages` | C→S (ack) | Load in-memory history |
 | `location-update` | C→S | GPS payload |
 | `location-updated` | S→C | Other users’ positions |
+| `users-updated` | S→C | Global online roster |
+| `user-left` | S→C | Peer disconnected |
+
+Machine-readable list: `GET /api/extensions`.
 
 ## Production notes
 

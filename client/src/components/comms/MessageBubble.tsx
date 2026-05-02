@@ -5,11 +5,23 @@ import {
   Pause,
   Check,
   CheckCheck,
-  Image as ImageIcon,
   FileText,
   Info,
   FileAudio,
+  Download,
+  ExternalLink,
 } from "lucide-react";
+import { systemApiUrl } from "@shared/cyrus-api-client";
+
+function resolveChatMediaUrl(pathOrUrl: string | undefined): string {
+  if (!pathOrUrl) return "";
+  return systemApiUrl(pathOrUrl);
+}
+
+function withDownloadParam(resolvedUrl: string): string {
+  if (!resolvedUrl) return "";
+  return resolvedUrl.includes("?") ? `${resolvedUrl}&download=1` : `${resolvedUrl}?download=1`;
+}
 
 export type MessageType = "text" | "emoji" | "media" | "voice-note" | "location" | "system";
 
@@ -76,29 +88,49 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
         );
 
       case "media": {
-        const url = message.mediaUrl || "";
+        const raw = message.mediaUrl || "";
+        const url = resolveChatMediaUrl(raw);
+        const downloadUrl = raw ? withDownloadParam(url) : "";
         const fn = (message.fileName || "").toLowerCase();
-        const mt = message.mediaMimeType || "";
+        const mt = (message.mediaMimeType || "").toLowerCase();
         const isImg = mt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(fn);
         const isVid = mt.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(fn);
         const isAud = mt.startsWith("audio/") || /\.(mp3|m4a|wav|ogg|flac|aac)$/i.test(fn);
+        const isPdf = mt.includes("pdf") || fn.endsWith(".pdf");
+        const isHtml = mt.includes("html") || /\.(html?|xhtml)$/i.test(fn);
+        const isTexty =
+          mt.startsWith("text/plain") ||
+          mt.startsWith("text/csv") ||
+          mt.includes("markdown") ||
+          /\.(txt|csv|md)$/i.test(fn);
+        const isOffice =
+          /\.(doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp)$/i.test(fn) ||
+          mt.includes("wordprocessingml") ||
+          mt.includes("spreadsheetml") ||
+          mt.includes("presentationml") ||
+          mt.includes("msword") ||
+          mt.includes("ms-excel") ||
+          mt.includes("ms-powerpoint");
+
         return (
           <div className="space-y-1.5">
-            {isImg && (
+            {isImg && url && (
               <div className="max-w-[min(100%,280px)] overflow-hidden rounded-lg">
-                <img
-                  src={url}
-                  alt={message.fileName || "Image"}
-                  className="h-auto max-h-60 w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
-                />
+                <a href={url} target="_blank" rel="noopener noreferrer" title="Open full size">
+                  <img
+                    src={url}
+                    alt={message.fileName || "Image"}
+                    className="h-auto max-h-60 w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
+                  />
+                </a>
               </div>
             )}
-            {isVid && (
+            {isVid && url && (
               <div className="max-w-[min(100%,320px)] overflow-hidden rounded-lg border border-white/10">
                 <video src={url} className="max-h-56 w-full" controls playsInline preload="metadata" />
               </div>
             )}
-            {isAud && (
+            {isAud && url && (
               <div className="min-w-[220px] max-w-sm rounded-lg border border-amber-500/25 bg-slate-950/50 px-2 py-1.5">
                 <p className="mb-1 truncate text-[10px] text-cyan-200/80">
                   {message.fileName || "Audio"}
@@ -106,11 +138,105 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                 <audio src={url} className="h-8 w-full" controls preload="metadata" />
               </div>
             )}
-            {!isImg && !isVid && !isAud && (
+            {isPdf && url && (
+              <div className="max-w-[min(100%,100%)] space-y-1">
+                <details className="rounded-lg border border-white/10 bg-black/25">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] text-cyan-200/90">
+                    Preview PDF
+                  </summary>
+                  <iframe
+                    title={message.fileName || "PDF"}
+                    src={`${url}#toolbar=1`}
+                    className="mt-0 h-72 w-full rounded-b-md border-0 bg-white/95"
+                  />
+                </details>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-cyan-300 underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open
+                  </a>
+                  <a href={downloadUrl} className="inline-flex items-center gap-1 text-amber-200/90 underline">
+                    <Download className="h-3 w-3" />
+                    Download
+                  </a>
+                </div>
+              </div>
+            )}
+            {isHtml && url && (
+              <div className="max-w-full space-y-1">
+                <p className="text-[10px] text-amber-200/70">
+                  HTML preview is sandboxed (scripts disabled). Open in a new tab for full behavior.
+                </p>
+                <details className="rounded-lg border border-white/10 bg-black/25">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] text-cyan-200/90">
+                    Preview HTML
+                  </summary>
+                  <iframe
+                    title={message.fileName || "HTML"}
+                    src={url}
+                    sandbox=""
+                    className="mt-0 h-64 w-full rounded-b-md border-0 bg-white"
+                  />
+                </details>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-cyan-300 underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open in browser
+                  </a>
+                  <a href={downloadUrl} className="inline-flex items-center gap-1 text-amber-200/90 underline">
+                    <Download className="h-3 w-3" />
+                    Download
+                  </a>
+                </div>
+              </div>
+            )}
+            {isTexty && url && !isPdf && !isHtml && (
+              <div className="flex min-w-0 max-w-sm flex-col gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 shrink-0 text-cyan-400" />
+                  <span className="truncate text-sm">{message.fileName || "Text file"}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">
+                    View
+                  </a>
+                  <a href={downloadUrl} className="text-amber-200/90 underline">
+                    Download
+                  </a>
+                </div>
+              </div>
+            )}
+            {isOffice && url && !isPdf && !isHtml && (
+              <div className="flex min-w-0 max-w-sm flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 shrink-0 text-amber-300" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{message.fileName || "Document"}</p>
+                    <p className="text-[10px] text-white/45">Download and open in Word, Excel, or similar.</p>
+                  </div>
+                </div>
+                <a
+                  href={downloadUrl}
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              </div>
+            )}
+            {!isImg && !isVid && !isAud && !isPdf && !isHtml && !isTexty && !isOffice && url && (
               <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={downloadUrl}
                 className="flex min-w-0 max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
               >
                 {(message.fileName || "").match(/\.(mp3|m4a|wav|ogg|flac|aac)$/i) ? (
@@ -124,15 +250,24 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                     <p className="text-xs text-gray-400">{message.mediaMimeType}</p>
                   )}
                 </div>
+                <Download className="ml-auto h-4 w-4 shrink-0 text-white/50" />
               </a>
             )}
-            {message.content && <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>}
+            {message.content?.trim() && (
+              <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+            )}
           </div>
         );
       }
 
       case "voice-note":
-        return <VoiceNoteInline duration={message.duration} url={message.mediaUrl} />;
+        return (
+          <VoiceNoteInline
+            key={message.mediaUrl || message.id}
+            duration={message.duration}
+            url={resolveChatMediaUrl(message.mediaUrl)}
+          />
+        );
 
       case "location":
         return (

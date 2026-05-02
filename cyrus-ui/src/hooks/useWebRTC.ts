@@ -13,6 +13,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { webRTCService, type OnlineUser, type ChatMessage } from "@/lib/webrtc-service";
 import { useToast } from "@/hooks/use-toast";
 
+export type IncomingCallInfo = {
+  from: string;
+  callerName: string;
+  callType: "voice" | "video";
+};
+
+export type ActiveCallInfo = {
+  peerId: string;
+  peerName: string;
+  callType: "voice" | "video";
+  status: "connecting" | "connected";
+};
+
+export type ConnectionQuality = "excellent" | "good" | "fair" | "poor" | "connecting";
+
 export interface UseWebRTCOptions {
   userId: string;
   userName: string;
@@ -32,7 +47,7 @@ export interface UseWebRTCReturn {
   isCallConnecting: boolean;
   incomingCall: { from: string; callerName: string; callType: "voice" | "video" } | null;
   callDuration: number;
-  connectionQuality: "excellent" | "good" | "fair" | "poor" | "connecting";
+  connectionQuality: ConnectionQuality;
   selectedUser: OnlineUser | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -75,9 +90,7 @@ export function useWebRTC({
     callType: "voice" | "video";
   } | null>(null);
   const [callDuration, setCallDuration] = useState(0);
-  const [connectionQuality, setConnectionQuality] = useState<
-    "excellent" | "good" | "fair" | "poor" | "connecting"
-  >("connecting");
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>("connecting");
   const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -339,7 +352,7 @@ export function useWebRTC({
     );
 
     try {
-      await webRTCService.acceptCall(incomingCall.from, incomingCall.callType);
+      await webRTCService.acceptCall(incomingCall.from, incomingCall.callerName, incomingCall.callType);
     } catch (error) {
       console.error("[useWebRTC] Failed to accept call:", error);
 

@@ -12,17 +12,17 @@ This project is configured to deploy on Railway using Bun and `Dockerfile.railwa
 Optional manual checks after deploy:
 
 - `GET /health/ready` — includes DB `SELECT 1`; returns 503 if Postgres is unreachable (useful for debugging, not required for Railway’s default health probe).
-- `GET /api/cyrus-comm/config/webrtc` — returns JSON `iceServers` / `sfu` for the **CYRUS Comm P2P+** layer (should return 200).
+- `GET /api/cyrus-comm/config/webrtc` — returns JSON `iceServers` / `sfu` for the **unified Comms mesh** layer (should return 200).
 
-## CYRUS Comm (P2P+) — same Railway service
+## CYRUS Comm mesh (WebRTC) — same Railway service
 
 The **main app** includes a second real-time layer (no extra container):
 
 | Surface | Path | Purpose |
 |--------|------|--------|
-| Command Center UI | **Comms → P2P+** tab | WebRTC voice/video, DM chat, live location (browser) |
+| Command Center UI | **Comms** (mesh strip, **People**, **Calls**) | WebRTC voice/video, parallel mesh DM, live location (browser) |
 | Socket.IO | **`/cyrus-comm-io`** | Signaling (WebSocket + polling; parallel to **`/cyrus-io`** presence) |
-| REST | **`/api/cyrus-comm/config/webrtc`** | STUN/TURN list for the P2P tab |
+| REST | **`/api/cyrus-comm/config/webrtc`** | STUN/TURN list for mesh WebRTC |
 
 Railway terminates TLS in front of your process; the app listens on **`PORT`** (injected). Same-origin requests from the deployed UI hit these paths automatically. No Railway plugin is required beyond your existing web service.
 
@@ -77,7 +77,7 @@ Optional hardening:
 3. `BASE_URL` and `CORS_ORIGIN` match your real HTTPS origin (avoids cookie / CORS surprises).
 4. Strong `SESSION_SECRET` and access codes in production.
 5. After first deploy: `GET /health/live` returns 200; open the app and confirm login.
-6. Optional: open **Comms → P2P+** from two clients and confirm `GET /api/cyrus-comm/config/webrtc` returns ICE config; add **TURN_*** variables if calls fail for some networks.
+6. Optional: open **Comms** from two clients, join mesh, start a mesh call from **People**, and confirm `GET /api/cyrus-comm/config/webrtc` returns ICE config; add **TURN_*** variables if calls fail for some networks.
 
 ## Important notes
 
