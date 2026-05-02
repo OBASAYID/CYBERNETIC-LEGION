@@ -26,8 +26,35 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
+
+/** Served with correct Content-Type so PDF/HTML open in-browser; ?download=1 forces attachment. */
+const COMMS_SERVE_MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".xml": "application/xml",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+};
 
 const avatarUpload = multer({
   storage: multer.diskStorage({
@@ -1123,6 +1150,26 @@ router.get("/api/comms/media/:id", (req, res) => {
       return res.status(404).json({ error: "Media not found" });
     }
     const filePath = path.join(COMMS_UPLOAD_DIR, match);
+    const ext = path.extname(match).toLowerCase();
+    const mime = COMMS_SERVE_MIME[ext] || "application/octet-stream";
+    res.setHeader("Content-Type", mime);
+    const forceDownload = String(req.query.download || "") === "1";
+    const baseName = path.basename(match);
+    if (forceDownload) {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
+    } else if (
+      mime.startsWith("application/pdf") ||
+      mime.startsWith("text/html") ||
+      mime.startsWith("text/plain") ||
+      mime.startsWith("text/csv") ||
+      mime.startsWith("image/") ||
+      mime.startsWith("video/") ||
+      mime.startsWith("audio/")
+    ) {
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(baseName)}"`);
+    } else {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
+    }
     res.sendFile(filePath);
   } catch (error: any) {
     console.error("Error serving media:", error);

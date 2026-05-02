@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { readHandoff } from "@shared/module-handoff";
 import { systemFetch } from "@shared/cyrus-api-client";
@@ -17,6 +17,7 @@ import {
   X,
   Radio,
   Share2,
+  Satellite,
 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
@@ -32,11 +33,18 @@ import { CommsIntelligence } from "../components/comms/CommsIntelligence";
 import { PsharePanel } from "../components/comms/PsharePanel";
 import { useAnomalyAlerts } from "../hooks/useCommsIntelligence";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { CommsP2PLayerProvider, useCommsP2PLayer } from "../components/comms/CommsP2PLayerContext";
+import {
+  CommsMeshLinkHeaderBadge,
+  CommsP2PUnifiedStrip,
+  CommsP2PCallDock,
+} from "../components/comms/CommsP2PUnifiedUI";
 import {
   fromSocketMessageSent,
   fromSocketNewMessage,
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
+import { getCommsDeviceId } from "../lib/comms-device-id";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
 
@@ -148,6 +156,9 @@ export function CommsPage() {
     if (p.get("tab") === "pshare") {
       setActiveTab("pshare");
     }
+    if (p.get("tab") === "p2p") {
+      setActiveTab("calls");
+    }
     const pid = p.get("post");
     if (pid) {
       setPsharePostHighlight(pid);
@@ -248,6 +259,7 @@ export function CommsPage() {
         if (prev.some((m) => m.id === newMsg.id)) return prev;
         return [...prev, newMsg];
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
     const handleMessageSent = (data: {
@@ -287,6 +299,7 @@ export function CommsPage() {
         if (prev.some((m) => m.id === sentMsg.id)) return prev;
         return [...prev, sentMsg];
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
     const handleCallChatMessage = (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
@@ -373,7 +386,7 @@ export function CommsPage() {
       socket.off("stream-viewer-joined", handleStreamViewerJoined);
       socket.off("stream-viewer-left", handleStreamViewerLeft);
     };
-  }, [wsRef.current]);
+  }, [queryClient, isConnected, myUserId]);
 
   const myId = myUserId || myDeviceId;
 
@@ -452,15 +465,6 @@ export function CommsPage() {
     },
     [myId, queryClient]
   );
-
-  useEffect(() => {
-    if (localMessages.length > 0) {
-      const timer = setTimeout(() => {
-        setLocalMessages([]);
-      }, 20000);
-      return () => clearTimeout(timer);
-    }
-  }, [localMessages.length]);
 
   useEffect(() => {
     if (selectedConvForMessage) {
@@ -626,16 +630,19 @@ export function CommsPage() {
         const res = await systemFetch("/api/comms/upload", {
           method: "POST",
           body: formData,
-          headers: { "X-Device-Id": uid, "X-User-Id": uid },
+          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
         });
         if (res.ok) {
           const data = (await res.json()) as { fileUrl: string; fileName: string; mimeType?: string };
+          const mime = data.mimeType || file.type || "";
+          const isRichMedia =
+            mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
           presenceSendChatMessage(conversationId, {
             message: caption || " ",
-            messageType: "media",
+            messageType: isRichMedia ? "media" : "file",
             fileUrl: data.fileUrl,
             fileName: data.fileName || file.name,
-            fileMimeType: data.mimeType || file.type,
+            fileMimeType: mime || undefined,
             fileSizeBytes: file.size,
           });
         }
@@ -655,7 +662,7 @@ export function CommsPage() {
         const res = await systemFetch("/api/comms/voice-note", {
           method: "POST",
           body: formData,
-          headers: { "X-Device-Id": uid, "X-User-Id": uid },
+          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
         });
         if (res.ok) {
           const data = (await res.json()) as { fileUrl: string; mimeType?: string };
@@ -857,7 +864,7 @@ export function CommsPage() {
 
   const tabConfig = [
     { id: "chat" as MainTab, icon: MessageSquare, label: "Chat" },
-    { id: "pshare" as MainTab, icon: Share2, label: "Pshare" },
+    { id: "pshare" as MainTab, icon: Share2, label: "Timeline" },
     { id: "calls" as MainTab, icon: Phone, label: "Calls" },
     { id: "people" as MainTab, icon: Users, label: "People" },
     { id: "streams" as MainTab, icon: Radio, label: "Streams" },
@@ -870,6 +877,7 @@ export function CommsPage() {
 
   return (
     <ModuleWorkspacePageShell mode="page">
+    <CommsP2PLayerProvider displayName={displayName}>
     <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
       {activeCall && activeCall.status === "connected" && (
         <CallView
@@ -960,16 +968,18 @@ export function CommsPage() {
                 <MessageSquare className="h-5 w-5 text-cyan-300" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-200/60">Secure channels</p>
+                <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-200/60">
+                  3GPP NTN · global satellite IoT
+                </p>
                 <h1
                   className="bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent sm:text-xl"
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
                   NEXUS COMMS
                 </h1>
-                <p className="truncate text-[10px] font-mono text-cyan-100/50 sm:text-[11px]">
-                  {isConnected ? "Connected" : "Connecting…"} · {onlineUsers.length} online
-                </p>
+                <CommsMeshLinkHeaderBadge
+                  presenceLinePrefix={`${isConnected ? "Connected" : "Connecting…"} · ${onlineUsers.length} online`}
+                />
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 sm:pl-2">
@@ -993,6 +1003,27 @@ export function CommsPage() {
               </div>
             </div>
           </header>
+
+          <div
+            className="rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-950/50 via-slate-950/40 to-indigo-950/45 px-3 py-2.5 shadow-[0_0_28px_-12px_rgba(56,189,248,0.45)] sm:px-4"
+            role="region"
+            aria-label="Satellite IoT and NTN capability"
+          >
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-sky-200/80">
+              <Satellite className="h-3.5 w-3.5 shrink-0 text-sky-300" aria-hidden />
+              <span>Robust IoT–NTN</span>
+              <span className="hidden text-white/25 sm:inline">·</span>
+              <span className="text-white/55 normal-case tracking-normal">
+                messaging, tracking, emergency · utilities · infrastructure · maritime · agriculture · fleet telematics
+              </span>
+            </div>
+            <p className="mt-1.5 text-[10px] leading-snug text-white/55 sm:text-[11px]">
+              Aligned with 3GPP non-terrestrial network (NTN) work: satellite overlay where terrestrial infrastructure alone cannot
+              close coverage gaps — from remote monitoring at scale to mission-critical reach-back.
+            </p>
+          </div>
+
+          <CommsP2PUnifiedStrip />
 
           <nav
             className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
@@ -1131,7 +1162,7 @@ export function CommsPage() {
 
                 {activeTab === "people" && (
                   <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <UserDiscovery
+                    <UserDiscoveryWithMesh
                       onlineUsers={onlineUsers}
                       allUsers={allUsers}
                       contacts={contacts}
@@ -1140,6 +1171,7 @@ export function CommsPage() {
                       onCall={handleUserCall}
                       onAddContact={handleAddContact}
                       onRemoveContact={handleRemoveContact}
+                      onOpenMeshCalls={() => setActiveTab("calls")}
                     />
                   </div>
                 )}
@@ -1192,7 +1224,33 @@ export function CommsPage() {
         </div>
       )}
     </div>
+    </CommsP2PLayerProvider>
     </ModuleWorkspacePageShell>
+  );
+}
+
+function UserDiscoveryWithMesh(
+  props: Omit<React.ComponentProps<typeof UserDiscovery>, "meshPeerIds" | "meshLinkReady" | "meshInCall" | "onMeshCall"> & {
+    onOpenMeshCalls: () => void;
+  },
+) {
+  const { onOpenMeshCalls, ...rest } = props;
+  const { meshPeerIds, startMeshCall, linkConnected, linkJoined, inMeshCall } = useCommsP2PLayer();
+  const onMeshCall = useCallback(
+    (userId: string, _userName: string, type: "audio" | "video") => {
+      void startMeshCall(userId, type === "video");
+      onOpenMeshCalls();
+    },
+    [startMeshCall, onOpenMeshCalls],
+  );
+  return (
+    <UserDiscovery
+      {...rest}
+      meshPeerIds={meshPeerIds}
+      meshLinkReady={linkConnected && linkJoined}
+      meshInCall={inMeshCall}
+      onMeshCall={onMeshCall}
+    />
   );
 }
 
@@ -1211,6 +1269,7 @@ function CallHistoryPanel({
 
   return (
     <div className="space-y-6">
+      <CommsP2PCallDock />
       <div>
         <h3
           className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/90"

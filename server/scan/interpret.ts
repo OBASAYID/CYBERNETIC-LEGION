@@ -2,10 +2,14 @@ import OpenAI from "openai";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+const openaiBaseTrimmed = typeof openaiBaseUrl === "string" ? openaiBaseUrl.trim() : "";
 
 const interpretClient =
   openaiApiKey
-    ? new OpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl })
+    ? new OpenAI({
+        apiKey: openaiApiKey,
+        ...(openaiBaseTrimmed ? { baseURL: openaiBaseTrimmed } : {}),
+      })
     : null;
 
 export interface Interpretation {
@@ -35,7 +39,7 @@ export async function interpretText(text: string): Promise<Interpretation> {
       ],
       max_tokens: 400,
     });
-    const content = resp.choices[0].message.content || "";
+    const content = resp.choices?.[0]?.message?.content || "";
     // Light parse: split by lines; heuristically classify
     const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
     const keyFindings: string[] = [];

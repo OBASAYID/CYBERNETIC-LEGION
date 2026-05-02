@@ -8,6 +8,7 @@ import {
   UserMinus,
   Users,
   Circle,
+  Link2,
 } from "lucide-react";
 import { UserProfileCard } from "./UserProfileCard";
 
@@ -46,6 +47,11 @@ interface UserDiscoveryProps {
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
   onAddContact: (contact: { contactId: string; contactName: string }) => void;
   onRemoveContact: (contactId: string) => void;
+  /** Peers visible on /cyrus-comm-io mesh registry (often same ids as presence). */
+  meshPeerIds?: Set<string>;
+  meshLinkReady?: boolean;
+  meshInCall?: boolean;
+  onMeshCall?: (userId: string, userName: string, type: "audio" | "video") => void;
 }
 
 export function UserDiscovery({
@@ -57,6 +63,10 @@ export function UserDiscovery({
   onCall,
   onAddContact,
   onRemoveContact,
+  meshPeerIds,
+  meshLinkReady = false,
+  meshInCall = false,
+  onMeshCall,
 }: UserDiscoveryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<{
@@ -126,6 +136,9 @@ export function UserDiscovery({
 
   const isContact = (userId: string) => contactIds.has(userId);
 
+  const meshReachable = (userId: string) =>
+    Boolean(meshLinkReady && onMeshCall && meshPeerIds?.has(userId));
+
   const handleToggleContact = (userId: string, userName: string) => {
     if (isContact(userId)) {
       const contact = contactByUserId.get(userId);
@@ -191,7 +204,7 @@ export function UserDiscovery({
                         {getStatusLabel(true, user.inCall)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -222,6 +235,32 @@ export function UserDiscovery({
                       >
                         <Video className="w-3.5 h-3.5" />
                       </button>
+                      {meshReachable(user.id) ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMeshCall!(user.id, user.displayName, "audio");
+                            }}
+                            disabled={meshInCall}
+                            className="p-2 bg-violet-500/20 hover:bg-violet-500/35 text-violet-300 rounded-lg transition-colors disabled:opacity-40"
+                            title="Mesh voice (WebRTC /cyrus-comm-io)"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMeshCall!(user.id, user.displayName, "video");
+                            }}
+                            disabled={meshInCall}
+                            className="p-2 bg-fuchsia-500/20 hover:bg-fuchsia-500/35 text-fuchsia-300 rounded-lg transition-colors disabled:opacity-40"
+                            title="Mesh video (WebRTC)"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -299,7 +338,7 @@ export function UserDiscovery({
                             : "Offline"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -320,6 +359,42 @@ export function UserDiscovery({
                       >
                         <Phone className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCall(user.id, user.displayName, "video");
+                        }}
+                        className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
+                        title="Video Call"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                      </button>
+                      {meshReachable(user.id) ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMeshCall!(user.id, user.displayName, "audio");
+                            }}
+                            disabled={meshInCall}
+                            className="p-2 bg-violet-500/20 hover:bg-violet-500/35 text-violet-300 rounded-lg transition-colors disabled:opacity-40"
+                            title="Mesh voice (WebRTC /cyrus-comm-io)"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMeshCall!(user.id, user.displayName, "video");
+                            }}
+                            disabled={meshInCall}
+                            className="p-2 bg-fuchsia-500/20 hover:bg-fuchsia-500/35 text-fuchsia-300 rounded-lg transition-colors disabled:opacity-40"
+                            title="Mesh video (WebRTC)"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -352,6 +427,8 @@ export function UserDiscovery({
           user={selectedUser}
           isContact={isContact(selectedUser.id)}
           isFavorite={contactByUserId.get(selectedUser.id)?.isFavorite || false}
+          meshReachable={meshReachable(selectedUser.id)}
+          meshInCall={meshInCall}
           onClose={() => setSelectedUser(null)}
           onMessage={() => {
             onMessage(selectedUser.id, selectedUser.displayName);
@@ -365,6 +442,22 @@ export function UserDiscovery({
             onCall(selectedUser.id, selectedUser.displayName, "video");
             setSelectedUser(null);
           }}
+          onMeshVoiceCall={
+            meshReachable(selectedUser.id) && onMeshCall
+              ? () => {
+                  onMeshCall(selectedUser.id, selectedUser.displayName, "audio");
+                  setSelectedUser(null);
+                }
+              : undefined
+          }
+          onMeshVideoCall={
+            meshReachable(selectedUser.id) && onMeshCall
+              ? () => {
+                  onMeshCall(selectedUser.id, selectedUser.displayName, "video");
+                  setSelectedUser(null);
+                }
+              : undefined
+          }
           onToggleContact={() => {
             handleToggleContact(selectedUser.id, selectedUser.displayName);
           }}

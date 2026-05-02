@@ -2,10 +2,14 @@ import OpenAI from "openai";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+const openaiBaseTrimmed = typeof openaiBaseUrl === "string" ? openaiBaseUrl.trim() : "";
 
 const txClient =
   openaiApiKey
-    ? new OpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl })
+    ? new OpenAI({
+        apiKey: openaiApiKey,
+        ...(openaiBaseTrimmed ? { baseURL: openaiBaseTrimmed } : {}),
+      })
     : null;
 
 export interface TranslateOptions {
@@ -50,7 +54,7 @@ export async function translateText(text: string, opts: TranslateOptions): Promi
       ],
       max_tokens: 800,
     });
-    const translated = resp.choices[0].message.content || "";
+    const translated = resp.choices?.[0]?.message?.content || "";
     return { translated, warnings };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

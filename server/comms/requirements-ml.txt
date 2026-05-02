@@ -1,0 +1,4 @@
+# Minimal deps for server/comms/ml_service.py (Comms intelligence: sentiment, anomalies, etc.)
+numpy>=1.21.0,<2
+scikit-learn>=1.0.1
+nltk>=3.8

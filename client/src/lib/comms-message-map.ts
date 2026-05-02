@@ -23,8 +23,20 @@ export function guessMimeFromFileName(name: string | null | undefined): string |
     pdf: "application/pdf",
     doc: "application/msword",
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    html: "text/html",
+    htm: "text/html",
+    css: "text/css",
+    js: "text/javascript",
     zip: "application/zip",
     txt: "text/plain",
+    csv: "text/csv",
+    md: "text/markdown",
+    json: "application/json",
+    xml: "application/xml",
   };
   return map[ext];
 }
@@ -223,7 +235,7 @@ export function fromSocketNewMessage(
       duration: data.voiceDurationSeconds,
     };
   }
-  if ((data.messageType === "media" || data.fileUrl) && data.fileUrl) {
+  if ((data.messageType === "media" || data.messageType === "file" || data.fileUrl) && data.fileUrl) {
     const m = mapServerMessageToComms(
       {
         id: data.id,
@@ -232,7 +244,7 @@ export function fromSocketNewMessage(
         content: data.message,
         timestamp: data.timestamp,
         read: false,
-        messageType: "media",
+        messageType: data.messageType === "file" ? "file" : "media",
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,
@@ -314,7 +326,7 @@ export function fromSocketMessageSent(
       duration: data.voiceDurationSeconds,
     };
   }
-  if ((data.messageType === "media" || data.fileUrl) && data.fileUrl) {
+  if ((data.messageType === "media" || data.messageType === "file" || data.fileUrl) && data.fileUrl) {
     return mapServerMessageToComms(
       {
         id: data.id,
@@ -323,7 +335,7 @@ export function fromSocketMessageSent(
         content: data.message,
         timestamp: data.timestamp,
         read: true,
-        messageType: "media",
+        messageType: data.messageType === "file" ? "file" : "media",
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,

@@ -7,6 +7,16 @@ CYRUS uses WebRTC for peer-to-peer voice and video calls. WebRTC requires
 media when a direct peer-to-peer connection cannot be established (e.g. behind
 symmetric NAT, corporate firewalls, or carrier-grade NAT on mobile networks).
 
+### CYRUS Comm **mesh WebRTC** (Command Center → Comms → unified strip / People / Calls)
+
+This flow uses **`GET /api/cyrus-comm/config/webrtc`** and ICE from **`server/comms/cyrus-comm-config.ts`**. Production TURN is enabled with:
+
+- `TURN_URLS` (comma-separated)
+- `TURN_USERNAME`
+- `TURN_CREDENTIAL`
+
+Documented for Railway in **`RAILWAY_DEPLOYMENT.md`**. Signaling uses Socket.IO path **`/cyrus-comm-io`** (separate from **`/cyrus-io`** presence).
+
 ---
 
 ## Default Configuration

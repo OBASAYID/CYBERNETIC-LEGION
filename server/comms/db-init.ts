@@ -265,6 +265,10 @@ const DDL_STATEMENTS = [
     file_url        VARCHAR,
     file_name       VARCHAR,
     file_mime_type  VARCHAR,
+    post_kind       VARCHAR NOT NULL DEFAULT 'general',
+    listing_title   VARCHAR,
+    listing_price   VARCHAR,
+    listing_currency VARCHAR,
     visibility      VARCHAR NOT NULL DEFAULT 'all',
     allow_comments  BOOLEAN NOT NULL DEFAULT TRUE,
     allowed_user_ids JSONB NOT NULL DEFAULT '[]',
@@ -305,6 +309,10 @@ const ALTER_STATEMENTS = [
   `ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS reactions JSONB`,
   `ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT FALSE`,
   `ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS encryption_level VARCHAR DEFAULT 'none'`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS post_kind VARCHAR NOT NULL DEFAULT 'general'`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_title VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_price VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_currency VARCHAR`,
 ];
 
 export async function initCommsDatabase(): Promise<void> {

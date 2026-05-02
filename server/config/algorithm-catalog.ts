@@ -30,6 +30,10 @@ function engineItems(): AlgorithmCatalogItem[] {
     ["emotional-cognition", "Emotion, sentiment, and empathy templates"],
     ["universal-language", "Language detection, translation, simplification"],
     ["decentralized-intelligence", "Distributed task workers and queue"],
+    [
+      "iot-ntn-connectivity",
+      "3GPP NTN satellite IoT + integrated CYRUS Comm P2P signaling (/cyrus-comm-io, /api/cyrus-comm/config/webrtc)",
+    ],
     ["ethical-governance", "Ethics assessment and moderation"],
     ["self-evolution", "Self-improvement and knowledge synthesis"],
     ["quantum-neural", "Quantum circuit simulation and inference"],

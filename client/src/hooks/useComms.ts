@@ -13,30 +13,12 @@ import {
   detectNetworkType,
   CallQualityMetrics,
 } from "../lib/webrtc-config";
-
-function getDeviceId(): string {
-  const presence = localStorage.getItem("cyrus_device_id");
-  const key = "cyrus-device-id";
-  const legacy = localStorage.getItem(key);
-  if (presence) {
-    if (legacy !== presence) {
-      localStorage.setItem(key, presence);
-    }
-    return presence;
-  }
-  let deviceId = legacy;
-  if (!deviceId) {
-    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-  localStorage.setItem(key, deviceId);
-  localStorage.setItem("cyrus_device_id", deviceId);
-  return deviceId;
-}
+import { getCommsDeviceId } from "../lib/comms-device-id";
 
 function commsHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "X-Device-Id": getDeviceId(),
+    "X-Device-Id": getCommsDeviceId(),
   };
 }
 
@@ -173,7 +155,7 @@ export function useComms() {
   const remindersQuery = useQuery<Reminder[]>({
     queryKey: ["/api/comms/reminders"],
     queryFn: async () => {
-      const res = await systemFetch("/api/comms/reminders");
+      const res = await systemFetch("/api/comms/reminders", { headers: commsHeaders() });
       if (!res.ok) throw new Error("Failed to fetch reminders");
       return res.json();
     },
@@ -199,7 +181,7 @@ export function useComms() {
     }) => {
       const res = await systemFetch("/api/comms/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: commsHeaders(),
         body: JSON.stringify({ recipientId, content }),
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -214,7 +196,7 @@ export function useComms() {
     mutationFn: async (reminder: Omit<Reminder, "id" | "completed">) => {
       const res = await systemFetch("/api/comms/reminders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: commsHeaders(),
         body: JSON.stringify(reminder),
       });
       if (!res.ok) throw new Error("Failed to add reminder");
@@ -229,6 +211,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/reminders/${id}/complete`, {
         method: "POST",
+        headers: commsHeaders(),
       });
       if (!res.ok) throw new Error("Failed to complete reminder");
       return res.json();
@@ -242,6 +225,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/reminders/${id}`, {
         method: "DELETE",
+        headers: commsHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete reminder");
       return res.json();
@@ -931,7 +915,7 @@ export function useComms() {
     queryKey: ["/api/comms/contacts"],
     queryFn: async () => {
       const res = await systemFetch("/api/comms/contacts", {
-        headers: { "X-Device-Id": getDeviceId() },
+        headers: { "X-Device-Id": getCommsDeviceId() },
       });
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
@@ -957,7 +941,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/contacts/${id}`, { 
         method: "DELETE",
-        headers: { "X-Device-Id": getDeviceId() },
+        headers: { "X-Device-Id": getCommsDeviceId() },
       });
       if (!res.ok) throw new Error("Failed to delete contact");
       return res.json();
@@ -1010,7 +994,7 @@ export function useComms() {
     setVolume,
     switchCamera,
     getAudioLevel,
-    myDeviceId: getDeviceId(),
+    myDeviceId: getCommsDeviceId(),
     isLoading: messagesQuery.isLoading || remindersQuery.isLoading,
   };
 }

@@ -1304,6 +1304,16 @@ class WebRTCService {
     this.cleanupCall(sendSignal);
   }
 
+  sendTextMessage(toUserId: string, text: string) {
+    if (!this.userId) return;
+    this.send({
+      type: "text-message",
+      from: this.userId,
+      to: toUserId,
+      data: { text, timestamp: Date.now() },
+    });
+  }
+
   private cleanupCall(sendSignal: boolean) {
     if (sendSignal && this.currentCallUserId) {
       this.send({
