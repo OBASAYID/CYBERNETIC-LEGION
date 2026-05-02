@@ -291,6 +291,16 @@ export function CommunicationPanel({
     const userId = getStableUserId();
     const userName = operatorName || "Operator";
 
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const link = q.get("commLink");
+      if (link === "satellite" || link === "ntn") {
+        webRTCService.setCommLinkProfile("satellite");
+      }
+    } catch {
+      /* ignore */
+    }
+
     webRTCService.connect(userId, userName)
       .then(() => {
         setIsConnected(true);
