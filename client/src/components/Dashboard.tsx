@@ -130,6 +130,8 @@ export function Dashboard() {
   });
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
   const userRole = localStorage.getItem("cyrus-user-role") || "user";
+  console.log("[Dashboard] User role from localStorage:", userRole);
+  console.log("[Dashboard] Should show logout all button:", userRole === "admin");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);

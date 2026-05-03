@@ -62,10 +62,17 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
 
       const data = await response.json();
 
+      // DEBUG: Log the login response
+      console.log("[AccessGate] Login response:", data);
+      console.log("[AccessGate] User role from response:", data.user?.role);
+
       // Store auth data in localStorage
       localStorage.setItem("cyrus_authenticated", "true");
       localStorage.setItem("cyrus-display-name", username.trim());
       localStorage.setItem("cyrus-user-role", data.user?.role || "user");
+
+      // DEBUG: Verify it was stored
+      console.log("[AccessGate] Stored role in localStorage:", localStorage.getItem("cyrus-user-role"));
 
       // Store session token if provided
       if (data.sessionToken) {
