@@ -27,3 +27,15 @@ export const users = pgTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+/**
+ * Extended user type returned by the standalone auth adapter's /api/auth/user endpoint.
+ * Includes role and isAdmin fields set during login based on the access code used.
+ */
+export type AuthUser = {
+  id: string;
+  username: string;
+  role: "admin" | "user";
+  isAdmin: boolean;
+  claims: { sub: string };
+};

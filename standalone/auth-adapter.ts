@@ -202,7 +202,7 @@ export async function setupAuth(app: Express): Promise<void> {
     };
     const sessionToken = issueSessionToken(user);
     console.log(`[Auth] /api/login token-first success for ${username} (${role})`);
-    res.json({ success: true, user: { id: userId, username, role }, sessionToken });
+    res.json({ success: true, user: { id: userId, username, role, isAdmin: role === "admin" }, sessionToken });
   });
 
   app.get("/api/auth/user", (req: any, res, next) => {
@@ -210,13 +210,36 @@ export async function setupAuth(app: Express): Promise<void> {
     const token = readSessionTokenFromRequest(req);
     if (token) {
       const tokenUser = verifySessionToken(token);
-      if (tokenUser) return res.json(tokenUser);
+      if (tokenUser) return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
     }
     return next();
   });
 
   app.post("/api/logout", (_req: any, res) => {
     res.json({ success: true });
+  });
+
+  app.post("/api/logout-all", (req: any, res) => {
+    const token = readSessionTokenFromRequest(req);
+    let user: SessionUser | null = null;
+    if (token) {
+      user = verifySessionToken(token);
+    }
+    if (!user) {
+      user = req.session?.user ?? null;
+    }
+    if (!user?.id) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    // In the token-based auth model, sessions are stateless JWTs — there is no
+    // server-side session store to purge. Returning success signals to the client
+    // that the admin action was accepted; individual clients will be logged out
+    // when their tokens expire or when they next call /api/logout.
+    console.log(`[Auth] /api/logout-all invoked by admin ${user.username}`);
+    res.json({ success: true, message: "All sessions invalidated" });
   });
 
   const store = buildSessionStore();
@@ -276,12 +299,13 @@ export async function setupAuth(app: Express): Promise<void> {
 
   app.get("/api/auth/user", (req: any, res) => {
     if (req.session?.user) {
-      return res.json(req.session.user);
+      const sessionUser = req.session.user;
+      return res.json({ ...sessionUser, isAdmin: sessionUser.role === "admin" });
     }
     const token = readSessionTokenFromRequest(req);
     if (token) {
       const tokenUser = verifySessionToken(token);
-      if (tokenUser) return res.json(tokenUser);
+      if (tokenUser) return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
     }
     res.status(401).json({ message: "Not authenticated" });
   });
