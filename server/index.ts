@@ -172,6 +172,13 @@ function findDistPublic(): string | null {
   return null;
 }
 
+/** Avoid CDN/browser caching the Vite shell across deploys (stale HTML → broken lazy chunks). */
+function setHtmlShellCacheHeaders(res: Response) {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+}
+
 export function log(message: string, source = "express") {
   logger.info("service_log", { source, message });
 }
@@ -375,7 +382,10 @@ if (distPublic) {
       },
     })(req, res, next);
   });
-  app.get("/", (_req, res) => res.status(200).sendFile(path.join(distPublic, "index.html")));
+  app.get("/", (_req, res) => {
+    setHtmlShellCacheHeaders(res);
+    return res.status(200).sendFile(path.join(distPublic, "index.html"));
+  });
 } else if (process.env.NODE_ENV === "production") {
   app.get("/", (_req, res) => res.status(200).json({ service: "CYRUS", status: "online" }));
 }
@@ -729,7 +739,14 @@ async function setupFrontendRoutes() {
   if (dp) {
     app.use("/*path", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
-      res.sendFile(path.join(dp, "index.html"));
+      // Missing hashed bundles must not receive index.html (wrong MIME → "Failed to fetch dynamically imported module").
+      if (req.path.startsWith("/assets/") || req.path.startsWith("/node_modules/")) {
+        return res.status(404).type("text/plain").send("Not found");
+      }
+      setHtmlShellCacheHeaders(res);
+      res.sendFile(path.join(dp, "index.html"), (err) => {
+        if (err) next(err);
+      });
     });
   }
 
