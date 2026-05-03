@@ -15,6 +15,7 @@ Use this file so **any** coding assistant (Cursor, VS Code, web UIs) shares the 
 ## Run and URL
 
 - **Integrated dev:** repo root `npm run dev` → UI + API + HMR on **`http://127.0.0.1:${CYRUS_LIVE_PORT:-${PORT:-3020}}/`** (single origin). Prefer **`CYRUS_LIVE_PORT`** as the one env name; `PORT` mirrors it at boot. Example: **`http://127.0.0.1:3020/scan`**.
+- **Mobile / installable:** production `npm run build` enables a **PWA** (web app manifest + service worker via `vite-plugin-pwa` in root `vite.config.ts`). After deploy, use the browser **Install** / **Add to Home Screen** action; APIs still require network. For **store** distribution, wrap the same web app with **Capacitor** (not scaffolded in-repo).
 - **Readiness:** `GET /api/ready` or `GET /health/ready` (503 + `SYSTEM_INITIALIZING` while booting).
 
 ## UI ↔ server wiring (do not duplicate)

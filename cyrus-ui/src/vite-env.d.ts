@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
   /** Optional external CYRUS / Replit API (e.g. `http://localhost:3001`). Empty = same-origin. */
