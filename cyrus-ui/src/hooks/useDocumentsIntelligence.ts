@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { useToast } from "@/hooks/use-toast";
 import { systemFetch } from "@/lib/system-api";
 
@@ -56,7 +57,7 @@ const defaultIntel: IntelOptions = {
   docHint: "",
   analysisCommand: "",
   strictLegalReview: true,
-  maxChunks: 80,
+  maxChunks: Math.min(1024, parseMaxAnalysisChunks()),
 };
 
 function appendFormFields(form: FormData, o: IntelOptions) {
@@ -190,10 +191,15 @@ export function useDocumentsIntelligence() {
     setCurrentFile(null);
   }, []);
 
+  const setHandoffStagedFile = useCallback((file: File | null) => {
+    setCurrentFile(file);
+  }, []);
+
   return {
     intel,
     setIntel,
     currentFile,
+    setHandoffStagedFile,
     syncReport,
     job: jobQuery.data,
     isSubmitting: isSubmitting || jobQuery.isFetching,

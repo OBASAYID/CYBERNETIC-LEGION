@@ -16,7 +16,15 @@ import {
   Share2,
   Terminal,
 } from "lucide-react";
-import { saveHandoff } from "@shared/module-handoff";
+import {
+  clearCommandSearchShare,
+  formatCommandHandoffTranscript,
+  mergeWorkspaceAndCommandHandoff,
+  saveHandoff,
+  writeCommandSearchShare,
+  type ModuleHandoffAttachment,
+  type ModuleHandoffLargeRef,
+} from "@shared/module-handoff";
 import { getSpeechRecognitionConstructor, speakCyrusTts } from "@shared/command-console-voice";
 import { systemFetch } from "@shared/cyrus-api-client";
 import { cn } from "@/lib/utils";
@@ -28,18 +36,6 @@ const COMMAND_SYSTEM =
 
 type Exchange = { role: "user" | "cyrus"; content: string };
 
-function getHandoffText(log: Exchange[]): string {
-  for (let i = log.length - 1; i >= 0; i--) {
-    const L = log[i]!;
-    if (L.role === "cyrus" && L.content.trim()) return L.content.trim();
-  }
-  for (let i = log.length - 1; i >= 0; i--) {
-    const L = log[i]!;
-    if (L.role === "user" && L.content.trim()) return L.content.trim();
-  }
-  return "";
-}
-
 export type ModuleCommandConsoleProps = {
   /** Page title / subtitle or other hint so CYRUS knows which surface is open. */
   pageContext?: string;
@@ -48,6 +44,13 @@ export type ModuleCommandConsoleProps = {
   scope?: "dashboard" | "module";
   /** Parent can reduce bottom padding when the console is collapsed (module shell). */
   onLayoutChange?: (minimized: boolean) => void;
+  /** When the console chat is empty, Pipeline handoff can use text from the workspace above. */
+  workspaceHandoffText?: () => string | undefined;
+  /** `sourceModule` on the saved handoff when text comes from `workspaceHandoffText`. */
+  workspaceHandoffSource?: string;
+  /** Optional small files to send with pipeline handoff (e.g. staged upload). */
+  workspaceHandoffAttachments?: () => ModuleHandoffAttachment[] | undefined;
+  workspaceHandoffLargeRefs?: () => ModuleHandoffLargeRef[] | undefined;
 };
 
 /**
@@ -81,6 +84,10 @@ export function ModuleCommandConsole({
   className,
   scope = "dashboard",
   onLayoutChange,
+  workspaceHandoffText,
+  workspaceHandoffSource,
+  workspaceHandoffAttachments,
+  workspaceHandoffLargeRefs,
 }: ModuleCommandConsoleProps) {
   const [, setLocation] = useLocation();
   const [input, setInput] = useState("");
@@ -206,19 +213,49 @@ export function ModuleCommandConsole({
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [log, send.isPending]);
 
+  useEffect(() => {
+    writeCommandSearchShare(formatCommandHandoffTranscript(log));
+  }, [log]);
+
   const goHandoff = (target: "files" | "scan" | "comms" | "pshare") => {
-    const text = getHandoffText(log);
-    if (!text) {
-      setHandoffHint("Send a message and get a CYRUS reply first, or type in the log.");
+    const fromWorkspace = (workspaceHandoffText?.() ?? "").trim();
+    const transcript = formatCommandHandoffTranscript(log).trim();
+    writeCommandSearchShare(transcript);
+
+    const rawAtt = workspaceHandoffAttachments?.() ?? [];
+    const attachments = rawAtt.filter((a) => a?.data && a.name);
+    const largeRefs = (workspaceHandoffLargeRefs?.() ?? []).filter((r) => r?.id && r.name);
+    const merged = mergeWorkspaceAndCommandHandoff(workspaceHandoffText?.() ?? "", transcript).trim();
+    const attachNames = [
+      ...attachments.map((a) => a.name),
+      ...largeRefs.map((r) => `${r.name} (${(r.size / (1024 * 1024)).toFixed(1)} MB)`),
+    ].filter(Boolean);
+    const fallbackText =
+      attachNames.length > 0 ? `Cross-module handoff — attached file(s): ${attachNames.join(", ")}` : "";
+    const text = merged || fallbackText;
+    if (!text && attachments.length === 0 && largeRefs.length === 0) {
+      setHandoffHint(
+        "Nothing to send yet — add a file or text in this module, or run a CYRUS command search below, then tap a pipeline target.",
+      );
       return;
     }
     setHandoffHint(null);
-    const note = "Cross-module handoff from Command console — generate a report, translate, or share with the group.";
+    const hasWs = fromWorkspace.length > 0;
+    const hasCmd = transcript.length > 0;
+    const fromModule = hasWs ? (workspaceHandoffSource?.trim() || "module-workspace") : "command-console";
+    let note =
+      fromModule === "command-console"
+        ? "Cross-module handoff from Command console — generate a report, translate, or share with the group."
+        : `Cross-module handoff from ${fromModule} — continue in the target module.`;
+    if (hasWs && hasCmd) note = `${note} Includes full CYRUS command search/Q&A transcript.`;
+    if (attachments.length || largeRefs.length) note = `${note} Includes staged file(s) for analysis where supported.`;
     saveHandoff({
-      text,
-      sourceModule: "command-console",
-      title: "Command → pipeline",
+      text: text || fallbackText,
+      sourceModule: fromModule,
+      title: fromModule === "command-console" ? "Command → pipeline" : "Workspace → pipeline",
       note,
+      attachments: attachments.length ? attachments : undefined,
+      largeAttachments: largeRefs.length ? largeRefs : undefined,
     });
     if (target === "files") setLocation("/files?handoff=1");
     else if (target === "scan") setLocation("/scan?handoff=1");
@@ -242,6 +279,7 @@ export function ModuleCommandConsole({
     setLog([]);
     setHandoffHint(null);
     setVoiceError(null);
+    clearCommandSearchShare();
     send.reset();
   };
 

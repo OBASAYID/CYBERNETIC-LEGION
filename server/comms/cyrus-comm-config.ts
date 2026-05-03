@@ -29,11 +29,14 @@ export const CYRUS_COMM_ICE_SERVERS: CyrusCommIceServer[] = [
 
 /** Enable coturn via env when deploying behind symmetric NAT */
 if (process.env.TURN_URLS && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
-  CYRUS_COMM_ICE_SERVERS.push({
-    urls: process.env.TURN_URLS.split(",").map((s) => s.trim()),
-    username: process.env.TURN_USERNAME,
-    credential: process.env.TURN_CREDENTIAL,
-  });
+  const urls = process.env.TURN_URLS.split(",").map((s) => s.trim()).filter(Boolean);
+  if (urls.length > 0) {
+    CYRUS_COMM_ICE_SERVERS.push({
+      urls,
+      username: process.env.TURN_USERNAME,
+      credential: process.env.TURN_CREDENTIAL,
+    });
+  }
 }
 
 /** Optional dedicated relay pool for satellite / NTN terminals (same format as TURN_*). */
@@ -42,11 +45,14 @@ if (
   process.env.SATELLITE_TURN_USERNAME &&
   process.env.SATELLITE_TURN_CREDENTIAL
 ) {
-  CYRUS_COMM_ICE_SERVERS.push({
-    urls: process.env.SATELLITE_TURN_URLS.split(",").map((s) => s.trim()),
-    username: process.env.SATELLITE_TURN_USERNAME,
-    credential: process.env.SATELLITE_TURN_CREDENTIAL,
-  });
+  const satUrls = process.env.SATELLITE_TURN_URLS.split(",").map((s) => s.trim()).filter(Boolean);
+  if (satUrls.length > 0) {
+    CYRUS_COMM_ICE_SERVERS.push({
+      urls: satUrls,
+      username: process.env.SATELLITE_TURN_USERNAME,
+      credential: process.env.SATELLITE_TURN_CREDENTIAL,
+    });
+  }
 }
 
 export const CYRUS_COMM_SFU = {

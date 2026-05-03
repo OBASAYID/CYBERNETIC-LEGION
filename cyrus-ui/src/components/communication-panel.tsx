@@ -46,8 +46,18 @@ import {
   ChevronUp,
   Info
 } from "lucide-react";
-import { webRTCService, OnlineUser, ChatMessage, ConnectionStats, CallHistoryEntry } from "@/lib/webrtc-service";
+import {
+  webRTCService,
+  OnlineUser,
+  ChatMessage,
+  ConnectionStats,
+  CallHistoryEntry,
+  GROUP_CALL_MAX_MEMBERS,
+  type GroupInvitePayload,
+} from "@/lib/webrtc-service";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { probeCyrusConnectivity } from "@/lib/cyrus-comm-connectivity";
 
 interface CommunicationPanelProps {
   operatorName?: string;
@@ -126,6 +136,27 @@ function AudioLevelBar({ level }: { level: number }) {
           />
         );
       })}
+    </div>
+  );
+}
+
+function RemotePeerVideo({ stream, label }: { stream: MediaStream; label: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    void el.play().catch(() => {});
+    return () => {
+      el.srcObject = null;
+    };
+  }, [stream]);
+  return (
+    <div className="relative rounded-lg overflow-hidden border border-white/15 bg-slate-900 aspect-video">
+      <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" />
+      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5 text-[10px] font-mono text-white/90 truncate">
+        {label}
+      </div>
     </div>
   );
 }
@@ -232,6 +263,14 @@ export function CommunicationPanel({
   const [showStats, setShowStats] = useState(false);
   const [callHistory, setCallHistory] = useState<CallHistoryEntry[]>([]);
 
+  // ── Group call (mesh, up to GROUP_CALL_MAX_MEMBERS) ───────────────────────
+  const [isGroupCall, setIsGroupCall] = useState(false);
+  const [incomingGroupInvite, setIncomingGroupInvite] = useState<(GroupInvitePayload & { from: string }) | null>(null);
+  const [groupRemoteStreams, setGroupRemoteStreams] = useState<Map<string, MediaStream>>(() => new Map());
+  const [groupSelectMode, setGroupSelectMode] = useState(false);
+  const [groupSelectedIds, setGroupSelectedIds] = useState<Set<string>>(() => new Set());
+  const [connectivityProbeRunning, setConnectivityProbeRunning] = useState(false);
+
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"users" | "chat" | "history">("users");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -318,6 +357,23 @@ export function CommunicationPanel({
     webRTCService.setOnIncomingCall(data => {
       setIncomingCall(data);
       toast({ title: "Incoming Transmission", description: `${data.callerName} requesting ${data.callType} link` });
+    });
+
+    webRTCService.setOnIncomingGroupInvite(d => {
+      setIncomingGroupInvite(d);
+      toast({
+        title: "Group invitation",
+        description: `${d.hostName} · ${d.memberIds.length} participants (${d.callType})`,
+      });
+    });
+
+    webRTCService.setOnGroupRemoteStream((peerId, stream) => {
+      setGroupRemoteStreams(prev => {
+        const next = new Map(prev);
+        next.set(peerId, stream);
+        return next;
+      });
+      setIsCallConnecting(false);
     });
 
     webRTCService.setOnCallResponse(data => {
@@ -428,6 +484,11 @@ export function CommunicationPanel({
 
   // ── Call actions ───────────────────────────────────────────────────────────
   const startCall = async (user: OnlineUser, type: "voice" | "video") => {
+    if (webRTCService.isInGroupCall()) {
+      toast({ title: "In a group call", description: "End the group session before starting a direct call.", variant: "destructive" });
+      return;
+    }
+    setIsGroupCall(false);
     setSelectedUser(user);
     setCallType(type);
     setIsInCall(true);
@@ -439,7 +500,12 @@ export function CommunicationPanel({
 
   const acceptCall = async () => {
     if (!incomingCall) return;
+    if (webRTCService.isInGroupCall()) {
+      toast({ title: "In a group call", description: "End the group session first.", variant: "destructive" });
+      return;
+    }
 
+    setIsGroupCall(false);
     setCallType(incomingCall.callType);
     setIsInCall(true);
     setIsCallConnecting(true);
@@ -476,6 +542,8 @@ export function CommunicationPanel({
 
   const endCall = useCallback((sendSignal: boolean = true) => {
     webRTCService.endCall(sendSignal);
+    setIsGroupCall(false);
+    setGroupRemoteStreams(new Map());
     setIsInCall(false);
     setCallType(null);
     setIsMuted(false);
@@ -492,6 +560,124 @@ export function CommunicationPanel({
 
     if (isFullscreen && document.fullscreenElement) document.exitFullscreen();
   }, [isFullscreen]);
+
+  const toggleGroupMember = (userId: string) => {
+    setGroupSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else {
+        if (next.size >= GROUP_CALL_MAX_MEMBERS - 1) {
+          toast({
+            title: "Group size limit",
+            description: `You can add at most ${GROUP_CALL_MAX_MEMBERS - 1} other people (${GROUP_CALL_MAX_MEMBERS} including you).`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const startGroupCall = async (type: "voice" | "video") => {
+    const members = onlineUsers.filter(u => groupSelectedIds.has(u.id) && u.status !== "in_call");
+    if (members.length === 0) {
+      toast({
+        title: "Select participants",
+        description: "Choose at least one available device for a group call.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsGroupCall(true);
+    setCallType(type);
+    setIsInCall(true);
+    setIsCallConnecting(true);
+    setConnectionQuality("connecting");
+    setLiveStats(null);
+    setGroupRemoteStreams(new Map());
+    setSelectedUser(members[0]);
+    try {
+      await webRTCService.startGroupCall(
+        members.map(u => ({ id: u.id, name: u.name })),
+        type,
+      );
+      setGroupSelectMode(false);
+      setGroupSelectedIds(new Set());
+      setIsCallConnecting(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not start group call";
+      toast({ title: "Group call failed", description: msg, variant: "destructive" });
+      endCall(false);
+    }
+  };
+
+  const acceptGroupInvite = async () => {
+    if (!incomingGroupInvite) return;
+    const inv = incomingGroupInvite;
+    setIncomingGroupInvite(null);
+    setIsGroupCall(true);
+    setCallType(inv.callType);
+    setIsInCall(true);
+    setIsCallConnecting(true);
+    setConnectionQuality("connecting");
+    setLiveStats(null);
+    setGroupRemoteStreams(new Map());
+    const hostUser =
+      onlineUsers.find(u => u.id === inv.from) ?? {
+        id: inv.from,
+        name: inv.hostName,
+        deviceId: "unknown",
+        status: "online" as const,
+        lastSeen: Date.now(),
+      };
+    setSelectedUser(hostUser);
+    try {
+      await webRTCService.acceptGroupInvite(inv);
+      setIsCallConnecting(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not join group call";
+      toast({ title: "Group call failed", description: msg, variant: "destructive" });
+      endCall(false);
+    }
+  };
+
+  const rejectGroupInvite = () => {
+    if (!incomingGroupInvite) return;
+    webRTCService.rejectGroupInvite(incomingGroupInvite.from, incomingGroupInvite);
+    setIncomingGroupInvite(null);
+  };
+
+  const peerDisplayName = useCallback(
+    (id: string) => onlineUsers.find(u => u.id === id)?.name ?? id.slice(0, 8),
+    [onlineUsers],
+  );
+
+  const runConnectivityProbe = async () => {
+    setConnectivityProbeRunning(true);
+    try {
+      const r = await probeCyrusConnectivity();
+      const port = r.stack?.fused?.livePort;
+      const origin = r.stack?.fused?.liveOrigin;
+      const stackHint =
+        port != null ? `API/stack port ${port}${origin ? ` · ${origin}` : ""}` : "";
+      toast({
+        title: r.httpOk && r.wsOk ? "Connectivity OK" : "Connectivity issue",
+        description: [
+          `HTTP ${r.httpOk ? "OK" : "fail"}${r.httpStatus != null ? ` (${r.httpStatus})` : ""}`,
+          `WebSocket ${r.wsOk ? "OK" : r.wsError || "fail"}`,
+          `${r.elapsedMs} ms`,
+          stackHint,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        variant: r.httpOk && r.wsOk ? "default" : "destructive",
+      });
+    } finally {
+      setConnectivityProbeRunning(false);
+    }
+  };
 
   const toggleMute = () => setIsMuted(webRTCService.toggleMute());
   const toggleVideo = () => setIsVideoOff(webRTCService.toggleVideo());
@@ -593,6 +779,26 @@ export function CommunicationPanel({
           </div>
 
           <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  disabled={connectivityProbeRunning}
+                  onClick={() => void runConnectivityProbe()}
+                  data-testid="button-connectivity-probe"
+                  aria-label="Check API and WebSocket signaling"
+                >
+                  <Wifi className={`h-4 w-4 ${connectivityProbeRunning ? "animate-pulse" : ""}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                Run HTTP (`/api/stack/ports`) + WebSocket probe (`/ws?probe=1`) — verifies API reachability and
+                that signaling upgrades are not blocked by a proxy.
+              </TooltipContent>
+            </Tooltip>
             <Badge variant="outline" className="gap-1 font-mono text-xs">
               <Users className="w-3 h-3" />
               {onlineUsers.length} DEVICE{onlineUsers.length !== 1 ? "S" : ""}
@@ -649,6 +855,54 @@ export function CommunicationPanel({
           </Card>
         )}
 
+        {/* ── Incoming group invite ───────────────────────────────────────── */}
+        {incomingGroupInvite && (
+          <Card className="border-2 border-violet-500/60 bg-gradient-to-br from-violet-500/10 via-background to-violet-500/5 overflow-hidden relative">
+            <CardContent className="p-6 relative">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Avatar className="w-16 h-16 border-2 border-violet-500/50">
+                      <AvatarFallback className="text-2xl font-bold bg-violet-500/20">
+                        {incomingGroupInvite.hostName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute -bottom-1 -right-1">
+                      <Users className="w-6 h-6 text-violet-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-bold text-xl">{incomingGroupInvite.hostName}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="font-mono text-xs">
+                        {incomingGroupInvite.callType === "video" ? (
+                          <><Video className="w-3 h-3 mr-1" /> GROUP VIDEO</>
+                        ) : (
+                          <><Phone className="w-3 h-3 mr-1" /> GROUP VOICE</>
+                        )}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {incomingGroupInvite.memberIds.length} participants (max {GROUP_CALL_MAX_MEMBERS})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button size="lg" variant="destructive" onClick={rejectGroupInvite}
+                    className="rounded-full w-14 h-14" data-testid="button-reject-group-invite">
+                    <PhoneOff className="w-6 h-6" />
+                  </Button>
+                  <Button size="lg" onClick={() => void acceptGroupInvite()}
+                    className="rounded-full w-14 h-14 bg-violet-600 hover:bg-violet-700" data-testid="button-accept-group-invite">
+                    <Phone className="w-6 h-6" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ── Active Call UI ──────────────────────────────────────────────── */}
         {isInCall && (
           <Card
@@ -660,7 +914,7 @@ export function CommunicationPanel({
               <div className={`relative ${callType === "video" ? (isFullscreen ? "h-full" : "aspect-video") : "py-16"} bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950`}>
 
                 {/* ── Video feeds ─────────────────────────────────────────── */}
-                {callType === "video" && (
+                {callType === "video" && !isGroupCall && (
                   <>
                     <video ref={remoteVideoRef} autoPlay playsInline
                       className="absolute inset-0 w-full h-full object-cover" data-testid="video-remote" />
@@ -702,8 +956,42 @@ export function CommunicationPanel({
                   </>
                 )}
 
+                {callType === "video" && isGroupCall && (
+                  <>
+                    <div className="absolute inset-0 z-0 p-2 pb-36 overflow-auto">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {Array.from(groupRemoteStreams.entries()).map(([id, stream]) => (
+                          <RemotePeerVideo key={id} stream={stream} label={peerDisplayName(id)} />
+                        ))}
+                      </div>
+                    </div>
+                    {isCallConnecting && groupRemoteStreams.size === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm z-10">
+                        <div className="text-center">
+                          <div className="relative w-24 h-24 mx-auto mb-4">
+                            <div className="absolute inset-0 border-4 border-violet-500/30 rounded-full" />
+                            <div className="absolute inset-0 border-4 border-transparent border-t-violet-400 rounded-full animate-spin" />
+                            <Users className="absolute inset-0 m-auto w-10 h-10 text-violet-400 animate-pulse" />
+                          </div>
+                          <p className="text-lg font-mono text-violet-300">GROUP VIDEO</p>
+                          <p className="text-sm text-muted-foreground mt-2">Waiting for participants…</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="absolute bottom-24 right-4 w-44 h-32 rounded-xl overflow-hidden border-2 border-white/20 shadow-2xl bg-slate-900 z-10">
+                      <video ref={localVideoRef} autoPlay playsInline muted
+                        className="w-full h-full object-cover scale-x-[-1]" data-testid="video-local-group" />
+                      {isVideoOff && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                          <VideoOff className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {/* ── Voice call UI ────────────────────────────────────────── */}
-                {callType === "voice" && (
+                {callType === "voice" && !isGroupCall && (
                   <div className="flex flex-col items-center justify-center py-8 relative z-10">
                     {/* Animated waveform background */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
@@ -757,6 +1045,46 @@ export function CommunicationPanel({
                   </div>
                 )}
 
+                {callType === "voice" && isGroupCall && (
+                  <div className="flex flex-col items-center justify-center py-8 relative z-10 px-4">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                      <Users className="w-40 h-40 text-violet-400" />
+                    </div>
+                    <Badge variant="secondary" className="mb-4 font-mono bg-violet-600/40 text-white border-violet-400/40">
+                      GROUP VOICE · {groupRemoteStreams.size + 1} ON LINK
+                    </Badge>
+                    <div className="flex flex-wrap justify-center gap-4 max-w-lg">
+                      <div className="flex flex-col items-center gap-1">
+                        <Avatar className="w-14 h-14 border-2 border-white/30">
+                          <AvatarFallback className="text-lg">You</AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-white/70 font-mono">You</span>
+                      </div>
+                      {Array.from(groupRemoteStreams.keys()).map(id => (
+                        <div key={id} className="flex flex-col items-center gap-1">
+                          <Avatar className="w-14 h-14 border-2 border-violet-400/50">
+                            <AvatarFallback className="text-lg bg-violet-900/40">
+                              {peerDisplayName(id)[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-white/80 font-mono truncate max-w-[88px]">{peerDisplayName(id)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {!isCallConnecting && !isMuted && (
+                      <div className="mt-6">
+                        <AudioLevelBar level={audioLevel} />
+                      </div>
+                    )}
+                    {isCallConnecting && groupRemoteStreams.size === 0 && (
+                      <div className="mt-6 flex items-center gap-2">
+                        <Radio className="w-4 h-4 text-violet-400 animate-pulse" />
+                        <span className="text-sm text-violet-300 animate-pulse">Connecting…</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* ── Top HUD ──────────────────────────────────────────────── */}
                 <div className={`absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -764,6 +1092,13 @@ export function CommunicationPanel({
                       <Shield className="w-3 h-3 mr-1 text-green-400" />
                       E2E ENCRYPTED
                     </Badge>
+
+                    {isGroupCall && (
+                      <Badge variant="secondary" className="bg-violet-700/70 backdrop-blur-sm font-mono text-xs gap-1">
+                        <Users className="w-3 h-3" />
+                        GROUP · {GROUP_CALL_MAX_MEMBERS} MAX
+                      </Badge>
+                    )}
 
                     <Badge variant="secondary" className={`bg-black/60 backdrop-blur-sm font-mono text-xs gap-1 ${qualityColor(connectionQuality)}`}>
                       <QualityIcon quality={connectionQuality} />
@@ -854,8 +1189,8 @@ export function CommunicationPanel({
                       </Tooltip>
                     )}
 
-                    {/* Screen share */}
-                    {callType === "video" && (
+                    {/* Screen share (1:1 only — mesh group uses per-peer tracks) */}
+                    {callType === "video" && !isGroupCall && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button size="lg" variant={isScreenSharing ? "default" : "secondary"} onClick={toggleScreenShare}
@@ -868,17 +1203,19 @@ export function CommunicationPanel({
                       </Tooltip>
                     )}
 
-                    {/* Record */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="lg" variant={isRecording ? "destructive" : "secondary"} onClick={toggleRecording}
-                          className={`rounded-full w-13 h-13 backdrop-blur-sm border-0 ${isRecording ? "" : "bg-white/10 hover:bg-white/20"}`}
-                          data-testid="button-record">
-                          {isRecording ? <Square className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{isRecording ? "Stop recording" : "Record call"}</TooltipContent>
-                    </Tooltip>
+                    {/* Record (1:1 only) */}
+                    {!isGroupCall && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="lg" variant={isRecording ? "destructive" : "secondary"} onClick={toggleRecording}
+                            className={`rounded-full w-13 h-13 backdrop-blur-sm border-0 ${isRecording ? "" : "bg-white/10 hover:bg-white/20"}`}
+                            data-testid="button-record">
+                            {isRecording ? <Square className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{isRecording ? "Stop recording" : "Record call"}</TooltipContent>
+                      </Tooltip>
+                    )}
 
                     {/* End call */}
                     <Button size="lg" variant="destructive" onClick={() => endCall(true)}
@@ -889,11 +1226,22 @@ export function CommunicationPanel({
                   </div>
 
                   {/* Participant info */}
-                  <div className="flex items-center justify-center gap-2 mt-3">
-                    <Avatar className="w-5 h-5">
-                      <AvatarFallback className="text-xs">{selectedUser?.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <span className="text-white/70 text-xs font-mono">{selectedUser?.name}</span>
+                  <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                    {isGroupCall ? (
+                      <>
+                        <Users className="w-4 h-4 text-violet-300" />
+                        <span className="text-white/70 text-xs font-mono">
+                          Group · {groupRemoteStreams.size + 1} on link
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Avatar className="w-5 h-5">
+                          <AvatarFallback className="text-xs">{selectedUser?.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-white/70 text-xs font-mono">{selectedUser?.name}</span>
+                      </>
+                    )}
                     {liveStats && (
                       <span className={`text-xs font-mono ${qualityColor(liveStats.quality)}`}>
                         · {liveStats.roundTripTime}ms
@@ -935,6 +1283,61 @@ export function CommunicationPanel({
               {/* ── Devices tab ─────────────────────────────────────────── */}
               {activeTab === "users" && (
                 <div className="space-y-2">
+                  {onlineUsers.length > 0 && (
+                    <div className="rounded-xl border bg-gradient-to-r from-violet-500/10 to-transparent p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">Group call</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Up to {GROUP_CALL_MAX_MEMBERS} people total. Select participants, then start group voice or video.
+                          </p>
+                        </div>
+                        <Button
+                          variant={groupSelectMode ? "default" : "outline"}
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            setGroupSelectMode(v => {
+                              if (v) setGroupSelectedIds(new Set());
+                              return !v;
+                            });
+                          }}
+                          data-testid="button-toggle-group-select"
+                        >
+                          {groupSelectMode ? "Cancel selection" : "Select group participants"}
+                        </Button>
+                      </div>
+                      {groupSelectMode && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-mono text-muted-foreground">
+                            Selected: {groupSelectedIds.size} / {GROUP_CALL_MAX_MEMBERS - 1}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={groupSelectedIds.size === 0}
+                            onClick={() => void startGroupCall("voice")}
+                            className="gap-1"
+                            data-testid="button-start-group-voice"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            Group voice
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={groupSelectedIds.size === 0}
+                            onClick={() => void startGroupCall("video")}
+                            className="gap-1 bg-violet-600 hover:bg-violet-700"
+                            data-testid="button-start-group-video"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            Group video
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {onlineUsers.length === 0 ? (
                     <div className="text-center py-12 space-y-4">
                       <div className="w-20 h-20 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
@@ -952,6 +1355,15 @@ export function CommunicationPanel({
                       <div key={user.id}
                         className="flex items-center justify-between p-4 rounded-xl border bg-gradient-to-r from-muted/30 to-transparent hover-elevate transition-all">
                         <div className="flex items-center gap-4">
+                          {groupSelectMode && (
+                            <Checkbox
+                              checked={groupSelectedIds.has(user.id)}
+                              onCheckedChange={() => toggleGroupMember(user.id)}
+                              disabled={user.status === "in_call"}
+                              aria-label={`Include ${user.name} in group call`}
+                              data-testid={`checkbox-group-${user.id}`}
+                            />
+                          )}
                           <div className="relative">
                             <Avatar className="w-12 h-12 border-2 border-muted">
                               <AvatarFallback className="font-bold">{user.name[0]}</AvatarFallback>
@@ -986,7 +1398,7 @@ export function CommunicationPanel({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" onClick={() => startCall(user, "voice")}
-                                disabled={user.status === "in_call"}
+                                disabled={user.status === "in_call" || groupSelectMode}
                                 className="rounded-full text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30"
                                 data-testid={`button-voice-call-${user.id}`}>
                                 <Phone className="w-5 h-5" />
@@ -998,7 +1410,7 @@ export function CommunicationPanel({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" onClick={() => startCall(user, "video")}
-                                disabled={user.status === "in_call"}
+                                disabled={user.status === "in_call" || groupSelectMode}
                                 className="rounded-full text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30"
                                 data-testid={`button-video-call-${user.id}`}>
                                 <Video className="w-5 h-5" />

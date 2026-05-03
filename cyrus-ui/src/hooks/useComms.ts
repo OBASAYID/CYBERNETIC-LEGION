@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { systemFetch } from "@/lib/system-api";
+import {
+  systemFetch,
+  resolveCyrusWebSocketUrl,
+  appendCommSignalingTokenToSearchParams,
+} from "@/lib/system-api";
 
 export interface NewsItem {
   title: string;
@@ -38,7 +42,10 @@ export function useComms() {
       toast({ title: "Set room ID", variant: "destructive" });
       return;
     }
-    const wsConn = new WebSocket(`${window.location.origin.replace(/^http/, "ws")}/ws?room=${remoteRoom}`);
+    const q = new URLSearchParams();
+    q.set("room", remoteRoom);
+    appendCommSignalingTokenToSearchParams(q);
+    const wsConn = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${q.toString()}`));
     setWs(wsConn);
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     pcRef.current = pc;

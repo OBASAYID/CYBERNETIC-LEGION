@@ -98,11 +98,43 @@ export function BiologyPage() {
     }
   };
 
+  const commandHandoffText = () => {
+    if (dnaResult) {
+      const muts = dnaResult.mutations
+        ?.map((m) => `Position ${m.position}: ${m.type} (${m.impact})`)
+        .join("\n");
+      const genes = dnaResult.genes?.map((g) => `${g.name}: ${g.function}`).join("\n");
+      return [
+        `DNA analysis — length ${dnaResult.length}, GC ${typeof dnaResult.gcContent === "number" ? dnaResult.gcContent.toFixed(1) : dnaResult.gcContent}%`,
+        dnaResult.sequence ? `Sequence (excerpt):\n${dnaResult.sequence}` : "",
+        muts ? `Mutations:\n${muts}` : "",
+        genes ? `Genes:\n${genes}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    if (pathogenResult) {
+      const ps = pathogenResult.pathogens
+        ?.map((p) => `- ${p.name} (confidence ${p.confidence}, ${p.severity}): ${p.treatment}`)
+        .join("\n");
+      return [
+        `Pathogen screen — ${pathogenResult.detected ? "organisms detected" : "none detected"}, sample quality ${pathogenResult.sampleQuality}`,
+        ps || "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    if (dnaSequence.trim()) return `DNA sequence input:\n${dnaSequence.trim()}`;
+    return undefined;
+  };
+
   return (
     <ModuleWorkspacePageShell
       title="Biology Lab Analysis"
       subtitle="DNA sequencing and pathogen detection"
       icon={Microscope}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="biology-lab"
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

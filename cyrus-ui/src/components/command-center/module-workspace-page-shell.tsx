@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FieldDateTimeHud } from "./field-datetime-hud";
+import type { ModuleHandoffAttachment, ModuleHandoffLargeRef } from "@shared/module-handoff";
 import { ModuleCommandConsole, ModuleCommandConsoleDock } from "./module-command-console";
 import { useWildlifeBackground } from "@/hooks/use-wildlife-background";
 
@@ -34,6 +35,14 @@ export type ModuleWorkspacePageShellProps = {
   commandConsole?: boolean | React.ReactNode;
   /** Optional context string for the default command console (merged with page title). */
   commandContext?: string;
+  /** Text to prefer for Pipeline (Share) when the bottom console has no chat yet — e.g. document output. */
+  commandHandoffText?: () => string | undefined;
+  /** `sourceModule` label stored with that handoff (e.g. `documents-intelligence`). */
+  commandHandoffSource?: string;
+  /** Optional small files to include in pipeline handoff. */
+  commandHandoffAttachments?: () => ModuleHandoffAttachment[] | undefined;
+  /** Large pipeline handoff files (IndexedDB refs). */
+  commandHandoffLargeRefs?: () => ModuleHandoffLargeRef[] | undefined;
 };
 
 function ModuleWorkspaceBackdrop() {
@@ -86,6 +95,10 @@ export function ModuleWorkspacePageShell({
   containerClassName,
   commandConsole = true,
   commandContext,
+  commandHandoffText,
+  commandHandoffSource,
+  commandHandoffAttachments,
+  commandHandoffLargeRefs,
 }: ModuleWorkspacePageShellProps) {
   const [commandConsoleMinimized, setCommandConsoleMinimized] = useState(false);
 
@@ -118,6 +131,10 @@ export function ModuleWorkspacePageShell({
                 pageContext={commandContext?.trim() || [title, subtitle].filter(Boolean).join(" — ")}
                 scope="module"
                 onLayoutChange={setCommandConsoleMinimized}
+                workspaceHandoffText={commandHandoffText}
+                workspaceHandoffSource={commandHandoffSource}
+                workspaceHandoffAttachments={commandHandoffAttachments}
+                workspaceHandoffLargeRefs={commandHandoffLargeRefs}
               />
             )
           : null;

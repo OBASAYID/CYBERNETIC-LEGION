@@ -167,11 +167,29 @@ export function SecurityPage() {
     await navigator.clipboard.writeText(text);
   };
 
+  const commandHandoffText = () => {
+    const blocks: string[] = [];
+    const pt = plaintext.trim();
+    const et = encryptedText.trim();
+    const dt = decryptedText.trim();
+    const hi = hashInput.trim();
+    const ho = hashOutput.trim();
+    if (pt) blocks.push(`Plaintext:\n${pt}`);
+    if (et) blocks.push(`Ciphertext:\n${et}`);
+    if (dt) blocks.push(`Decrypted:\n${dt}`);
+    if (ho) blocks.push(`Hash output:\n${ho}`);
+    if (!blocks.length && hi) blocks.push(`Hash input:\n${hi}`);
+    if (!blocks.length) return undefined;
+    return `Security & encryption workspace\n\n${blocks.join("\n\n")}`;
+  };
+
   return (
     <ModuleWorkspacePageShell
       title="Security & Encryption"
       subtitle="AES-256-GCM encryption system"
       icon={Shield}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="security-encryption"
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

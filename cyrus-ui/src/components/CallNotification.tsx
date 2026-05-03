@@ -3,7 +3,7 @@
  *
  * Renders as a fixed overlay at the top of the viewport so it is visible
  * regardless of which page the user is on.  Plays a ringtone (Web Audio API
- * oscillator — no asset required) and auto-dismisses after 30 s.
+ * oscillator — no asset required) and auto-dismisses after 2 min if unanswered.
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -74,7 +74,7 @@ function useAutoDismiss(active: boolean, timeoutMs: number, onDismiss: () => voi
 
 export function CallNotification({ call, onAccept, onReject }: CallNotificationProps) {
   useRingtone(true);
-  useAutoDismiss(true, 30_000, onReject);
+  useAutoDismiss(true, 120_000, onReject);
 
   const isVideo = call.callType === "video";
   const initial = call.callerName?.[0]?.toUpperCase() ?? "?";

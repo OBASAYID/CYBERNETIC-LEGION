@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { systemFetch } from "@shared/cyrus-api-client";
+import {
+  systemFetch,
+  resolveCyrusWebSocketUrl,
+  appendCommSignalingTokenToSearchParams,
+} from "@shared/cyrus-api-client";
 import {
   createPeerConnectionConfig,
   getOptimalVideoConstraints,
@@ -277,10 +281,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -456,10 +460,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -582,10 +586,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -776,13 +780,16 @@ export function useComms() {
   const connectPresence = useCallback((displayName: string = "User") => {
     if (presenceWsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const deviceId = `device_${navigator.userAgent.substring(0, 20).replace(/\s/g, '_')}`;
-    
-    const ws = new WebSocket(
-      `${wsProtocol}//${window.location.host}/ws?userId=${userId}&name=${encodeURIComponent(displayName)}&deviceId=${deviceId}`
-    );
+
+    const q = new URLSearchParams({
+      userId,
+      name: displayName,
+      deviceId,
+    });
+    appendCommSignalingTokenToSearchParams(q);
+    const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${q.toString()}`));
     presenceWsRef.current = ws;
 
     ws.onopen = () => {

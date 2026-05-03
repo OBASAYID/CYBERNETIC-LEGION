@@ -1,6 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import multer, { type StorageEngine } from "multer";
+import { parseMaxAnalysisChunks, parseMaxUploadFileBytes } from "../shared/cyrus-document-limits.js";
 
 type MulterFile = Express.Multer.File;
 type HealthProvider = string;
@@ -528,6 +529,14 @@ const getOpenAIClient = (): OpenAI | AzureOpenAI => {
   return openai;
 };
 
+function clampAnalysisChunks(maxChunksRaw: string | undefined): number | undefined {
+  const cap = parseMaxAnalysisChunks();
+  if (!maxChunksRaw) return undefined;
+  const n = parseInt(String(maxChunksRaw), 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(cap, Math.max(1, n));
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: path.join(process.cwd(), "public", "uploads"),
@@ -536,7 +545,7 @@ const upload = multer({
       cb(null, uniqueName);
     },
   }) as StorageEngine,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: parseMaxUploadFileBytes() },
 });
 
 export async function registerRoutes(
@@ -986,7 +995,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -1077,7 +1086,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -1154,7 +1163,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
 
       const job = await createAnalysisJob({
         userId: null, // TODO: get from auth

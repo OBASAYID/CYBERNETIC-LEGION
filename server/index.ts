@@ -16,10 +16,13 @@ import { logger } from "./observability/logger.js";
 import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
+import { parseExpressJsonBodyLimit } from "../shared/cyrus-document-limits.js";
 
 
 const dotenvResult = dotenv.config();
 syncFusedStackPortEnv();
+
+const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
 
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
@@ -273,7 +276,7 @@ app.get("/api/status", (_req, res) => {
     metrics: getMetrics(),
   });
 });
-app.post("/api/cyrus", express.json({ limit: "2mb" }), (req, res, next) => {
+app.post("/api/cyrus", express.json({ limit: CYRUS_JSON_BODY_LIMIT }), (req, res, next) => {
   // Keep the old canned demo response only when explicitly requested.
   // Otherwise, pass through so the richer handler in `server/routes.ts` can run.
   if (process.env.CYRUS_ENABLE_LEGACY_DEMO_ROUTE !== "true") {
@@ -442,7 +445,7 @@ declare module "http" {
   }
 }
 
-app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: CYRUS_JSON_BODY_LIMIT, verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use("/api", (req, res, next) => {

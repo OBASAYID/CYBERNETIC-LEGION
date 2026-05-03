@@ -37,6 +37,45 @@ export function systemApiUrl(pathOrUrl: string): string {
   return resolveCyrusApiUrl(p);
 }
 
+/**
+ * WebSocket URL consistent with {@link systemFetch}: same host as the page unless
+ * `VITE_CYRUS_API_BASE` targets a split-origin API (signaling then uses that host).
+ *
+ * @param pathAndQuery Path starting with `/`, e.g. `/ws?userId=…&name=…`
+ */
+/** When server `CYRUS_COMM_WS_TOKEN` is set, pass the same value from `VITE_CYRUS_COMM_WS_TOKEN` in the browser. */
+export function appendCommSignalingTokenToSearchParams(q: URLSearchParams): void {
+  if (typeof import.meta === "undefined") return;
+  const env = (import.meta as ImportMeta & { env?: { VITE_CYRUS_COMM_WS_TOKEN?: string } }).env;
+  const t = String(env?.VITE_CYRUS_COMM_WS_TOKEN || "").trim();
+  if (t) q.set("token", t);
+}
+
+export function resolveCyrusWebSocketUrl(pathAndQuery: string): string {
+  const path = pathAndQuery.trim().startsWith("/") ? pathAndQuery.trim() : `/${pathAndQuery.trim()}`;
+  const base = getCyrusApiBase();
+
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  if (!base) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}${path}`;
+  }
+
+  try {
+    const normalized =
+      base.startsWith("http://") || base.startsWith("https://") ? base : `https://${base.replace(/^\/\//, "")}`;
+    const u = new URL(normalized);
+    const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${u.host}${path}`;
+  } catch {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}${path}`;
+  }
+}
+
 export function systemCredentials(): RequestCredentials {
   return resolveCyrusApiCredentials();
 }

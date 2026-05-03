@@ -161,11 +161,28 @@ export function BloodSamplingPage() {
     return value >= range.min && value <= range.max;
   };
 
+  const commandHandoffText = () => {
+    if (!session.results) return undefined;
+    const r = session.results;
+    return [
+      "Blood lab snapshot (automated sampling workspace)",
+      `Hemoglobin: ${r.hemoglobin} g/dL`,
+      `WBC: ${r.whiteBloodCells} K/µL`,
+      `RBC: ${r.redBloodCells} M/µL`,
+      `Platelets: ${r.platelets} K/µL`,
+      `Glucose: ${r.glucose} mg/dL`,
+      `SpO₂: ${r.oxygenLevel}%`,
+      `Sample quality: ${r.quality}`,
+    ].join("\n");
+  };
+
   return (
     <ModuleWorkspacePageShell
       title="Blood Sampling System"
       subtitle="Automated collection and analysis"
       icon={Droplets}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="blood-sampling"
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

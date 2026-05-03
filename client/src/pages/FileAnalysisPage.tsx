@@ -1,5 +1,16 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useFileAnalysis } from "../hooks/useFileAnalysis";
+import {
+  encodeFileAsHandoffAttachment,
+  readCommandSearchShare,
+  readHandoff,
+  registerLargeHandoffFile,
+  resolveHandoffPayloadToFiles,
+  revokeHandoffPayloadBlobs,
+  type ModuleHandoffAttachment,
+  type ModuleHandoffLargeRef,
+} from "@shared/module-handoff";
 import { CyrusHumanoid } from "../components/CyrusHumanoid";
 import {
   FileUp,
@@ -20,12 +31,17 @@ import { ModuleWorkspacePageShell } from "@/components/command-center/module-wor
 
 export function FileAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [location] = useLocation();
+  const handoffConsumedRef = useRef(false);
   const [docType, setDocType] = useState("report");
   const [docContent, setDocContent] = useState("");
   const [docAudience, setDocAudience] = useState("official");
+  const [handoffAttach, setHandoffAttach] = useState<ModuleHandoffAttachment[] | undefined>();
+  const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
 
   const {
     currentFile,
+    primeHandoffFile,
     lastReport,
     fullPipeline,
     generateDocument,
@@ -49,6 +65,70 @@ export function FileAnalysisPage() {
     });
   };
 
+  const commandHandoffText = () => {
+    if (generateDocument.data?.rendered?.trim()) return generateDocument.data.rendered.trim();
+    if (docContent.trim()) return docContent.trim();
+    if (lastReport) {
+      const parts = [
+        lastReport.analysis.summary,
+        ...(lastReport.analysis.keyFindings || []),
+        ...(lastReport.analysis.recommendations || []),
+      ].filter(Boolean);
+      if (parts.length) return parts.join("\n\n");
+    }
+    return undefined;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentFile) {
+      setHandoffAttach(undefined);
+      setHandoffLargeRefs([]);
+      return;
+    }
+    const INLINE_MAX = 900_000;
+    if (currentFile.size <= INLINE_MAX) {
+      setHandoffLargeRefs([]);
+      void encodeFileAsHandoffAttachment(currentFile).then((a) => {
+        if (!cancelled) setHandoffAttach(a ? [a] : undefined);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setHandoffAttach(undefined);
+    void registerLargeHandoffFile(currentFile).then((ref) => {
+      if (cancelled) return;
+      setHandoffLargeRefs(ref ? [ref] : []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentFile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("handoff") !== "1") {
+      handoffConsumedRef.current = false;
+      return;
+    }
+    if (handoffConsumedRef.current) return;
+    handoffConsumedRef.current = true;
+    const h = readHandoff(true);
+    if (!h) return;
+
+    void (async () => {
+      try {
+        if (h.text.trim()) setDocContent(h.text);
+        const files = await resolveHandoffPayloadToFiles(h);
+        if (files[0]) primeHandoffFile(files[0]);
+      } finally {
+        await revokeHandoffPayloadBlobs(h);
+      }
+    })();
+  }, [location, primeHandoffFile]);
+
   const getRiskColor = (level?: string) => {
     switch (level) {
       case "high":
@@ -65,6 +145,10 @@ export function FileAnalysisPage() {
       title="Document Intelligence"
       subtitle="Analysis and generation engine"
       icon={FileText}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="documents-intelligence"
+      commandHandoffAttachments={() => handoffAttach}
+      commandHandoffLargeRefs={() => (handoffLargeRefs.length ? handoffLargeRefs : undefined)}
       headerEnd={
         <>
           <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 md:flex">
@@ -227,6 +311,17 @@ export function FileAnalysisPage() {
                     placeholder="Enter content or notes for document generation..."
                     className="w-full h-28 bg-gray-800/50 text-white p-4 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-500/50 border border-gray-700/50 placeholder-gray-500"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = readCommandSearchShare()?.trim();
+                      if (!t) return;
+                      setDocContent((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${t}` : t));
+                    }}
+                    className="w-full rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-500/20"
+                  >
+                    Load last CYRUS command search into this field
+                  </button>
 
                   <button
                     onClick={handleGenerateDoc}

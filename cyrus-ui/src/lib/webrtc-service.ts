@@ -1,4 +1,12 @@
-import { systemFetch } from "@/lib/system-api";
+import {
+  systemFetch,
+  resolveCyrusWebSocketUrl,
+  appendCommSignalingTokenToSearchParams,
+} from "@/lib/system-api";
+import { GroupMeshSession, GROUP_CALL_MAX_MEMBERS, type GroupInvitePayload } from "@/lib/group-mesh";
+
+export type { GroupInvitePayload } from "@/lib/group-mesh";
+export { GROUP_CALL_MAX_MEMBERS } from "@/lib/group-mesh";
 
 // WebRTC Service for Voice and Video Calls
 // Enterprise-Grade Real-Time Communication System
@@ -109,6 +117,17 @@ type ScreenShareHandler = (stream: MediaStream | null) => void;
 type RecordingHandler = (state: "started" | "stopped", blob?: Blob) => void;
 type DeviceListHandler = (devices: MediaDeviceInfo2[]) => void;
 type AudioLevelHandler = (level: number) => void;
+
+/**
+ * How long we tolerate `connectionState === "disconnected"` before auto-hangup.
+ * Short values kill otherwise healthy long calls (Chrome often blips "disconnected").
+ * Target: stable sessions up to ~1 hour on normal networks.
+ */
+const PEER_DISCONNECTED_GRACE_MS = 50 * 60 * 1000; // 50 min (terrestrial)
+const PEER_DISCONNECTED_GRACE_MS_SATELLITE = 55 * 60 * 1000; // 55 min (NTN / satellite IP)
+/** After sustained "failed", give ICE restart time before tearing down. */
+const PEER_FAILED_GRACE_MS = 10 * 60 * 1000; // 10 min
+const PEER_FAILED_GRACE_MS_SATELLITE = 12 * 60 * 1000; // 12 min
 
 // ─── ICE / TURN Configuration ─────────────────────────────────────────────────
 
@@ -321,6 +340,12 @@ class WebRTCService {
   private remoteIceServers: RTCIceServer[] | null = null;
   /** Terrestrial vs NTN/satellite IP — drives capture, encoding caps, and hangup windows. */
   private linkProfile: "terrestrial" | "satellite" = "terrestrial";
+
+  /** Full-mesh group call (≤10) — mutually exclusive with {@link peerConnection} 1:1 call. */
+  private groupMesh: GroupMeshSession | null = null;
+  private readonly groupSignalQueue: Record<string, unknown>[] = [];
+  private onIncomingGroupInviteHandler: ((d: GroupInvitePayload & { from: string }) => void) | null = null;
+  private onGroupRemoteStreamHandler: ((peerId: string, stream: MediaStream) => void) | null = null;
 
   // ── Reconnection / Heartbeat ───────────────────────────────────────────────
   private reconnectAttempts: number = 0;
@@ -593,12 +618,12 @@ class WebRTCService {
         this.socket = null;
       }
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const q = new URLSearchParams();
       if (this.userId) q.set("userId", this.userId);
       if (this.userName) q.set("name", this.userName);
       q.set("deviceId", this.deviceId);
-      const wsUrl = `${protocol}//${window.location.host}/ws?${q.toString()}`;
+      appendCommSignalingTokenToSearchParams(q);
+      const wsUrl = resolveCyrusWebSocketUrl(`/ws?${q.toString()}`);
 
       console.log("[WebRTC] Connecting to signaling server:", wsUrl);
 
@@ -768,6 +793,36 @@ class WebRTCService {
         }
         break;
 
+      case "group-invite": {
+        const d = message.data as GroupInvitePayload | undefined;
+        if (d?.roomId && Array.isArray(d.memberIds) && this.onIncomingGroupInviteHandler) {
+          this.onIncomingGroupInviteHandler({
+            from: message.from,
+            roomId: d.roomId,
+            callType: d.callType === "video" ? "video" : "voice",
+            memberIds: d.memberIds,
+            hostName: typeof d.hostName === "string" ? d.hostName : "Host",
+          });
+        }
+        break;
+      }
+
+      case "group-offer":
+      case "group-answer":
+      case "group-ice-candidate":
+        if (this.groupMesh?.isActive()) {
+          await this.groupMesh.handleSignal(message as Record<string, unknown>);
+        } else {
+          this.groupSignalQueue.push(message as Record<string, unknown>);
+        }
+        break;
+
+      case "group-end":
+        if (this.groupMesh?.isActive()) {
+          this.disposeGroupLocal(false);
+        }
+        break;
+
       case "call-request":
         console.log("[WebRTC] Incoming call from:", message.from);
         if (this.onIncomingCall) {
@@ -913,7 +968,13 @@ class WebRTCService {
       if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
         const isFailed = pc.connectionState === "failed";
         const sat = this.linkProfile === "satellite";
-        const hangupAfterMs = isFailed ? (sat ? 40_000 : 20_000) : sat ? 55_000 : 35_000;
+        const hangupAfterMs = isFailed
+          ? sat
+            ? PEER_FAILED_GRACE_MS_SATELLITE
+            : PEER_FAILED_GRACE_MS
+          : sat
+            ? PEER_DISCONNECTED_GRACE_MS_SATELLITE
+            : PEER_DISCONNECTED_GRACE_MS;
         this.callTeardownTimer = setTimeout(() => {
           this.callTeardownTimer = null;
           if (
@@ -1304,6 +1365,11 @@ class WebRTCService {
   async startCall(targetUserId: string, targetUserName: string, callType: "voice" | "video"): Promise<void> {
     console.log(`[WebRTC] Starting ${callType} call to ${targetUserName}`);
 
+    if (this.groupMesh?.isActive()) {
+      console.warn("[WebRTC] End group call before starting a 1:1 call");
+      return;
+    }
+
     this.currentCallUserId = targetUserId;
     this.currentCallUserName = targetUserName;
     this.pendingCallType = callType;
@@ -1321,6 +1387,10 @@ class WebRTCService {
 
   async acceptCall(callerId: string, callerName: string, callType: "voice" | "video"): Promise<void> {
     console.log(`[WebRTC] Accepting ${callType} call from ${callerId}`);
+
+    if (this.groupMesh?.isActive()) {
+      throw new Error("End the group call before accepting a direct call");
+    }
 
     this.currentCallUserId = callerId;
     this.currentCallUserName = callerName;
@@ -1513,6 +1583,10 @@ class WebRTCService {
   // ── Public Call Controls ───────────────────────────────────────────────────
 
   endCall(sendSignal: boolean = true) {
+    if (this.groupMesh?.isActive()) {
+      this.disposeGroupLocal(sendSignal);
+      return;
+    }
     console.log("[WebRTC] Ending call, sendSignal:", sendSignal);
     this.recordCallHistory("good");
     this.cleanupCall(sendSignal);
@@ -1678,6 +1752,10 @@ class WebRTCService {
   // ── Call Recording ─────────────────────────────────────────────────────────
 
   startRecording(): boolean {
+    if (this.groupMesh?.isActive()) {
+      console.warn("[WebRTC] Group call recording is not supported in this build");
+      return false;
+    }
     if (!this.remoteStream && !this.localStream) {
       console.warn("[WebRTC] No streams to record");
       return false;
@@ -1805,6 +1883,154 @@ class WebRTCService {
   setOnDeviceList(handler: DeviceListHandler) { this.onDeviceList = handler; }
   setOnAudioLevel(handler: AudioLevelHandler) { this.onAudioLevel = handler; }
 
+  setOnIncomingGroupInvite(handler: (d: GroupInvitePayload & { from: string }) => void) {
+    this.onIncomingGroupInviteHandler = handler;
+  }
+
+  setOnGroupRemoteStream(handler: (peerId: string, stream: MediaStream) => void) {
+    this.onGroupRemoteStreamHandler = handler;
+  }
+
+  /** Start a mesh group session (host). Max {@link GROUP_CALL_MAX_MEMBERS} including you. */
+  async startGroupCall(participants: { id: string; name: string }[], callType: "voice" | "video"): Promise<void> {
+    if (!this.userId) throw new Error("Not signed in");
+    if (this.peerConnection) throw new Error("Already in a 1:1 call");
+    if (this.groupMesh?.isActive()) throw new Error("Already in a group call");
+
+    const ids = [this.userId, ...participants.map((p) => p.id)];
+    const unique = [...new Set(ids)];
+    if (unique.length > GROUP_CALL_MAX_MEMBERS) {
+      throw new Error(`Maximum ${GROUP_CALL_MAX_MEMBERS} participants (including you)`);
+    }
+
+    const roomId = crypto.randomUUID();
+    const memberIds = unique.sort();
+
+    this.groupMesh = new GroupMeshSession(
+      roomId,
+      this.userId,
+      memberIds,
+      callType,
+      this.linkProfile,
+      (m) => this.send(m)
+    );
+    this.groupMesh.setCallbacks({
+      onRemoteStream: (peerId, stream) => this.onGroupRemoteStreamHandler?.(peerId, stream),
+      onEnded: () => {
+        this.disposeGroupLocal(false);
+        if (this.onCallEnd) this.onCallEnd();
+      },
+    });
+
+    try {
+      this.localStream = await getMediaWithFallback(callType, this.linkProfile);
+      if (this.onLocalStream) this.onLocalStream(this.localStream);
+      this.startAudioLevelMonitoring();
+
+      await this.groupMesh.startWithLocalStream(this.localStream, { offerDelayMs: 1400 });
+      await this.flushGroupSignalQueue();
+
+      const payload: GroupInvitePayload = {
+        roomId,
+        callType,
+        memberIds,
+        hostName: this.userName || "Host",
+      };
+      for (const id of memberIds) {
+        if (id === this.userId) continue;
+        this.send({
+          type: "group-invite",
+          from: this.userId,
+          to: id,
+          data: payload,
+        });
+      }
+    } catch (e) {
+      this.disposeGroupLocal(false);
+      throw e;
+    }
+  }
+
+  async acceptGroupInvite(invite: GroupInvitePayload & { from: string }): Promise<void> {
+    if (!this.userId) throw new Error("Not signed in");
+    if (this.peerConnection) throw new Error("Already in a 1:1 call");
+    if (this.groupMesh?.isActive()) throw new Error("Already in a group call");
+    if (!invite.memberIds.includes(this.userId)) {
+      throw new Error("Invalid group invite");
+    }
+
+    this.groupMesh = new GroupMeshSession(
+      invite.roomId,
+      this.userId,
+      invite.memberIds,
+      invite.callType,
+      this.linkProfile,
+      (m) => this.send(m)
+    );
+    this.groupMesh.setCallbacks({
+      onRemoteStream: (peerId, stream) => this.onGroupRemoteStreamHandler?.(peerId, stream),
+      onEnded: () => {
+        this.disposeGroupLocal(false);
+        if (this.onCallEnd) this.onCallEnd();
+      },
+    });
+
+    try {
+      this.localStream = await getMediaWithFallback(invite.callType, this.linkProfile);
+      if (this.onLocalStream) this.onLocalStream(this.localStream);
+      this.startAudioLevelMonitoring();
+
+      await this.groupMesh.startWithLocalStream(this.localStream);
+      await this.flushGroupSignalQueue();
+    } catch (e) {
+      this.disposeGroupLocal(false);
+      throw e;
+    }
+  }
+
+  rejectGroupInvite(fromHostId: string, invite: GroupInvitePayload) {
+    this.send({
+      type: "group-reject",
+      from: this.userId,
+      to: fromHostId,
+      roomId: invite.roomId,
+      data: {},
+    });
+  }
+
+  endGroupCall() {
+    this.disposeGroupLocal(true);
+  }
+
+  isInGroupCall(): boolean {
+    return !!this.groupMesh?.isActive();
+  }
+
+  getGroupRemoteStreams(): ReadonlyMap<string, MediaStream> {
+    return this.groupMesh?.getRemoteStreams() ?? new Map();
+  }
+
+  private disposeGroupLocal(sendGroupEnd: boolean) {
+    if (this.groupMesh) {
+      this.groupMesh.dispose(sendGroupEnd);
+      this.groupMesh = null;
+    }
+    this.groupSignalQueue.length = 0;
+    this.stopAudioLevelMonitoring();
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+    }
+  }
+
+  private async flushGroupSignalQueue() {
+    const q = [...this.groupSignalQueue];
+    this.groupSignalQueue.length = 0;
+    for (const m of q) {
+      await this.groupMesh?.handleSignal(m);
+    }
+  }
+
   // ── Disconnect ─────────────────────────────────────────────────────────────
 
   disconnect() {
@@ -1815,6 +2041,7 @@ class WebRTCService {
       this.reconnectTimer = null;
     }
 
+    this.disposeGroupLocal(false);
     this.cleanupCall(true);
     this.stopHeartbeat();
 

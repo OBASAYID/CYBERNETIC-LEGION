@@ -1,3 +1,4 @@
+import { maxDocgenTargetPages } from "../../shared/cyrus-document-limits.js";
 import { templates, type DocType, defaultDocType, type Audience } from "./templates.js";
 import { analyzeDocument, type DocGenInput, type AnalysisOutput } from "./analyze.js";
 
@@ -32,9 +33,7 @@ export interface GeneratedDoc {
 }
 
 function maxTargetPages(): number {
-  const raw = Number(process.env.CYRUS_DOCGEN_MAX_PAGES);
-  if (Number.isFinite(raw) && raw >= 1) return Math.min(4000, Math.floor(raw));
-  return 2000;
+  return maxDocgenTargetPages();
 }
 
 function normalizeTargetPages(input: DocGenInput): number {

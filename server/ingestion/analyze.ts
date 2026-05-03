@@ -1,3 +1,4 @@
+import { parseMaxAnalysisChunks } from "../../shared/cyrus-document-limits.js";
 import { localLLM } from "../ai/local-llm-client.js";
 import { ExtractionResult } from "./extract.js";
 
@@ -7,7 +8,12 @@ const useLocalLLM = process.env.USE_LOCAL_LLM !== "false";
 let openaiClient: any = null;
 
 const CHUNK_SIZE = 24_000;
-const MAX_CHUNKS = 120;
+const MAX_CHUNKS = parseMaxAnalysisChunks();
+
+const LEGAL_BRIDGE_BODY_CAP = (() => {
+    const raw = parseInt(process.env.CYRUS_LEGAL_BRIDGE_MAX_CONTENT_CHARS || "800000", 10);
+    return Number.isFinite(raw) ? Math.min(8_000_000, Math.max(50_000, raw)) : 800_000;
+})();
 
 async function initOpenAIClient() {
     if (!openaiClient && !useLocalLLM && openaiApiKey) {
@@ -294,7 +300,7 @@ async function performLegalAnalysis(content: string, jurisdiction: string, stric
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                content: content.slice(0, 120_000),
+                content: content.slice(0, LEGAL_BRIDGE_BODY_CAP),
                 jurisdiction,
                 strictLegalReview: strictReview,
             }),

@@ -55,6 +55,14 @@ export function broadcastToAll(message: any, excludeUserId?: string): void {
   });
 }
 
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function initSignalingServer(httpServer: Server) {
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
@@ -110,25 +118,65 @@ export function initSignalingServer(httpServer: Server) {
 
   wss.on("connection", (ws, req) => {
     const url = new URL(req.url || "", `http://${req.headers.host}`);
+
+    const wsTokenRequired = String(process.env.CYRUS_COMM_WS_TOKEN || "").trim();
+    if (wsTokenRequired) {
+      const offered = String(url.searchParams.get("token") || "").trim();
+      if (offered !== wsTokenRequired) {
+        try {
+          ws.close(1008, "Signaling token required or invalid");
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+    }
+
+    if (url.searchParams.get("probe") === "1") {
+      try {
+        ws.send(JSON.stringify({ type: "probe-ack", ts: Date.now() }));
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => {
+        try {
+          ws.close(1000, "probe complete");
+        } catch {
+          /* ignore */
+        }
+      }, 50);
+      return;
+    }
+
     const roomId = url.searchParams.get("room");
     const userId = url.searchParams.get("userId") || `user_${uuid().substring(0, 8)}`;
-    const displayName = url.searchParams.get("name") || `User-${userId.substring(0, 6)}`;
+    const displayNameRaw = url.searchParams.get("name") || `User-${userId.substring(0, 6)}`;
+    const displayName = safeDecodeURIComponent(displayNameRaw);
     const deviceId = url.searchParams.get("deviceId") || uuid();
-    
+
     const clientId = uuid();
     (ws as any).clientId = clientId;
     (ws as any).userId = userId;
 
+    const prior = connectedUsers.get(userId);
     connectedUsers.set(userId, {
       id: userId,
-      displayName: decodeURIComponent(displayName),
+      displayName,
       ws,
       deviceId,
       lastActivity: new Date(),
       inCall: false,
     });
 
-    console.log(`[Presence] User connected: ${decodeURIComponent(displayName)} (${userId}) - Total users: ${connectedUsers.size}`);
+    if (prior && prior.ws !== ws) {
+      try {
+        prior.ws.close(1000, "Superseded by new connection");
+      } catch {
+        /* ignore */
+      }
+    }
+
+    console.log(`[Presence] User connected: ${displayName} (${userId}) - Total users: ${connectedUsers.size}`);
     console.log(`[Presence] All connected users: ${Array.from(connectedUsers.values()).map(u => u.displayName).join(", ")}`);
 
     if (roomId) {
@@ -211,6 +259,53 @@ export function initSignalingServer(httpServer: Server) {
 
           case "ice-restart-needed":
             forwardToPeer(msg.to, { type: "ice-restart-needed", from: userId }, "ice-restart-needed");
+            break;
+
+          case "group-invite":
+            forwardToPeer(
+              msg.to,
+              { type: "group-invite", from: userId, data: msg.data ?? {} },
+              "group-invite",
+            );
+            break;
+
+          case "group-offer":
+          case "group-answer":
+          case "group-ice-candidate": {
+            const tgt = msg.targetUserId;
+            if (typeof tgt === "string") {
+              forwardToPeer(
+                tgt,
+                {
+                  type: msg.type,
+                  roomId: msg.roomId,
+                  targetUserId: msg.targetUserId,
+                  from: userId,
+                  data: msg.data,
+                },
+                msg.type,
+              );
+            }
+            break;
+          }
+
+          case "group-reject":
+            forwardToPeer(
+              msg.to,
+              { type: "group-reject", from: userId, roomId: msg.roomId, data: msg.data ?? {} },
+              "group-reject",
+            );
+            break;
+
+          case "group-end":
+            if (msg.roomId) {
+              const peers = roomMap.get(msg.roomId) || new Set();
+              peers.forEach((peer) => {
+                if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+                  peer.send(JSON.stringify({ type: "group-end", roomId: msg.roomId, from: userId }));
+                }
+              });
+            }
             break;
 
           case "call-user":
@@ -400,7 +495,18 @@ export function initSignalingServer(httpServer: Server) {
     });
 
     ws.on("close", () => {
+      for (const [roomId, set] of roomMap.entries()) {
+        set.delete(ws);
+        if (set.size === 0) {
+          roomMap.delete(roomId);
+        }
+      }
+
       const user = connectedUsers.get(userId);
+      if (user?.ws !== ws) {
+        return;
+      }
+
       if (user?.currentRoomId) {
         const room = roomMap.get(user.currentRoomId);
         if (room) {
@@ -418,13 +524,6 @@ export function initSignalingServer(httpServer: Server) {
 
       console.log(`[Presence] User disconnected: ${user?.displayName || userId} - Remaining users: ${connectedUsers.size - 1}`);
       connectedUsers.delete(userId);
-      
-      for (const [roomId, set] of roomMap.entries()) {
-        set.delete(ws);
-        if (set.size === 0) {
-          roomMap.delete(roomId);
-        }
-      }
 
       broadcastPresence();
     });
