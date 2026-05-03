@@ -569,6 +569,57 @@ export async function registerRoutes(
   }
   console.log("[Socket.IO] Real-time communication server active");
 
+  // ===============================================
+  // LOGOUT ALL DEVICES ENDPOINT
+  // ===============================================
+  app.post("/api/logout-all", async (req: any, res) => {
+    // Resolve the authenticated user from session or token
+    const user = req.user || req.session?.user;
+    if (!user?.id) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const userId: string = user.id;
+
+    try {
+      // 1. Delete all PostgreSQL sessions for this user (connect-pg-simple stores
+      //    sessions in a `sessions` table; the sess column is JSONB so we can
+      //    filter by the embedded user id).
+      try {
+        const { pool: pgPool } = await import("./db.js");
+        await pgPool.query(
+          `DELETE FROM sessions WHERE sess->>'user' IS NOT NULL
+             AND (sess->'user'->>'id' = $1 OR sess->>'userId' = $1)`,
+          [userId],
+        );
+      } catch (dbErr) {
+        // Non-fatal: sessions table may not exist when using in-memory store
+        console.warn("[logout-all] Session DB cleanup skipped:", dbErr instanceof Error ? dbErr.message : String(dbErr));
+      }
+
+      // 2. Broadcast FORCE_LOGOUT over Socket.IO and disconnect all sockets for
+      //    this user so every open tab / device is kicked in real-time.
+      try {
+        const { broadcastForceLogout } = await import("./comms/socket-signaling.js");
+        broadcastForceLogout(userId);
+      } catch (wsErr) {
+        console.warn("[logout-all] Socket broadcast skipped:", wsErr instanceof Error ? wsErr.message : String(wsErr));
+      }
+
+      // 3. Destroy the current server-side session (if any) so this request's
+      //    cookie is also invalidated immediately.
+      if (req.session?.destroy) {
+        await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
+      }
+
+      console.log(`[logout-all] All sessions invalidated for user ${userId}`);
+      return res.json({ success: true, message: "Logged out from all devices" });
+    } catch (error) {
+      console.error("[logout-all] Error:", error);
+      return res.status(500).json({ error: "Failed to logout from all devices" });
+    }
+  });
+
   app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
     try {
       const m = await import("./comms/cyrus-comm-config.js");
