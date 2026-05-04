@@ -108,6 +108,27 @@ export function getGroupRooms(): GroupRoom[] {
   return Array.from(groupRooms.values());
 }
 
+/**
+ * Emit a FORCE_LOGOUT event to every active Socket.IO connection belonging to
+ * the given userId, then disconnect those sockets.  Called by the
+ * /api/logout-all endpoint so all devices are kicked in real-time.
+ */
+export function broadcastForceLogout(userId: string): void {
+  if (!ioInstance) return;
+  for (const [, user] of users) {
+    if (user.id === userId) {
+      const socket = ioInstance.sockets.sockets.get(user.socketId);
+      if (socket) {
+        socket.emit("force-logout", {
+          type: "FORCE_LOGOUT",
+          message: "Logged out from all devices",
+        });
+        socket.disconnect(true);
+      }
+    }
+  }
+}
+
 export function initSocketSignaling(server: HttpServer) {
   const io = new SocketIOServer(server, {
     cors: {

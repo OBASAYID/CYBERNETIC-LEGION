@@ -544,6 +544,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setIsConnected(false);
     });
 
+    socket.on('force-logout', (data: { type: string; message: string }) => {
+      console.warn("[Presence] FORCE_LOGOUT received:", data.message);
+      // Clear all local auth state so the user is fully signed out
+      localStorage.clear();
+      sessionStorage.clear();
+      // Redirect to the root — the app will show the login screen
+      window.location.href = "/";
+    });
+
   }, [addNotification, setupWebRTCMedia, cleanupMedia]);
 
   const disconnectPresence = useCallback(() => {
