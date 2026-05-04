@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { readHandoff } from "@shared/module-handoff";
-import { systemFetch } from "@shared/cyrus-api-client";
+import { systemFetch, commsAssetUrl } from "@shared/cyrus-api-client";
 import { useComms } from "../hooks/useComms";
 import { usePresence } from "../contexts/PresenceContext";
 import { Link, useLocation } from "wouter";
@@ -417,7 +417,7 @@ export function CommsPage() {
     return allUsers.map((u) => ({
       id: u.id,
       displayName: u.displayName,
-      profileImageUrl: liveProfile.get(u.id) ?? u.profileImageUrl ?? null,
+      profileImageUrl: commsAssetUrl(liveProfile.get(u.id) ?? u.profileImageUrl) ?? null,
       isOnline: on.has(u.id),
     }));
   }, [allUsers, onlineUsers]);
@@ -435,7 +435,7 @@ export function CommsPage() {
   }, [allUsers, onlineUsers, myId, localChatAvatar]);
 
   const getAvatarForUser = useCallback(
-    (id: string) => avatarByUserId.get(id) ?? null,
+    (id: string) => commsAssetUrl(avatarByUserId.get(id) ?? null),
     [avatarByUserId]
   );
 
@@ -451,11 +451,15 @@ export function CommsPage() {
           body: fd,
           headers: { "X-User-Id": myId, "X-Device-Id": myId },
         });
-        const data = await res.json();
+        const data = (await res.json().catch(() => ({}))) as { profileImageUrl?: string; error?: string };
         if (res.ok && data.profileImageUrl) {
+          const resolved = commsAssetUrl(data.profileImageUrl) ?? data.profileImageUrl;
           localStorage.setItem("cyrus-chat-avatar", data.profileImageUrl);
-          setLocalChatAvatar(data.profileImageUrl);
+          setLocalChatAvatar(resolved);
           await queryClient.invalidateQueries({ queryKey: ["/api/comms/users/all"] });
+        } else {
+          console.error("Avatar upload failed:", data.error || res.status);
+          window.alert(data.error || `Photo upload failed (${res.status}). Try a smaller JPG or PNG.`);
         }
       } catch (e) {
         console.error("Avatar upload failed:", e);

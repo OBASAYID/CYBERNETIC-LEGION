@@ -36,6 +36,14 @@ interface AllUser {
   isOnline: boolean;
   lastSeen: string | null;
   status: string;
+  onlineSince?: string | null;
+  lastLocation?: {
+    lat: number;
+    lng: number;
+    accuracy?: number | null;
+    at: string;
+  } | null;
+  locationShareEnabled?: boolean;
 }
 
 interface UserDiscoveryProps {
@@ -75,6 +83,9 @@ export function UserDiscovery({
     isOnline: boolean;
     inCall: boolean;
     lastSeen: string | null;
+    onlineSince?: string | null;
+    lastLocation?: AllUser["lastLocation"];
+    locationShareEnabled?: boolean;
   } | null>(null);
 
   const contactIds = useMemo(
@@ -139,6 +150,8 @@ export function UserDiscovery({
   const meshReachable = (userId: string) =>
     Boolean(meshLinkReady && onMeshCall && meshPeerIds?.has(userId));
 
+  const profileFromDirectory = (userId: string) => allUsers.find((u) => u.id === userId);
+
   const handleToggleContact = (userId: string, userName: string) => {
     if (isContact(userId)) {
       const contact = contactByUserId.get(userId);
@@ -161,6 +174,10 @@ export function UserDiscovery({
             className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
           />
         </div>
+        <p className="mt-2 text-[10px] leading-snug text-gray-500">
+          GPS on the ops map appears only when a user turns on <span className="text-cyan-400/90">Live location</span> in
+          Mesh (Calls tab) — coordinates are throttled and stored for the team roster.
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -177,15 +194,19 @@ export function UserDiscovery({
                 <div
                   key={user.id}
                   className="group bg-gray-800/40 hover:bg-gray-800/70 border border-gray-700/30 hover:border-cyan-500/20 rounded-xl p-3 transition-all cursor-pointer"
-                  onClick={() =>
+                  onClick={() => {
+                    const full = profileFromDirectory(user.id);
                     setSelectedUser({
                       id: user.id,
                       displayName: user.displayName,
                       isOnline: true,
                       inCall: user.inCall,
-                      lastSeen: user.lastActivity || null,
-                    })
-                  }
+                      lastSeen: full?.lastSeen || user.lastActivity || null,
+                      onlineSince: full?.onlineSince ?? null,
+                      lastLocation: full?.lastLocation ?? null,
+                      locationShareEnabled: full?.locationShareEnabled ?? false,
+                    });
+                  }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">
@@ -314,6 +335,9 @@ export function UserDiscovery({
                       isOnline: user.isOnline || onlineUserIds.has(user.id),
                       inCall: false,
                       lastSeen: user.lastSeen,
+                      onlineSince: user.onlineSince ?? null,
+                      lastLocation: user.lastLocation ?? null,
+                      locationShareEnabled: user.locationShareEnabled ?? false,
                     })
                   }
                 >

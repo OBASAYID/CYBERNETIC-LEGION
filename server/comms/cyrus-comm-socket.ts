@@ -8,6 +8,7 @@ import type { Server as HttpServer } from "http";
 import { Server as SocketIOServer, type Socket } from "socket.io";
 import { randomUUID } from "crypto";
 import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
+import { persistLastKnownLocation } from "./comms-profile-persist.js";
 
 type RegistryEntry = { socketId: string; displayName: string; socket: Socket };
 
@@ -292,6 +293,13 @@ export function initCyrusCommSocketSignaling(server: HttpServer) {
           accuracy: payload?.accuracy,
           ts: Date.now(),
         });
+        void persistLastKnownLocation(
+          userId,
+          lat,
+          lng,
+          typeof payload?.accuracy === "number" ? payload.accuracy : undefined,
+          String(socket.data.displayName || ""),
+        );
       },
     );
 

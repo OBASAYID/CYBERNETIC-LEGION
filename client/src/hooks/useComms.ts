@@ -145,6 +145,14 @@ export function useComms() {
       lastSeen: string | null;
       status: string;
       profileImageUrl: string | null;
+      onlineSince?: string | null;
+      lastLocation?: {
+        lat: number;
+        lng: number;
+        accuracy?: number | null;
+        at: string;
+      } | null;
+      locationShareEnabled?: boolean;
     }[]
   >({
     queryKey: ["/api/comms/users/all", "includeSelf"],

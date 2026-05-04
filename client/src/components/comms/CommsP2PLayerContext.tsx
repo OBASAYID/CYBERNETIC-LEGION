@@ -455,6 +455,21 @@ export function CommsP2PLayerProvider({
     };
   }, [shareLoc, joined, pushLog]);
 
+  useEffect(() => {
+    const id = selfId.trim();
+    if (!id) return;
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      "X-User-Id": id,
+      "X-Device-Id": id,
+    };
+    void systemFetch("/api/comms/user/location-share", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ enabled: shareLoc }),
+    }).catch(() => {});
+  }, [shareLoc, selfId]);
+
   const sendMeshMessage = useCallback(
     (text: string) => {
       const peer = selectedPeer;

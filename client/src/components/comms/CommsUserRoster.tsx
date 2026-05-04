@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { User } from "lucide-react";
+import { commsAssetUrl } from "@shared/cyrus-api-client";
 
 export interface RosterUser {
   id: string;
@@ -60,7 +61,7 @@ export function CommsUserRoster({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -119,7 +120,7 @@ export function CommsUserRoster({
                 <div className="relative h-9 w-9 shrink-0">
                   {u.profileImageUrl ? (
                     <img
-                      src={u.profileImageUrl}
+                      src={commsAssetUrl(u.profileImageUrl) ?? u.profileImageUrl}
                       alt=""
                       className={`h-9 w-9 rounded-full object-cover ${
                         isPicked

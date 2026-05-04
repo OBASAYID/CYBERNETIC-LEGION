@@ -8,6 +8,13 @@ import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
 import { commsIntelligence } from "./comms-intelligence.js";
 import { refreshCommsUserAvatar } from "./socket-signaling.js";
+import {
+  parseDeviceInfo,
+  mergeDeviceInfoForOnlineTransition,
+  setLocationShareEnabled,
+  persistLastKnownLocation,
+  invalidateLocationShareCache,
+} from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
 import multer from "multer";
 import path from "path";
@@ -64,7 +71,7 @@ const avatarUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
@@ -127,14 +134,29 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     const userId = getUserId(req);
     const includeSelf = String(req.query.includeSelf) === "1" || String(req.query.includeSelf) === "true";
     const allUsers = await db.select().from(onlineUsers);
-    const mapRow = (u: typeof allUsers[number]) => ({
-      id: u.id,
-      displayName: u.displayName || "Unknown User",
-      isOnline: u.isOnline || false,
-      lastSeen: u.lastSeen?.toISOString() || null,
-      profileImageUrl: u.profileImageUrl || null,
-      status: u.status || "offline",
-    });
+    const mapRow = (u: (typeof allUsers)[number]) => {
+      const di = parseDeviceInfo(u.deviceInfo);
+      const lastLocation =
+        di.locationShareEnabled && di.lastLocation
+          ? {
+              lat: di.lastLocation.lat,
+              lng: di.lastLocation.lng,
+              accuracy: di.lastLocation.accuracy ?? null,
+              at: di.lastLocation.at,
+            }
+          : null;
+      return {
+        id: u.id,
+        displayName: u.displayName || "Unknown User",
+        isOnline: u.isOnline || false,
+        lastSeen: u.lastSeen?.toISOString() || null,
+        profileImageUrl: u.profileImageUrl || null,
+        status: u.status || "offline",
+        onlineSince: di.onlineSince || null,
+        lastLocation,
+        locationShareEnabled: !!di.locationShareEnabled,
+      };
+    };
     const filteredUsers = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
     res.json(filteredUsers);
   } catch (error: any) {
@@ -153,30 +175,80 @@ router.post("/api/comms/user/status", async (req: any, res) => {
     const userId = getUserId(req) || `anon_${Date.now()}`;
     const { isOnline, socketId, displayName } = req.body;
     const claims = req.user?.claims || {};
+    const nextOnline = isOnline !== false;
+    const dn =
+      displayName ||
+      `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() ||
+      claims?.email ||
+      "Anonymous";
 
-    await db.insert(onlineUsers).values({
-      id: userId,
-      displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
-      email: claims?.email,
-      profileImageUrl: claims?.profile_image_url,
-      lastSeen: new Date(),
-      isOnline: isOnline !== false,
-      socketId,
-    }).onConflictDoUpdate({
-      target: onlineUsers.id,
-      set: {
-        lastSeen: new Date(),
-        isOnline: isOnline !== false,
-        socketId,
-        displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
+    const [existing] = await db.select().from(onlineUsers).where(eq(onlineUsers.id, userId)).limit(1);
+    const mergedDevice = mergeDeviceInfoForOnlineTransition(existing?.deviceInfo, nextOnline);
+
+    await db
+      .insert(onlineUsers)
+      .values({
+        id: userId,
+        displayName: dn,
+        email: claims?.email,
         profileImageUrl: claims?.profile_image_url,
-      },
-    });
+        lastSeen: new Date(),
+        isOnline: nextOnline,
+        socketId,
+        deviceInfo: mergedDevice,
+      })
+      .onConflictDoUpdate({
+        target: onlineUsers.id,
+        set: {
+          lastSeen: new Date(),
+          isOnline: nextOnline,
+          socketId,
+          displayName: dn,
+          profileImageUrl: claims?.profile_image_url,
+          deviceInfo: mergedDevice,
+        },
+      });
 
     res.json({ success: true });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.post("/api/comms/user/location-share", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required (X-User-Id or X-Device-Id)" });
+    }
+    const enabled = Boolean(req.body?.enabled);
+    await setLocationShareEnabled(userId, enabled);
+    invalidateLocationShareCache(userId);
+    res.json({ success: true, locationShareEnabled: enabled });
+  } catch (error: any) {
+    console.error("Error updating location share:", error);
+    res.status(500).json({ error: "Failed to update location share" });
+  }
+});
+
+router.post("/api/comms/user/location", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required" });
+    }
+    const lat = Number(req.body?.latitude);
+    const lng = Number(req.body?.longitude);
+    const accuracy = typeof req.body?.accuracy === "number" ? req.body.accuracy : undefined;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: "latitude and longitude required" });
+    }
+    await persistLastKnownLocation(userId, lat, lng, accuracy);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Error persisting location:", error);
+    res.status(500).json({ error: "Failed to persist location" });
   }
 });
 
@@ -1067,8 +1139,8 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ error: "No image file uploaded" });
       }
-      const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-      const fileUrl = `/api/comms/media/${fileId}`;
+      const safeFilename = path.basename(req.file.filename);
+      const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
 
       await db
         .insert(onlineUsers)
@@ -1142,19 +1214,27 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
 
 router.get("/api/comms/media/:id", (req, res) => {
   try {
-    const { id } = req.params;
-    const safeId = path.basename(id);
-    const files = fs.readdirSync(COMMS_UPLOAD_DIR);
-    const match = files.find(f => f.startsWith(safeId));
-    if (!match) {
+    const raw = decodeURIComponent(String(req.params.id || ""));
+    const safeName = path.basename(raw);
+    if (!safeName) {
       return res.status(404).json({ error: "Media not found" });
     }
-    const filePath = path.join(COMMS_UPLOAD_DIR, match);
-    const ext = path.extname(match).toLowerCase();
+    let filePath = path.join(COMMS_UPLOAD_DIR, safeName);
+    let resolvedName = safeName;
+    if (!fs.existsSync(filePath)) {
+      const files = fs.readdirSync(COMMS_UPLOAD_DIR);
+      const match = files.find((f) => f === safeName || f.startsWith(safeName));
+      if (!match) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      resolvedName = match;
+      filePath = path.join(COMMS_UPLOAD_DIR, match);
+    }
+    const ext = path.extname(resolvedName).toLowerCase();
     const mime = COMMS_SERVE_MIME[ext] || "application/octet-stream";
     res.setHeader("Content-Type", mime);
     const forceDownload = String(req.query.download || "") === "1";
-    const baseName = path.basename(match);
+    const baseName = path.basename(resolvedName);
     if (forceDownload) {
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
     } else if (
@@ -1307,16 +1387,31 @@ router.get("/api/comms/users/search", async (req: any, res) => {
       .limit(20);
 
     const filtered = results
-      .filter(u => u.id !== userId)
-      .map(u => ({
-        id: u.id,
-        displayName: u.displayName || "Unknown User",
-        email: u.email,
-        isOnline: u.isOnline || false,
-        lastSeen: u.lastSeen?.toISOString() || null,
-        profileImageUrl: u.profileImageUrl || null,
-        status: u.status || "offline",
-      }));
+      .filter((u) => u.id !== userId)
+      .map((u) => {
+        const di = parseDeviceInfo(u.deviceInfo);
+        const lastLocation =
+          di.locationShareEnabled && di.lastLocation
+            ? {
+                lat: di.lastLocation.lat,
+                lng: di.lastLocation.lng,
+                accuracy: di.lastLocation.accuracy ?? null,
+                at: di.lastLocation.at,
+              }
+            : null;
+        return {
+          id: u.id,
+          displayName: u.displayName || "Unknown User",
+          email: u.email,
+          isOnline: u.isOnline || false,
+          lastSeen: u.lastSeen?.toISOString() || null,
+          profileImageUrl: u.profileImageUrl || null,
+          status: u.status || "offline",
+          onlineSince: di.onlineSince || null,
+          lastLocation,
+          locationShareEnabled: !!di.locationShareEnabled,
+        };
+      });
 
     res.json(filtered);
   } catch (error: any) {

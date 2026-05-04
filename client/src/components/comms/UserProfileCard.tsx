@@ -18,6 +18,11 @@ interface UserProfileCardProps {
     isOnline: boolean;
     inCall: boolean;
     lastSeen: string | null;
+    /** ISO time when current online session started (server). */
+    onlineSince?: string | null;
+    /** Last GPS fix when user opted into ops / team sharing. */
+    lastLocation?: { lat: number; lng: number; accuracy?: number | null; at: string } | null;
+    locationShareEnabled?: boolean;
   };
   isContact: boolean;
   isFavorite: boolean;
@@ -56,6 +61,18 @@ export function UserProfileCard({
       .slice(0, 2);
   };
 
+  const sessionLabel = () => {
+    if (!user.isOnline || !user.onlineSince) return null;
+    const start = new Date(user.onlineSince).getTime();
+    if (!Number.isFinite(start)) return null;
+    const mins = Math.max(0, Math.floor((Date.now() - start) / 60_000));
+    if (mins < 1) return "Session < 1 min";
+    if (mins < 60) return `Online this session · ${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `Online this session · ${h}h ${m}m`;
+  };
+
   const getStatusText = () => {
     if (user.inCall) return "In a call";
     if (user.isOnline) return "Online";
@@ -78,6 +95,8 @@ export function UserProfileCard({
     if (user.isOnline) return "text-green-400";
     return "text-gray-500";
   };
+
+  const sessionText = sessionLabel();
 
   return (
     <div
@@ -124,6 +143,16 @@ export function UserProfileCard({
             {user.displayName}
           </h3>
           <p className={`text-sm ${getStatusColor()}`}>{getStatusText()}</p>
+          {sessionText ? <p className="mt-1 text-[11px] text-cyan-200/70">{sessionText}</p> : null}
+          {user.lastLocation && user.locationShareEnabled ? (
+            <p className="mt-1 text-[10px] text-amber-200/80">
+              Last GPS{" "}
+              {user.lastLocation.accuracy != null
+                ? `(±${Math.round(user.lastLocation.accuracy)}m)`
+                : ""}{" "}
+              · {new Date(user.lastLocation.at).toLocaleString()}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-4 gap-2 mb-5">
@@ -155,12 +184,23 @@ export function UserProfileCard({
             </span>
           </button>
           <button
-            className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-colors group"
-            title="Share Location"
+            type="button"
+            disabled={!user.lastLocation || !user.locationShareEnabled}
+            onClick={() => {
+              if (!user.lastLocation || !user.locationShareEnabled) return;
+              const { lat, lng } = user.lastLocation;
+              window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank", "noopener,noreferrer");
+            }}
+            className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-colors group disabled:opacity-35"
+            title={
+              user.lastLocation && user.locationShareEnabled
+                ? "Open last shared position in maps"
+                : "No ops GPS stored (user must enable mesh live location + team share)"
+            }
           >
             <MapPin className="w-5 h-5 text-purple-400 group-hover:text-purple-300" />
             <span className="text-[10px] text-purple-400 group-hover:text-purple-300">
-              Location
+              Map
             </span>
           </button>
         </div>

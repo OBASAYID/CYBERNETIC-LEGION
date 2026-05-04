@@ -17,6 +17,15 @@ export function resolveCyrusApiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** Avatar / comms media paths (`/api/comms/...`) resolve against `VITE_CYRUS_API_BASE` when set. */
+export function commsAssetUrl(url: string | null | undefined): string | null {
+  if (url == null || typeof url !== "string") return null;
+  const u = url.trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  return resolveCyrusApiUrl(u);
+}
+
 export function resolveCyrusApiCredentials(): RequestCredentials {
   const base = getCyrusApiBase();
   if (typeof window === "undefined") return "same-origin";
