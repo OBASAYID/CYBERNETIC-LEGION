@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { systemFetch } from "@shared/cyrus-api-client";
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline, Circle } from "@react-google-maps/api";
 import { useNavigation } from "../hooks/useNavigation";
 import { CyrusHumanoid } from "../components/CyrusHumanoid";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
+import { getCommsDeviceId } from "../lib/comms-device-id";
 import {
   MapPin,
   Navigation,
@@ -33,6 +34,8 @@ import {
   Copy,
   Check,
   LayoutGrid,
+  Users,
+  RefreshCw,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 
@@ -92,6 +95,42 @@ function formatCoordinate(value: number, type: "lat" | "lon"): string {
   return `${deg}° ${min}' ${sec}" ${dir}`;
 }
 
+type FieldPinSource = "comms" | "tracked" | "url";
+
+type FieldPin = {
+  key: string;
+  label: string;
+  lat: number;
+  lng: number;
+  accuracy?: number | null;
+  updatedAt?: string | null;
+  source: FieldPinSource;
+};
+
+type CommsRosterUser = {
+  id: string;
+  displayName: string;
+  lastLocation?: { lat: number; lng: number; accuracy?: number | null; at: string } | null;
+  locationShareEnabled?: boolean;
+  isOnline?: boolean;
+};
+
+type TrackedRosterRow = {
+  userId: string;
+  userName: string;
+  lat: number | null;
+  lon: number | null;
+  accuracy?: number | null;
+  lastUpdated?: string;
+  status?: string;
+};
+
+function fieldPinColor(source: FieldPinSource): string {
+  if (source === "comms") return "#f97316";
+  if (source === "tracked") return "#a855f7";
+  return "#eab308";
+}
+
 export function NavigationPage() {
   const { apiKey, loading: apiKeyLoading } = useGoogleMapsApiKey();
 
@@ -128,6 +167,162 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
   const [copiedCoord, setCopiedCoord] = useState(false);
   const [activePanel, setActivePanel] = useState<"tracking" | "route" | "share">("tracking");
   const autoStartedRef = useRef(false);
+  const search = useSearch();
+  const [fieldPins, setFieldPins] = useState<FieldPin[]>([]);
+  const [fieldPinInfoKey, setFieldPinInfoKey] = useState<string | null>(null);
+  const [commsRoster, setCommsRoster] = useState<CommsRosterUser[]>([]);
+  const [trackedRoster, setTrackedRoster] = useState<TrackedRosterRow[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const lastPinFitSig = useRef("");
+
+  const mergePin = useCallback((pin: FieldPin) => {
+    setFieldPins((prev) => {
+      const ix = prev.findIndex((p) => p.key === pin.key);
+      if (ix >= 0) {
+        const next = [...prev];
+        next[ix] = pin;
+        return next;
+      }
+      return [...prev, pin];
+    });
+  }, []);
+
+  const unpinFieldPin = useCallback((key: string) => {
+    setFieldPins((prev) => prev.filter((p) => p.key !== key));
+    setFieldPinInfoKey((k) => (k === key ? null : k));
+  }, []);
+
+  const refreshFieldRoster = useCallback(async () => {
+    setRosterLoading(true);
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Device-Id": getCommsDeviceId(),
+      };
+      const [cRes, tRes] = await Promise.all([
+        systemFetch("/api/comms/users/all?includeSelf=1", { headers }),
+        systemFetch("/api/nav/admin/users"),
+      ]);
+      if (cRes.ok) {
+        const j = await cRes.json();
+        setCommsRoster(Array.isArray(j) ? j : []);
+      } else {
+        setCommsRoster([]);
+      }
+      if (tRes.ok) {
+        const j = await tRes.json();
+        setTrackedRoster(Array.isArray(j?.users) ? j.users : []);
+      } else {
+        setTrackedRoster([]);
+      }
+    } catch {
+      setCommsRoster([]);
+      setTrackedRoster([]);
+    } finally {
+      setRosterLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshFieldRoster();
+    const id = window.setInterval(() => void refreshFieldRoster(), 30_000);
+    return () => window.clearInterval(id);
+  }, [refreshFieldRoster]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(search || "");
+    const pinUser = q.get("pinUser");
+    const pinLatRaw = q.get("pinLat");
+    const pinLonRaw = q.get("pinLon") || q.get("pinLng");
+    const pinLabel = q.get("pinLabel") || "Pinned";
+
+    if (pinUser) {
+      const commsU = commsRoster.find((u) => u.id === pinUser);
+      if (commsU?.lastLocation) {
+        mergePin({
+          key: `comms:${pinUser}`,
+          label: commsU.displayName,
+          lat: commsU.lastLocation.lat,
+          lng: commsU.lastLocation.lng,
+          accuracy: commsU.lastLocation.accuracy,
+          updatedAt: commsU.lastLocation.at,
+          source: "comms",
+        });
+      } else {
+        const tu = trackedRoster.find((u) => u.userId === pinUser);
+        if (
+          tu?.lat != null &&
+          tu?.lon != null &&
+          Number.isFinite(tu.lat) &&
+          Number.isFinite(tu.lon)
+        ) {
+          mergePin({
+            key: `tracked:${pinUser}`,
+            label: tu.userName || pinUser,
+            lat: tu.lat,
+            lng: tu.lon,
+            accuracy: tu.accuracy ?? null,
+            updatedAt: tu.lastUpdated ?? null,
+            source: "tracked",
+          });
+        }
+      }
+    }
+
+    const pinLat = pinLatRaw != null && pinLatRaw !== "" ? parseFloat(pinLatRaw) : NaN;
+    const pinLon = pinLonRaw != null && pinLonRaw !== "" ? parseFloat(pinLonRaw) : NaN;
+    if (Number.isFinite(pinLat) && Number.isFinite(pinLon)) {
+      mergePin({
+        key: "url:coords",
+        label: pinLabel,
+        lat: pinLat,
+        lng: pinLon,
+        source: "url",
+      });
+    }
+  }, [search, commsRoster, trackedRoster, mergePin]);
+
+  useEffect(() => {
+    setFieldPins((prev) =>
+      prev.map((pin) => {
+        if (pin.source === "url") return pin;
+        if (pin.key.startsWith("comms:")) {
+          const id = pin.key.slice("comms:".length);
+          const u = commsRoster.find((x) => x.id === id);
+          if (u?.lastLocation) {
+            return {
+              ...pin,
+              label: u.displayName,
+              lat: u.lastLocation.lat,
+              lng: u.lastLocation.lng,
+              accuracy: u.lastLocation.accuracy,
+              updatedAt: u.lastLocation.at,
+            };
+          }
+        }
+        if (pin.key.startsWith("tracked:")) {
+          const id = pin.key.slice("tracked:".length);
+          const tu = trackedRoster.find((x) => x.userId === id);
+          if (
+            tu?.lat != null &&
+            tu?.lon != null &&
+            Number.isFinite(tu.lat) &&
+            Number.isFinite(tu.lon)
+          ) {
+            return {
+              ...pin,
+              label: tu.userName || pin.label,
+              lat: tu.lat,
+              lng: tu.lon,
+              accuracy: tu.accuracy ?? null,
+              updatedAt: tu.lastUpdated ?? null,
+            };
+          }
+        }
+        return pin;
+      })
+    );
+  }, [commsRoster, trackedRoster]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: apiKey,
@@ -147,6 +342,25 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
     isLoading,
     isRouting,
   } = useNavigation();
+
+  const pinFitSig = fieldPins
+    .map((p) => `${p.key}:${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`)
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    if (!map || !isLoaded || fieldPins.length === 0) return;
+    if (pinFitSig === lastPinFitSig.current) return;
+    lastPinFitSig.current = pinFitSig;
+    const bounds = new google.maps.LatLngBounds();
+    fieldPins.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
+    if (currentPosition) bounds.extend({ lat: currentPosition.lat, lng: currentPosition.lon });
+    map.fitBounds(bounds, 72);
+  }, [map, isLoaded, pinFitSig, fieldPins, currentPosition]);
+
+  useEffect(() => {
+    if (fieldPins.length === 0) lastPinFitSig.current = "";
+  }, [fieldPins.length]);
 
   const reverseGeocode = useCallback(async (lat: number, lon: number) => {
     if (!isLoaded || !window.google) return;
@@ -237,6 +451,23 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
       map.setZoom(17);
     }
   };
+
+  const centerMapOnLatLng = useCallback(
+    (lat: number, lng: number) => {
+      if (!map) return;
+      map.panTo({ lat, lng });
+      map.setZoom(16);
+    },
+    [map]
+  );
+
+  const fitAllFieldPins = useCallback(() => {
+    if (!map || !isLoaded || fieldPins.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    fieldPins.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
+    if (currentPosition) bounds.extend({ lat: currentPosition.lat, lng: currentPosition.lon });
+    map.fitBounds(bounds, 72);
+  }, [map, isLoaded, fieldPins, currentPosition]);
 
   const handleZoomIn = () => {
     if (map) {
@@ -560,6 +791,81 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                     </div>
                   </InfoWindow>
                 )}
+                {fieldPins.map((p) => {
+                  const fill = fieldPinColor(p.source);
+                  const acc =
+                    p.accuracy != null && p.accuracy > 0 ? Math.min(p.accuracy, 5000) : null;
+                  return (
+                    <Fragment key={p.key}>
+                      {acc != null && (
+                        <Circle
+                          center={{ lat: p.lat, lng: p.lng }}
+                          radius={acc}
+                          options={{
+                            fillColor: fill,
+                            fillOpacity: 0.07,
+                            strokeColor: fill,
+                            strokeOpacity: 0.28,
+                            strokeWeight: 1,
+                          }}
+                        />
+                      )}
+                      <Marker
+                        position={{ lat: p.lat, lng: p.lng }}
+                        onClick={() =>
+                          setFieldPinInfoKey((k) => (k === p.key ? null : p.key))
+                        }
+                        icon={{
+                          path: google.maps.SymbolPath.CIRCLE,
+                          scale: 9,
+                          fillColor: fill,
+                          fillOpacity: 1,
+                          strokeColor: "#ffffff",
+                          strokeWeight: 2,
+                        }}
+                      />
+                      {fieldPinInfoKey === p.key && (
+                        <InfoWindow
+                          position={{ lat: p.lat, lng: p.lng }}
+                          onCloseClick={() => setFieldPinInfoKey(null)}
+                        >
+                          <div className="p-2 text-black min-w-[170px] text-xs">
+                            <p className="font-bold text-sm mb-0.5">{p.label}</p>
+                            <p className="text-[10px] text-gray-500 mb-1">
+                              {p.source === "comms"
+                                ? "Team (Comms GPS)"
+                                : p.source === "tracked"
+                                  ? "Tracked (Nav DB)"
+                                  : "Coordinates"}
+                            </p>
+                            <div className="grid grid-cols-2 gap-1 text-[10px] mb-2">
+                              <div>
+                                <span className="text-gray-400">LAT</span>
+                                <p className="font-mono font-semibold">{p.lat.toFixed(5)}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">LON</span>
+                                <p className="font-mono font-semibold">{p.lng.toFixed(5)}</p>
+                              </div>
+                            </div>
+                            {p.updatedAt ? (
+                              <p className="text-[9px] text-gray-500 mb-2">
+                                Updated {new Date(p.updatedAt).toLocaleString()}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="w-full rounded-md bg-gray-900 py-1.5 text-[11px] font-medium text-white hover:bg-gray-800"
+                              onClick={() => unpinFieldPin(p.key)}
+                            >
+                              Remove pin
+                            </button>
+                          </div>
+                        </InfoWindow>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </GoogleMap>
 
               <div className="absolute right-3 top-3 flex flex-col gap-2 z-10">
@@ -584,6 +890,15 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   className="w-10 h-10 bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl flex items-center justify-center text-[#0a84ff] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-[rgba(84,84,88,0.35)]"
                 >
                   <LocateFixed className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={fitAllFieldPins}
+                  disabled={fieldPins.length === 0}
+                  title="Fit map to pinned team / tracked targets"
+                  className="w-10 h-10 bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl flex items-center justify-center text-[#f97316] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-[rgba(84,84,88,0.35)]"
+                >
+                  <Users className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => isWatching ? stopGPSWatch() : startGPSWatch()}
@@ -727,6 +1042,156 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                     </div>
                   </div>
                 )}
+
+                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Users className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
+                      <span className="text-[12px] font-semibold truncate">Field roster</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void refreshFieldRoster()}
+                      disabled={rosterLoading}
+                      className="shrink-0 p-1.5 rounded-lg border border-[rgba(84,84,88,0.35)] text-[rgba(235,235,245,0.7)] hover:bg-[#2c2c2e] disabled:opacity-40"
+                      title="Refresh team & tracked list"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${rosterLoading ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-[rgba(235,235,245,0.45)] mb-2">
+                    Pin shared team GPS (Comms) or last known Nav-tracked positions. Deep link:{" "}
+                    <span className="font-mono text-[9px]">/nav?pinUser=…</span>
+                  </p>
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto pr-0.5">
+                    {commsRoster
+                      .filter((u) => u.lastLocation)
+                      .map((u) => {
+                        const key = `comms:${u.id}`;
+                        const pinned = fieldPins.some((fp) => fp.key === key);
+                        const loc = u.lastLocation!;
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center gap-2 rounded-lg bg-[#2c2c2e]/80 px-2 py-1.5 text-[10px]"
+                          >
+                            <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
+                              {u.displayName}
+                            </span>
+                            <span className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[8px] font-mono uppercase text-orange-300">
+                              GPS
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-cyan-300 hover:bg-white/5"
+                              onClick={() => centerMapOnLatLng(loc.lat, loc.lng)}
+                            >
+                              Map
+                            </button>
+                            {pinned ? (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-red-500/30 px-1.5 py-0.5 text-[9px] text-red-300 hover:bg-red-500/10"
+                                onClick={() => unpinFieldPin(key)}
+                              >
+                                Unpin
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-orange-500/35 px-1.5 py-0.5 text-[9px] text-orange-200 hover:bg-orange-500/10"
+                                onClick={() =>
+                                  mergePin({
+                                    key,
+                                    label: u.displayName,
+                                    lat: loc.lat,
+                                    lng: loc.lng,
+                                    accuracy: loc.accuracy,
+                                    updatedAt: loc.at,
+                                    source: "comms",
+                                  })
+                                }
+                              >
+                                Pin
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {trackedRoster
+                      .filter(
+                        (tu) =>
+                          tu.lat != null &&
+                          tu.lon != null &&
+                          Number.isFinite(tu.lat) &&
+                          Number.isFinite(tu.lon)
+                      )
+                      .map((tu) => {
+                        const key = `tracked:${tu.userId}`;
+                        const pinned = fieldPins.some((fp) => fp.key === key);
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center gap-2 rounded-lg bg-[#2c2c2e]/80 px-2 py-1.5 text-[10px]"
+                          >
+                            <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
+                              {tu.userName || tu.userId}
+                            </span>
+                            <span className="shrink-0 rounded bg-violet-500/20 px-1 py-0.5 text-[8px] font-mono uppercase text-violet-200">
+                              Nav
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-cyan-300 hover:bg-white/5"
+                              onClick={() => centerMapOnLatLng(tu.lat!, tu.lon!)}
+                            >
+                              Map
+                            </button>
+                            {pinned ? (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-red-500/30 px-1.5 py-0.5 text-[9px] text-red-300 hover:bg-red-500/10"
+                                onClick={() => unpinFieldPin(key)}
+                              >
+                                Unpin
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-violet-500/35 px-1.5 py-0.5 text-[9px] text-violet-200 hover:bg-violet-500/10"
+                                onClick={() =>
+                                  mergePin({
+                                    key,
+                                    label: tu.userName || tu.userId,
+                                    lat: tu.lat!,
+                                    lng: tu.lon!,
+                                    accuracy: tu.accuracy ?? null,
+                                    updatedAt: tu.lastUpdated ?? null,
+                                    source: "tracked",
+                                  })
+                                }
+                              >
+                                Pin
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {!rosterLoading &&
+                    commsRoster.filter((u) => u.lastLocation).length === 0 &&
+                    trackedRoster.filter(
+                      (tu) =>
+                        tu.lat != null &&
+                        tu.lon != null &&
+                        Number.isFinite(tu.lat) &&
+                        Number.isFinite(tu.lon)
+                    ).length === 0 ? (
+                      <p className="text-[10px] text-[rgba(235,235,245,0.35)] py-2 text-center">
+                        No shared team GPS or tracked fixes yet.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
 
                 <Link href="/drone">
                   <button className="w-full bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 rounded-xl p-3 flex items-center gap-3 hover:border-cyan-400/50 transition-all group">
@@ -873,7 +1338,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
 
       <CyrusHumanoid
         module="navigation"
-        context={`User is in navigation module. ${currentPosition ? `Current position: ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}. Location: ${locationName}. Altitude: ${altitude.toFixed(1)}m. Speed: ${(speed * 3.6).toFixed(1)}km/h. Heading: ${heading.toFixed(0)}° ${getCardinalDirection(heading)}.` : "No position data"}. GPS tracking: ${isWatching ? "active" : "inactive"}.`}
+        context={`User is in navigation module. ${currentPosition ? `Current position: ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}. Location: ${locationName}. Altitude: ${altitude.toFixed(1)}m. Speed: ${(speed * 3.6).toFixed(1)}km/h. Heading: ${heading.toFixed(0)}° ${getCardinalDirection(heading)}.` : "No position data"}. GPS tracking: ${isWatching ? "active" : "inactive"}. Field pins: ${fieldPins.length} (${fieldPins.map((p) => p.label).join(", ") || "none"}).`}
         compact={true}
       />
     </div>
