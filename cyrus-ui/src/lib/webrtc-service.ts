@@ -42,12 +42,44 @@ export interface OnlineUser {
   profileImageUrl?: string | null;
 }
 
+export interface CommAttachment {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size?: number;
+  /** Inferred category for UI (image, video, audio, ebook, model3d, file). */
+  kind?: "image" | "video" | "audio" | "ebook" | "model3d" | "file";
+}
+
+/** Classify shared files for Communication UI (photos, clips, books, CAD, audio). */
+export function inferCommAttachmentKind(mimeType: string, fileName: string): NonNullable<CommAttachment["kind"]> {
+  const m = (mimeType || "").toLowerCase();
+  const ext = (fileName.split(".").pop() || "").toLowerCase();
+  if (m.startsWith("image/")) return "image";
+  if (m.startsWith("video/")) return "video";
+  if (m.startsWith("audio/")) return "audio";
+  if (
+    m.includes("pdf") ||
+    ext === "pdf" ||
+    ext === "epub" ||
+    ext === "mobi" ||
+    ext === "azw3" ||
+    m.includes("epub")
+  ) {
+    return "ebook";
+  }
+  const modelExt = new Set(["stl", "step", "stp", "obj", "3mf", "glb", "gltf", "dae", "fbx", "x3d", "ply", "3ds"]);
+  if (modelExt.has(ext) || m.includes("model") || m.includes("stl") || m.includes("step")) return "model3d";
+  return "file";
+}
+
 export interface ChatMessage {
   from: string;
   to: string;
   text: string;
   timestamp: number;
   isOwn: boolean;
+  attachment?: CommAttachment;
 }
 
 /** Detailed real-time call quality metrics surfaced to the UI. */
@@ -786,9 +818,15 @@ class WebRTCService {
           this.onMessage({
             from: message.from,
             to: message.to,
-            text: message.data.text,
-            timestamp: message.data.timestamp,
-            isOwn: false
+            text: typeof message.data?.text === "string" ? message.data.text : "",
+            timestamp: typeof message.data?.timestamp === "number" ? message.data.timestamp : Date.now(),
+            isOwn: false,
+            attachment:
+              message.data?.attachment &&
+              typeof message.data.attachment === "object" &&
+              typeof message.data.attachment.url === "string"
+                ? (message.data.attachment as CommAttachment)
+                : undefined,
           });
         }
         break;
@@ -1592,13 +1630,21 @@ class WebRTCService {
     this.cleanupCall(sendSignal);
   }
 
-  sendTextMessage(toUserId: string, text: string) {
+  sendTextMessage(toUserId: string, text: string, attachment?: CommAttachment) {
     if (!this.userId) return;
+    const line =
+      text.trim() ||
+      (attachment ? `📎 ${attachment.fileName}` : "");
+    if (!line && !attachment) return;
     this.send({
       type: "text-message",
       from: this.userId,
       to: toUserId,
-      data: { text, timestamp: Date.now() },
+      data: {
+        text: line,
+        timestamp: Date.now(),
+        ...(attachment ? { attachment } : {}),
+      },
     });
   }
 

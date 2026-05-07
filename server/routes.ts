@@ -7,6 +7,7 @@ type MulterFile = Express.Multer.File;
 type HealthProvider = string;
 type ElevenLabsVoice = string;
 import path from "path";
+import fs from "node:fs/promises";
 import { randomUUID } from "crypto";
 import OpenAI, { AzureOpenAI } from "openai";
 import { z } from "zod";
@@ -41,6 +42,7 @@ let createAnalysisJob: any;
 let getAnalysisJob: any;
 let listAnalysisReports: any;
 let generateDocument: any;
+let exportGeneratedDocument: any;
 let createDocgenJob: any;
 let getDocgenJob: any;
 let listDocgenJobs: any;
@@ -190,6 +192,8 @@ async function loadDependencies() {
   try {
     const dgM = await import("./docgen/generate");
     generateDocument = dgM.generateDocument;
+    const dgExportM = await import("./docgen/export");
+    exportGeneratedDocument = dgExportM.exportGeneratedDocument;
     const dgJobsM = await import("./docgen/jobs");
     createDocgenJob = dgJobsM.createDocgenJob;
     getDocgenJob = dgJobsM.getDocgenJob;
@@ -535,6 +539,78 @@ function clampAnalysisChunks(maxChunksRaw: string | undefined): number | undefin
   const n = parseInt(String(maxChunksRaw), 10);
   if (!Number.isFinite(n)) return undefined;
   return Math.min(cap, Math.max(1, n));
+}
+
+/** Safe disk path for chat uploads served as `/uploads/<file>`. */
+function uploadsDiskPathFromPublicUrl(url: string): string | null {
+  const u = String(url || "").trim();
+  if (!u.startsWith("/uploads/")) return null;
+  const base = path.basename(u);
+  if (!base || base === "." || base === "..") return null;
+  return path.join(process.cwd(), "public", "uploads", base);
+}
+
+/**
+ * Inline video/document context for /api/cyrus/infer using the same extraction pipeline as file analysis
+ * (audio transcription + sampled frame OCR when available).
+ */
+async function enrichCyrusMessageWithUploads(message: string, context: unknown): Promise<string> {
+  if (!extractFile) return message;
+  const ctx = context as
+    | { uploadedFile?: { url?: string; type?: string; mimetype?: string; name?: string } }
+    | undefined;
+  const uf = ctx?.uploadedFile;
+  if (!uf || typeof uf.url !== "string" || !uf.url.trim()) return message;
+
+  const mimetype = typeof uf.mimetype === "string" ? uf.mimetype : "";
+  const fileType = typeof uf.type === "string" ? uf.type : "";
+  const isVideo =
+    fileType === "video" ||
+    mimetype.startsWith("video/") ||
+    /\.(mp4|webm|mov|m4v|mkv|ogv|avi)(\?.*)?$/i.test(uf.url);
+
+  if (!isVideo) {
+    if (fileType && fileType !== "image") {
+      return `${message}\n\n[FILE REFERENCE] ${uf.name || "upload"} (${mimetype || "unknown"}) — ${uf.url}`;
+    }
+    return message;
+  }
+
+  const absPath = uploadsDiskPathFromPublicUrl(uf.url);
+  if (!absPath) {
+    return `${message}\n\n[VIDEO] Could not resolve upload path for: ${uf.url}`;
+  }
+
+  try {
+    const buffer = await fs.readFile(absPath);
+    const ext = await extractFile(buffer, mimetype || undefined);
+    const parts: string[] = [message, "", "[VIDEO — extracted from uploaded file]"];
+    if (ext.transcript?.trim()) {
+      parts.push("Audio / speech (best effort):", ext.transcript.trim(), "");
+    }
+    const frameText =
+      Array.isArray(ext.frames)
+        ? ext.frames.map((f: { ocrText?: string }) => f?.ocrText).filter(Boolean).join("\n")
+        : "";
+    if (frameText.trim()) {
+      parts.push("Sampled frame / visual notes:", frameText.trim(), "");
+    }
+    if (ext.warnings?.length) {
+      parts.push(`Extraction notes: ${ext.warnings.join("; ")}`, "");
+    }
+    const hasContent = Boolean(ext.transcript?.trim() || frameText.trim() || ext.text?.trim());
+    if (!hasContent) {
+      parts.push(
+        "No speech or on-screen text was extracted. Describe what you need from the video, or use a common format (e.g. MP4 with AAC audio).",
+      );
+    } else if (ext.text?.trim()) {
+      parts.push("Additional text extraction:", ext.text.trim().slice(0, 12_000));
+    }
+    return parts.join("\n");
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return `${message}\n\n[VIDEO] Failed to process upload: ${detail}`;
+  }
 }
 
 const upload = multer({
@@ -1391,6 +1467,50 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Docgen generate failed:", err);
       res.status(500).json({ error: "Document generation failed", detail: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/docgen/export", async (req, res) => {
+    try {
+      if (!exportGeneratedDocument) {
+        return res.status(503).json({ error: "Document export service unavailable" });
+      }
+      const {
+        format,
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      } = req.body || {};
+      const normalizedFormat = String(format || "md").toLowerCase();
+      const allowed = new Set(["pdf", "docx", "html", "md", "txt", "json"]);
+      if (!allowed.has(normalizedFormat)) {
+        return res.status(400).json({ error: "Unsupported export format" });
+      }
+
+      const file = await exportGeneratedDocument(normalizedFormat, {
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      });
+
+      res.setHeader("Content-Type", file.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+      return res.send(file.data);
+    } catch (err: any) {
+      console.error("Docgen export failed:", err);
+      return res.status(500).json({ error: "Document export failed", detail: err?.message || String(err) });
     }
   });
 
@@ -2448,12 +2568,12 @@ Format your response in a clear, structured manner.`
       }
     };
 
-    const jsonOfflineNoKey = (userMessage: string, hasImage: boolean) => {
+    const jsonOfflineNoKey = (userMessage: string, requiresCloudMedia: boolean) => {
       const identity = cyrusSoul.getIdentity();
       const preview = String(userMessage).replace(/\s+/g, " ").trim().slice(0, 280);
       const ellip = preview.length >= 280 ? "…" : "";
-      const response = hasImage
-        ? "Image analysis requires an OpenAI-compatible API key on the server. I cannot inspect images in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
+      const response = requiresCloudMedia
+        ? "Image and video chat requires an OpenAI-compatible API key on the server. I cannot run vision or multimodal understanding in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
         : `I'm running in **offline mode** (no API key on the server), so I can't call the cloud model. I received: "${preview}${ellip}"\n\nSet **OPENAI_API_KEY** or **AI_INTEGRATIONS_OPENAI_API_KEY** in the environment and restart for full AI replies.`;
       cyrusSoul.processThought(userMessage, "offline_mode");
       return res.json({
@@ -2471,11 +2591,26 @@ Format your response in a clear, structured manner.`
         return res.status(400).json({ error: "Message is required" });
       }
 
+      const hasUploadContext = Boolean(
+        context &&
+          typeof context === "object" &&
+          (context as { uploadedFile?: unknown }).uploadedFile &&
+          typeof (context as { uploadedFile?: unknown }).uploadedFile === "object",
+      );
+      const uf = hasUploadContext
+        ? (context as { uploadedFile: { type?: string; mimetype?: string } }).uploadedFile
+        : null;
+      const hasVideoUpload = Boolean(
+        uf &&
+          (uf.type === "video" ||
+            (typeof uf.mimetype === "string" && uf.mimetype.startsWith("video/"))),
+      );
+
       // Track each inference so learning/evolution metrics reflect real usage.
       taskTrackingId = adaptiveLearning.generateTaskId();
       adaptiveLearning.startTaskTracking(taskTrackingId, "general_conversation", {
         message,
-        hasImage: Boolean(imageData),
+        hasImage: Boolean(imageData) || hasVideoUpload,
         hasConversationHistory: Array.isArray(conversationHistory) && conversationHistory.length > 0,
       });
 
@@ -2483,7 +2618,7 @@ Format your response in a clear, structured manner.`
       const requiresAgentExecution = isAgentCommand(message);
 
       // If it's an agent command, execute it autonomously
-      if (requiresAgentExecution && !imageData) {
+      if (requiresAgentExecution && !imageData && !hasUploadContext) {
         console.log("[CYRUS] Autonomous agent activated for command:", message);
         const { response, agentResult } = await executeAgentTask(message);
 
@@ -2513,18 +2648,19 @@ Format your response in a clear, structured manner.`
       }
 
       if (!openai) {
-        const hasImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const hasVisionImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const requiresCloudMedia = hasVisionImage || hasVideoUpload;
         await adaptiveLearning.learnFromConversation(String(message), "offline_mode_no_api_key", {
           moduleContext: "offline_mode",
         });
         await adaptiveLearning.endTaskTracking(
           taskTrackingId,
           true,
-          { offlineMode: true, hasImage },
+          { offlineMode: true, hasImage: requiresCloudMedia },
           "offline_fallback_response",
         );
         taskTrackingId = null;
-        return jsonOfflineNoKey(String(message), hasImage);
+        return jsonOfflineNoKey(String(message), requiresCloudMedia);
       }
 
       // Standard CYRUS response path
@@ -2573,13 +2709,15 @@ If you detect a command that requires physical device interaction, inform the op
         }
       }
 
-      // Build the user message content
+      const enrichedMessage = await enrichCyrusMessageWithUploads(String(message), context);
+
+      // Build the user message content (video/document text is inlined via enrichment)
       const fullMessage = contextInfo
-        ? `${message}\n\n[CONTEXT]${contextInfo}`
-        : message;
+        ? `${enrichedMessage}\n\n[CONTEXT]${contextInfo}`
+        : enrichedMessage;
 
       // Check if we have image data for vision analysis
-      if (imageData && typeof imageData === 'string' && imageData.startsWith('data:image')) {
+      if (imageData && typeof imageData === "string" && imageData.startsWith("data:image")) {
         // Use vision capability with image
         chatMessages.push({
           role: "user",

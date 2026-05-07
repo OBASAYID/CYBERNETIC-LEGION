@@ -32,7 +32,7 @@ export default function TradingDashboard() {
   } = useTradingDashboard();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white p-4">
+    <div className="min-h-screen bg-transparent text-white p-4">
       <div className="max-w-7xl mx-auto space-y-4">
         <TradingSummary
           autonomousStatus={autonomousStatus}

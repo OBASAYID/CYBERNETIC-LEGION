@@ -344,3 +344,119 @@
     animation: none !important;
   }
 }
+
+/* ─── CYRUS global atmospheric smoke (ember + blue/black/white wisps) ───
+   Custom classes avoid the project’s `.animate-pulse { animation: none }` override. */
+
+@keyframes cyrus-smoke-drift-a {
+  0%,
+  100% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.38;
+  }
+  33% {
+    transform: translate(6%, -5%) scale(1.06);
+    opacity: 0.52;
+  }
+  66% {
+    transform: translate(-4%, 4%) scale(0.96);
+    opacity: 0.32;
+  }
+}
+
+@keyframes cyrus-smoke-drift-b {
+  0%,
+  100% {
+    transform: translate(0%, 0%) scale(1) rotate(0deg);
+    opacity: 0.28;
+  }
+  40% {
+    transform: translate(-8%, 6%) scale(1.08) rotate(-2deg);
+    opacity: 0.45;
+  }
+  75% {
+    transform: translate(5%, -4%) scale(0.94) rotate(1.5deg);
+    opacity: 0.34;
+  }
+}
+
+@keyframes cyrus-smoke-drift-c {
+  0%,
+  100% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate(5%, -8%) scale(1.1);
+    opacity: 0.62;
+  }
+}
+
+@keyframes cyrus-smoke-drift-d {
+  0%,
+  100% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(-6%, 5%) scale(1.06);
+    opacity: 0.72;
+  }
+}
+
+@keyframes cyrus-smoke-ember {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0) scaleX(1);
+  }
+  45% {
+    opacity: 0.68;
+    transform: translateY(-2%) scaleX(1.06);
+  }
+  70% {
+    opacity: 0.5;
+    transform: translateY(1%) scaleX(0.98);
+  }
+}
+
+@keyframes cyrus-smoke-ember-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.58;
+    transform: scaleY(1.12);
+  }
+}
+
+.cyrus-smoke-drift-a {
+  animation: cyrus-smoke-drift-a 38s ease-in-out infinite;
+}
+.cyrus-smoke-drift-b {
+  animation: cyrus-smoke-drift-b 48s ease-in-out infinite;
+  animation-delay: -6s;
+}
+.cyrus-smoke-drift-c {
+  animation: cyrus-smoke-drift-c 32s ease-in-out infinite;
+  animation-delay: -12s;
+}
+.cyrus-smoke-drift-d {
+  animation: cyrus-smoke-drift-d 44s ease-in-out infinite;
+  animation-delay: -18s;
+}
+.cyrus-smoke-ember {
+  animation: cyrus-smoke-ember 14s ease-in-out infinite;
+}
+.cyrus-smoke-ember-soft {
+  animation: cyrus-smoke-ember-soft 9s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyrus-smoke-bg .cyrus-smoke-animated {
+    animation: none !important;
+  }
+}

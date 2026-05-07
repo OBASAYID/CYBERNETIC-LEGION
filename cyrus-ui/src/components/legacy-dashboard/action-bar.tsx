@@ -239,9 +239,15 @@ export function LegacyActionBar({
             {pendingAttachment.type === "image" ? (
               <img src={pendingAttachment.preview} alt="" className="w-16 h-16 object-cover rounded-lg" />
             ) : (
-              <div className="w-16 h-16 bg-white/10 rounded-lg flex items-center justify-center">
+              <div className="w-16 h-16 bg-white/10 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
                 {pendingAttachment.type === "video" ? (
-                  <Video className="w-8 h-8 text-purple-400" />
+                  <video
+                    src={pendingAttachment.preview}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
                 ) : (
                   <FileText className="w-8 h-8 text-blue-400" />
                 )}

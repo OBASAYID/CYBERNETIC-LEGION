@@ -19,14 +19,11 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { useWildlifeBackground } from "@/hooks/use-wildlife-background";
-
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
   const role = useUserRole();
   const isAdmin = role === "admin";
-  const wildlifeBg = useWildlifeBackground();
   const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
   const [adminTab, setAdminTab] = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
@@ -57,17 +54,11 @@ export default function DashboardFresh() {
   const headerOperator = !isAdmin || adminTab === "modules";
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-white">
-      {/* Wildlife full-screen background image */}
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${wildlifeBg})` }}
-        aria-hidden
-      />
-      {/* Dark overlay to keep UI readable over the wildlife scene */}
-      <div className="pointer-events-none fixed inset-0 bg-slate-950/72" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/55 to-orange-950/22" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-transparent text-white">
+      {/* Crack + smoke: global `AtmosphericSmokeBackground`; light read tint only */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-sky-950/12 via-slate-900/20 to-blue-950/22" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(56,189,248,0.065),transparent_58%)]" />
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
         <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />

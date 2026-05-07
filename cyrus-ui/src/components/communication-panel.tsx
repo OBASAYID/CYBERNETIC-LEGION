@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -44,7 +44,11 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
-  Info
+  Info,
+  Paperclip,
+  FileText,
+  Loader2,
+  Box,
 } from "lucide-react";
 import {
   webRTCService,
@@ -53,11 +57,94 @@ import {
   ConnectionStats,
   CallHistoryEntry,
   GROUP_CALL_MAX_MEMBERS,
+  inferCommAttachmentKind,
+  type CommAttachment,
   type GroupInvitePayload,
 } from "@/lib/webrtc-service";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { probeCyrusConnectivity } from "@/lib/cyrus-comm-connectivity";
+import { systemFetch } from "@/lib/system-api";
+import { cn } from "@/lib/utils";
+
+/** File picker: photos, video clips, audio (mp3/mp4), ebooks, STEP/STL/OBJ/CAD, GLB/GLTF. */
+const COMM_MEDIA_ACCEPT =
+  "image/*,video/*,audio/*,.pdf,.epub,.mobi,.azw3,.mp3,.mp4,.m4a,.wav,.webm,.ogg,.opus,.flac,.mov,.stl,.step,.stp,.obj,.3mf,.glb,.gltf,.dae,.fbx,.x3d,.ply";
+
+function resolveCommMediaUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url) || url.startsWith("blob:")) return url;
+  try {
+    return new URL(url, window.location.origin).href;
+  } catch {
+    return url;
+  }
+}
+
+/** Dark console shell — stable in light/dark system theme. */
+const COMM_SHELL =
+  "border-sky-950/55 bg-gradient-to-b from-[#050a14] via-[#0a1628] to-[#050a14] text-sky-50/95 shadow-[0_0_0_1px_rgba(15,118,178,0.12)]";
+
+function getPeerPresenceLabelClass(status: OnlineUser["status"]) {
+  switch (status) {
+    case "online":
+      return "text-sky-300";
+    case "busy":
+      return "text-amber-200/90";
+    case "in_call":
+      return "text-rose-400";
+    default:
+      return "text-slate-500";
+  }
+}
+
+/** Signaling channel or peer row: bright glow when live; red when offline / on call. */
+function PresenceDot(
+  props:
+    | { variant: "channel"; connected: boolean; reconnecting?: boolean }
+    | { variant: "peer"; status: OnlineUser["status"] },
+) {
+  if (props.variant === "channel") {
+    const { connected, reconnecting } = props;
+    const live = connected && !reconnecting;
+    return (
+      <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+        {live ? (
+          <span className="absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-45 animate-ping" />
+        ) : null}
+        <span
+          className={cn(
+            "relative block h-2.5 w-2.5 rounded-full border-2 border-[#030712]",
+            live && "bg-sky-400 shadow-[0_0_14px_rgba(56,189,248,0.95)]",
+            !live && reconnecting && "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.75)] animate-pulse",
+            !live && !reconnecting && "bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.9)]",
+          )}
+        />
+      </span>
+    );
+  }
+  const { status } = props;
+  const live = status === "online";
+  const busy = status === "busy";
+  return (
+    <span className="relative flex h-3 w-3 shrink-0 items-center justify-center" aria-hidden>
+      {live ? (
+        <span
+          className="absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-35 animate-ping"
+          style={{ animationDuration: "2.4s" }}
+        />
+      ) : null}
+      <span
+        className={cn(
+          "relative block h-2.5 w-2.5 rounded-full border-2 border-[#0a1628]",
+          live && "bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.9)]",
+          busy && "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]",
+          !live && !busy && "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.85)]",
+        )}
+      />
+    </span>
+  );
+}
 
 interface CommunicationPanelProps {
   operatorName?: string;
@@ -91,10 +178,75 @@ function qualityColor(q: string) {
   }
 }
 
-function mosColor(mos: number) {
-  if (mos >= 4) return "text-green-400";
-  if (mos >= 3) return "text-yellow-400";
-  return "text-red-400";
+function CommAttachmentBubble({ attachment, isOwn }: { attachment: CommAttachment; isOwn: boolean }) {
+  const { url, fileName, mimeType, kind = inferCommAttachmentKind(mimeType, fileName) } = attachment;
+  const href = resolveCommMediaUrl(url);
+  const border = isOwn ? "border-sky-400/35" : "border-sky-800/45";
+
+  if (kind === "image") {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={`block mt-2 rounded-lg overflow-hidden border ${border}`}>
+        <img src={href} alt={fileName} className="max-h-56 w-full object-contain bg-black/20" loading="lazy" />
+      </a>
+    );
+  }
+  if (kind === "video") {
+    return (
+      <div className={`mt-2 rounded-lg overflow-hidden border ${border}`}>
+        <video src={href} controls playsInline preload="metadata" className="max-h-56 w-full bg-black/40">
+          <track kind="captions" />
+        </video>
+      </div>
+    );
+  }
+  if (kind === "audio") {
+    return (
+      <div className={`mt-2 rounded-lg border p-2 ${border} bg-black/10`}>
+        <audio src={href} controls preload="metadata" className="w-full max-h-10" />
+      </div>
+    );
+  }
+  if (kind === "ebook") {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${border} hover:bg-sky-950/40`}
+      >
+        <FileText className="h-4 w-4 shrink-0 text-amber-500" />
+        <span className="truncate font-medium">{fileName}</span>
+        <Download className="h-4 w-4 shrink-0 opacity-60" />
+      </a>
+    );
+  }
+  if (kind === "model3d") {
+    return (
+      <a
+        href={href}
+        download={fileName}
+        className={`mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${border} hover:bg-sky-950/40`}
+      >
+        <Box className="h-4 w-4 shrink-0 text-sky-400" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{fileName}</p>
+          <p className="text-xs text-muted-foreground">3D model — download or open in your CAD viewer</p>
+        </div>
+        <Download className="h-4 w-4 shrink-0 opacity-60" />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={href}
+      download={fileName}
+      className={`mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${border} hover:bg-sky-950/40`}
+    >
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="truncate font-medium">{fileName}</span>
+      <Download className="h-4 w-4 shrink-0 opacity-60" />
+    </a>
+  );
 }
 
 function formatDuration(seconds: number) {
@@ -109,6 +261,12 @@ function formatHistoryDuration(s: number) {
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
+function mosColor(mos: number) {
+  if (mos >= 4) return "text-green-400";
+  if (mos >= 3) return "text-yellow-400";
+  return "text-red-400";
 }
 
 // ─── Audio Level Visualiser ───────────────────────────────────────────────────
@@ -276,6 +434,8 @@ export function CommunicationPanel({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const controlsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isSharingMedia, setIsSharingMedia] = useState(false);
+  const commMediaInputRef = useRef<HTMLInputElement>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -295,16 +455,9 @@ export function CommunicationPanel({
     return stableId;
   }, [operatorId]);
 
-  // ── Status helpers ─────────────────────────────────────────────────────────
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "online":  return "bg-green-500";
-      case "busy":    return "bg-yellow-500";
-      case "in_call": return "bg-red-500";
-      default:        return "bg-gray-500";
-    }
-  };
+  const meId = useMemo(() => getStableUserId(), [getStableUserId]);
 
+  // ── Status helpers ─────────────────────────────────────────────────────────
   const getStatusText = (status: string) => {
     switch (status) {
       case "online":  return "ONLINE";
@@ -710,17 +863,68 @@ export function CommunicationPanel({
   };
 
   const sendMessage = () => {
-    if (!messageInput.trim() || !selectedUser) return;
-    webRTCService.sendTextMessage(selectedUser.id, messageInput.trim());
+    if (!selectedUser) return;
+    const trimmed = messageInput.trim();
+    if (!trimmed) return;
+    webRTCService.sendTextMessage(selectedUser.id, trimmed);
     setMessages(prev => [...prev, {
-      from: operatorId || "",
+      from: meId,
       to: selectedUser.id,
-      text: messageInput.trim(),
+      text: trimmed,
       timestamp: Date.now(),
-      isOwn: true
+      isOwn: true,
     }]);
     setMessageInput("");
   };
+
+  const shareCommMedia = useCallback(async (file: File) => {
+    if (!selectedUser) {
+      toast({
+        title: "Select a contact",
+        description: "Open a chat thread before sharing a file.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSharingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (meId) formData.append("userId", meId);
+      const res = await systemFetch("/api/files/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const uploaded = await res.json() as {
+        url?: string;
+        mimetype?: string;
+        originalName?: string;
+        size?: number;
+      };
+      const path = typeof uploaded.url === "string" ? uploaded.url : "";
+      const absoluteUrl = resolveCommMediaUrl(path);
+      const mime = uploaded.mimetype || file.type || "application/octet-stream";
+      const name = uploaded.originalName || file.name;
+      const size = typeof uploaded.size === "number" ? uploaded.size : file.size;
+      const kind = inferCommAttachmentKind(mime, name);
+      const attachment: CommAttachment = { url: absoluteUrl, fileName: name, mimeType: mime, size, kind };
+      const caption = messageInput.trim();
+      webRTCService.sendTextMessage(selectedUser.id, caption, attachment);
+      const line = caption || `📎 ${name}`;
+      setMessages(prev => [...prev, {
+        from: meId,
+        to: selectedUser.id,
+        text: line,
+        timestamp: Date.now(),
+        isOwn: true,
+        attachment,
+      }]);
+      setMessageInput("");
+    } catch {
+      toast({ title: "Share failed", description: "Could not upload the file.", variant: "destructive" });
+    } finally {
+      setIsSharingMedia(false);
+      if (commMediaInputRef.current) commMediaInputRef.current.value = "";
+    }
+  }, [selectedUser, meId, messageInput, toast]);
 
   const selectUserForChat = (user: OnlineUser) => {
     setSelectedUser(user);
@@ -730,15 +934,15 @@ export function CommunicationPanel({
   // ── Auth gate ──────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
-      <Card className="border-2 border-dashed border-muted-foreground/20">
+      <Card className={cn(COMM_SHELL, "border-dashed")}>
         <CardContent className="p-8">
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
+          <div className="flex flex-col items-center gap-4 text-sky-200/70">
             <div className="relative">
-              <Shield className="w-16 h-16 opacity-30" />
-              <WifiOff className="w-8 h-8 absolute bottom-0 right-0 text-destructive" />
+              <Shield className="w-16 h-16 text-sky-500/25" />
+              <WifiOff className="w-8 h-8 absolute bottom-0 right-0 text-rose-500/90" />
             </div>
             <div className="text-center">
-              <p className="font-semibold text-lg">AUTHENTICATION REQUIRED</p>
+              <p className="font-semibold text-lg text-sky-100 tracking-wide">AUTHENTICATION REQUIRED</p>
               <p className="text-sm mt-1">Verify identity to access secure communication channels</p>
             </div>
           </div>
@@ -753,27 +957,26 @@ export function CommunicationPanel({
       <div className="space-y-4">
 
         {/* ── Status Bar ─────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between bg-gradient-to-r from-background via-muted/30 to-background p-3 rounded-lg border">
+        <div className={cn("flex items-center justify-between p-3 rounded-lg border", COMM_SHELL)}>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"} ${isReconnecting ? "animate-pulse" : ""}`} />
-              {isConnected && <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />}
+            <div className="relative flex items-center justify-center w-5 h-5">
+              <PresenceDot variant="channel" connected={isConnected} reconnecting={isReconnecting} />
             </div>
 
             {isReconnecting ? (
               <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-yellow-500" />
-                <span className="text-sm font-mono text-yellow-500">RECONNECTING ({reconnectAttempt}/10)</span>
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                <span className="text-sm font-mono text-amber-300">RECONNECTING ({reconnectAttempt}/10)</span>
               </div>
             ) : isConnected ? (
               <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-green-500" />
-                <span className="text-sm font-mono text-green-500">CYRUS COMMS ACTIVE</span>
+                <Zap className="w-4 h-4 text-sky-400" />
+                <span className="text-sm font-mono text-sky-300">CYRUS COMMS ACTIVE</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <WifiOff className="w-4 h-4 text-red-500" />
-                <span className="text-sm font-mono text-red-500">DISCONNECTED</span>
+                <WifiOff className="w-4 h-4 text-rose-400" />
+                <span className="text-sm font-mono text-rose-400">OFFLINE — DISCONNECTED</span>
               </div>
             )}
           </div>
@@ -785,13 +988,13 @@ export function CommunicationPanel({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 shrink-0"
+                  className="h-8 w-8 shrink-0 border-sky-800/50 bg-slate-950/50 text-sky-200 hover:bg-sky-950/70 hover:text-sky-50"
                   disabled={connectivityProbeRunning}
                   onClick={() => void runConnectivityProbe()}
                   data-testid="button-connectivity-probe"
                   aria-label="Check API and WebSocket signaling"
                 >
-                  <Wifi className={`h-4 w-4 ${connectivityProbeRunning ? "animate-pulse" : ""}`} />
+                  <Wifi className={`h-4 w-4 ${connectivityProbeRunning ? "animate-pulse text-sky-400" : ""}`} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
@@ -799,12 +1002,12 @@ export function CommunicationPanel({
                 that signaling upgrades are not blocked by a proxy.
               </TooltipContent>
             </Tooltip>
-            <Badge variant="outline" className="gap-1 font-mono text-xs">
-              <Users className="w-3 h-3" />
+            <Badge variant="outline" className="gap-1 font-mono text-xs border-sky-800/50 bg-slate-950/40 text-sky-200">
+              <Users className="w-3 h-3 text-sky-400" />
               {onlineUsers.length} DEVICE{onlineUsers.length !== 1 ? "S" : ""}
             </Badge>
-            <Badge variant="outline" className="gap-1 font-mono text-xs">
-              <Activity className="w-3 h-3 text-green-400" />
+            <Badge variant="outline" className="gap-1 font-mono text-xs border-sky-800/50 bg-slate-950/40 text-sky-200">
+              <Activity className="w-3 h-3 text-sky-400" />
               E2E ENCRYPTED
             </Badge>
           </div>
@@ -812,23 +1015,23 @@ export function CommunicationPanel({
 
         {/* ── Incoming Call ───────────────────────────────────────────────── */}
         {incomingCall && (
-          <Card className="border-2 border-primary bg-gradient-to-br from-primary/10 via-background to-primary/5 overflow-hidden relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 animate-pulse pointer-events-none" />
+          <Card className="border-2 border-sky-500/45 bg-gradient-to-br from-sky-950/50 via-[#0a1628] to-slate-950 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-sky-500/10 via-transparent to-sky-500/10 animate-pulse pointer-events-none" />
             <CardContent className="p-6 relative">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Avatar className="w-16 h-16 border-2 border-primary">
-                      <AvatarFallback className="text-2xl font-bold bg-primary/20">
+                    <Avatar className="w-16 h-16 border-2 border-sky-500/50">
+                      <AvatarFallback className="text-2xl font-bold bg-sky-900/40 text-sky-100">
                         {incomingCall.callerName[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div className="absolute -bottom-1 -right-1">
-                      <PhoneIncoming className="w-6 h-6 text-primary animate-bounce" />
+                      <PhoneIncoming className="w-6 h-6 text-sky-400 animate-bounce" />
                     </div>
                   </div>
                   <div>
-                    <p className="font-bold text-xl">{incomingCall.callerName}</p>
+                    <p className="font-bold text-xl text-sky-50">{incomingCall.callerName}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="secondary" className="font-mono text-xs">
                         {incomingCall.callType === "video"
@@ -846,7 +1049,7 @@ export function CommunicationPanel({
                     <PhoneOff className="w-6 h-6" />
                   </Button>
                   <Button size="lg" onClick={acceptCall}
-                    className="rounded-full w-14 h-14 bg-green-600 hover:bg-green-700" data-testid="button-accept-call">
+                    className="rounded-full w-14 h-14 bg-sky-600 hover:bg-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.35)]" data-testid="button-accept-call">
                     <Phone className="w-6 h-6" />
                   </Button>
                 </div>
@@ -857,22 +1060,22 @@ export function CommunicationPanel({
 
         {/* ── Incoming group invite ───────────────────────────────────────── */}
         {incomingGroupInvite && (
-          <Card className="border-2 border-violet-500/60 bg-gradient-to-br from-violet-500/10 via-background to-violet-500/5 overflow-hidden relative">
+          <Card className="border-2 border-sky-600/50 bg-gradient-to-br from-sky-950/45 via-[#0a1628] to-slate-950 overflow-hidden relative">
             <CardContent className="p-6 relative">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Avatar className="w-16 h-16 border-2 border-violet-500/50">
-                      <AvatarFallback className="text-2xl font-bold bg-violet-500/20">
+                    <Avatar className="w-16 h-16 border-2 border-sky-500/45">
+                      <AvatarFallback className="text-2xl font-bold bg-sky-900/40 text-sky-100">
                         {incomingGroupInvite.hostName[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div className="absolute -bottom-1 -right-1">
-                      <Users className="w-6 h-6 text-violet-400" />
+                      <Users className="w-6 h-6 text-sky-400" />
                     </div>
                   </div>
                   <div>
-                    <p className="font-bold text-xl">{incomingGroupInvite.hostName}</p>
+                    <p className="font-bold text-xl text-sky-50">{incomingGroupInvite.hostName}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       <Badge variant="secondary" className="font-mono text-xs">
                         {incomingGroupInvite.callType === "video" ? (
@@ -894,7 +1097,7 @@ export function CommunicationPanel({
                     <PhoneOff className="w-6 h-6" />
                   </Button>
                   <Button size="lg" onClick={() => void acceptGroupInvite()}
-                    className="rounded-full w-14 h-14 bg-violet-600 hover:bg-violet-700" data-testid="button-accept-group-invite">
+                    className="rounded-full w-14 h-14 bg-sky-600 hover:bg-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.35)]" data-testid="button-accept-group-invite">
                     <Phone className="w-6 h-6" />
                   </Button>
                 </div>
@@ -1256,46 +1459,80 @@ export function CommunicationPanel({
 
         {/* ── Main Panel (not in call) ────────────────────────────────────── */}
         {!isInCall && (
-          <Card className="border-muted">
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <Button variant={activeTab === "users" ? "default" : "outline"} size="sm"
-                  onClick={() => setActiveTab("users")} className="gap-1" data-testid="button-tab-users">
+          <Card className={cn("overflow-hidden", COMM_SHELL)}>
+            <CardHeader className="pb-2 border-b border-sky-950/45 bg-slate-950/25">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("users")}
+                  className={cn(
+                    "gap-1 border-sky-800/45",
+                    activeTab === "users"
+                      ? "bg-sky-600 text-white border-sky-500/60 shadow-[0_0_14px_rgba(14,165,233,0.22)] hover:bg-sky-500"
+                      : "bg-slate-950/55 text-sky-200/85 hover:bg-sky-950/70 hover:text-sky-50",
+                  )}
+                  data-testid="button-tab-users"
+                >
                   <Users className="w-4 h-4" />
                   Devices
                 </Button>
-                <Button variant={activeTab === "chat" ? "default" : "outline"} size="sm"
-                  onClick={() => setActiveTab("chat")} disabled={!selectedUser}
-                  className="gap-1" data-testid="button-tab-chat">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("chat")}
+                  disabled={!selectedUser}
+                  className={cn(
+                    "gap-1 border-sky-800/45",
+                    activeTab === "chat"
+                      ? "bg-sky-600 text-white border-sky-500/60 shadow-[0_0_14px_rgba(14,165,233,0.22)] hover:bg-sky-500"
+                      : "bg-slate-950/55 text-sky-200/85 hover:bg-sky-950/70 hover:text-sky-50",
+                    !selectedUser && "opacity-45",
+                  )}
+                  data-testid="button-tab-chat"
+                >
                   <MessageSquare className="w-4 h-4" />
                   Messages
                 </Button>
-                <Button variant={activeTab === "history" ? "default" : "outline"} size="sm"
-                  onClick={() => setActiveTab("history")} className="gap-1" data-testid="button-tab-history">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("history")}
+                  className={cn(
+                    "gap-1 border-sky-800/45",
+                    activeTab === "history"
+                      ? "bg-sky-600 text-white border-sky-500/60 shadow-[0_0_14px_rgba(14,165,233,0.22)] hover:bg-sky-500"
+                      : "bg-slate-950/55 text-sky-200/85 hover:bg-sky-950/70 hover:text-sky-50",
+                  )}
+                  data-testid="button-tab-history"
+                >
                   <History className="w-4 h-4" />
                   History
                 </Button>
               </div>
             </CardHeader>
 
-            <CardContent className="p-4">
+            <CardContent className="p-4 bg-slate-950/20">
 
               {/* ── Devices tab ─────────────────────────────────────────── */}
               {activeTab === "users" && (
                 <div className="space-y-2">
                   {onlineUsers.length > 0 && (
-                    <div className="rounded-xl border bg-gradient-to-r from-violet-500/10 to-transparent p-4 space-y-3">
+                    <div className="rounded-xl border border-sky-800/40 bg-sky-950/20 p-4 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold">Group call</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="text-sm font-semibold text-sky-100">Group call</p>
+                          <p className="text-xs text-sky-200/60 mt-0.5">
                             Up to {GROUP_CALL_MAX_MEMBERS} people total. Select participants, then start group voice or video.
                           </p>
                         </div>
                         <Button
-                          variant={groupSelectMode ? "default" : "outline"}
+                          variant="outline"
                           size="sm"
-                          className="shrink-0"
+                          className={cn(
+                            "shrink-0 border-sky-800/50",
+                            groupSelectMode && "bg-sky-600 text-white border-sky-500/60 hover:bg-sky-500 shadow-[0_0_12px_rgba(14,165,233,0.2)]",
+                          )}
                           onClick={() => {
                             setGroupSelectMode(v => {
                               if (v) setGroupSelectedIds(new Set());
@@ -1309,7 +1546,7 @@ export function CommunicationPanel({
                       </div>
                       {groupSelectMode && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-mono text-muted-foreground">
+                          <span className="text-xs font-mono text-sky-300/70">
                             Selected: {groupSelectedIds.size} / {GROUP_CALL_MAX_MEMBERS - 1}
                           </span>
                           <Button
@@ -1317,7 +1554,7 @@ export function CommunicationPanel({
                             variant="secondary"
                             disabled={groupSelectedIds.size === 0}
                             onClick={() => void startGroupCall("voice")}
-                            className="gap-1"
+                            className="gap-1 border border-sky-800/40 bg-slate-900/60 text-sky-100 hover:bg-slate-800/80"
                             data-testid="button-start-group-voice"
                           >
                             <Phone className="w-3.5 h-3.5" />
@@ -1327,7 +1564,7 @@ export function CommunicationPanel({
                             size="sm"
                             disabled={groupSelectedIds.size === 0}
                             onClick={() => void startGroupCall("video")}
-                            className="gap-1 bg-violet-600 hover:bg-violet-700"
+                            className="gap-1 bg-sky-600 hover:bg-sky-500 text-white shadow-[0_0_12px_rgba(14,165,233,0.25)]"
                             data-testid="button-start-group-video"
                           >
                             <Video className="w-3.5 h-3.5" />
@@ -1340,12 +1577,12 @@ export function CommunicationPanel({
 
                   {onlineUsers.length === 0 ? (
                     <div className="text-center py-12 space-y-4">
-                      <div className="w-20 h-20 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-                        <Radio className="w-10 h-10 text-muted-foreground/50" />
+                      <div className="w-20 h-20 mx-auto rounded-full bg-sky-950/50 border border-sky-900/35 flex items-center justify-center">
+                        <Radio className="w-10 h-10 text-sky-600/45" />
                       </div>
                       <div>
-                        <p className="font-medium text-muted-foreground">No Devices Detected</p>
-                        <p className="text-sm text-muted-foreground/70 mt-1">
+                        <p className="font-medium text-sky-200/80">No Devices Detected</p>
+                        <p className="text-sm text-sky-300/50 mt-1">
                           Open CYRUS on another device to establish connection
                         </p>
                       </div>
@@ -1353,7 +1590,7 @@ export function CommunicationPanel({
                   ) : (
                     onlineUsers.map(user => (
                       <div key={user.id}
-                        className="flex items-center justify-between p-4 rounded-xl border bg-gradient-to-r from-muted/30 to-transparent hover-elevate transition-all">
+                        className="flex items-center justify-between p-4 rounded-xl border border-sky-900/35 bg-slate-900/35 hover:bg-slate-800/45 transition-colors">
                         <div className="flex items-center gap-4">
                           {groupSelectMode && (
                             <Checkbox
@@ -1365,18 +1602,20 @@ export function CommunicationPanel({
                             />
                           )}
                           <div className="relative">
-                            <Avatar className="w-12 h-12 border-2 border-muted">
-                              <AvatarFallback className="font-bold">{user.name[0]}</AvatarFallback>
+                            <Avatar className="w-12 h-12 border-2 border-sky-800/45">
+                              <AvatarFallback className="font-bold bg-sky-950 text-sky-100">{user.name[0]}</AvatarFallback>
                             </Avatar>
-                            <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-background ${getStatusColor(user.status)}`} />
+                            <span className="absolute -bottom-0.5 -right-0.5 flex shadow-sm shadow-slate-950 rounded-full">
+                              <PresenceDot variant="peer" status={user.status} />
+                            </span>
                           </div>
                           <div>
-                            <p className="font-semibold">{user.name}</p>
+                            <p className="font-semibold text-sky-50">{user.name}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs font-mono">
+                              <Badge variant="outline" className={cn("text-xs font-mono border-sky-800/45 bg-slate-950/50", getPeerPresenceLabelClass(user.status))}>
                                 {getStatusText(user.status)}
                               </Badge>
-                              <span className="text-xs text-muted-foreground truncate max-w-[100px]">
+                              <span className="text-xs text-sky-300/45 truncate max-w-[100px]">
                                 {user.deviceId.slice(0, 12)}…
                               </span>
                             </div>
@@ -1387,7 +1626,7 @@ export function CommunicationPanel({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" onClick={() => selectUserForChat(user)}
-                                disabled={user.status === "in_call"} className="rounded-full"
+                                disabled={user.status === "in_call"} className="rounded-full text-sky-300 hover:text-sky-50 hover:bg-sky-950/60"
                                 data-testid={`button-chat-${user.id}`}>
                                 <MessageSquare className="w-5 h-5" />
                               </Button>
@@ -1399,7 +1638,7 @@ export function CommunicationPanel({
                             <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" onClick={() => startCall(user, "voice")}
                                 disabled={user.status === "in_call" || groupSelectMode}
-                                className="rounded-full text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30"
+                                className="rounded-full text-sky-400 hover:text-sky-100 hover:bg-sky-950/50"
                                 data-testid={`button-voice-call-${user.id}`}>
                                 <Phone className="w-5 h-5" />
                               </Button>
@@ -1411,7 +1650,7 @@ export function CommunicationPanel({
                             <TooltipTrigger asChild>
                               <Button size="icon" variant="ghost" onClick={() => startCall(user, "video")}
                                 disabled={user.status === "in_call" || groupSelectMode}
-                                className="rounded-full text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                                className="rounded-full text-sky-300 hover:text-sky-50 hover:bg-sky-950/50"
                                 data-testid={`button-video-call-${user.id}`}>
                                 <Video className="w-5 h-5" />
                               </Button>
@@ -1428,42 +1667,53 @@ export function CommunicationPanel({
               {/* ── Chat tab ─────────────────────────────────────────────── */}
               {activeTab === "chat" && selectedUser && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-sky-900/40 bg-slate-900/45">
                     <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback>{selectedUser.name[0]}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar className="w-10 h-10 border border-sky-800/40">
+                          <AvatarFallback className="bg-sky-950 text-sky-100">{selectedUser.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="absolute -bottom-0.5 -right-0.5 flex rounded-full shadow-sm shadow-slate-950">
+                          <PresenceDot variant="peer" status={selectedUser.status} />
+                        </span>
+                      </div>
                       <div>
-                        <span className="font-semibold">{selectedUser.name}</span>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className={`w-2 h-2 rounded-full ${getStatusColor(selectedUser.status)}`} />
-                          <span className="text-xs text-muted-foreground">{getStatusText(selectedUser.status)}</span>
+                        <span className="font-semibold text-sky-50">{selectedUser.name}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={cn("text-xs font-medium", getPeerPresenceLabelClass(selectedUser.status))}>
+                            {getStatusText(selectedUser.status)}
+                          </span>
                         </div>
                       </div>
                     </div>
                     <Button size="icon" variant="ghost"
+                      className="text-sky-300 hover:text-sky-50 hover:bg-sky-950/50"
                       onClick={() => { setSelectedUser(null); setActiveTab("users"); }}
                       data-testid="button-close-chat">
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
 
-                  <ScrollArea className="h-72 border rounded-xl p-4 bg-muted/10">
+                  <ScrollArea className="h-72 rounded-xl border border-sky-900/45 bg-[#030a12] p-4">
                     <div className="space-y-3">
                       {messages
                         .filter(m =>
-                          (m.from === selectedUser.id && m.to === operatorId) ||
-                          (m.from === operatorId && m.to === selectedUser.id)
+                          (m.from === selectedUser.id && m.to === meId) ||
+                          (m.from === meId && m.to === selectedUser.id)
                         )
                         .map((msg, idx) => (
                           <div key={idx} className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
+                            <div className={cn(
+                              "max-w-[75%] px-4 py-2.5 rounded-2xl",
                               msg.isOwn
-                                ? "bg-primary text-primary-foreground rounded-br-md"
-                                : "bg-muted rounded-bl-md"
-                            }`}>
-                              <p className="text-sm">{msg.text}</p>
-                              <p className="text-xs opacity-60 mt-1 text-right">
+                                ? "bg-sky-700 text-white border border-sky-500/35 rounded-br-md shadow-[0_0_18px_rgba(14,165,233,0.12)]"
+                                : "bg-slate-800/90 text-sky-50 border border-sky-800/45 rounded-bl-md",
+                            )}>
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+                              {msg.attachment ? (
+                                <CommAttachmentBubble attachment={msg.attachment} isOwn={msg.isOwn} />
+                              ) : null}
+                              <p className={cn("text-xs mt-1 text-right", msg.isOwn ? "text-sky-100/75" : "text-sky-300/50")}>
                                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                               </p>
                             </div>
@@ -1473,13 +1723,44 @@ export function CommunicationPanel({
                     </div>
                   </ScrollArea>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      ref={commMediaInputRef}
+                      type="file"
+                      className="hidden"
+                      accept={COMM_MEDIA_ACCEPT}
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) void shareCommMedia(f);
+                      }}
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="rounded-full shrink-0 border-sky-800/50 bg-slate-900/60 text-sky-200 hover:bg-sky-950/80 hover:text-sky-50"
+                          disabled={!selectedUser || isSharingMedia}
+                          onClick={() => commMediaInputRef.current?.click()}
+                          aria-label="Attach photo, video, audio, ebook, or 3D model"
+                          data-testid="button-comm-attach"
+                        >
+                          {isSharingMedia ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Paperclip className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Attach media or file</TooltipContent>
+                    </Tooltip>
                     <Input value={messageInput} onChange={e => setMessageInput(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && sendMessage()}
-                      placeholder="Type a secure message…" className="rounded-full px-4"
+                      placeholder="Type a secure message…" className="rounded-full px-4 flex-1 border-sky-800/50 bg-slate-950/70 text-sky-50 placeholder:text-slate-500 focus-visible:ring-sky-500/30"
                       data-testid="input-message" />
                     <Button size="icon" onClick={sendMessage} disabled={!messageInput.trim()}
-                      className="rounded-full" data-testid="button-send-message">
+                      className="rounded-full shrink-0 bg-sky-600 hover:bg-sky-500 text-white border border-sky-500/50 shadow-[0_0_14px_rgba(14,165,233,0.2)] disabled:opacity-40" data-testid="button-send-message">
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1491,12 +1772,12 @@ export function CommunicationPanel({
                 <div className="space-y-2">
                   {callHistory.length === 0 ? (
                     <div className="text-center py-12 space-y-4">
-                      <div className="w-20 h-20 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-                        <History className="w-10 h-10 text-muted-foreground/50" />
+                      <div className="w-20 h-20 mx-auto rounded-full bg-sky-950/45 border border-sky-900/35 flex items-center justify-center">
+                        <History className="w-10 h-10 text-sky-600/45" />
                       </div>
                       <div>
-                        <p className="font-medium text-muted-foreground">No Call History</p>
-                        <p className="text-sm text-muted-foreground/70 mt-1">
+                        <p className="font-medium text-sky-200/80">No Call History</p>
+                        <p className="text-sm text-sky-300/50 mt-1">
                           Completed calls will appear here
                         </p>
                       </div>
@@ -1504,37 +1785,37 @@ export function CommunicationPanel({
                   ) : (
                     <>
                       <div className="flex justify-end mb-2">
-                        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground"
+                        <Button variant="ghost" size="sm" className="text-xs text-sky-300/70 hover:text-sky-100 hover:bg-sky-950/40"
                           onClick={() => { webRTCService.clearCallHistory(); setCallHistory([]); }}>
                           Clear history
                         </Button>
                       </div>
                       {callHistory.map(entry => (
                         <div key={entry.id}
-                          className="flex items-center justify-between p-3 rounded-xl border bg-muted/20 hover:bg-muted/30 transition-colors">
+                          className="flex items-center justify-between p-3 rounded-xl border border-sky-900/35 bg-slate-900/30 hover:bg-slate-800/40 transition-colors">
                           <div className="flex items-center gap-3">
                             <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                              entry.direction === "inbound" ? "bg-green-500/20" : "bg-blue-500/20"
+                              entry.direction === "inbound" ? "bg-sky-900/50 border border-sky-800/40" : "bg-slate-800/70 border border-sky-900/30"
                             }`}>
                               {entry.callType === "video"
-                                ? <Video className="w-4 h-4 text-blue-400" />
-                                : <Phone className={`w-4 h-4 ${entry.direction === "inbound" ? "text-green-400" : "text-blue-400"}`} />}
+                                ? <Video className="w-4 h-4 text-sky-400" />
+                                : <Phone className="w-4 h-4 text-sky-300" />}
                             </div>
                             <div>
-                              <p className="font-medium text-sm">{entry.remoteUserName}</p>
+                              <p className="font-medium text-sm text-sky-50">{entry.remoteUserName}</p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-sky-300/55">
                                   {new Date(entry.startTime).toLocaleDateString([], { month: "short", day: "numeric" })}
                                   {" "}
                                   {new Date(entry.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                 </span>
-                                <span className="text-xs text-muted-foreground">·</span>
-                                <span className="text-xs text-muted-foreground">{formatHistoryDuration(entry.duration)}</span>
+                                <span className="text-xs text-sky-400/35">·</span>
+                                <span className="text-xs text-sky-300/55">{formatHistoryDuration(entry.duration)}</span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-xs font-mono ${qualityColor(entry.quality)}`}>
+                            <Badge variant="outline" className={cn("text-xs font-mono border-sky-800/45 bg-slate-950/40", qualityColor(entry.quality))}>
                               {entry.quality.toUpperCase()}
                             </Badge>
                           </div>

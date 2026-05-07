@@ -54,7 +54,7 @@ export default function DeviceControl() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-6">
+    <div className="min-h-screen bg-transparent text-white p-6">
       <div className="max-w-3xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">Device Control</h1>
         <p className="text-sm text-slate-400">

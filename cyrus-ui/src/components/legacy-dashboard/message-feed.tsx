@@ -10,6 +10,8 @@ type Message = {
   timestamp: Date;
   hasImage?: boolean;
   imageUrl?: string;
+  hasVideo?: boolean;
+  videoUrl?: string;
 };
 
 export function LegacyMessageFeed({
@@ -55,6 +57,20 @@ export function LegacyMessageFeed({
                 <div className="flex items-center gap-2 mb-2">
                   <img src={cyrusEmblem} alt="" className="w-5 h-5 rounded-full" />
                   <span className="text-xs font-medium text-white/60">CYRUS</span>
+                </div>
+              )}
+              {message.hasVideo && message.videoUrl && (
+                <div className="mb-3 max-w-full rounded-xl overflow-hidden border border-white/15 bg-black/30">
+                  <video
+                    src={message.videoUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="max-h-64 w-full object-contain"
+                    data-testid="video-message-attachment"
+                  >
+                    Your browser does not support video playback.
+                  </video>
                 </div>
               )}
               {message.hasImage && message.imageUrl && (

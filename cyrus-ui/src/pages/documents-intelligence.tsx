@@ -3,6 +3,7 @@ import { useDocumentsIntelligence, type IntelOptions } from "@/hooks/useDocument
 import { Button } from "@/components/ui/button";
 import {
   Brain,
+  ChevronDown,
   FileText,
   Gavel,
   Loader2,
@@ -60,6 +61,23 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(a.href);
 }
 
+function downloadBlob(filename: string, blob: Blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const EXPORT_FORMATS: Array<{ value: "pdf" | "docx" | "html" | "md" | "txt" | "json"; label: string }> = [
+  { value: "pdf", label: "PDF (.pdf)" },
+  { value: "docx", label: "Word (.docx)" },
+  { value: "html", label: "HTML (.html)" },
+  { value: "md", label: "Markdown (.md)" },
+  { value: "txt", label: "Plain text (.txt)" },
+  { value: "json", label: "Structured JSON (.json)" },
+];
+
 export default function DocumentsIntelligence() {
   const { toast } = useToast();
   const {
@@ -73,6 +91,7 @@ export default function DocumentsIntelligence() {
     runSyncFull,
     runAsync,
     generateDocument,
+    exportDocument,
     clearResults,
   } = useDocumentsIntelligence();
 
@@ -81,8 +100,10 @@ export default function DocumentsIntelligence() {
   const [genType, setGenType] = useState("legal");
   const [genAudience, setGenAudience] = useState("legal_counsel");
   const [genBody, setGenBody] = useState("");
-  const [targetPages, setTargetPages] = useState(48);
+  const [targetPages, setTargetPages] = useState(2000);
   const [genPurpose, setGenPurpose] = useState("");
+  const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
+  const [isExporting, setIsExporting] = useState(false);
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
   const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
   const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
@@ -385,7 +406,7 @@ export default function DocumentsIntelligence() {
                     onClick={() => analyseFileInputRef.current?.click()}
                   >
                     <Upload className="mr-2 h-5 w-5" />
-                    Upload document
+                    Upload document (PDF, Word, text, image)
                   </Button>
                   {(stagedAnalyseFile || currentFile) && (
                     <p className="mt-2 text-sm text-white/75">
@@ -474,10 +495,21 @@ export default function DocumentsIntelligence() {
                   <span>{targetPages} pg</span>
                 </div>
                 <input
-                  type="range"
-                  min={4}
+                  type="number"
+                  min={1}
                   max={maxDocgenTargetPages()}
-                  step={4}
+                  step={10}
+                  value={targetPages}
+                  onChange={(e) =>
+                    setTargetPages(Math.max(1, Math.min(maxDocgenTargetPages(), Number(e.target.value || 1))))
+                  }
+                  className="mb-2 w-full rounded-lg border border-white/12 bg-slate-900/85 px-3 py-2 text-base text-white"
+                />
+                <input
+                  type="range"
+                  min={1}
+                  max={maxDocgenTargetPages()}
+                  step={10}
                   value={targetPages}
                   onChange={(e) => setTargetPages(+e.target.value)}
                   className="h-2 w-full"
@@ -610,15 +642,44 @@ export default function DocumentsIntelligence() {
                     >
                       Generated document
                     </h3>
-                    <Button
-                      type="button"
-                      size="default"
-                      variant="outline"
-                      className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
-                      onClick={() => downloadText(`${genMut.data.title || "cyrus-doc"}.md`, genMut.data.rendered)}
-                    >
-                      Download .md
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <select
+                          value={exportFormat}
+                          onChange={(e) => setExportFormat(e.target.value as (typeof EXPORT_FORMATS)[number]["value"])}
+                          className="h-10 appearance-none rounded-md border border-indigo-400/30 bg-slate-900 pl-3 pr-8 text-sm text-indigo-100"
+                        >
+                          {EXPORT_FORMATS.map((fmt) => (
+                            <option key={fmt.value} value={fmt.value}>
+                              {fmt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-200/80" />
+                      </div>
+                      <Button
+                        type="button"
+                        size="default"
+                        variant="outline"
+                        disabled={isExporting}
+                        className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
+                        onClick={async () => {
+                          try {
+                            setIsExporting(true);
+                            const file = await exportDocument(exportFormat, genMut.data);
+                            downloadBlob(file.filename, file.blob);
+                            toast({ title: "Download ready", description: `Exported as ${exportFormat.toUpperCase()}` });
+                          } catch (e: unknown) {
+                            const msg = e instanceof Error ? e.message : "Export failed";
+                            toast({ title: "Export failed", description: msg, variant: "destructive" });
+                          } finally {
+                            setIsExporting(false);
+                          }
+                        }}
+                      >
+                        {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Download ${exportFormat.toUpperCase()}`}
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm text-white/70">{genMut.data.title}</p>
                   <div className="min-h-0 max-h-[min(28dvh,260px)] flex-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2.5 sm:p-3">

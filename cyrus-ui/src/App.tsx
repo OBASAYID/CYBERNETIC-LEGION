@@ -14,6 +14,7 @@ import { ArrowLeft } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
+import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -97,40 +98,43 @@ function App() {
     <ThemeProvider>
       <AppErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <div className="min-h-screen bg-black text-white">
-            <ReturnHomeButton />
-            {!isAuthenticated ? (
-              <PasswordGate
-                key="cyrus-password-gate"
-                username={gateUsername}
-                password={gatePassword}
-                onUsernameChange={setGateUsername}
-                onPasswordChange={setGatePassword}
-                onAuthenticated={(sessionToken: string, profile: GateProfile) => {
-                  setGatePassword("");
-                  clearGateDraft();
-                  onAuthenticated(sessionToken, profile);
-                }}
-              />
-            ) : (
-              <TooltipProvider>
-                <Toaster />
-                <AppErrorBoundary>
-                  {/* CallProvider wraps all authenticated routes so incoming/active
-                      call overlays are globally available regardless of current page. */}
-                  <CallProvider
-                    webRTCOptions={{
-                      userId: callUserId,
-                      userName: callDisplayName,
-                      isAuthenticated,
-                    }}
-                  >
-                    <AppRoutes />
-                  </CallProvider>
-                </AppErrorBoundary>
-                <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
-              </TooltipProvider>
-            )}
+          <div className="relative isolate min-h-screen overflow-x-hidden bg-black text-white">
+            <AtmosphericSmokeBackground />
+            <div className="relative z-10 min-h-screen">
+              <ReturnHomeButton />
+              {!isAuthenticated ? (
+                <PasswordGate
+                  key="cyrus-password-gate"
+                  username={gateUsername}
+                  password={gatePassword}
+                  onUsernameChange={setGateUsername}
+                  onPasswordChange={setGatePassword}
+                  onAuthenticated={(sessionToken: string, profile: GateProfile) => {
+                    setGatePassword("");
+                    clearGateDraft();
+                    onAuthenticated(sessionToken, profile);
+                  }}
+                />
+              ) : (
+                <TooltipProvider>
+                  <Toaster />
+                  <AppErrorBoundary>
+                    {/* CallProvider wraps all authenticated routes so incoming/active
+                        call overlays are globally available regardless of current page. */}
+                    <CallProvider
+                      webRTCOptions={{
+                        userId: callUserId,
+                        userName: callDisplayName,
+                        isAuthenticated,
+                      }}
+                    >
+                      <AppRoutes />
+                    </CallProvider>
+                  </AppErrorBoundary>
+                  <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
+                </TooltipProvider>
+              )}
+            </div>
           </div>
         </QueryClientProvider>
       </AppErrorBoundary>

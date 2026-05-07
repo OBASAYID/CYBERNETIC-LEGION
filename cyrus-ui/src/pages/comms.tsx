@@ -32,7 +32,7 @@ export default function Comms() {
   } = useComms();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-6">
+    <div className="min-h-screen bg-transparent text-white p-6">
       <div className="max-w-5xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">Comms & Ops</h1>
 
