@@ -41,6 +41,7 @@ let createAnalysisJob: any;
 let getAnalysisJob: any;
 let listAnalysisReports: any;
 let generateDocument: any;
+let exportGeneratedDocument: any;
 let createDocgenJob: any;
 let getDocgenJob: any;
 let listDocgenJobs: any;
@@ -190,6 +191,8 @@ async function loadDependencies() {
   try {
     const dgM = await import("./docgen/generate");
     generateDocument = dgM.generateDocument;
+    const dgExportM = await import("./docgen/export");
+    exportGeneratedDocument = dgExportM.exportGeneratedDocument;
     const dgJobsM = await import("./docgen/jobs");
     createDocgenJob = dgJobsM.createDocgenJob;
     getDocgenJob = dgJobsM.getDocgenJob;
@@ -1391,6 +1394,50 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Docgen generate failed:", err);
       res.status(500).json({ error: "Document generation failed", detail: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/docgen/export", async (req, res) => {
+    try {
+      if (!exportGeneratedDocument) {
+        return res.status(503).json({ error: "Document export service unavailable" });
+      }
+      const {
+        format,
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      } = req.body || {};
+      const normalizedFormat = String(format || "md").toLowerCase();
+      const allowed = new Set(["pdf", "docx", "html", "md", "txt", "json"]);
+      if (!allowed.has(normalizedFormat)) {
+        return res.status(400).json({ error: "Unsupported export format" });
+      }
+
+      const file = await exportGeneratedDocument(normalizedFormat, {
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      });
+
+      res.setHeader("Content-Type", file.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+      return res.send(file.data);
+    } catch (err: any) {
+      console.error("Docgen export failed:", err);
+      return res.status(500).json({ error: "Document export failed", detail: err?.message || String(err) });
     }
   });
 

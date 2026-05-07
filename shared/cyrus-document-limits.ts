@@ -64,5 +64,5 @@ export function maxDocgenTargetPages(): number {
       ? parseInt(String(process.env.CYRUS_DOCGEN_MAX_PAGES), 10)
       : NaN;
   if (Number.isFinite(raw) && raw >= 1) return Math.min(CYRUS_DOCGEN_MAX_PAGES_CAP, Math.floor(raw));
-  return 2000;
+  return 4000;
 }

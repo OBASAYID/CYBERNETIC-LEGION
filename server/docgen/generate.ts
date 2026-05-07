@@ -44,6 +44,53 @@ function wordsPerPage(input: DocGenInput): number {
     return Math.max(180, Math.min(420, Number(input.wordsPerPage || 280)));
 }
 
+function countWords(text: string): number {
+    return text.split(/\s+/).filter(Boolean).length;
+}
+
+function clipSource(text: string, max = 2000): string {
+    const clean = text.replace(/\s+/g, " ").trim();
+    if (clean.length <= max) return clean;
+    return `${clean.slice(0, max)}...`;
+}
+
+function expandSectionsForTargetPages(
+    sections: { title: string; content: string }[],
+    targetPages: number,
+    wordsPerPg: number,
+    seedText: string,
+): { title: string; content: string }[] {
+    const targetWords = Math.max(1200, targetPages * wordsPerPg);
+    const expanded = sections.map((section) => ({ ...section }));
+    let totalWords = expanded.reduce((sum, section) => sum + countWords(section.content), 0);
+    if (totalWords >= targetWords) return expanded;
+
+    const source = clipSource(seedText || expanded.map((s) => s.content).join("\n\n"), 3500);
+    let pass = 0;
+    // Guardrail for runaway loops on very high page counts.
+    const maxPasses = Math.max(24, Math.ceil(targetPages / 16));
+
+    while (totalWords < targetWords && pass < maxPasses) {
+        for (let index = 0; index < expanded.length && totalWords < targetWords; index += 1) {
+            const section = expanded[index];
+            const segment = [
+                "",
+                `### Extended Coverage ${pass + 1}.${index + 1}`,
+                `This section is intentionally expanded for long-form output planning around ${targetPages} pages. It deepens context, constraints, operational detail, and implementation steps for ${section.title.toLowerCase()}.`,
+                source
+                    ? `Source reinforcement: ${source}`
+                    : "Source reinforcement: Additional source detail was not provided, so this expansion follows the same narrative line with explicit assumptions.",
+                "Additional elaboration: include procedural checkpoints, legal/compliance implications where relevant, stakeholder responsibilities, risk treatment, and measurable outcomes.",
+            ].join("\n");
+            section.content = `${section.content}\n${segment}`;
+            totalWords += countWords(segment);
+        }
+        pass += 1;
+    }
+
+    return expanded;
+}
+
 function renderMarkdown(doc: Omit<GeneratedDoc, "rendered" | "htmlRendered" | "wordCount" | "estimatedPages">): string {
     const lines: string[] = [];
     lines.push(`# ${doc.title}`);
@@ -240,7 +287,14 @@ export async function generateDocument(input: DocGenInput): Promise<GeneratedDoc
     const analysis = await analyzeDocument(input);
     const docType = input.docType || defaultDocType;
     const audience = input.audience || "official";
-    const sections = mergeTemplateSections(String(docType), analysis);
+    const targetPages = normalizeTargetPages(input);
+    const wpp = wordsPerPage(input);
+    const sections = expandSectionsForTargetPages(
+        mergeTemplateSections(String(docType), analysis),
+        targetPages,
+        wpp,
+        input.rawText || input.topic || input.purpose || "",
+    );
     const missing = Array.from(new Set([
         ...analysis.missing,
         ...sections.filter((section) => section.content.trim().length < 20).map((section) => section.title),
@@ -259,14 +313,14 @@ export async function generateDocument(input: DocGenInput): Promise<GeneratedDoc
         layoutPlan: analysis.layoutPlan,
         graphicsPlan: analysis.graphicsPlan,
         dataVisuals: analysis.dataVisuals,
-        targetPages: normalizeTargetPages(input),
+        targetPages,
         attachments: [] as GeneratedDoc["attachments"],
     };
 
     const rendered = renderMarkdown(base);
     const htmlRendered = renderHtml(base);
     const wordCount = rendered.split(/\s+/).filter(Boolean).length;
-    const estimatedPages = Math.max(base.targetPages, Math.ceil(wordCount / wordsPerPage(input)));
+    const estimatedPages = Math.max(base.targetPages, Math.ceil(wordCount / wpp));
 
     return {
         ...base,
