@@ -50,6 +50,8 @@ interface Message {
   timestamp: Date;
   hasImage?: boolean;
   imageUrl?: string;
+  hasVideo?: boolean;
+  videoUrl?: string;
 }
 
 interface LocationData {
@@ -100,7 +102,17 @@ export default function Dashboard() {
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   
   const [pendingAttachment, setPendingAttachment] = useState<{file: File; preview: string; type: string} | null>(null);
+  const pendingAttachmentRef = useRef(pendingAttachment);
+  useEffect(() => {
+    pendingAttachmentRef.current = pendingAttachment;
+  }, [pendingAttachment]);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
+
+  const revokeVideoPreviewIfNeeded = useCallback((att: typeof pendingAttachment) => {
+    if (att?.type === "video" && att.preview.startsWith("blob:")) {
+      URL.revokeObjectURL(att.preview);
+    }
+  }, []);
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -317,6 +329,7 @@ export default function Dashboard() {
   const handleChatFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      revokeVideoPreviewIfNeeded(pendingAttachmentRef.current);
       const type = file.type.startsWith('image/') ? 'image' : 
                    file.type.startsWith('video/') ? 'video' : 'document';
       
@@ -330,6 +343,12 @@ export default function Dashboard() {
           });
         };
         reader.readAsDataURL(file);
+      } else if (type === 'video') {
+        setPendingAttachment({
+          file,
+          preview: URL.createObjectURL(file),
+          type,
+        });
       } else {
         setPendingAttachment({
           file,
@@ -341,7 +360,7 @@ export default function Dashboard() {
     if (chatFileInputRef.current) {
       chatFileInputRef.current.value = '';
     }
-  }, []);
+  }, [revokeVideoPreviewIfNeeded]);
 
   const uploadAndSendFile = useCallback(async () => {
     if (!pendingAttachment) return;
@@ -363,13 +382,16 @@ export default function Dashboard() {
       
       const uploadedFile = await uploadResponse.json();
       
+      const isVideo = pendingAttachment.type === "video";
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
         content: inputText || `Sent a ${pendingAttachment.type}: ${pendingAttachment.file.name}`,
         timestamp: new Date(),
         hasImage: pendingAttachment.type === 'image',
-        imageUrl: pendingAttachment.type === 'image' ? (pendingAttachment.preview || uploadedFile.url) : undefined
+        imageUrl: pendingAttachment.type === 'image' ? (pendingAttachment.preview || uploadedFile.url) : undefined,
+        hasVideo: isVideo,
+        videoUrl: isVideo ? uploadedFile.url : undefined,
       };
       setMessages(prev => [...prev, userMessage]);
       
@@ -396,6 +418,7 @@ export default function Dashboard() {
             uploadedFile: {
               name: pendingAttachment.file.name,
               type: pendingAttachment.type,
+              mimetype: pendingAttachment.file.type || uploadedFile.mimetype || "",
               size: pendingAttachment.file.size,
               url: uploadedFile.url
             }
@@ -428,6 +451,7 @@ export default function Dashboard() {
         });
       }
       
+      revokeVideoPreviewIfNeeded(pendingAttachment);
       setPendingAttachment(null);
       setInputText('');
     } catch (error) {
@@ -442,7 +466,7 @@ export default function Dashboard() {
     } finally {
       setIsThinking(false);
     }
-  }, [pendingAttachment, inputText, messages, createConversation]);
+  }, [pendingAttachment, inputText, messages, createConversation, revokeVideoPreviewIfNeeded]);
 
   const exportConversation = useCallback(() => {
     const doc = messages.map(m => {
@@ -1102,7 +1126,7 @@ Total Messages: ${messages.length}
   const { navItems, navLabelByRoute, orchestratorModules, stackSummary } = useLegacyDashboardData();
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="min-h-screen bg-transparent flex flex-col">
       <LegacyDashboardHeader
         navItems={navItems}
         logoSrc={cyrusEmblem}
@@ -1186,7 +1210,10 @@ Total Messages: ${messages.length}
         onAnalyzeFile={handleFileAnalyze}
         onInputChange={setInputText}
         onFileInputChange={handleChatFileSelect}
-        onRemoveAttachment={() => setPendingAttachment(null)}
+        onRemoveAttachment={() => {
+          revokeVideoPreviewIfNeeded(pendingAttachment);
+          setPendingAttachment(null);
+        }}
         onSend={() => (pendingAttachment ? uploadAndSendFile() : handleSendMessage())}
         onMessage={() => {
           const msg: Message = {

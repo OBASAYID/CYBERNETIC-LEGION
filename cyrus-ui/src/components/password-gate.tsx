@@ -241,7 +241,7 @@ export function PasswordGate({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-slate-950">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-transparent text-white">
       <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80 pointer-events-none" />
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

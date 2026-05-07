@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { FieldDateTimeHud } from "./field-datetime-hud";
 import type { ModuleHandoffAttachment, ModuleHandoffLargeRef } from "@shared/module-handoff";
 import { ModuleCommandConsole, ModuleCommandConsoleDock } from "./module-command-console";
-import { useWildlifeBackground } from "@/hooks/use-wildlife-background";
 
 /** Lucide icons — use wide component type to avoid dual node_modules @types/react ref identity issues. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,19 +45,12 @@ export type ModuleWorkspacePageShellProps = {
 };
 
 function ModuleWorkspaceBackdrop() {
-  const wildlifeBg = useWildlifeBackground();
   return (
     <>
-      {/* Wildlife full-screen background image */}
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${wildlifeBg})` }}
-        aria-hidden
-      />
-      {/* Dark overlay to keep module UI readable */}
-      <div className="pointer-events-none fixed inset-0 bg-slate-950/75" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/55 to-orange-950/22" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
+      {/* Global crack + smoke comes from App; light tint only so modules stay legible */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-sky-950/14 via-slate-900/22 to-blue-950/25" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(56,189,248,0.06),transparent_58%)]" />
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
         <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
