@@ -10,6 +10,10 @@ export type ModuleTileTheme = {
   sub: string;
   glow: string;
   corner: string;
+  /** CSS `filter` for the shared folder tile artwork so accents stay on-brand per tile. */
+  folderTint: string;
+  /** Center color for the top hairline on folder tiles (avoids dynamic Tailwind `via-*`). */
+  hairline: string;
 };
 
 const THEMES: ModuleTileTheme[] = [
@@ -21,6 +25,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-cyan-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(34,211,238,0.45)]",
     corner: "from-cyan-500/25",
+    folderTint: "hue-rotate(168deg) saturate(0.82) brightness(1.04) contrast(1.06)",
+    hairline: "rgba(34, 211, 238, 0.55)",
   },
   {
     border: "border-orange-400/40",
@@ -30,6 +36,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-orange-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(251,146,60,0.4)]",
     corner: "from-orange-500/25",
+    folderTint: "saturate(1.12) contrast(1.06) brightness(1.02)",
+    hairline: "rgba(251, 146, 60, 0.55)",
   },
   {
     border: "border-violet-400/45",
@@ -39,6 +47,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-violet-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(167,139,250,0.45)]",
     corner: "from-violet-500/25",
+    folderTint: "hue-rotate(268deg) saturate(0.88) brightness(1.03) contrast(1.05)",
+    hairline: "rgba(167, 139, 250, 0.55)",
   },
   {
     border: "border-emerald-400/40",
@@ -48,6 +58,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-emerald-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(52,211,153,0.4)]",
     corner: "from-emerald-500/25",
+    folderTint: "hue-rotate(82deg) saturate(0.9) brightness(1.02) contrast(1.05)",
+    hairline: "rgba(52, 211, 153, 0.55)",
   },
   {
     border: "border-sky-400/45",
@@ -57,6 +69,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-sky-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(56,189,248,0.4)]",
     corner: "from-sky-500/25",
+    folderTint: "hue-rotate(188deg) saturate(0.85) brightness(1.05) contrast(1.04)",
+    hairline: "rgba(56, 189, 248, 0.55)",
   },
   {
     border: "border-rose-400/40",
@@ -66,6 +80,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-rose-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(251,113,133,0.4)]",
     corner: "from-rose-500/25",
+    folderTint: "hue-rotate(310deg) saturate(0.95) brightness(1.03) contrast(1.05)",
+    hairline: "rgba(251, 113, 133, 0.55)",
   },
   {
     border: "border-amber-400/45",
@@ -75,6 +91,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-amber-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(251,191,36,0.45)]",
     corner: "from-amber-500/25",
+    folderTint: "hue-rotate(-8deg) saturate(1.15) contrast(1.05) brightness(1.03)",
+    hairline: "rgba(251, 191, 36, 0.55)",
   },
   {
     border: "border-fuchsia-400/35",
@@ -84,6 +102,8 @@ const THEMES: ModuleTileTheme[] = [
     sub: "text-fuchsia-100/80",
     glow: "shadow-[0_0_28px_-8px_rgba(232,121,249,0.4)]",
     corner: "from-fuchsia-500/25",
+    folderTint: "hue-rotate(285deg) saturate(0.92) brightness(1.02) contrast(1.05)",
+    hairline: "rgba(232, 121, 249, 0.55)",
   },
 ];
 

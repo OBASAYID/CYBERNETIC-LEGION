@@ -26,6 +26,7 @@ import {
   type ModuleHandoffLargeRef,
 } from "@shared/module-handoff";
 import { getSpeechRecognitionConstructor, speakCyrusTts } from "@shared/command-console-voice";
+import { SMOKE_VORTEX_TEXTURE_URL } from "@/lib/dashboard-backdrop";
 import { systemFetch } from "@/lib/system-api";
 import { cn } from "@/lib/utils";
 
@@ -66,14 +67,14 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
       className={cn("pointer-events-none fixed bottom-0 left-0 right-0 z-30", className)}
       role="presentation"
     >
-      {/* Illuminated green + fading blue: light source behind the command console, blocked by the console panel */}
+      {/* Warm orange fading into sky blue behind the command console */}
       <div
         className="pointer-events-none absolute bottom-0 left-0 right-0 h-[min(26rem,58vh)] overflow-hidden"
         aria-hidden
       >
-        <div className="absolute bottom-[-1.5rem] left-1/2 h-48 w-[min(44rem,96vw)] -translate-x-1/2 rounded-full bg-emerald-400/5 blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-44 w-[min(50rem,100vw)] -translate-x-1/2 rounded-full bg-sky-500/4 blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-36 w-[min(36rem,88vw)] -translate-x-1/2 rounded-full bg-blue-600/3 blur-2xl" />
+        <div className="absolute bottom-[-1.5rem] left-[18%] h-52 w-[min(28rem,72vw)] rounded-full bg-orange-500/12 blur-3xl" />
+        <div className="absolute bottom-[-0.5rem] right-[12%] h-48 w-[min(32rem,78vw)] rounded-full bg-sky-400/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400/8 via-cyan-300/6 to-sky-400/9 blur-3xl" />
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-950/95 to-transparent" />
       </div>
       <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-screen-2xl px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
@@ -307,19 +308,31 @@ export function ModuleCommandConsole({
     return (
       <section
         className={cn(
-          "relative z-20 overflow-hidden rounded-3xl bg-slate-950/55 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl",
+          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-r from-orange-950/45 via-slate-950/50 to-sky-950/45 p-1 shadow-[0_0_44px_-20px_rgba(251,146,60,0.35),0_0_48px_-22px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl",
           className,
         )}
         aria-label="CYRUS command console (minimized)"
       >
-        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-slate-900/50 px-3 py-2.5 shadow-inner shadow-cyan-500/10 backdrop-blur-sm sm:px-4">
+        <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-r from-orange-500/10 via-transparent to-sky-400/12" aria-hidden />
+        <div
+          className="cyrus-command-console-smoke pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-14 overflow-hidden rounded-b-2xl"
+          aria-hidden
+          style={{
+            maskImage: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 45%, black 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 45%, black 100%)",
+          }}
+        >
+          <div className="cyrus-smoke-animated cyrus-console-smoke-wisp-a absolute -bottom-3 left-[12%] right-[20%] h-12 rounded-[50%] bg-[radial-gradient(ellipse_100%_100%_at_50%_100%,rgba(251,146,60,0.22),rgba(15,23,42,0.35)_55%,transparent_72%)] blur-xl mix-blend-screen" />
+          <div className="cyrus-smoke-animated cyrus-console-smoke-wisp-b absolute -bottom-4 left-[18%] right-[14%] h-14 rounded-[50%] bg-[radial-gradient(ellipse_100%_90%_at_50%_100%,rgba(56,189,248,0.16),rgba(2,6,23,0.4)_52%,transparent_75%)] blur-[18px] mix-blend-screen" />
+        </div>
+        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-slate-900/45 px-3 py-2.5 shadow-inner shadow-orange-500/5 backdrop-blur-sm sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-cyan-500/10">
-              <Terminal className="h-4 w-4 text-cyan-300" aria-hidden />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-orange-400/30 bg-gradient-to-br from-orange-500/15 to-sky-500/12">
+              <Terminal className="h-4 w-4 text-orange-200" aria-hidden />
             </div>
             <div className="min-w-0 text-left">
               <p
-                className="text-[9px] font-mono uppercase tracking-[0.3em] text-cyan-200/55"
+                className="text-[9px] font-mono uppercase tracking-[0.3em] text-orange-200/55"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Cyrus AI
@@ -335,7 +348,7 @@ export function ModuleCommandConsole({
           <button
             type="button"
             onClick={() => setConsoleMinimized(false)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 transition hover:border-cyan-400/50 hover:bg-cyan-500/20"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-400/35 bg-gradient-to-br from-orange-500/15 to-sky-500/20 text-sky-200 transition hover:border-sky-300/55 hover:from-orange-500/25 hover:to-sky-400/30"
             aria-label="Expand command console"
             title="Expand"
           >
@@ -349,13 +362,13 @@ export function ModuleCommandConsole({
   return (
     <section
       className={cn(
-        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-slate-950/55 p-1 shadow-[0_0_40px_-24px_rgba(56,189,248,0.28),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:min-h-[26rem]",
+        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-orange-950/40 via-slate-950/52 to-sky-950/42 p-1 shadow-[0_0_44px_-20px_rgba(251,146,60,0.32),0_0_46px_-22px_rgba(56,189,248,0.26),0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:min-h-[26rem]",
         className,
       )}
       aria-label="CYRUS command console"
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/40"
+        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-[linear-gradient(115deg,rgba(251,146,60,0.14)_0%,rgba(15,23,42,0.35)_42%,rgba(14,165,233,0.12)_100%)]"
         aria-hidden
       />
       <div
@@ -365,30 +378,56 @@ export function ModuleCommandConsole({
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-cyan-500/8 via-transparent to-orange-500/6" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-orange-500/12 via-transparent to-sky-400/14" />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.05),transparent_55%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_85%_50%_at_15%_20%,rgba(251,146,60,0.12),transparent_55%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,rgba(34,211,238,0.04),transparent_65%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_80%_48%_at_88%_75%,rgba(56,189,248,0.11),transparent_58%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(34,211,238,0.03)_0%,transparent_38%,rgba(251,191,36,0.02)_100%)]"
+        className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(118deg,rgba(251,146,60,0.06)_0%,transparent_40%,rgba(125,211,252,0.07)_100%)]"
         aria-hidden
       />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-slate-900/40 p-4 shadow-inner shadow-cyan-500/10 backdrop-blur-sm sm:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-slate-900/38 p-4 shadow-inner shadow-orange-500/8 backdrop-blur-sm sm:p-5">
         <div
-          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(34,211,238,0.04),transparent_58%)]"
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_60%_at_50%_0%,rgba(253,186,116,0.06),transparent_50%,rgba(125,211,252,0.05),transparent_70%)]"
           aria-hidden
         />
+        <div
+          className="cyrus-command-console-smoke pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[min(12.5rem,46%)] overflow-hidden rounded-b-[1.25rem]"
+          aria-hidden
+          style={{
+            maskImage: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 32%, black 78%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 32%, black 78%)",
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-orange-950/25 via-sky-950/8 to-transparent" aria-hidden />
+          <div className="cyrus-smoke-animated cyrus-console-smoke-wisp-a absolute -bottom-2 left-[4%] right-[6%] h-[min(7rem,36%)] max-h-36 rounded-[50%] bg-[radial-gradient(ellipse_100%_100%_at_50%_100%,rgba(251,146,60,0.2),rgba(120,53,15,0.12)_42%,rgba(15,23,42,0.5)_58%,transparent_76%)] blur-2xl mix-blend-screen" />
+          <div className="cyrus-smoke-animated cyrus-console-smoke-wisp-b absolute -bottom-8 left-[10%] right-[12%] h-[min(8.5rem,42%)] max-h-44 rounded-[50%] bg-[radial-gradient(ellipse_100%_88%_at_50%_100%,rgba(125,211,252,0.14),rgba(30,58,138,0.22)_48%,rgba(2,6,23,0.55)_62%,transparent_78%)] blur-[26px] mix-blend-screen" />
+          <div
+            className="cyrus-smoke-animated cyrus-console-vortex-bottom absolute bottom-[-18%] left-1/2 h-[10.5rem] w-[min(26rem,108%)] max-w-none -translate-x-1/2 bg-contain bg-[center_bottom] bg-no-repeat opacity-[0.13] mix-blend-screen"
+            style={{
+              backgroundImage: `url(${SMOKE_VORTEX_TEXTURE_URL})`,
+              filter: "blur(1.2px) contrast(1.06) saturate(0.9)",
+            }}
+          />
+          <div
+            className="cyrus-smoke-animated cyrus-console-vortex-bottom absolute bottom-[-22%] left-1/2 h-[12rem] w-[min(28rem,112%)] max-w-none -translate-x-1/2 bg-contain bg-[center_bottom] bg-no-repeat opacity-[0.08] mix-blend-screen"
+            style={{
+              backgroundImage: `url(${SMOKE_VORTEX_TEXTURE_URL})`,
+              filter: "blur(2.8px) brightness(0.92) saturate(0.85)",
+            }}
+          />
+        </div>
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
         {inModule ? (
           <button
             type="button"
             onClick={() => setConsoleMinimized(true)}
-            className="absolute right-1 top-0 z-30 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-slate-900/90 text-cyan-200/90 shadow-sm transition hover:border-cyan-500/40 hover:text-white sm:right-2"
+            className="absolute right-1 top-0 z-30 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-slate-900/90 text-sky-200/90 shadow-sm transition hover:border-orange-400/40 hover:text-white sm:right-2"
             aria-expanded="true"
             aria-label="Minimize command console"
             title="Minimize"
@@ -400,7 +439,7 @@ export function ModuleCommandConsole({
           <div className="relative mb-2">
             {isListening ? (
               <span
-                className="pointer-events-none absolute inset-0 -m-1.5 animate-ping rounded-full border border-cyan-400/40 opacity-40"
+                className="pointer-events-none absolute inset-0 -m-1.5 animate-ping rounded-full border border-orange-400/35 opacity-40"
                 aria-hidden
               />
             ) : null}
@@ -413,8 +452,8 @@ export function ModuleCommandConsole({
                 isListening ? "Stop listening and send to CYRUS" : "Start voice input to CYRUS"
               }
               className={cn(
-                "relative flex h-[4.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-2 border-cyan-400/45 bg-slate-900/80 px-1.5 pb-1.5 pt-1.5 shadow-[0_0_20px_rgba(34,211,238,0.16)] transition focus:outline-none focus:ring-2 focus:ring-cyan-400/50 disabled:opacity-50 sm:h-[5.25rem] sm:w-[5.25rem]",
-                isListening && "border-sky-300/70 shadow-[0_0_24px_rgba(125,211,252,0.24)]",
+                "relative flex h-[4.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-2 border-orange-400/50 bg-slate-900/80 px-1.5 pb-1.5 pt-1.5 shadow-[0_0_22px_rgba(251,146,60,0.2),0_0_18px_rgba(56,189,248,0.12)] transition focus:outline-none focus:ring-2 focus:ring-orange-400/45 disabled:opacity-50 sm:h-[5.25rem] sm:w-[5.25rem]",
+                isListening && "border-sky-300/75 shadow-[0_0_26px_rgba(125,211,252,0.28),0_0_14px_rgba(251,146,60,0.15)]",
               )}
             >
               <img
@@ -424,23 +463,23 @@ export function ModuleCommandConsole({
                 draggable={false}
               />
               <Mic
-                className={cn("h-3.5 w-3.5 shrink-0 text-cyan-200/95", isListening && "text-sky-200")}
+                className={cn("h-3.5 w-3.5 shrink-0 text-orange-200/95", isListening && "text-sky-200")}
                 aria-hidden
               />
             </button>
           </div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-cyan-200/60">Cyrus AI</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-orange-200/55">Cyrus AI</p>
           <h2
-            className="mt-0.5 bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+            className="mt-0.5 bg-gradient-to-r from-orange-200 via-amber-100 to-sky-200 bg-clip-text text-lg font-bold tracking-tight text-transparent"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             Command console
           </h2>
           {voiceError ? <p className="mt-2 max-w-sm text-[11px] text-amber-300/90">{voiceError}</p> : null}
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-[10px] text-cyan-500/60">
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-[10px] text-sky-500/65">
             <div className="flex items-center gap-1.5">
-              <Terminal className="h-3 w-3 opacity-70" aria-hidden />
-              <Cpu className="h-3 w-3 text-cyan-500/50" />
+              <Terminal className="h-3 w-3 text-orange-400/70 opacity-90" aria-hidden />
+              <Cpu className="h-3 w-3 text-sky-400/55" />
               <span className="font-mono">/api/infer</span>
             </div>
             <button
@@ -448,7 +487,7 @@ export function ModuleCommandConsole({
               onClick={reloadConsole}
               disabled={send.isPending}
               title="Clear the log, input, and voice state (wait if CYRUS is replying)"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-cyan-200/90 transition hover:border-cyan-500/40 hover:bg-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-sky-200/90 transition hover:border-orange-400/35 hover:bg-orange-950/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               Reload console
@@ -456,8 +495,8 @@ export function ModuleCommandConsole({
           </div>
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-slate-900/50 px-2 py-2 sm:gap-2">
-          <span className="w-full pl-0.5 text-[9px] font-mono uppercase tracking-[0.28em] text-cyan-500/60 sm:w-auto sm:pl-0">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-orange-400/20 bg-gradient-to-r from-orange-950/35 via-slate-900/50 to-sky-950/35 px-2 py-2 sm:gap-2">
+          <span className="w-full pl-0.5 text-[9px] font-mono uppercase tracking-[0.28em] text-orange-300/55 sm:w-auto sm:pl-0">
             Pipeline
           </span>
           {(
@@ -473,9 +512,9 @@ export function ModuleCommandConsole({
               type="button"
               title={title}
               onClick={() => goHandoff(id)}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1.5 text-[11px] font-medium text-white/90 transition hover:border-cyan-500/35 hover:bg-cyan-950/50"
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1.5 text-[11px] font-medium text-white/90 transition hover:border-sky-400/40 hover:bg-sky-950/35"
             >
-              <Icon className="h-3.5 w-3.5 text-cyan-300/80" />
+              <Icon className="h-3.5 w-3.5 text-sky-300/85" />
               {label}
               <ArrowRight className="h-3 w-3 text-white/35" />
             </button>
@@ -490,7 +529,7 @@ export function ModuleCommandConsole({
             <p className="text-slate-500/90">Prompt CYRUS — query, plan, or ask anything in this module.</p>
           )}
           {log.map((line, i) => (
-            <div key={i} className={line.role === "user" ? "text-cyan-200/90" : "text-slate-300"}>
+            <div key={i} className={line.role === "user" ? "text-orange-200/90" : "text-slate-300"}>
               <span className="text-slate-600">{line.role === "user" ? "› " : "∴ "}</span>
               <span className="whitespace-pre-wrap break-words">{line.content}</span>
             </div>
@@ -516,14 +555,14 @@ export function ModuleCommandConsole({
             }}
             placeholder="Message CYRUS…"
             rows={2}
-            className="min-h-[3rem] max-h-32 flex-1 resize-y rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35"
+            className="min-h-[3rem] max-h-32 flex-1 resize-y rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
             disabled={send.isPending}
           />
           <button
             type="button"
             onClick={submit}
             disabled={!input.trim() || send.isPending}
-            className="inline-flex h-12 min-w-[3.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-4 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/25 disabled:opacity-40"
+            className="inline-flex h-12 min-w-[3.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-sky-400/40 bg-gradient-to-br from-orange-500/20 to-sky-500/25 px-4 text-sm font-medium text-sky-100 transition hover:from-orange-500/30 hover:to-sky-400/35 disabled:opacity-40"
           >
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             <span className="hidden sm:inline">Send</span>

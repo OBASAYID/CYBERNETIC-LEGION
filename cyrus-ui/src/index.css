@@ -676,8 +676,80 @@
   will-change: transform, opacity;
 }
 
+@keyframes cyrus-console-smoke-wisp-a {
+  0%,
+  100% {
+    transform: translate3d(-1.2%, 0, 0) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate3d(1.8%, -5%, 0) scale(1.07);
+    opacity: 1;
+  }
+}
+
+@keyframes cyrus-console-smoke-wisp-b {
+  0%,
+  100% {
+    transform: translate3d(1.5%, 1%, 0) scale(1.02);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(-2.2%, -3%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes cyrus-console-vortex-bottom {
+  0% {
+    transform: translate(-50%, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate(-50%, 0) rotate(178deg) scale(1.05);
+  }
+  100% {
+    transform: translate(-50%, 0) rotate(360deg) scale(1);
+  }
+}
+
+.cyrus-console-smoke-wisp-a {
+  animation: cyrus-console-smoke-wisp-a 16s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.cyrus-console-smoke-wisp-b {
+  animation: cyrus-console-smoke-wisp-b 21s ease-in-out infinite;
+  animation-delay: -4s;
+  will-change: transform, opacity;
+}
+.cyrus-console-vortex-bottom {
+  animation: cyrus-console-vortex-bottom 48s linear infinite;
+  animation-delay: -2s;
+  will-change: transform;
+}
+
+@keyframes cyrus-module-folder-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -2px) scale(1.018);
+  }
+}
+
+.cyrus-module-folder-art {
+  animation: cyrus-module-folder-breathe 11s ease-in-out infinite;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cyrus-smoke-bg .cyrus-smoke-animated {
+    animation: none !important;
+  }
+  .cyrus-command-console-smoke .cyrus-smoke-animated {
+    animation: none !important;
+  }
+  .cyrus-module-folder-art {
     animation: none !important;
   }
 }
