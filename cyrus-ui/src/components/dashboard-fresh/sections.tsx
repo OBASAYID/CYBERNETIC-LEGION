@@ -6,22 +6,21 @@ import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
-/** Shared folder artwork for CTAs — same asset as module tiles, variant tints only (no box icon). */
-function ModulesFolderGlyph({ variant = "amber", className = "" }: { variant?: "amber" | "copper" | "steel"; className?: string }) {
-  const tone =
-    variant === "copper"
-      ? "hue-rotate(-18deg) saturate(1.22) contrast(1.08) brightness(0.96) drop-shadow(0 4px 12px rgba(0,0,0,0.45))"
-      : variant === "steel"
-        ? "hue-rotate(158deg) saturate(0.72) contrast(1.06) brightness(0.92) drop-shadow(0 4px 12px rgba(0,0,0,0.45))"
-        : "saturate(1.15) contrast(1.06) brightness(1.02) drop-shadow(0 4px 14px rgba(251,191,36,0.2))";
+/** Shared folder artwork for CTAs — green tint, `mix-blend-multiply` removes light PNG matte. */
+function ModulesFolderGlyph({ className = "" }: { className?: string }) {
   return (
-    <img
-      src={MODULE_FOLDER_TILE_URL}
-      alt=""
-      className={className}
-      style={{ filter: tone }}
-      draggable={false}
-    />
+    <span className="relative isolate inline-flex items-center justify-center overflow-hidden rounded-md bg-slate-950 align-middle">
+      <img
+        src={MODULE_FOLDER_TILE_URL}
+        alt=""
+        className={cn("relative mix-blend-multiply", className)}
+        style={{
+          filter:
+            "hue-rotate(78deg) saturate(1.26) brightness(1.02) contrast(1.1) drop-shadow(0 2px 8px rgba(0,0,0,0.4)) drop-shadow(0 0 10px rgba(16,185,129,0.2))",
+        }}
+        draggable={false}
+      />
+    </span>
   );
 }
 
@@ -216,18 +215,20 @@ export function ModuleWorkspaceSection({
         <div className="mb-2.5 flex flex-col gap-2 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-              <div className="pointer-events-none absolute inset-[-45%] rounded-full bg-gradient-to-br from-amber-400/45 via-orange-500/25 to-sky-400/30 opacity-90 blur-lg mix-blend-screen" />
-              <div className="pointer-events-none absolute inset-[-18%] rounded-[1.35rem] bg-amber-200/20 blur-md" />
-              <img
-                src={MODULE_FOLDER_TILE_URL}
-                alt="Modules"
-                className="relative h-11 w-11 object-contain"
-                style={{
-                  filter:
-                    "saturate(1.14) contrast(1.07) brightness(1.02) drop-shadow(0 6px 16px rgba(0,0,0,0.5)) drop-shadow(0 0 22px rgba(251,191,36,0.22))",
-                }}
-                draggable={false}
-              />
+              <div className="pointer-events-none absolute inset-[-45%] rounded-full bg-gradient-to-br from-emerald-500/40 via-emerald-600/22 to-teal-500/28 opacity-90 blur-lg mix-blend-screen" />
+              <div className="pointer-events-none absolute inset-[-18%] rounded-[1.35rem] bg-emerald-400/16 blur-md" />
+              <span className="relative isolate flex h-11 w-11 items-center justify-center overflow-hidden rounded-[22%] bg-slate-950">
+                <img
+                  src={MODULE_FOLDER_TILE_URL}
+                  alt="Modules"
+                  className="relative h-full w-full object-contain mix-blend-multiply"
+                  style={{
+                    filter:
+                      "hue-rotate(78deg) saturate(1.26) brightness(1.02) contrast(1.1) drop-shadow(0 4px 14px rgba(0,0,0,0.48)) drop-shadow(0 0 16px rgba(16,185,129,0.22))",
+                  }}
+                  draggable={false}
+                />
+              </span>
             </div>
             <div>
               <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
@@ -304,6 +305,11 @@ export function ModuleWorkspaceSection({
                   <div
                     className="relative z-10 transition duration-300 ease-out will-change-transform [transform-style:preserve-3d] group-hover:[transform:translateY(-2px)_rotateX(4deg)_scale(1.02)]"
                   >
+                    {/* Opaque slate behind folder: multiply blend removes baked-in light/white PNG backdrop */}
+                    <div
+                      className="pointer-events-none absolute inset-x-[4%] bottom-0 top-[6%] z-0 rounded-[28%] bg-slate-950"
+                      aria-hidden
+                    />
                     {/* Edge definition + depth (PNG-friendly) */}
                     <img
                       src={MODULE_FOLDER_TILE_URL}
@@ -311,7 +317,7 @@ export function ModuleWorkspaceSection({
                       width={256}
                       height={256}
                       aria-hidden
-                      className="pointer-events-none absolute left-1/2 top-0 z-0 h-[3.68rem] w-auto max-w-[min(5.52rem,88%)] -translate-x-1/2 select-none object-contain object-bottom opacity-[0.22] blur-[0.65px] sm:h-[3.95rem] sm:max-w-[5.78rem]"
+                      className="pointer-events-none absolute left-1/2 top-0 z-[1] h-[3.68rem] w-auto max-w-[min(5.52rem,88%)] -translate-x-1/2 select-none object-contain object-bottom opacity-[0.35] blur-[0.65px] mix-blend-multiply sm:h-[3.95rem] sm:max-w-[5.78rem]"
                       style={{
                         filter: "brightness(0)",
                         transform: "translateZ(-2px)",
@@ -323,32 +329,34 @@ export function ModuleWorkspaceSection({
                       alt=""
                       width={256}
                       height={256}
-                      className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom sm:h-[3.9rem] sm:max-w-[5.75rem]"
+                      className="cyrus-module-folder-art relative z-[2] mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom mix-blend-multiply sm:h-[3.9rem] sm:max-w-[5.75rem]"
                       style={{
                         animationDelay: `${(i % 7) * -1.4}s`,
                         transform: "translateZ(0)",
                         filter: [
                           `url(#${folderTintFilterId})`,
-                          "drop-shadow(0 1px 0 rgba(0,0,0,0.7))",
-                          "drop-shadow(0 2px 4px rgba(0,0,0,0.48))",
-                          "drop-shadow(0 7px 10px rgba(0,0,0,0.32))",
-                          "drop-shadow(0 0 0.75px rgba(5,46,42,0.55))",
-                          "drop-shadow(0 18px 26px rgba(0,0,0,0.2))",
-                          "drop-shadow(0 0 12px rgba(16,185,129,0.18))",
-                          "contrast(1.045)",
-                          "brightness(1.02)",
+                          "hue-rotate(12deg)",
+                          "saturate(1.22)",
+                          "brightness(1.04)",
+                          "contrast(1.06)",
+                          "drop-shadow(0 1px 0 rgba(0,0,0,0.72))",
+                          "drop-shadow(0 2px 4px rgba(0,0,0,0.45))",
+                          "drop-shadow(0 7px 10px rgba(0,0,0,0.3))",
+                          "drop-shadow(0 0 0.5px rgba(4,120,87,0.65))",
+                          "drop-shadow(0 16px 22px rgba(0,0,0,0.22))",
+                          "drop-shadow(0 0 14px rgba(16,185,129,0.22))",
                         ].join(" "),
                       }}
                       draggable={false}
                     />
-                    {/* Primary specular (upper-left light) */}
+                    {/* Primary specular — green-tinted, not white */}
                     <div
-                      className="pointer-events-none absolute left-[10%] right-[28%] top-[14%] z-20 h-[26%] rounded-tl-lg rounded-br-[40%] bg-gradient-to-br from-white/45 via-white/12 to-transparent opacity-[0.38] mix-blend-soft-light transition duration-300 group-hover:opacity-[0.46]"
+                      className="pointer-events-none absolute left-[10%] right-[28%] top-[14%] z-20 h-[26%] rounded-tl-lg rounded-br-[40%] bg-gradient-to-br from-emerald-200/35 via-emerald-400/12 to-transparent opacity-[0.42] mix-blend-soft-light transition duration-300 group-hover:opacity-[0.52]"
                       aria-hidden
                     />
-                    {/* Thin paper edge cue */}
+                    {/* Paper edge — cool green sheen */}
                     <div
-                      className="pointer-events-none absolute inset-x-[18%] top-[22%] z-[19] h-[8%] rounded-sm bg-white/18 opacity-35 blur-[1px] mix-blend-overlay"
+                      className="pointer-events-none absolute inset-x-[18%] top-[22%] z-[19] h-[8%] rounded-sm bg-emerald-100/22 opacity-40 blur-[1px] mix-blend-overlay"
                       aria-hidden
                     />
                     {/* Rim / fresnel darken */}
@@ -377,9 +385,9 @@ export function ModuleWorkspaceSection({
                         <feColorMatrix
                           type="matrix"
                           values="
-                            0.92  0.06  0.06  0  0.01
-                            0.06  1.06  0.05  0  0.04
-                            0.05  0.08  0.84  0  0.04
+                            0.55  0.35  0.12  0  0.02
+                            0.12  1.18  0.10  0  0.10
+                            0.08  0.22  0.78  0  0.08
                             0     0     0     1  0"
                         />
                       </filter>
