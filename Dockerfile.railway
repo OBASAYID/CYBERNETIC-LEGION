@@ -34,6 +34,9 @@ RUN bun install --production --no-progress
 
 COPY --from=builder /app/dist /app/dist
 
+# Ensure public assets (crack texture, images, etc.) are available at runtime
+COPY public /app/dist/public
+
 COPY server/comms/requirements-ml.txt /app/server/comms/requirements-ml.txt
 COPY server/comms/ml_service.py /app/server/comms/ml_service.py
 RUN pip3 install --no-cache-dir --break-system-packages -r /app/server/comms/requirements-ml.txt \
