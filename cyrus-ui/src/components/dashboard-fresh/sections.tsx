@@ -1,7 +1,6 @@
 import { Activity, Cpu, Gauge, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
-import { getModuleTheme } from "@/config/module-tile-themes";
 import { MODULE_FOLDER_TILE_URL } from "@/lib/dashboard-backdrop";
 import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
@@ -25,9 +24,6 @@ function ModulesFolderGlyph({ variant = "amber", className = "" }: { variant?: "
     />
   );
 }
-
-const MODULE_TILE_FOLDER_SHADOW =
-  " drop-shadow(0 18px 34px rgba(0,0,0,0.58)) drop-shadow(0 0 28px rgba(251,191,36,0.14)) drop-shadow(0 0 48px rgba(56,189,248,0.08))";
 
 export function HeroSection() {
   return (
@@ -216,8 +212,8 @@ export function ModuleWorkspaceSection({
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.06),transparent_58%)]"
         aria-hidden
       />
-      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/10 via-slate-950/14 to-orange-950/8 p-4 shadow-inner shadow-black/10 backdrop-blur-[1px]">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/10 via-slate-950/14 to-orange-950/8 p-3 shadow-inner shadow-black/10 backdrop-blur-[1px] sm:p-3.5">
+        <div className="mb-2.5 flex flex-col gap-2 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
               <div className="pointer-events-none absolute inset-[-45%] rounded-full bg-gradient-to-br from-amber-400/45 via-orange-500/25 to-sky-400/30 opacity-90 blur-lg mix-blend-screen" />
@@ -272,91 +268,136 @@ export function ModuleWorkspaceSection({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-3.5 md:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
           {modules.map((item, i) => {
-            const t = getModuleTheme(item.href, i);
-            const ringAccent = t.border.replace("border-", "ring-");
+            const folderTintFilterId = `cyrusFolderGreenTint-${item.href.replace(/[^a-zA-Z0-9_-]/g, "_")}_${i}`;
             return (
-              <Link key={item.href} href={item.href} className="block">
-                <div
-                  className={cn(
-                    "group relative isolate min-h-[13.5rem] w-full cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-950 text-left shadow-[0_14px_40px_-12px_rgba(0,0,0,0.75)] transition duration-200 ease-out",
-                    t.glow,
-                    "hover:z-[1] hover:scale-[1.02] hover:brightness-[1.03] active:scale-[0.99]",
-                  )}
-                  data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                >
+            <Link key={item.href} href={item.href} className="block">
+              <div
+                className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
+                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+              >
+                <div className="cyrus-folder-realism-host relative flex h-[4.35rem] w-full max-w-[6.25rem] items-end justify-center sm:h-[4.65rem] sm:max-w-[6.5rem]">
+                  {/* Penumbra + umbra contact shadow */}
                   <div
-                    className={`pointer-events-none absolute -bottom-8 left-1/2 h-24 w-[88%] -translate-x-1/2 rounded-full bg-gradient-to-br ${t.corner} to-transparent opacity-35 blur-2xl transition group-hover:opacity-70`}
-                  />
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-neutral-300/30 via-slate-800/35 to-slate-950"
+                    className="pointer-events-none absolute bottom-[1px] left-1/2 h-[10px] w-[84%] -translate-x-1/2 rounded-[100%] bg-black/55 blur-[7px]"
                     aria-hidden
                   />
                   <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-[72%] bg-gradient-to-t from-slate-950 via-slate-950/88 to-transparent"
+                    className="pointer-events-none absolute bottom-[2px] left-1/2 h-[5px] w-[48%] -translate-x-1/2 rounded-[100%] bg-black/[0.72] blur-[3px]"
+                    aria-hidden
+                  />
+                  {/* Subtle bounce light (green floor reflection) */}
+                  <div
+                    className="pointer-events-none absolute bottom-0 left-1/2 h-[52%] w-[92%] -translate-x-1/2 bg-[radial-gradient(ellipse_80%_58%_at_50%_100%,rgba(16,185,129,0.28),transparent_62%)] opacity-75 mix-blend-plus-lighter"
                     aria-hidden
                   />
                   <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-[radial-gradient(ellipse_85%_70%_at_50%_100%,rgba(251,191,36,0.12),rgba(14,165,233,0.06)_42%,transparent_68%)] mix-blend-soft-light"
+                    className="pointer-events-none absolute left-1/2 top-[48%] h-11 w-[90%] -translate-x-1/2 rounded-full bg-emerald-400/14 blur-xl transition duration-300 group-hover:bg-emerald-300/22"
+                    aria-hidden
+                  />
+                  {/* Slight occlusion behind folder body */}
+                  <div
+                    className="pointer-events-none absolute bottom-[6px] left-1/2 z-[1] h-[68%] w-[72%] -translate-x-1/2 rounded-md bg-black/28 blur-xl opacity-75"
                     aria-hidden
                   />
                   <div
-                    className="cyrus-module-folder-art pointer-events-none absolute bottom-[-7%] left-1/2 w-[min(124%,13.25rem)] max-w-none select-none"
-                    style={{ animationDelay: `${(i % 7) * -1.4}s` }}
+                    className="relative z-10 transition duration-300 ease-out will-change-transform [transform-style:preserve-3d] group-hover:[transform:translateY(-2px)_rotateX(4deg)_scale(1.02)]"
                   >
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute bottom-[10%] left-1/2 h-28 w-[94%] -translate-x-1/2 rounded-full bg-gradient-to-t to-transparent opacity-80 mix-blend-screen blur-2xl transition duration-300 group-hover:opacity-100",
-                        t.corner,
-                      )}
-                    />
-                    <div
-                      className="pointer-events-none absolute bottom-[18%] left-1/2 h-20 w-[72%] -translate-x-1/2 rounded-full bg-gradient-to-t from-white/25 via-amber-100/10 to-transparent opacity-50 blur-xl mix-blend-overlay transition group-hover:opacity-80"
+                    {/* Edge definition + depth (PNG-friendly) */}
+                    <img
+                      src={MODULE_FOLDER_TILE_URL}
+                      alt=""
+                      width={256}
+                      height={256}
+                      aria-hidden
+                      className="pointer-events-none absolute left-1/2 top-0 z-0 h-[3.68rem] w-auto max-w-[min(5.52rem,88%)] -translate-x-1/2 select-none object-contain object-bottom opacity-[0.22] blur-[0.65px] sm:h-[3.95rem] sm:max-w-[5.78rem]"
+                      style={{
+                        filter: "brightness(0)",
+                        transform: "translateZ(-2px)",
+                      }}
+                      draggable={false}
                     />
                     <img
                       src={MODULE_FOLDER_TILE_URL}
                       alt=""
                       width={256}
                       height={256}
-                      className="relative w-full object-contain object-bottom transition duration-300 group-hover:scale-[1.06] group-hover:brightness-[1.04]"
-                      style={{ filter: `${t.folderTint}${MODULE_TILE_FOLDER_SHADOW}` }}
+                      className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom sm:h-[3.9rem] sm:max-w-[5.75rem]"
+                      style={{
+                        animationDelay: `${(i % 7) * -1.4}s`,
+                        transform: "translateZ(0)",
+                        filter: [
+                          `url(#${folderTintFilterId})`,
+                          "drop-shadow(0 1px 0 rgba(0,0,0,0.7))",
+                          "drop-shadow(0 2px 4px rgba(0,0,0,0.48))",
+                          "drop-shadow(0 7px 10px rgba(0,0,0,0.32))",
+                          "drop-shadow(0 0 0.75px rgba(5,46,42,0.55))",
+                          "drop-shadow(0 18px 26px rgba(0,0,0,0.2))",
+                          "drop-shadow(0 0 12px rgba(16,185,129,0.18))",
+                          "contrast(1.045)",
+                          "brightness(1.02)",
+                        ].join(" "),
+                      }}
                       draggable={false}
                     />
-                  </div>
-                  <div
-                    className={cn(
-                      "pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-inset opacity-0 transition group-hover:opacity-100",
-                      ringAccent,
-                    )}
-                  />
-                  <div className="relative z-10 flex min-h-[13.5rem] flex-col p-3.5 pt-4">
+                    {/* Primary specular (upper-left light) */}
                     <div
-                      className="mb-2 h-px w-full max-w-[95%] opacity-[0.9] shadow-[0_0_16px_rgba(251,191,36,0.14)]"
-                      style={{
-                        background: `linear-gradient(90deg, transparent, ${t.hairline}, transparent)`,
-                      }}
+                      className="pointer-events-none absolute left-[10%] right-[28%] top-[14%] z-20 h-[26%] rounded-tl-lg rounded-br-[40%] bg-gradient-to-br from-white/45 via-white/12 to-transparent opacity-[0.38] mix-blend-soft-light transition duration-300 group-hover:opacity-[0.46]"
+                      aria-hidden
                     />
-                    <p
-                      className={cn(
-                        "line-clamp-2 min-h-[2.75rem] text-sm font-semibold leading-snug tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.88)]",
-                        t.label,
-                      )}
-                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                    >
-                      {item.label}
-                    </p>
-                    <p
-                      className={cn(
-                        "mt-auto line-clamp-2 border-t border-white/5 pt-2 text-[10px] leading-snug text-white/88 drop-shadow-[0_1px_8px_rgba(0,0,0,0.92)]",
-                        t.sub,
-                      )}
-                    >
-                      {item.description ?? "Open module"}
-                    </p>
+                    {/* Thin paper edge cue */}
+                    <div
+                      className="pointer-events-none absolute inset-x-[18%] top-[22%] z-[19] h-[8%] rounded-sm bg-white/18 opacity-35 blur-[1px] mix-blend-overlay"
+                      aria-hidden
+                    />
+                    {/* Rim / fresnel darken */}
+                    <div
+                      className="pointer-events-none absolute inset-[-6%] z-[21] rounded-lg bg-[radial-gradient(ellipse_72%_88%_at_50%_55%,transparent_52%,rgba(0,0,0,0.22)_92%,rgba(0,0,0,0.35)_100%)] mix-blend-multiply opacity-70"
+                      aria-hidden
+                    />
                   </div>
+                  {/* Inline SVG filter: natural green tint while preserving shading */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="0"
+                    height="0"
+                    className="pointer-events-none absolute"
+                    aria-hidden
+                  >
+                    <defs>
+                      <filter
+                        id={folderTintFilterId}
+                        colorInterpolationFilters="sRGB"
+                        x="-8%"
+                        y="-8%"
+                        width="116%"
+                        height="116%"
+                      >
+                        <feColorMatrix
+                          type="matrix"
+                          values="
+                            0.92  0.06  0.06  0  0.01
+                            0.06  1.06  0.05  0  0.04
+                            0.05  0.08  0.84  0  0.04
+                            0     0     0     1  0"
+                        />
+                      </filter>
+                    </defs>
+                  </svg>
                 </div>
-              </Link>
+                <p
+                  className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-white sm:text-xs"
+                  style={{
+                    fontFamily: "'Orbitron', system-ui, sans-serif",
+                    textShadow:
+                      "0 0 10px rgba(0,0,0,1), 0 1px 0 rgba(0,0,0,1), 0 2px 8px rgba(0,0,0,0.95), 0 0 1px rgba(16,185,129,0.9)",
+                  }}
+                >
+                  {item.label}
+                </p>
+              </div>
+            </Link>
             );
           })}
         </div>

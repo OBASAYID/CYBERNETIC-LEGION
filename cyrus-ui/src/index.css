@@ -730,16 +730,22 @@
 @keyframes cyrus-module-folder-breathe {
   0%,
   100% {
-    transform: translate(-50%, 0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
   50% {
-    transform: translate(-50%, -2px) scale(1.018);
+    transform: translate3d(0, -0.5px, 0) scale(1.004);
   }
 }
 
 .cyrus-module-folder-art {
-  animation: cyrus-module-folder-breathe 11s ease-in-out infinite;
+  animation: cyrus-module-folder-breathe 14s ease-in-out infinite;
   will-change: transform;
+}
+
+/** Module tiles: stacking context so folder reads with physical depth */
+.cyrus-folder-realism-host {
+  transform-style: preserve-3d;
+  perspective: 520px;
 }
 
 @media (prefers-reduced-motion: reduce) {
