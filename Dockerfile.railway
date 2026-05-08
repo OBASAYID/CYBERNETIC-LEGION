@@ -32,10 +32,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json package-lock.json ./
 RUN bun install --production --no-progress
 
+# Copy compiled server and UI build
 COPY --from=builder /app/dist /app/dist
 
-# Ensure public assets (crack texture, images, etc.) are available at runtime
-COPY public /app/dist/public
+# Ensure all public assets are available (crack texture, images, etc.)
+COPY cyrus-ui/public /app/dist/public
+
+# Ensure server-side files are accessible
+COPY server /app/server
 
 COPY server/comms/requirements-ml.txt /app/server/comms/requirements-ml.txt
 COPY server/comms/ml_service.py /app/server/comms/ml_service.py
