@@ -120,19 +120,17 @@ export default function DashboardFresh() {
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
                   <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-                    <span className="pointer-events-none absolute inset-[-40%] rounded-full bg-emerald-400/28 blur-md mix-blend-screen" />
-                    <span className="relative isolate flex h-7 w-7 items-center justify-center overflow-hidden rounded-md bg-slate-950">
-                      <img
-                        src={MODULE_FOLDER_TILE_URL}
-                        alt=""
-                        className="relative h-full w-full object-contain mix-blend-multiply"
-                        style={{
-                          filter:
-                            "hue-rotate(78deg) saturate(1.26) brightness(1.02) contrast(1.1) drop-shadow(0 3px 10px rgba(0,0,0,0.42)) drop-shadow(0 0 12px rgba(16,185,129,0.2))",
-                        }}
-                        draggable={false}
-                      />
-                    </span>
+                    <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-emerald-400/30 blur-md" />
+                    <img
+                      src={MODULE_FOLDER_TILE_URL}
+                      alt=""
+                      className="relative h-7 w-7 object-contain"
+                      style={{
+                        filter:
+                          "hue-rotate(78deg) saturate(1.32) brightness(1.06) contrast(1.08) drop-shadow(0 2px 6px rgba(5,80,60,0.28)) drop-shadow(0 0 12px rgba(16,185,129,0.35))",
+                      }}
+                      draggable={false}
+                    />
                   </span>
                   Module workspace
                 </button>
