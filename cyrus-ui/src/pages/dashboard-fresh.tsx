@@ -19,7 +19,11 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { MODULE_FOLDER_TILE_URL, MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
+import {
+  MODULE_FOLDER_ICON_FILTER,
+  MODULE_FOLDER_TILE_URL,
+  MODULE_RIBBON_LIGHT_URL,
+} from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -120,17 +124,16 @@ export default function DashboardFresh() {
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
                   <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-                    <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-emerald-400/30 blur-md" />
-                    <img
-                      src={MODULE_FOLDER_TILE_URL}
-                      alt=""
-                      className="relative h-7 w-7 object-contain"
-                      style={{
-                        filter:
-                          "hue-rotate(78deg) saturate(1.32) brightness(1.06) contrast(1.08) drop-shadow(0 2px 6px rgba(5,80,60,0.28)) drop-shadow(0 0 12px rgba(16,185,129,0.35))",
-                      }}
-                      draggable={false}
-                    />
+                    <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-sky-400/32 blur-md" />
+                    <span className="relative isolate flex h-7 w-7 items-center justify-center overflow-hidden rounded-[20%] bg-sky-950">
+                      <img
+                        src={MODULE_FOLDER_TILE_URL}
+                        alt=""
+                        className="h-full w-full object-contain mix-blend-multiply"
+                        style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+                        draggable={false}
+                      />
+                    </span>
                   </span>
                   Module workspace
                 </button>
