@@ -742,12 +742,6 @@
   will-change: transform;
 }
 
-/** Module tiles: stacking context so folder reads with physical depth */
-.cyrus-folder-realism-host {
-  transform-style: preserve-3d;
-  perspective: 520px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .cyrus-smoke-bg .cyrus-smoke-animated {
     animation: none !important;
