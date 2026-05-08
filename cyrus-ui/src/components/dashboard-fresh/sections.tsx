@@ -1,9 +1,27 @@
-import { Activity, Cpu, Gauge, LayoutGrid, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
+import { Activity, Cpu, Gauge, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
 import { getModuleTheme } from "@/config/module-tile-themes";
+import { MODULES_MAIN_ICON_URL } from "@/lib/dashboard-backdrop";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
+
+function ModulesFolderGlyph({ variant = "amber", className = "" }: { variant?: "amber" | "copper" | "steel"; className?: string }) {
+  const tone =
+    variant === "copper"
+      ? "hue-rotate(-18deg) saturate(1.22) contrast(1.08) brightness(0.96)"
+      : variant === "steel"
+        ? "hue-rotate(158deg) saturate(0.72) contrast(1.06) brightness(0.92)"
+        : "saturate(1.2) contrast(1.08) brightness(0.98)";
+  return (
+    <img
+      src={MODULES_MAIN_ICON_URL}
+      alt="Modules"
+      className={className}
+      style={{ filter: tone }}
+    />
+  );
+}
 
 export function HeroSection() {
   return (
@@ -25,9 +43,12 @@ export function HeroSection() {
         <Link href="/modules">
           <button
             type="button"
-            className="rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
+            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
+            <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-black/20">
+              <ModulesFolderGlyph className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+            </span>
             Open Orchestrator
           </button>
         </Link>
@@ -191,13 +212,19 @@ export function ModuleWorkspaceSection({
       <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/20 via-slate-950/35 to-orange-950/18 p-4 shadow-inner shadow-black/10 backdrop-blur-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
-              <LayoutGrid className="h-5 w-5 text-cyan-300" />
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-400/35 bg-gradient-to-br from-amber-500/15 via-amber-300/10 to-orange-600/18 shadow-[0_0_24px_rgba(251,191,36,0.22)]">
+              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/12 via-transparent to-black/18" />
+              <img
+                src={MODULES_MAIN_ICON_URL}
+                alt="Modules"
+                className="relative h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]"
+                style={{ filter: "saturate(1.2) contrast(1.08) brightness(0.98)" }}
+              />
             </div>
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-cyan-200/60">Field access</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
               <h2
-                className="mt-0.5 bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+                className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Module workspace
@@ -236,6 +263,7 @@ export function ModuleWorkspaceSection({
         <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-6">
           {modules.map((item, i) => {
             const t = getModuleTheme(item.href, i);
+            const folderVariant = (i % 3 === 0 ? "amber" : i % 3 === 1 ? "copper" : "steel") as "amber" | "copper" | "steel";
             return (
               <Link key={item.href} href={item.href} className="block">
                 <div
@@ -251,6 +279,12 @@ export function ModuleWorkspaceSection({
                   <div
                     className={`pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br ${t.corner} to-transparent opacity-50 blur-xl transition group-hover:opacity-100`}
                   />
+                  <div className="pointer-events-none absolute right-2 top-2 rounded-md border border-white/10 bg-black/35 p-0.5 opacity-80 backdrop-blur-sm">
+                    <ModulesFolderGlyph
+                      variant={folderVariant}
+                      className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                    />
+                  </div>
                   <div className="mb-1.5 flex items-center gap-2">
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-slate-900/70 ${t.icon}`}
