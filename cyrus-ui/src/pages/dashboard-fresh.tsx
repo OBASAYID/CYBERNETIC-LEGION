@@ -19,6 +19,8 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
+import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
+import { MODULES_MAIN_ICON_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -55,17 +57,25 @@ export default function DashboardFresh() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-transparent text-white">
-      {/* Crack + smoke: global `AtmosphericSmokeBackground`; light read tint only */}
+      {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
       <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-sky-950/12 via-slate-900/20 to-blue-950/22" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(56,189,248,0.065),transparent_58%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(90vw,520px)] w-[min(95vw,720px)] -translate-x-1/2 rounded-full bg-amber-300/[0.07] blur-3xl" />
-        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.08] blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.09] blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-[40vh] w-[min(80rem,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_80%_70%_at_50%_100%,rgba(16,185,129,0.05),rgba(14,165,233,0.04)_40%,transparent_70%)] blur-2xl" />
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(0.8px)" }}
+        />
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
+        />
+        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/45 to-transparent" />
+        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
+        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-amber-300/[0.1] blur-3xl" />
+        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(251,191,36,0.22),rgba(120,53,15,0.08)_56%,transparent_78%)] blur-2xl" />
+        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
+        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
       </div>
       <div className="pointer-events-none fixed top-4 left-4 z-20 flex items-center gap-2 sm:top-5 sm:left-5">
         <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
@@ -103,13 +113,21 @@ export default function DashboardFresh() {
                 <button
                   type="button"
                   onClick={() => setAdminTab("modules")}
-                  className={`rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
                     adminTab === "modules"
                       ? "border-cyan-400/50 bg-gradient-to-b from-cyan-600/35 to-cyan-900/40 text-cyan-50 shadow-lg shadow-cyan-500/20"
                       : "border-white/12 bg-slate-950/40 text-white/70 hover:text-white/92"
                   }`}
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
+                  <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-black/25">
+                    <img
+                      src={MODULES_MAIN_ICON_URL}
+                      alt=""
+                      className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
+                      style={{ filter: "saturate(1.15) contrast(1.05) brightness(0.98)" }}
+                    />
+                  </span>
                   Module workspace
                 </button>
                 <button

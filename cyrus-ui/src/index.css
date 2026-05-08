@@ -432,6 +432,150 @@
   }
 }
 
+@keyframes cyrus-crack-parallax {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-0.45%, -0.35%, 0) scale(1.018);
+  }
+}
+
+@keyframes cyrus-crack-parallax-2 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.32;
+  }
+  45% {
+    transform: translate3d(0.55%, 0.45%, 0) scale(1.028);
+    opacity: 0.44;
+  }
+  70% {
+    transform: translate3d(-0.3%, 0.2%, 0) scale(1.01);
+    opacity: 0.36;
+  }
+}
+
+@keyframes cyrus-fissure-flicker {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: translateY(0) scaleX(1);
+  }
+  35% {
+    opacity: 0.56;
+    transform: translateY(-1%) scaleX(1.04);
+  }
+  62% {
+    opacity: 0.42;
+    transform: translateY(0.6%) scaleX(0.98);
+  }
+  80% {
+    opacity: 0.5;
+    transform: translateY(-0.4%) scaleX(1.02);
+  }
+}
+
+@keyframes cyrus-honey-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-1.1%, -0.9%, 0) scale(1.02);
+  }
+}
+
+@keyframes cyrus-honey-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  45% {
+    transform: translate3d(1.5%, 1.1%, 0) scale(1.03);
+    opacity: 0.5;
+  }
+}
+
+@keyframes cyrus-honey-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.26;
+  }
+  52% {
+    transform: translate3d(-1.8%, 1.4%, 0) scale(1.045);
+    opacity: 0.35;
+  }
+}
+
+@keyframes cyrus-vortex-spin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(176deg) scale(1.06);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1);
+  }
+}
+
+@keyframes cyrus-vortex-spin-reverse {
+  0% {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1.06);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(188deg) scale(1);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1.06);
+  }
+}
+
+@keyframes cyrus-ribbon-float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(-2deg) scale(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: translate(-49.2%, -50.6%) rotate(2.5deg) scale(1.045);
+    opacity: 0.28;
+  }
+}
+
+@keyframes cyrus-ribbon-float-soft {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(4deg) scale(1.05);
+    opacity: 0.1;
+  }
+  50% {
+    transform: translate(-50.8%, -49.4%) rotate(-2deg) scale(1.12);
+    opacity: 0.17;
+  }
+}
+
+@keyframes cyrus-footprint-sheen {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    opacity: 0.29;
+    transform: translate3d(0.15%, -0.1%, 0);
+  }
+  70% {
+    opacity: 0.23;
+    transform: translate3d(-0.1%, 0.08%, 0);
+  }
+}
+
 .cyrus-smoke-drift-a {
   animation: cyrus-smoke-drift-a 38s ease-in-out infinite;
 }
@@ -453,6 +597,83 @@
 .cyrus-smoke-ember-soft {
   animation: cyrus-smoke-ember-soft 9s ease-in-out infinite;
   animation-delay: -2s;
+}
+.cyrus-crack-parallax {
+  animation: cyrus-crack-parallax 55s ease-in-out infinite;
+  will-change: transform;
+}
+.cyrus-crack-parallax-2 {
+  animation: cyrus-crack-parallax-2 41s ease-in-out infinite;
+  animation-delay: -7s;
+  will-change: transform, opacity;
+}
+.cyrus-fissure-flicker {
+  animation: cyrus-fissure-flicker 7.8s ease-in-out infinite;
+  animation-delay: -1.5s;
+  will-change: transform, opacity;
+}
+.cyrus-honeycomb-layer-a,
+.cyrus-honeycomb-layer-b,
+.cyrus-honeycomb-layer-c {
+  background-repeat: repeat;
+  will-change: transform, opacity;
+}
+.cyrus-honeycomb-layer-a {
+  background-image:
+    linear-gradient(30deg, transparent 24%, rgba(186, 230, 253, 0.28) 25%, rgba(186, 230, 253, 0.28) 27%, transparent 28%, transparent 74%, rgba(59, 130, 246, 0.3) 75%, rgba(59, 130, 246, 0.3) 76%, transparent 77%, transparent),
+    linear-gradient(-30deg, transparent 24%, rgba(186, 230, 253, 0.28) 25%, rgba(186, 230, 253, 0.28) 27%, transparent 28%, transparent 74%, rgba(59, 130, 246, 0.3) 75%, rgba(59, 130, 246, 0.3) 76%, transparent 77%, transparent),
+    linear-gradient(90deg, transparent 24%, rgba(148, 163, 184, 0.2) 25%, rgba(148, 163, 184, 0.2) 27%, transparent 28%, transparent 74%, rgba(30, 58, 138, 0.25) 75%, rgba(30, 58, 138, 0.25) 76%, transparent 77%, transparent);
+  background-size: 84px 146px;
+  background-position: 0 0, 42px 73px, 0 0;
+  mix-blend-mode: soft-light;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.22));
+  animation: cyrus-honey-drift-a 44s ease-in-out infinite;
+}
+.cyrus-honeycomb-layer-b {
+  background-image:
+    linear-gradient(30deg, transparent 24%, rgba(96, 165, 250, 0.22) 25%, rgba(96, 165, 250, 0.22) 27%, transparent 28%, transparent 74%, rgba(15, 23, 42, 0.42) 75%, rgba(15, 23, 42, 0.42) 76%, transparent 77%, transparent),
+    linear-gradient(-30deg, transparent 24%, rgba(96, 165, 250, 0.22) 25%, rgba(96, 165, 250, 0.22) 27%, transparent 28%, transparent 74%, rgba(15, 23, 42, 0.42) 75%, rgba(15, 23, 42, 0.42) 76%, transparent 77%, transparent),
+    linear-gradient(90deg, transparent 24%, rgba(191, 219, 254, 0.18) 25%, rgba(191, 219, 254, 0.18) 27%, transparent 28%, transparent 74%, rgba(15, 23, 42, 0.35) 75%, rgba(15, 23, 42, 0.35) 76%, transparent 77%, transparent);
+  background-size: 66px 114px;
+  background-position: 18px -8px, 51px 49px, 0 0;
+  mix-blend-mode: overlay;
+  animation: cyrus-honey-drift-b 36s ease-in-out infinite;
+  animation-delay: -8s;
+}
+.cyrus-honeycomb-layer-c {
+  background-image:
+    linear-gradient(30deg, transparent 24%, rgba(2, 6, 23, 0.5) 25%, rgba(2, 6, 23, 0.5) 27%, transparent 28%, transparent 74%, rgba(125, 211, 252, 0.2) 75%, rgba(125, 211, 252, 0.2) 76%, transparent 77%, transparent),
+    linear-gradient(-30deg, transparent 24%, rgba(2, 6, 23, 0.5) 25%, rgba(2, 6, 23, 0.5) 27%, transparent 28%, transparent 74%, rgba(125, 211, 252, 0.2) 75%, rgba(125, 211, 252, 0.2) 76%, transparent 77%, transparent),
+    linear-gradient(90deg, transparent 24%, rgba(248, 250, 252, 0.12) 25%, rgba(248, 250, 252, 0.12) 27%, transparent 28%, transparent 74%, rgba(2, 6, 23, 0.42) 75%, rgba(2, 6, 23, 0.42) 76%, transparent 77%, transparent);
+  background-size: 102px 176px;
+  background-position: -20px 16px, 31px 104px, 0 0;
+  mix-blend-mode: soft-light;
+  animation: cyrus-honey-drift-c 51s ease-in-out infinite;
+  animation-delay: -15s;
+}
+.cyrus-vortex-spin {
+  animation: cyrus-vortex-spin 42s linear infinite;
+  will-change: transform;
+}
+.cyrus-vortex-spin-reverse {
+  animation: cyrus-vortex-spin-reverse 58s linear infinite;
+  animation-delay: -6s;
+  will-change: transform;
+}
+.cyrus-ribbon-float {
+  animation: cyrus-ribbon-float 20s ease-in-out infinite;
+  animation-delay: -3s;
+  will-change: transform, opacity;
+}
+.cyrus-ribbon-float-soft {
+  animation: cyrus-ribbon-float-soft 26s ease-in-out infinite;
+  animation-delay: -8s;
+  will-change: transform, opacity;
+}
+.cyrus-footprint-sheen {
+  animation: cyrus-footprint-sheen 10.5s ease-in-out infinite;
+  animation-delay: -2.2s;
+  will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
