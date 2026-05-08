@@ -2,26 +2,32 @@ import { Activity, Cpu, Gauge, ShieldCheck, Sparkles, TerminalSquare } from "luc
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
 import { getModuleTheme } from "@/config/module-tile-themes";
-import { MODULES_MAIN_ICON_URL } from "@/lib/dashboard-backdrop";
+import { MODULE_FOLDER_TILE_URL } from "@/lib/dashboard-backdrop";
+import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
+/** Shared folder artwork for CTAs — same asset as module tiles, variant tints only (no box icon). */
 function ModulesFolderGlyph({ variant = "amber", className = "" }: { variant?: "amber" | "copper" | "steel"; className?: string }) {
   const tone =
     variant === "copper"
-      ? "hue-rotate(-18deg) saturate(1.22) contrast(1.08) brightness(0.96)"
+      ? "hue-rotate(-18deg) saturate(1.22) contrast(1.08) brightness(0.96) drop-shadow(0 4px 12px rgba(0,0,0,0.45))"
       : variant === "steel"
-        ? "hue-rotate(158deg) saturate(0.72) contrast(1.06) brightness(0.92)"
-        : "saturate(1.2) contrast(1.08) brightness(0.98)";
+        ? "hue-rotate(158deg) saturate(0.72) contrast(1.06) brightness(0.92) drop-shadow(0 4px 12px rgba(0,0,0,0.45))"
+        : "saturate(1.15) contrast(1.06) brightness(1.02) drop-shadow(0 4px 14px rgba(251,191,36,0.2))";
   return (
     <img
-      src={MODULES_MAIN_ICON_URL}
-      alt="Modules"
+      src={MODULE_FOLDER_TILE_URL}
+      alt=""
       className={className}
       style={{ filter: tone }}
+      draggable={false}
     />
   );
 }
+
+const MODULE_TILE_FOLDER_SHADOW =
+  " drop-shadow(0 18px 34px rgba(0,0,0,0.58)) drop-shadow(0 0 28px rgba(251,191,36,0.14)) drop-shadow(0 0 48px rgba(56,189,248,0.08))";
 
 export function HeroSection() {
   return (
@@ -43,11 +49,12 @@ export function HeroSection() {
         <Link href="/modules">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
-            <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-black/20">
-              <ModulesFolderGlyph className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
+              <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-cyan-400/25 blur-md mix-blend-screen" />
+              <ModulesFolderGlyph className="relative h-7 w-7 object-contain" />
             </span>
             Open Orchestrator
           </button>
@@ -195,8 +202,8 @@ export function ModuleWorkspaceSection({
         <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
         <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
       </div>
-    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/30 via-slate-950/45 to-orange-950/25 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-md">
-      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/30" aria-hidden />
+    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/14 via-slate-950/18 to-orange-950/12 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-[2px]">
+      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/10" aria-hidden />
       <div
         className="pointer-events-none absolute inset-0 z-[1] opacity-[0.08]"
         style={{
@@ -209,16 +216,21 @@ export function ModuleWorkspaceSection({
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.06),transparent_58%)]"
         aria-hidden
       />
-      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/20 via-slate-950/35 to-orange-950/18 p-4 shadow-inner shadow-black/10 backdrop-blur-sm">
+      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/10 via-slate-950/14 to-orange-950/8 p-4 shadow-inner shadow-black/10 backdrop-blur-[1px]">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-400/35 bg-gradient-to-br from-amber-500/15 via-amber-300/10 to-orange-600/18 shadow-[0_0_24px_rgba(251,191,36,0.22)]">
-              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/12 via-transparent to-black/18" />
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+              <div className="pointer-events-none absolute inset-[-45%] rounded-full bg-gradient-to-br from-amber-400/45 via-orange-500/25 to-sky-400/30 opacity-90 blur-lg mix-blend-screen" />
+              <div className="pointer-events-none absolute inset-[-18%] rounded-[1.35rem] bg-amber-200/20 blur-md" />
               <img
-                src={MODULES_MAIN_ICON_URL}
+                src={MODULE_FOLDER_TILE_URL}
                 alt="Modules"
-                className="relative h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]"
-                style={{ filter: "saturate(1.2) contrast(1.08) brightness(0.98)" }}
+                className="relative h-11 w-11 object-contain"
+                style={{
+                  filter:
+                    "saturate(1.14) contrast(1.07) brightness(1.02) drop-shadow(0 6px 16px rgba(0,0,0,0.5)) drop-shadow(0 0 22px rgba(251,191,36,0.22))",
+                }}
+                draggable={false}
               />
             </div>
             <div>
@@ -230,7 +242,7 @@ export function ModuleWorkspaceSection({
                 Module workspace
               </h2>
               <p className="mt-1 max-w-md text-xs text-white/70">
-                Each tile is a different mission channel—pick one to open its console.
+                Each module is a folder console—open one to jump into that mission channel.
               </p>
             </div>
           </div>
@@ -260,45 +272,89 @@ export function ModuleWorkspaceSection({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-3.5 md:grid-cols-4 xl:grid-cols-6">
           {modules.map((item, i) => {
             const t = getModuleTheme(item.href, i);
-            const folderVariant = (i % 3 === 0 ? "amber" : i % 3 === 1 ? "copper" : "steel") as "amber" | "copper" | "steel";
+            const ringAccent = t.border.replace("border-", "ring-");
             return (
               <Link key={item.href} href={item.href} className="block">
                 <div
-                  className={`
-                    group relative w-full cursor-pointer overflow-hidden rounded-2xl border p-3 text-left
-                    ${t.background} ${t.border} ${t.glow}
-                    transition duration-200 ease-out
-                    hover:z-[1] hover:scale-[1.02] hover:brightness-110
-                    active:scale-[0.99]
-                  `}
+                  className={cn(
+                    "group relative isolate min-h-[13.5rem] w-full cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-950 text-left shadow-[0_14px_40px_-12px_rgba(0,0,0,0.75)] transition duration-200 ease-out",
+                    t.glow,
+                    "hover:z-[1] hover:scale-[1.02] hover:brightness-[1.03] active:scale-[0.99]",
+                  )}
                   data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 >
                   <div
-                    className={`pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br ${t.corner} to-transparent opacity-50 blur-xl transition group-hover:opacity-100`}
+                    className={`pointer-events-none absolute -bottom-8 left-1/2 h-24 w-[88%] -translate-x-1/2 rounded-full bg-gradient-to-br ${t.corner} to-transparent opacity-35 blur-2xl transition group-hover:opacity-70`}
                   />
-                  <div className="pointer-events-none absolute right-2 top-2 rounded-md border border-white/10 bg-black/35 p-0.5 opacity-80 backdrop-blur-sm">
-                    <ModulesFolderGlyph
-                      variant={folderVariant}
-                      className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-neutral-300/30 via-slate-800/35 to-slate-950"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-[72%] bg-gradient-to-t from-slate-950 via-slate-950/88 to-transparent"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-[radial-gradient(ellipse_85%_70%_at_50%_100%,rgba(251,191,36,0.12),rgba(14,165,233,0.06)_42%,transparent_68%)] mix-blend-soft-light"
+                    aria-hidden
+                  />
+                  <div
+                    className="cyrus-module-folder-art pointer-events-none absolute bottom-[-7%] left-1/2 w-[min(124%,13.25rem)] max-w-none select-none"
+                    style={{ animationDelay: `${(i % 7) * -1.4}s` }}
+                  >
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute bottom-[10%] left-1/2 h-28 w-[94%] -translate-x-1/2 rounded-full bg-gradient-to-t to-transparent opacity-80 mix-blend-screen blur-2xl transition duration-300 group-hover:opacity-100",
+                        t.corner,
+                      )}
+                    />
+                    <div
+                      className="pointer-events-none absolute bottom-[18%] left-1/2 h-20 w-[72%] -translate-x-1/2 rounded-full bg-gradient-to-t from-white/25 via-amber-100/10 to-transparent opacity-50 blur-xl mix-blend-overlay transition group-hover:opacity-80"
+                    />
+                    <img
+                      src={MODULE_FOLDER_TILE_URL}
+                      alt=""
+                      width={256}
+                      height={256}
+                      className="relative w-full object-contain object-bottom transition duration-300 group-hover:scale-[1.06] group-hover:brightness-[1.04]"
+                      style={{ filter: `${t.folderTint}${MODULE_TILE_FOLDER_SHADOW}` }}
+                      draggable={false}
                     />
                   </div>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-slate-900/70 ${t.icon}`}
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-inset opacity-0 transition group-hover:opacity-100",
+                      ringAccent,
+                    )}
+                  />
+                  <div className="relative z-10 flex min-h-[13.5rem] flex-col p-3.5 pt-4">
+                    <div
+                      className="mb-2 h-px w-full max-w-[95%] opacity-[0.9] shadow-[0_0_16px_rgba(251,191,36,0.14)]"
+                      style={{
+                        background: `linear-gradient(90deg, transparent, ${t.hairline}, transparent)`,
+                      }}
+                    />
+                    <p
+                      className={cn(
+                        "line-clamp-2 min-h-[2.75rem] text-sm font-semibold leading-snug tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.88)]",
+                        t.label,
+                      )}
+                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                     >
-                      <item.Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <p className={`line-clamp-1 text-sm font-semibold ${t.label}`} style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
                       {item.label}
                     </p>
+                    <p
+                      className={cn(
+                        "mt-auto line-clamp-2 border-t border-white/5 pt-2 text-[10px] leading-snug text-white/88 drop-shadow-[0_1px_8px_rgba(0,0,0,0.92)]",
+                        t.sub,
+                      )}
+                    >
+                      {item.description ?? "Open module"}
+                    </p>
                   </div>
-                  <p className={`line-clamp-2 pl-[2.25rem] text-[10px] leading-snug ${t.sub}`}>
-                    {item.description ?? "Open module"}
-                  </p>
-                  <div className="mt-2 h-px w-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 transition group-hover:opacity-100" />
                 </div>
               </Link>
             );

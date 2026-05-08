@@ -157,23 +157,23 @@ export function ModuleWorkspacePageShell({
       >
         <section
           className={cn(
-            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-900/24 via-slate-950/54 to-amber-950/24 p-1 shadow-[0_0_54px_-24px_rgba(245,158,11,0.24),0_0_58px_-34px_rgba(251,191,36,0.1)] backdrop-blur-md",
+            "relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-900/14 via-slate-950/20 to-amber-950/14 p-1 shadow-[0_0_54px_-24px_rgba(245,158,11,0.24),0_0_58px_-34px_rgba(251,191,36,0.1)] backdrop-blur-[2px]",
             frameClassName,
           )}
         >
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.1]"
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
             style={{
               backgroundImage: "radial-gradient(circle at 1px 1px, rgba(251, 191, 36, 0.34) 1px, transparent 0)",
               backgroundSize: "24px 24px",
             }}
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-300/12 via-white/5 to-orange-500/12" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-300/8 via-white/[0.03] to-orange-500/8" />
           <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(251,191,36,0.15),rgba(120,53,15,0.05)_44%,transparent_60%)]"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(251,191,36,0.1),rgba(120,53,15,0.03)_44%,transparent_60%)]"
             aria-hidden
           />
-          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-amber-950/20 via-slate-950/42 to-amber-950/18 p-4 backdrop-blur-sm sm:p-5">
+          <div className="relative rounded-[1.4rem] bg-gradient-to-b from-amber-950/10 via-slate-950/18 to-amber-950/8 p-4 backdrop-blur-[1px] sm:p-5">
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <Link href={backHref}>

@@ -19,8 +19,7 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
-import { MODULES_MAIN_ICON_URL } from "@/lib/dashboard-backdrop";
+import { MODULE_FOLDER_TILE_URL, MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -120,12 +119,17 @@ export default function DashboardFresh() {
                   }`}
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
-                  <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-sm bg-black/25">
+                  <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
+                    <span className="pointer-events-none absolute inset-[-40%] rounded-full bg-cyan-400/30 blur-md mix-blend-screen" />
                     <img
-                      src={MODULES_MAIN_ICON_URL}
+                      src={MODULE_FOLDER_TILE_URL}
                       alt=""
-                      className="h-3.5 w-3.5 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
-                      style={{ filter: "saturate(1.15) contrast(1.05) brightness(0.98)" }}
+                      className="relative h-7 w-7 object-contain"
+                      style={{
+                        filter:
+                          "saturate(1.12) contrast(1.06) brightness(1.02) drop-shadow(0 4px 12px rgba(0,0,0,0.45)) drop-shadow(0 0 16px rgba(34,211,238,0.2))",
+                      }}
+                      draggable={false}
                     />
                   </span>
                   Module workspace

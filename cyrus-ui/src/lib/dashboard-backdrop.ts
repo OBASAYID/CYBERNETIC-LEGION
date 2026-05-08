@@ -6,3 +6,5 @@ export const SMOKE_VORTEX_TEXTURE_URL = "/smoke-vortex.png";
 export const MODULE_RIBBON_LIGHT_URL = "/module-ribbon-light.png";
 /** Main modules icon (folder) provided by user and polished in UI styling. */
 export const MODULES_MAIN_ICON_URL = "/modules-main-icon.png";
+/** Full folder artwork for module workspace tiles (replaces flat rectangle with folder silhouette). */
+export const MODULE_FOLDER_TILE_URL = "/module-folder-tile.png";
