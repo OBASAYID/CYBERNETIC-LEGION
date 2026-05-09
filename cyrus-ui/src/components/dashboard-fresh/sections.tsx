@@ -6,23 +6,16 @@ import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
-/** Shared folder: blue tint + dark blue backing + multiply removes light PNG matte (not a white box). */
+/** Shared folder glyph — blue tint only, no rounded backing or halo frame. */
 function ModulesFolderGlyph({ className = "" }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "relative isolate inline-flex items-center justify-center overflow-hidden rounded-[20%] bg-sky-950 align-middle",
-        className,
-      )}
-    >
-      <img
-        src={MODULE_FOLDER_TILE_URL}
-        alt=""
-        className="h-full w-full object-contain mix-blend-multiply"
-        style={{ filter: MODULE_FOLDER_ICON_FILTER }}
-        draggable={false}
-      />
-    </span>
+    <img
+      src={MODULE_FOLDER_TILE_URL}
+      alt=""
+      className={cn("relative object-contain align-middle", className)}
+      style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+      draggable={false}
+    />
   );
 }
 
@@ -50,7 +43,6 @@ export function HeroSection() {
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-              <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-sky-400/35 blur-md" />
               <ModulesFolderGlyph className="h-7 w-7" />
             </span>
             Open Orchestrator
@@ -194,16 +186,13 @@ export function ModuleWorkspaceSection({
       <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-            <div className="pointer-events-none absolute inset-[-40%] rounded-full bg-sky-400/30 blur-lg" />
-            <span className="relative isolate flex h-11 w-11 items-center justify-center overflow-hidden rounded-[22%] bg-sky-950">
-              <img
-                src={MODULE_FOLDER_TILE_URL}
-                alt="Modules"
-                className="h-full w-full object-contain mix-blend-multiply"
-                style={{ filter: MODULE_FOLDER_ICON_FILTER }}
-                draggable={false}
-              />
-            </span>
+            <img
+              src={MODULE_FOLDER_TILE_URL}
+              alt="Modules"
+              className="h-11 w-11 object-contain"
+              style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+              draggable={false}
+            />
           </div>
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
@@ -252,28 +241,18 @@ export function ModuleWorkspaceSection({
               data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
               <div className="relative flex h-[4.35rem] w-full max-w-[6.25rem] items-end justify-center sm:h-[4.65rem] sm:max-w-[6.5rem]">
-                <div
-                  className="pointer-events-none absolute bottom-0 left-1/2 h-[48%] w-[88%] -translate-x-1/2 bg-[radial-gradient(ellipse_82%_60%_at_50%_100%,rgba(56,189,248,0.24),transparent_65%)]"
-                  aria-hidden
+                <img
+                  src={MODULE_FOLDER_TILE_URL}
+                  alt=""
+                  width={256}
+                  height={256}
+                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]"
+                  style={{
+                    animationDelay: `${(i % 7) * -1.4}s`,
+                    filter: MODULE_FOLDER_ICON_FILTER,
+                  }}
+                  draggable={false}
                 />
-                <div
-                  className="pointer-events-none absolute left-1/2 top-[42%] h-10 w-[82%] -translate-x-1/2 rounded-full bg-sky-400/22 blur-xl transition duration-300 group-hover:bg-sky-300/30"
-                  aria-hidden
-                />
-                <span className="cyrus-module-folder-art relative z-10 mx-auto inline-flex h-[3.65rem] max-w-[min(5.5rem,88%)] items-end justify-center overflow-hidden rounded-[24%] bg-sky-950 transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]">
-                  <img
-                    src={MODULE_FOLDER_TILE_URL}
-                    alt=""
-                    width={256}
-                    height={256}
-                    className="h-full w-auto max-h-full object-contain object-bottom mix-blend-multiply"
-                    style={{
-                      animationDelay: `${(i % 7) * -1.4}s`,
-                      filter: MODULE_FOLDER_ICON_FILTER,
-                    }}
-                    draggable={false}
-                  />
-                </span>
               </div>
               <p
                 className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
