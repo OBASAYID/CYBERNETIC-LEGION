@@ -232,40 +232,40 @@ export function ModuleWorkspaceSection({
         </div>
       </div>
 
-      <div className="grid w-full grid-cols-3 items-stretch gap-x-3 gap-y-4 sm:gap-x-5 sm:gap-y-5 lg:gap-x-6 lg:gap-y-6">
+      <div className="grid w-full grid-cols-2 items-stretch gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-6 md:gap-2 lg:gap-3">
         {modules.map((item) => {
           const BadgeIcon = item.Icon;
           return (
             <Link key={item.href} href={item.href} className="block min-w-0">
               <div
-                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-row items-center gap-2 rounded-xl border border-white/10 bg-slate-950/30 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2.5 sm:rounded-2xl sm:px-2.5 sm:py-2.5"
+                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-slate-950/30 px-1.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2 sm:rounded-2xl sm:px-2 sm:py-2.5 md:px-1.5 md:py-2"
                 data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.9rem] border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_18px_rgba(34,211,238,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_24px_rgba(34,211,238,0.45)] sm:h-12 sm:w-12 sm:rounded-[1rem] lg:h-14 lg:w-14"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_14px_rgba(34,211,238,0.32),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_22px_rgba(34,211,238,0.42)] sm:h-10 sm:w-10 sm:rounded-[0.85rem] md:h-9 md:w-9 lg:h-11 lg:w-11"
                   aria-hidden
                 >
                   <BadgeIcon
-                    className="h-6 w-6 text-cyan-50 drop-shadow-[0_0_8px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased sm:h-7 sm:w-7 lg:h-8 lg:w-8"
+                    className="h-5 w-5 text-cyan-50 drop-shadow-[0_0_6px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased md:h-4 md:w-4 lg:h-6 lg:w-6"
                     strokeWidth={1.65}
                   />
                 </div>
-                <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5">
+                <div className="flex w-full min-w-0 flex-col items-center gap-0.5">
                   <p
-                    className="w-full text-[12px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-[13px] sm:leading-tight"
+                    className="w-full text-[10px] font-semibold leading-tight tracking-wide text-sky-50 antialiased sm:text-[11px] md:text-[10px] lg:text-xs"
                     style={{
                       fontFamily: "'Orbitron', system-ui, sans-serif",
                       textRendering: "optimizeLegibility",
                       WebkitFontSmoothing: "antialiased",
                       textShadow:
-                        "0 0 14px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 20px rgba(56,189,248,0.45)",
+                        "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
                     }}
                   >
                     {item.label}
                   </p>
                   {item.description ? (
                     <p
-                      className="line-clamp-2 w-full text-[10px] leading-snug text-cyan-100/70 antialiased sm:line-clamp-3 sm:text-[11px] lg:text-xs"
+                      className="line-clamp-2 hidden w-full text-[9px] leading-snug text-cyan-100/68 antialiased sm:line-clamp-2 sm:text-[10px] lg:block lg:text-[10px]"
                       style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
                     >
                       {item.description}
