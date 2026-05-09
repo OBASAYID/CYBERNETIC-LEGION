@@ -190,130 +190,105 @@ export function ModuleWorkspaceSection({
   setModuleFilter: (next: "all" | "core") => void;
 }) {
   return (
-    <div className="relative w-full">
-      <div
-        className="pointer-events-none absolute left-1/2 top-[55%] z-0 w-[min(76rem,108vw)] -translate-x-1/2 -translate-y-1/2"
-        aria-hidden
-      >
-        <div className="mx-auto h-80 max-w-5xl rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
-        <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
+    <div className="relative z-10 w-full">
+      <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+            <div className="pointer-events-none absolute inset-[-40%] rounded-full bg-sky-400/30 blur-lg" />
+            <span className="relative isolate flex h-11 w-11 items-center justify-center overflow-hidden rounded-[22%] bg-sky-950">
+              <img
+                src={MODULE_FOLDER_TILE_URL}
+                alt="Modules"
+                className="h-full w-full object-contain mix-blend-multiply"
+                style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+                draggable={false}
+              />
+            </span>
+          </div>
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
+            <h2
+              className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+              style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+            >
+              Module workspace
+            </h2>
+            <p className="mt-1 max-w-md text-xs text-white/70">
+              Each module is a folder console—open one to jump into that mission channel.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setModuleFilter("all")}
+            className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
+              moduleFilter === "all"
+                ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
+                : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setModuleFilter("core")}
+            className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
+              moduleFilter === "core"
+                ? "border-orange-400/50 bg-gradient-to-r from-orange-600/30 to-amber-500/20 text-amber-50 shadow-lg shadow-orange-500/15"
+                : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
+            }`}
+          >
+            Core
+          </button>
+        </div>
       </div>
-    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/14 via-slate-950/18 to-orange-950/12 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-[2px]">
-      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950/10" aria-hidden />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.08]"
-        style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.38) 1px, transparent 0)`,
-          backgroundSize: "24px 24px",
-        }}
-      />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-200/4 via-yellow-400/3 to-orange-500/8" />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.06),transparent_58%)]"
-        aria-hidden
-      />
-      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/10 via-slate-950/14 to-orange-950/8 p-3 shadow-inner shadow-black/10 backdrop-blur-[1px] sm:p-3.5">
-        <div className="mb-2.5 flex flex-col gap-2 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-              <div className="pointer-events-none absolute inset-[-40%] rounded-full bg-sky-400/30 blur-lg" />
-              <span className="relative isolate flex h-11 w-11 items-center justify-center overflow-hidden rounded-[22%] bg-sky-950">
-                <img
-                  src={MODULE_FOLDER_TILE_URL}
-                  alt="Modules"
-                  className="h-full w-full object-contain mix-blend-multiply"
-                  style={{ filter: MODULE_FOLDER_ICON_FILTER }}
-                  draggable={false}
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
+        {modules.map((item, i) => (
+          <Link key={item.href} href={item.href} className="block">
+            <div
+              className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
+              data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              <div className="relative flex h-[4.35rem] w-full max-w-[6.25rem] items-end justify-center sm:h-[4.65rem] sm:max-w-[6.5rem]">
+                <div
+                  className="pointer-events-none absolute bottom-0 left-1/2 h-[48%] w-[88%] -translate-x-1/2 bg-[radial-gradient(ellipse_82%_60%_at_50%_100%,rgba(56,189,248,0.24),transparent_65%)]"
+                  aria-hidden
                 />
-              </span>
-            </div>
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
-              <h2
-                className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
-                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                <div
+                  className="pointer-events-none absolute left-1/2 top-[42%] h-10 w-[82%] -translate-x-1/2 rounded-full bg-sky-400/22 blur-xl transition duration-300 group-hover:bg-sky-300/30"
+                  aria-hidden
+                />
+                <span className="cyrus-module-folder-art relative z-10 mx-auto inline-flex h-[3.65rem] max-w-[min(5.5rem,88%)] items-end justify-center overflow-hidden rounded-[24%] bg-sky-950 transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]">
+                  <img
+                    src={MODULE_FOLDER_TILE_URL}
+                    alt=""
+                    width={256}
+                    height={256}
+                    className="h-full w-auto max-h-full object-contain object-bottom mix-blend-multiply"
+                    style={{
+                      animationDelay: `${(i % 7) * -1.4}s`,
+                      filter: MODULE_FOLDER_ICON_FILTER,
+                    }}
+                    draggable={false}
+                  />
+                </span>
+              </div>
+              <p
+                className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
+                style={{
+                  fontFamily: "'Orbitron', system-ui, sans-serif",
+                  textShadow:
+                    "0 0 12px rgba(12,42,74,0.95), 0 1px 2px rgba(8,30,58,0.9), 0 0 18px rgba(56,189,248,0.5)",
+                }}
               >
-                Module workspace
-              </h2>
-              <p className="mt-1 max-w-md text-xs text-white/70">
-                Each module is a folder console—open one to jump into that mission channel.
+                {item.label}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setModuleFilter("all")}
-              className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                moduleFilter === "all"
-                  ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
-                  : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setModuleFilter("core")}
-              className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                moduleFilter === "core"
-                  ? "border-orange-400/50 bg-gradient-to-r from-orange-600/30 to-amber-500/20 text-amber-50 shadow-lg shadow-orange-500/15"
-                  : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
-              }`}
-            >
-              Core
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
-          {modules.map((item, i) => (
-            <Link key={item.href} href={item.href} className="block">
-              <div
-                className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
-                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-              >
-                <div className="relative flex h-[4.35rem] w-full max-w-[6.25rem] items-end justify-center sm:h-[4.65rem] sm:max-w-[6.5rem]">
-                  <div
-                    className="pointer-events-none absolute bottom-0 left-1/2 h-[48%] w-[88%] -translate-x-1/2 bg-[radial-gradient(ellipse_82%_60%_at_50%_100%,rgba(56,189,248,0.24),transparent_65%)]"
-                    aria-hidden
-                  />
-                  <div
-                    className="pointer-events-none absolute left-1/2 top-[42%] h-10 w-[82%] -translate-x-1/2 rounded-full bg-sky-400/22 blur-xl transition duration-300 group-hover:bg-sky-300/30"
-                    aria-hidden
-                  />
-                  <span className="cyrus-module-folder-art relative z-10 mx-auto inline-flex h-[3.65rem] max-w-[min(5.5rem,88%)] items-end justify-center overflow-hidden rounded-[24%] bg-sky-950 transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]">
-                    <img
-                      src={MODULE_FOLDER_TILE_URL}
-                      alt=""
-                      width={256}
-                      height={256}
-                      className="h-full w-auto max-h-full object-contain object-bottom mix-blend-multiply"
-                      style={{
-                        animationDelay: `${(i % 7) * -1.4}s`,
-                        filter: MODULE_FOLDER_ICON_FILTER,
-                      }}
-                      draggable={false}
-                    />
-                  </span>
-                </div>
-                <p
-                  className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
-                  style={{
-                    fontFamily: "'Orbitron', system-ui, sans-serif",
-                    textShadow:
-                      "0 0 12px rgba(12,42,74,0.95), 0 1px 2px rgba(8,30,58,0.9), 0 0 18px rgba(56,189,248,0.5)",
-                  }}
-                >
-                  {item.label}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
+          </Link>
+        ))}
       </div>
-    </section>
     </div>
   );
 }
