@@ -10,8 +10,8 @@ export const MODULES_MAIN_ICON_URL = "/modules-main-icon.png";
 export const MODULE_FOLDER_TILE_URL = "/module-folder-tile.png";
 
 /**
- * CSS `filter` for folder PNG: cyan/blue tint.
- * Pair the `<img>` with `mix-blend-multiply` so near-white / gray matte blends into dark UI (no extra plate).
+ * CSS `filter` for folder PNG: cyan/blue tint with matte suppression.
+ * Pair the `<img>` with `mix-blend-darken` to knock out white PNG backgrounds without a visible plate.
  */
 export const MODULE_FOLDER_ICON_FILTER =
-  "hue-rotate(172deg) saturate(1.3) brightness(1.05) contrast(1.09) drop-shadow(0 2px 5px rgba(8,70,110,0.38)) drop-shadow(0 0 14px rgba(56,189,248,0.45))";
+  "hue-rotate(174deg) saturate(1.45) brightness(0.86) contrast(1.35)";
