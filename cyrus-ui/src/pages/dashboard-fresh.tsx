@@ -124,16 +124,13 @@ export default function DashboardFresh() {
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
                   <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-                    <span className="pointer-events-none absolute inset-[-35%] rounded-full bg-sky-400/32 blur-md" />
-                    <span className="relative isolate flex h-7 w-7 items-center justify-center overflow-hidden rounded-[20%] bg-sky-950">
-                      <img
-                        src={MODULE_FOLDER_TILE_URL}
-                        alt=""
-                        className="h-full w-full object-contain mix-blend-multiply"
-                        style={{ filter: MODULE_FOLDER_ICON_FILTER }}
-                        draggable={false}
-                      />
-                    </span>
+                    <img
+                      src={MODULE_FOLDER_TILE_URL}
+                      alt=""
+                      className="h-7 w-7 object-contain"
+                      style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+                      draggable={false}
+                    />
                   </span>
                   Module workspace
                 </button>
