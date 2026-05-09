@@ -232,27 +232,27 @@ export function ModuleWorkspaceSection({
         </div>
       </div>
 
-      <div className="grid w-full grid-cols-3 gap-x-3 gap-y-6 sm:gap-x-6 sm:gap-y-8 lg:gap-x-8 lg:gap-y-10">
+      <div className="grid w-full grid-cols-3 items-stretch gap-x-3 gap-y-4 sm:gap-x-5 sm:gap-y-5 lg:gap-x-6 lg:gap-y-6">
         {modules.map((item) => {
           const BadgeIcon = item.Icon;
           return (
             <Link key={item.href} href={item.href} className="block min-w-0">
               <div
-                className="group relative flex min-h-0 w-full cursor-pointer flex-col items-center gap-2.5 px-0.5 pb-1 text-center transition duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0"
+                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-row items-center gap-2 rounded-xl border border-white/10 bg-slate-950/30 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2.5 sm:rounded-2xl sm:px-2.5 sm:py-2.5"
                 data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <div
-                  className="flex aspect-square w-[min(100%,5.75rem)] max-w-full shrink-0 items-center justify-center rounded-[1.15rem] border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_22px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.38),inset_0_-1px_0_rgba(15,23,42,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:scale-[1.04] group-hover:shadow-[0_0_28px_rgba(34,211,238,0.5)] sm:w-[min(100%,6.25rem)] lg:w-[min(100%,7rem)]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.9rem] border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_18px_rgba(34,211,238,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_24px_rgba(34,211,238,0.45)] sm:h-12 sm:w-12 sm:rounded-[1rem] lg:h-14 lg:w-14"
                   aria-hidden
                 >
                   <BadgeIcon
-                    className="h-9 w-9 text-cyan-50 drop-shadow-[0_0_10px_rgba(34,211,238,0.9)] [shape-rendering:geometricPrecision] antialiased sm:h-10 sm:w-10 lg:h-11 lg:w-11"
+                    className="h-6 w-6 text-cyan-50 drop-shadow-[0_0_8px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased sm:h-7 sm:w-7 lg:h-8 lg:w-8"
                     strokeWidth={1.65}
                   />
                 </div>
-                <div className="flex w-full min-w-0 max-w-none flex-col items-center gap-1 px-0.5">
+                <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5">
                   <p
-                    className="w-full text-center text-[13px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-sm"
+                    className="w-full text-[12px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-[13px] sm:leading-tight"
                     style={{
                       fontFamily: "'Orbitron', system-ui, sans-serif",
                       textRendering: "optimizeLegibility",
@@ -265,7 +265,7 @@ export function ModuleWorkspaceSection({
                   </p>
                   {item.description ? (
                     <p
-                      className="line-clamp-3 w-full text-center text-[11px] leading-snug text-cyan-100/72 antialiased sm:text-xs"
+                      className="line-clamp-2 w-full text-[10px] leading-snug text-cyan-100/70 antialiased sm:line-clamp-3 sm:text-[11px] lg:text-xs"
                       style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
                     >
                       {item.description}
