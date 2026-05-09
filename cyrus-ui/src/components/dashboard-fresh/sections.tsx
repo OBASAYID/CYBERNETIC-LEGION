@@ -201,8 +201,7 @@ export function ModuleWorkspaceSection({
               Module workspace
             </h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
-              Open a module channel below—each tile uses the same iconography as Command Center navigation, with a
-              short mission readout.
+              Open a module channel below—each tile matches Command Center destinations, with a short mission readout.
             </p>
           </div>
         </div>
@@ -232,50 +231,36 @@ export function ModuleWorkspaceSection({
         </div>
       </div>
 
-      <div className="grid w-full grid-cols-2 items-stretch gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-6 md:gap-2 lg:gap-3">
-        {modules.map((item) => {
-          const BadgeIcon = item.Icon;
-          return (
-            <Link key={item.href} href={item.href} className="block min-w-0">
-              <div
-                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-slate-950/30 px-1.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2 sm:rounded-2xl sm:px-2 sm:py-2.5 md:px-1.5 md:py-2"
-                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+      <div className="grid w-full grid-cols-4 items-stretch gap-1.5 sm:gap-3">
+        {modules.map((item) => (
+          <Link key={item.href} href={item.href} className="block min-w-0">
+            <div
+              className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-slate-950/30 px-2 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:rounded-2xl sm:px-3 sm:py-3"
+              data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              <p
+                className="w-full text-[11px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-xs"
+                style={{
+                  fontFamily: "'Orbitron', system-ui, sans-serif",
+                  textRendering: "optimizeLegibility",
+                  WebkitFontSmoothing: "antialiased",
+                  textShadow:
+                    "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
+                }}
               >
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_14px_rgba(34,211,238,0.32),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_22px_rgba(34,211,238,0.42)] sm:h-10 sm:w-10 sm:rounded-[0.85rem] md:h-9 md:w-9 lg:h-11 lg:w-11"
-                  aria-hidden
+                {item.label}
+              </p>
+              {item.description ? (
+                <p
+                  className="line-clamp-2 w-full text-[10px] leading-snug text-cyan-100/72 antialiased sm:line-clamp-3 sm:text-[11px]"
+                  style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
                 >
-                  <BadgeIcon
-                    className="h-5 w-5 text-cyan-50 drop-shadow-[0_0_6px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased md:h-4 md:w-4 lg:h-6 lg:w-6"
-                    strokeWidth={1.65}
-                  />
-                </div>
-                <div className="flex w-full min-w-0 flex-col items-center gap-0.5">
-                  <p
-                    className="w-full text-[10px] font-semibold leading-tight tracking-wide text-sky-50 antialiased sm:text-[11px] md:text-[10px] lg:text-xs"
-                    style={{
-                      fontFamily: "'Orbitron', system-ui, sans-serif",
-                      textRendering: "optimizeLegibility",
-                      WebkitFontSmoothing: "antialiased",
-                      textShadow:
-                        "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
-                    }}
-                  >
-                    {item.label}
-                  </p>
-                  {item.description ? (
-                    <p
-                      className="line-clamp-2 hidden w-full text-[9px] leading-snug text-cyan-100/68 antialiased sm:line-clamp-2 sm:text-[10px] lg:block lg:text-[10px]"
-                      style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
-                    >
-                      {item.description}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+                  {item.description}
+                </p>
+              ) : null}
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

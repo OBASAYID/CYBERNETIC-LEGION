@@ -261,7 +261,9 @@ export function getDashboardNavItems(): {
   description?: string;
   Icon: LucideIcon;
 }[] {
-  return COMMAND_CENTER_NAV.filter((e) => e.path !== "/ai-assistant").map((e) => ({
+  return COMMAND_CENTER_NAV.filter(
+    (e) => e.path !== "/ai-assistant" && e.path !== "/file-analysis",
+  ).map((e) => ({
     href: e.path,
     label: e.dashboardLabel,
     description: e.dashboardDescription ?? e.sublabel,
