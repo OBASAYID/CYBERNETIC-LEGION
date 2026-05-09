@@ -127,7 +127,7 @@ export default function DashboardFresh() {
                     <img
                       src={MODULE_FOLDER_TILE_URL}
                       alt=""
-                      className="h-7 w-7 object-contain mix-blend-darken"
+                      className="cyrus-module-folder-trim h-7 w-7 object-contain mix-blend-darken"
                       style={{ filter: MODULE_FOLDER_ICON_FILTER }}
                       draggable={false}
                     />

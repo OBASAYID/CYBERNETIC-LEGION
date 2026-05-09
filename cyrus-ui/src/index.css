@@ -742,6 +742,11 @@
   will-change: transform;
 }
 
+/** Crops baked-in white margins on `module-folder-tile.png` so only the folder reads in the tile. */
+.cyrus-module-folder-trim {
+  clip-path: inset(7.5% 8.5% 9.5% 8.5%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cyrus-smoke-bg .cyrus-smoke-animated {
     animation: none !important;

@@ -29,13 +29,13 @@ import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
-/** Shared folder glyph — blue tint; darken blend removes light PNG matte (no colored frame). */
+/** Shared folder glyph — chrome tint; trim + darken removes PNG matte plate. */
 function ModulesFolderGlyph({ className = "" }: { className?: string }) {
   return (
     <img
       src={MODULE_FOLDER_TILE_URL}
       alt=""
-      className={cn("relative object-contain align-middle mix-blend-darken", className)}
+      className={cn("cyrus-module-folder-trim relative object-contain align-middle mix-blend-darken", className)}
       style={{ filter: MODULE_FOLDER_ICON_FILTER }}
       draggable={false}
     />
@@ -264,7 +264,7 @@ export function ModuleWorkspaceSection({
             <img
               src={MODULE_FOLDER_TILE_URL}
               alt="Modules"
-              className="h-11 w-11 object-contain mix-blend-darken"
+              className="cyrus-module-folder-trim h-11 w-11 object-contain mix-blend-darken"
               style={{ filter: MODULE_FOLDER_ICON_FILTER }}
               draggable={false}
             />
@@ -309,47 +309,53 @@ export function ModuleWorkspaceSection({
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
-        {modules.map((item, i) => (
-          <Link key={item.href} href={item.href} className="block">
-            {(() => {
-              const BadgeIcon = getModuleBadgeIcon(item.label);
-              return (
-            <div
-              className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
-              data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-            >
-              <div className="relative flex h-[4.55rem] w-full max-w-[6.4rem] items-end justify-center sm:h-[4.9rem] sm:max-w-[6.7rem]">
-                <img
-                  src={MODULE_FOLDER_TILE_URL}
-                  alt=""
-                  width={256}
-                  height={256}
-                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.9rem] w-auto max-w-[min(5.8rem,90%)] select-none object-contain object-bottom mix-blend-darken transition duration-300 group-hover:scale-[1.04] sm:h-[4.15rem] sm:max-w-[6rem]"
-                  style={{
-                    animationDelay: `${(i % 7) * -1.4}s`,
-                    filter: MODULE_FOLDER_ICON_FILTER,
-                  }}
-                  draggable={false}
-                />
-                <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-300/45 bg-slate-900/70 shadow-[0_0_10px_rgba(56,189,248,0.35)] backdrop-blur-sm">
-                  <BadgeIcon className="h-3.5 w-3.5 text-cyan-200/95" strokeWidth={2.1} />
-                </span>
-              </div>
-              <p
-                className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
-                style={{
-                  fontFamily: "'Orbitron', system-ui, sans-serif",
-                  textShadow:
-                    "0 0 12px rgba(12,42,74,0.95), 0 1px 2px rgba(8,30,58,0.9), 0 0 18px rgba(56,189,248,0.5)",
-                }}
+        {modules.map((item, i) => {
+          const BadgeIcon = getModuleBadgeIcon(item.label);
+          return (
+            <Link key={item.href} href={item.href} className="block">
+              <div
+                className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
+                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                {item.label}
-              </p>
-            </div>
-              );
-            })()}
-          </Link>
-        ))}
+                <div className="relative flex w-full max-w-[6.4rem] items-end justify-center sm:max-w-[6.7rem]">
+                  <div className="relative z-10 inline-flex h-[3.9rem] items-end justify-center sm:h-[4.15rem]">
+                    <img
+                      src={MODULE_FOLDER_TILE_URL}
+                      alt=""
+                      width={256}
+                      height={256}
+                      className="cyrus-module-folder-art cyrus-module-folder-trim relative z-10 mx-auto block h-full w-auto max-w-[min(5.8rem,90%)] select-none object-contain object-bottom mix-blend-darken transition duration-300 group-hover:scale-[1.04] sm:max-w-[6rem]"
+                      style={{
+                        animationDelay: `${(i % 7) * -1.4}s`,
+                        filter: MODULE_FOLDER_ICON_FILTER,
+                      }}
+                      draggable={false}
+                    />
+                    <span
+                      className="pointer-events-none absolute left-1/2 top-[48%] z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-100/35 bg-gradient-to-br from-white/25 via-slate-200/15 to-cyan-300/25 shadow-[0_0_14px_rgba(34,211,238,0.45),0_0_2px_rgba(255,255,255,0.55)_inset,0_1px_0_rgba(255,255,255,0.35)_inset] backdrop-blur-[2px]"
+                      aria-hidden
+                    >
+                      <BadgeIcon
+                        className="h-3.5 w-3.5 text-cyan-50 drop-shadow-[0_0_6px_rgba(34,211,238,0.85)]"
+                        strokeWidth={2.1}
+                      />
+                    </span>
+                  </div>
+                </div>
+                <p
+                  className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
+                  style={{
+                    fontFamily: "'Orbitron', system-ui, sans-serif",
+                    textShadow:
+                      "0 0 12px rgba(12,42,74,0.95), 0 1px 2px rgba(8,30,58,0.9), 0 0 18px rgba(56,189,248,0.5)",
+                  }}
+                >
+                  {item.label}
+                </p>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
