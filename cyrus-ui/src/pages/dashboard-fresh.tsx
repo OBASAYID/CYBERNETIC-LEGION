@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut, TerminalSquare } from "lucide-react";
+import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import {
   ModuleCommandConsole,
@@ -19,11 +19,7 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import {
-  MODULE_FOLDER_ICON_FILTER,
-  MODULE_FOLDER_TILE_URL,
-  MODULE_RIBBON_LIGHT_URL,
-} from "@/lib/dashboard-backdrop";
+import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -90,8 +86,42 @@ export default function DashboardFresh() {
 
       <div className="relative z-10">
         <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:px-6">
-          <div className="mx-auto flex w-full max-w-full items-center justify-between gap-2">
-            <HeaderTitle variant={headerOperator ? "operator" : "default"} />
+          <div className="mx-auto flex w-full max-w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              {isAdmin ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab("modules")}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                      adminTab === "modules"
+                        ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
+                        : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                    }`}
+                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                    <span className="hidden sm:inline">Module workspace</span>
+                    <span className="sm:hidden">Modules</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab("console")}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                      adminTab === "console"
+                        ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
+                        : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                    }`}
+                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                    <span className="hidden sm:inline">Mission console</span>
+                    <span className="sm:hidden">Console</span>
+                  </button>
+                </div>
+              ) : null}
+              <HeaderTitle variant={headerOperator ? "operator" : "default"} />
+            </div>
             <div className="flex shrink-0 items-center gap-2">
               {isAdmin && <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />}
               <button
@@ -108,54 +138,6 @@ export default function DashboardFresh() {
         </header>
 
         <main className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
-        {isAdmin && (
-          <div className="relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-r from-amber-500/[0.1] via-slate-900/55 to-cyan-500/[0.1] p-1 shadow-lg shadow-black/35">
-            <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.03)_50%,transparent_70%)]" />
-            <div className="relative flex flex-col gap-2 p-3 sm:p-4">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAdminTab("modules")}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
-                    adminTab === "modules"
-                      ? "border-cyan-400/50 bg-gradient-to-b from-cyan-600/35 to-cyan-900/40 text-cyan-50 shadow-lg shadow-cyan-500/20"
-                      : "border-white/12 bg-slate-950/40 text-white/70 hover:text-white/92"
-                  }`}
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-                    <img
-                      src={MODULE_FOLDER_TILE_URL}
-                      alt=""
-                      className="cyrus-module-folder-trim h-7 w-7 object-contain mix-blend-darken"
-                      style={{ filter: MODULE_FOLDER_ICON_FILTER }}
-                      draggable={false}
-                    />
-                  </span>
-                  Module workspace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminTab("console")}
-                  className={`rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
-                    adminTab === "console"
-                      ? "border-amber-400/50 bg-gradient-to-b from-amber-600/30 to-amber-950/50 text-amber-50 shadow-lg shadow-amber-500/20"
-                      : "border-white/12 bg-slate-950/40 text-white/70 hover:text-white/92"
-                  }`}
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  Mission console
-                </button>
-              </div>
-              <p className="text-[11px] leading-relaxed text-white/65">
-                Operators use <span className="text-cyan-300/80">Module workspace</span>. Command surface,
-                engine health, and orchestrator data live under{" "}
-                <span className="text-amber-300/80">Mission console</span>.
-              </p>
-            </div>
-          </div>
-        )}
-
         {!isAdmin && (
           <p className="max-w-2xl rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
             <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>
