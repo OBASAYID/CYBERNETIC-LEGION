@@ -1,4 +1,27 @@
-import { Activity, Cpu, Gauge, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
+import {
+  Activity,
+  Atom,
+  Binary,
+  BookOpenCheck,
+  Bot,
+  Camera,
+  Cpu,
+  Cross,
+  FileCode2,
+  FileText,
+  Folder,
+  Gauge,
+  GraduationCap,
+  Map,
+  Microscope,
+  Radar,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  TerminalSquare,
+  Trophy,
+  Waves,
+} from "lucide-react";
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
 import { MODULE_FOLDER_ICON_FILTER, MODULE_FOLDER_TILE_URL } from "@/lib/dashboard-backdrop";
@@ -6,13 +29,13 @@ import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
-/** Shared folder glyph — blue tint; multiply removes light PNG matte (no colored frame). */
+/** Shared folder glyph — blue tint; darken blend removes light PNG matte (no colored frame). */
 function ModulesFolderGlyph({ className = "" }: { className?: string }) {
   return (
     <img
       src={MODULE_FOLDER_TILE_URL}
       alt=""
-      className={cn("relative object-contain align-middle mix-blend-multiply", className)}
+      className={cn("relative object-contain align-middle mix-blend-darken", className)}
       style={{ filter: MODULE_FOLDER_ICON_FILTER }}
       draggable={false}
     />
@@ -181,6 +204,58 @@ export function ModuleWorkspaceSection({
   moduleFilter: "all" | "core";
   setModuleFilter: (next: "all" | "core") => void;
 }) {
+  const getModuleBadgeIcon = (label: string) => {
+    const key = label.trim().toLowerCase();
+    switch (key) {
+      case "vision":
+        return Camera;
+      case "medical":
+        return Cross;
+      case "security":
+        return ShieldCheck;
+      case "maps":
+        return Map;
+      case "comms":
+        return Waves;
+      case "quantum":
+        return Atom;
+      case "docs":
+        return FileText;
+      case "analyzer":
+        return Radar;
+      case "doc builder":
+        return FileCode2;
+      case "drone ui":
+        return Bot;
+      case "algorithms":
+        return Binary;
+      case "modules":
+        return Folder;
+      case "systems":
+        return Cpu;
+      case "hero":
+        return Trophy;
+      case "biology":
+        return Microscope;
+      case "blood":
+        return Stethoscope;
+      case "ops":
+        return TerminalSquare;
+      case "nav pro":
+        return Map;
+      case "ai hub":
+        return Sparkles;
+      case "assistant":
+        return GraduationCap;
+      case "trading":
+        return BookOpenCheck;
+      case "design":
+        return Activity;
+      default:
+        return Folder;
+    }
+  };
+
   return (
     <div className="relative z-10 w-full">
       <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -189,7 +264,7 @@ export function ModuleWorkspaceSection({
             <img
               src={MODULE_FOLDER_TILE_URL}
               alt="Modules"
-              className="h-11 w-11 object-contain mix-blend-multiply"
+              className="h-11 w-11 object-contain mix-blend-darken"
               style={{ filter: MODULE_FOLDER_ICON_FILTER }}
               draggable={false}
             />
@@ -236,23 +311,29 @@ export function ModuleWorkspaceSection({
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
         {modules.map((item, i) => (
           <Link key={item.href} href={item.href} className="block">
+            {(() => {
+              const BadgeIcon = getModuleBadgeIcon(item.label);
+              return (
             <div
               className="group relative flex min-h-0 cursor-pointer flex-col items-center pb-0.5 text-center transition duration-200 ease-out hover:-translate-y-px active:translate-y-0"
               data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <div className="relative flex h-[4.35rem] w-full max-w-[6.25rem] items-end justify-center sm:h-[4.65rem] sm:max-w-[6.5rem]">
+              <div className="relative flex h-[4.55rem] w-full max-w-[6.4rem] items-end justify-center sm:h-[4.9rem] sm:max-w-[6.7rem]">
                 <img
                   src={MODULE_FOLDER_TILE_URL}
                   alt=""
                   width={256}
                   height={256}
-                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom mix-blend-multiply transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]"
+                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.9rem] w-auto max-w-[min(5.8rem,90%)] select-none object-contain object-bottom mix-blend-darken transition duration-300 group-hover:scale-[1.04] sm:h-[4.15rem] sm:max-w-[6rem]"
                   style={{
                     animationDelay: `${(i % 7) * -1.4}s`,
                     filter: MODULE_FOLDER_ICON_FILTER,
                   }}
                   draggable={false}
                 />
+                <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-300/45 bg-slate-900/70 shadow-[0_0_10px_rgba(56,189,248,0.35)] backdrop-blur-sm">
+                  <BadgeIcon className="h-3.5 w-3.5 text-cyan-200/95" strokeWidth={2.1} />
+                </span>
               </div>
               <p
                 className="mt-1 line-clamp-2 max-w-[7.25rem] text-[11px] font-semibold leading-tight tracking-wide text-sky-100 sm:text-xs"
@@ -265,6 +346,8 @@ export function ModuleWorkspaceSection({
                 {item.label}
               </p>
             </div>
+              );
+            })()}
           </Link>
         ))}
       </div>
