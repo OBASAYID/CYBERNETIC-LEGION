@@ -1,21 +1,8 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import {
-  ArrowRight,
-  Cpu,
-  Eye,
-  FileText,
-  Loader2,
-  Maximize2,
-  MessageSquare,
-  Mic,
-  Minimize2,
-  RotateCcw,
-  Send,
-  Share2,
-  Terminal,
-} from "lucide-react";
+import { ArrowRight, Cpu, Loader2, Maximize2, Mic, Minimize2, RotateCcw, Send, Terminal } from "lucide-react";
+import { getCommandCenterNavByPath } from "@/config/command-center-nav";
 import {
   clearCommandSearchShare,
   formatCommandHandoffTranscript,
@@ -268,6 +255,18 @@ export function ModuleCommandConsole({
     else setLocation("/comms?tab=pshare&handoff=1");
   };
 
+  const pipelineTargets: {
+    id: "files" | "scan" | "comms" | "pshare";
+    path: string;
+    title: string;
+    labelOverride?: string;
+  }[] = [
+    { id: "files", path: "/files", title: "Build / analyze report" },
+    { id: "scan", path: "/scan", title: "Translate & multilingual" },
+    { id: "comms", path: "/comms", title: "Group chat" },
+    { id: "pshare", path: "/comms", title: "Group feed", labelOverride: "Pshare" },
+  ];
+
   const reloadConsole = () => {
     if (send.isPending) return;
     pendingStopRef.current = false;
@@ -499,26 +498,25 @@ export function ModuleCommandConsole({
           <span className="w-full pl-0.5 text-[9px] font-mono uppercase tracking-[0.28em] text-orange-300/55 sm:w-auto sm:pl-0">
             Pipeline
           </span>
-          {(
-            [
-              { id: "files" as const, label: "Docs", Icon: FileText, title: "Build / analyze report" },
-              { id: "scan" as const, label: "Vision", Icon: Eye, title: "Translate & multilingual" },
-              { id: "comms" as const, label: "Chat", Icon: MessageSquare, title: "Group chat" },
-              { id: "pshare" as const, label: "Pshare", Icon: Share2, title: "Group feed" },
-            ] as const
-          ).map(({ id, label, Icon, title }) => (
-            <button
-              key={id}
-              type="button"
-              title={title}
-              onClick={() => goHandoff(id)}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1.5 text-[11px] font-medium text-white/90 transition hover:border-sky-400/40 hover:bg-sky-950/35"
-            >
-              <Icon className="h-3.5 w-3.5 text-sky-300/85" />
-              {label}
-              <ArrowRight className="h-3 w-3 text-white/35" />
-            </button>
-          ))}
+          {pipelineTargets.map(({ id, path, title, labelOverride }) => {
+            const nav = getCommandCenterNavByPath(path);
+            if (!nav) return null;
+            const Icon = nav.Icon;
+            const label = labelOverride ?? nav.dashboardLabel;
+            return (
+              <button
+                key={id}
+                type="button"
+                title={title}
+                onClick={() => goHandoff(id)}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1.5 text-[11px] font-medium text-white/90 transition hover:border-sky-400/40 hover:bg-sky-950/35"
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0 text-sky-300/85 [shape-rendering:geometricPrecision]" strokeWidth={1.75} />
+                {label}
+                <ArrowRight className="h-3 w-3 shrink-0 text-white/35" />
+              </button>
+            );
+          })}
         </div>
         {handoffHint && <p className="mb-2 text-[11px] text-amber-300/90">{handoffHint}</p>}
 

@@ -249,6 +249,11 @@ export function getModuleOrchestratorSurfaces(): {
   });
 }
 
+/** Single nav entry by primary route (e.g. Command Console pipeline handoff). */
+export function getCommandCenterNavByPath(path: string): CommandCenterNavEntry | undefined {
+  return COMMAND_CENTER_NAV.find((e) => e.path === path);
+}
+
 /** Dashboard top nav: all quick links including cyrus-ui pages. */
 export function getDashboardNavItems(): {
   href: string;
