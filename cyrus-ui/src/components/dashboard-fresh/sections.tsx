@@ -1,4 +1,4 @@
-import { Activity, Cpu, Gauge, LayoutGrid, ShieldCheck, TerminalSquare } from "lucide-react";
+import { Activity, Cpu, Gauge, ShieldCheck, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
@@ -185,25 +185,18 @@ export function ModuleWorkspaceSection({
   return (
     <div className="relative z-10 w-full max-w-none">
       <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div
-            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-100/30 bg-gradient-to-br from-white/20 via-slate-300/12 to-cyan-300/22 shadow-[0_0_18px_rgba(34,211,238,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px]"
-            aria-hidden
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
+          <h2
+            className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+            style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
-            <LayoutGrid className="h-6 w-6 text-cyan-50 drop-shadow-[0_0_8px_rgba(34,211,238,0.75)] [shape-rendering:geometricPrecision] antialiased" strokeWidth={1.85} />
-          </div>
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
-            <h2
-              className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
-              style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-            >
-              Module workspace
-            </h2>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
-              Open a module channel below—each tile matches Command Center destinations, with a short mission readout.
-            </p>
-          </div>
+            Module workspace
+          </h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
+            Open a module channel below—each tile uses the same icon as Command Center navigation, plus a short mission
+            readout.
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <button
@@ -232,35 +225,47 @@ export function ModuleWorkspaceSection({
       </div>
 
       <div className="grid w-full grid-cols-4 items-stretch gap-1.5 sm:gap-3">
-        {modules.map((item) => (
-          <Link key={item.href} href={item.href} className="block min-w-0">
-            <div
-              className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-slate-950/30 px-2 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:rounded-2xl sm:px-3 sm:py-3"
-              data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-            >
-              <p
-                className="w-full text-[11px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-xs"
-                style={{
-                  fontFamily: "'Orbitron', system-ui, sans-serif",
-                  textRendering: "optimizeLegibility",
-                  WebkitFontSmoothing: "antialiased",
-                  textShadow:
-                    "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
-                }}
+        {modules.map((item) => {
+          const BadgeIcon = item.Icon;
+          return (
+            <Link key={item.href} href={item.href} className="block min-w-0">
+              <div
+                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-slate-950/30 px-1.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2 sm:rounded-2xl sm:px-2 sm:py-2.5"
+                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                {item.label}
-              </p>
-              {item.description ? (
-                <p
-                  className="line-clamp-2 w-full text-[10px] leading-snug text-cyan-100/72 antialiased sm:line-clamp-3 sm:text-[11px]"
-                  style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_14px_rgba(34,211,238,0.32),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_22px_rgba(34,211,238,0.42)] sm:h-10 sm:w-10 sm:rounded-[0.85rem]"
+                  aria-hidden
                 >
-                  {item.description}
+                  <BadgeIcon
+                    className="h-5 w-5 text-cyan-50 drop-shadow-[0_0_6px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased sm:h-[1.35rem] sm:w-[1.35rem]"
+                    strokeWidth={1.65}
+                  />
+                </div>
+                <p
+                  className="w-full text-[10px] font-semibold leading-tight tracking-wide text-sky-50 antialiased sm:text-[11px]"
+                  style={{
+                    fontFamily: "'Orbitron', system-ui, sans-serif",
+                    textRendering: "optimizeLegibility",
+                    WebkitFontSmoothing: "antialiased",
+                    textShadow:
+                      "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
+                  }}
+                >
+                  {item.label}
                 </p>
-              ) : null}
-            </div>
-          </Link>
-        ))}
+                {item.description ? (
+                  <p
+                    className="line-clamp-2 w-full text-[9px] leading-snug text-cyan-100/72 antialiased sm:line-clamp-3 sm:text-[10px]"
+                    style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
+                  >
+                    {item.description}
+                  </p>
+                ) : null}
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
