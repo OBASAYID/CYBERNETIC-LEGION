@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
 
-/** Shared folder glyph — blue tint only, no rounded backing or halo frame. */
+/** Shared folder glyph — blue tint; multiply removes light PNG matte (no colored frame). */
 function ModulesFolderGlyph({ className = "" }: { className?: string }) {
   return (
     <img
       src={MODULE_FOLDER_TILE_URL}
       alt=""
-      className={cn("relative object-contain align-middle", className)}
+      className={cn("relative object-contain align-middle mix-blend-multiply", className)}
       style={{ filter: MODULE_FOLDER_ICON_FILTER }}
       draggable={false}
     />
@@ -189,7 +189,7 @@ export function ModuleWorkspaceSection({
             <img
               src={MODULE_FOLDER_TILE_URL}
               alt="Modules"
-              className="h-11 w-11 object-contain"
+              className="h-11 w-11 object-contain mix-blend-multiply"
               style={{ filter: MODULE_FOLDER_ICON_FILTER }}
               draggable={false}
             />
@@ -246,7 +246,7 @@ export function ModuleWorkspaceSection({
                   alt=""
                   width={256}
                   height={256}
-                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]"
+                  className="cyrus-module-folder-art relative z-10 mx-auto block h-[3.65rem] w-auto max-w-[min(5.5rem,88%)] select-none object-contain object-bottom mix-blend-multiply transition duration-300 group-hover:scale-[1.03] sm:h-[3.9rem] sm:max-w-[5.75rem]"
                   style={{
                     animationDelay: `${(i % 7) * -1.4}s`,
                     filter: MODULE_FOLDER_ICON_FILTER,

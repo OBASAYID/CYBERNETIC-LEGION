@@ -9,6 +9,9 @@ export const MODULES_MAIN_ICON_URL = "/modules-main-icon.png";
 /** Full folder artwork for module workspace tiles (replaces flat rectangle with folder silhouette). */
 export const MODULE_FOLDER_TILE_URL = "/module-folder-tile.png";
 
-/** CSS `filter` for folder PNG: cyan/blue tint on screen (no backing frame required). */
+/**
+ * CSS `filter` for folder PNG: cyan/blue tint.
+ * Pair the `<img>` with `mix-blend-multiply` so near-white / gray matte blends into dark UI (no extra plate).
+ */
 export const MODULE_FOLDER_ICON_FILTER =
   "hue-rotate(172deg) saturate(1.3) brightness(1.05) contrast(1.09) drop-shadow(0 2px 5px rgba(8,70,110,0.38)) drop-shadow(0 0 14px rgba(56,189,248,0.45))";
