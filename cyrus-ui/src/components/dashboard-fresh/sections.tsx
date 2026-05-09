@@ -416,7 +416,7 @@ export function LegacyBanner() {
 export function HeaderBadge({ livePort }: { livePort?: number }) {
   return (
     <span
-      className="rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-600/25 via-cyan-500/20 to-cyan-600/25 px-3 py-1.5 text-xs font-mono text-cyan-100 shadow-lg shadow-cyan-500/15"
+      className="inline-flex shrink-0 whitespace-nowrap rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-600/25 via-cyan-500/20 to-cyan-600/25 px-2.5 py-1.5 text-[11px] font-mono text-cyan-100 shadow-lg shadow-cyan-500/15 sm:px-3 sm:text-xs"
       style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
     >
       Fused {livePort ?? "—"}
@@ -427,10 +427,10 @@ export function HeaderBadge({ livePort }: { livePort?: number }) {
 export function HeaderTitle({ variant = "default" }: { variant?: "default" | "operator" }) {
   const isOperator = variant === "operator";
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative hidden h-12 w-12 shrink-0 sm:block">
+    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <div className="relative hidden h-10 w-10 shrink-0 sm:block md:h-12 md:w-12">
         <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-orange-500/20 blur-md" />
-        <div className="relative h-12 w-12 overflow-hidden rounded-full border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.35)]">
+        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.35)] md:h-12 md:w-12">
           <img
             src="/images/cyrus-logo.png"
             alt=""
@@ -439,12 +439,12 @@ export function HeaderTitle({ variant = "default" }: { variant?: "default" | "op
           />
         </div>
       </div>
-      <div>
-        <p className="text-xs font-mono uppercase tracking-[0.28em] text-cyan-200/80">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-200/80 sm:text-xs sm:tracking-[0.28em]">
           {isOperator ? "CYRUS" : "CYRUS Command"}
         </p>
         <h1
-          className="mt-0.5 text-xl font-bold tracking-wide"
+          className="mt-0.5 break-words text-base font-bold leading-tight tracking-wide sm:text-lg md:text-xl"
           style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
         >
           {isOperator ? (

@@ -76,63 +76,71 @@ export default function DashboardFresh() {
         <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
         <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
       </div>
-      <div className="pointer-events-none fixed top-4 left-4 z-20 flex items-center gap-2 sm:top-5 sm:left-5">
-        <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
-        <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
-      </div>
-      <div className="pointer-events-none fixed right-4 top-4 z-20 sm:right-5 sm:top-5">
-        <FieldDateTimeHud />
-      </div>
-
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:px-6">
-          <div className="mx-auto flex w-full max-w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-              {isAdmin ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setAdminTab("modules")}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
-                      adminTab === "modules"
-                        ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
-                        : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
-                    }`}
-                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
-                    <span className="hidden sm:inline">Module workspace</span>
-                    <span className="sm:hidden">Modules</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdminTab("console")}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
-                      adminTab === "console"
-                        ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
-                        : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
-                    }`}
-                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                  >
-                    <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
-                    <span className="hidden sm:inline">Mission console</span>
-                    <span className="sm:hidden">Console</span>
-                  </button>
-                </div>
-              ) : null}
-              <HeaderTitle variant={headerOperator ? "operator" : "default"} />
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5">
+            {/* Status + field clock — own row so nothing stacks under fixed HUD */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
+                <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
+              </div>
+              <FieldDateTimeHud className="shrink-0" />
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {isAdmin && <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
-                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
+
+            {/* Title row: admin toggles + branding | fused + logout */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2 sm:min-w-[12rem] sm:gap-3">
+                {isAdmin ? (
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab("modules")}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                        adminTab === "modules"
+                          ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
+                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                      }`}
+                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                      <span className="hidden sm:inline">Module workspace</span>
+                      <span className="sm:hidden">Modules</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab("console")}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                        adminTab === "console"
+                          ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
+                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                      }`}
+                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                    >
+                      <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                      <span className="hidden sm:inline">Mission console</span>
+                      <span className="sm:hidden">Console</span>
+                    </button>
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1 basis-[min(100%,16rem)] sm:basis-auto">
+                  <HeaderTitle variant={headerOperator ? "operator" : "default"} />
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-2.5">
+                {isAdmin && (
+                  <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />
+                )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
+                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                >
+                  <LogOut className="h-3.5 w-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Logout</span>
+                </button>
+              </div>
             </div>
           </div>
         </header>
