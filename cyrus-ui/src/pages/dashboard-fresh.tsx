@@ -90,7 +90,7 @@ export default function DashboardFresh() {
 
       <div className="relative z-10">
         <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:px-6">
-          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-2">
+          <div className="mx-auto flex w-full max-w-full items-center justify-between gap-2">
             <HeaderTitle variant={headerOperator ? "operator" : "default"} />
             <div className="flex shrink-0 items-center gap-2">
               {isAdmin && <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />}
@@ -107,7 +107,7 @@ export default function DashboardFresh() {
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-screen-2xl flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
+        <main className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
         {isAdmin && (
           <div className="relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-r from-amber-500/[0.1] via-slate-900/55 to-cyan-500/[0.1] p-1 shadow-lg shadow-black/35">
             <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.03)_50%,transparent_70%)]" />

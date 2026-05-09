@@ -183,7 +183,7 @@ export function ModuleWorkspaceSection({
   setModuleFilter: (next: "all" | "core") => void;
 }) {
   return (
-    <div className="relative z-10 w-full">
+    <div className="relative z-10 w-full max-w-none">
       <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div
@@ -200,7 +200,7 @@ export function ModuleWorkspaceSection({
             >
               Module workspace
             </h2>
-            <p className="mt-1 max-w-md text-xs leading-relaxed text-white/72 antialiased">
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
               Open a module channel below—each tile uses the same iconography as Command Center navigation, with a
               short mission readout.
             </p>
@@ -232,25 +232,25 @@ export function ModuleWorkspaceSection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+      <div className="grid w-full grid-cols-3 gap-x-3 gap-y-6 sm:gap-x-6 sm:gap-y-8 lg:gap-x-8 lg:gap-y-10">
         {modules.map((item) => {
           const BadgeIcon = item.Icon;
           return (
-            <Link key={item.href} href={item.href} className="block">
+            <Link key={item.href} href={item.href} className="block min-w-0">
               <div
-                className="group relative flex min-h-0 cursor-pointer flex-col items-center gap-2.5 px-1 pb-1 text-center transition duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0"
+                className="group relative flex min-h-0 w-full cursor-pointer flex-col items-center gap-2.5 px-0.5 pb-1 text-center transition duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0"
                 data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <div
-                  className="flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center rounded-[1.15rem] border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_22px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.38),inset_0_-1px_0_rgba(15,23,42,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:scale-[1.04] group-hover:shadow-[0_0_28px_rgba(34,211,238,0.5)] sm:h-[5.25rem] sm:w-[5.25rem]"
+                  className="flex aspect-square w-[min(100%,5.75rem)] max-w-full shrink-0 items-center justify-center rounded-[1.15rem] border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_22px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.38),inset_0_-1px_0_rgba(15,23,42,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:scale-[1.04] group-hover:shadow-[0_0_28px_rgba(34,211,238,0.5)] sm:w-[min(100%,6.25rem)] lg:w-[min(100%,7rem)]"
                   aria-hidden
                 >
                   <BadgeIcon
-                    className="h-9 w-9 text-cyan-50 drop-shadow-[0_0_10px_rgba(34,211,238,0.9)] [shape-rendering:geometricPrecision] antialiased sm:h-10 sm:w-10"
+                    className="h-9 w-9 text-cyan-50 drop-shadow-[0_0_10px_rgba(34,211,238,0.9)] [shape-rendering:geometricPrecision] antialiased sm:h-10 sm:w-10 lg:h-11 lg:w-11"
                     strokeWidth={1.65}
                   />
                 </div>
-                <div className="flex w-full min-w-0 max-w-[11.5rem] flex-col items-center gap-1">
+                <div className="flex w-full min-w-0 max-w-none flex-col items-center gap-1 px-0.5">
                   <p
                     className="w-full text-center text-[13px] font-semibold leading-snug tracking-wide text-sky-50 antialiased sm:text-sm"
                     style={{
