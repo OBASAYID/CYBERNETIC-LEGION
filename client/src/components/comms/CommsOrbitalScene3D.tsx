@@ -33,11 +33,16 @@ type Props = {
 
 const CYAN = "#00e5ff";
 const AXIAL_TILT = (23.4 * Math.PI) / 180;
-const ORBIT_A = 2.62;
-const ORBIT_B = 1.72;
-/** Base radius for user presence spheres (enlarged vs earlier build). */
-const PLANET_R = 0.34;
-const SUN_R = 0.42;
+/** Overall scene scale (−10% vs prior art). */
+const S = 0.9;
+const ORBIT_A = 2.62 * S;
+const ORBIT_B = 1.72 * S;
+/** Base radius for user presence spheres. */
+const PLANET_R = 0.34 * S;
+const SUN_R = 0.42 * S;
+/** Front cap offset so Html sits flush on sphere (not floating). */
+const HUB_FACE_Z = SUN_R * 1.002;
+const NODE_FACE_Z = PLANET_R * 1.003;
 
 function orbitXZ(index: number, deg: number) {
   const phi = (deg * Math.PI) / 180 + index * ((Math.PI * 2) / 5);
@@ -131,8 +136,8 @@ function MainUserHub({
 }) {
   const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
   const hasPhoto = !!mainUserPhotoUrl;
-  /** With a texture on the sphere, keep copy lower so it does not mask the face. */
-  const hubLabelPos: [number, number, number] = hasPhoto ? [0, -SUN_R * 0.62, SUN_R * 0.98] : [0, 0, SUN_R * 1.12];
+  /** Photo ring sits on sphere cap; with texture, only captions sit below the limb. */
+  const hubLabelPos: [number, number, number] = hasPhoto ? [0, -SUN_R * 0.58, SUN_R * 0.9] : [0, 0, HUB_FACE_Z];
 
   return (
     <group>
@@ -150,7 +155,7 @@ function MainUserHub({
       <Billboard follow position={hubLabelPos}>
         <Html
           center
-          distanceFactor={5.25}
+          distanceFactor={hasPhoto ? 5.1 : 5.45}
           style={{ pointerEvents: "auto", userSelect: "none" }}
           zIndexRange={[250, 0]}
         >
@@ -159,32 +164,29 @@ function MainUserHub({
               type="button"
               disabled={photoUploading}
               onClick={onPhotoClick}
-              title={hasPhoto ? "Change your hub photo" : "Upload your photo for the center hub"}
+              title={hasPhoto ? "Change your profile photo" : "Upload your profile photo"}
               className="flex flex-col items-center rounded-lg border-0 bg-transparent p-0 transition hover:brightness-110 disabled:opacity-50"
             >
               {!hasPhoto ? (
                 <div
-                  className="relative rounded-full p-[3px] shadow-[0_0_32px_rgba(0,229,255,0.5)]"
+                  className="relative rounded-full p-[2px] shadow-[0_0_28px_rgba(0,229,255,0.45)]"
                   style={{ background: `linear-gradient(145deg, ${CYAN}dd, rgba(0,229,255,0.2))` }}
                 >
-                  <div className="flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full bg-[#030810] sm:h-[6rem] sm:w-[6rem]">
-                    <span className="text-4xl font-bold text-cyan-100 sm:text-5xl">{initial}</span>
+                  <div className="flex h-[4.65rem] w-[4.65rem] items-center justify-center rounded-full bg-[#030810] sm:h-[5.35rem] sm:w-[5.35rem]">
+                    <span className="text-3xl font-bold text-cyan-100 sm:text-4xl">{initial}</span>
                   </div>
                 </div>
               ) : null}
 
-              <p className="mt-2 max-w-[14rem] text-center font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-200/90 drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]">
-                Global Service Center
-              </p>
               <p
-                className={`mt-0.5 text-center text-sm font-semibold sm:text-base ${
+                className={`mt-2 text-center text-sm font-semibold sm:text-base ${
                   darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
                 }`}
               >
                 {displayName}
               </p>
               <p className="mt-1 rounded-md border border-cyan-500/40 bg-black/45 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-cyan-100 backdrop-blur-sm">
-                {photoUploading ? "Uploading…" : hasPhoto ? "Tap to change hub photo" : "Tap to upload your hub photo"}
+                {photoUploading ? "Uploading…" : hasPhoto ? "Tap to change photo" : "Tap to add photo"}
               </p>
             </button>
           </div>
@@ -194,7 +196,7 @@ function MainUserHub({
   );
 }
 
-/** Glowing link from Global Service Center to each orbit node (reference: data tether). */
+/** Glowing link from hub to each orbit node. */
 function HubTether({ orbitPhaseRef, index }: { orbitPhaseRef: React.MutableRefObject<number>; index: number }) {
   const lineObj = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -310,19 +312,17 @@ function OrbitingNode({
           <Suspense fallback={null}>
             <UserSphereBody darkMode={darkMode} online={online} />
           </Suspense>
-        </group>
-
-        {/* Face-on portrait + name (reference: circular photo on sphere) */}
-        <Billboard follow position={[0, 0, PLANET_R * 1.06]}>
-          <Html
-            center
-            distanceFactor={4.85}
-            style={{ pointerEvents: "auto", userSelect: "none" }}
-            zIndexRange={[100, 0]}
-          >
+          {/* Ring + portrait on sphere cap (same tilt as mesh) */}
+          <Billboard follow position={[0, 0, NODE_FACE_Z]}>
+            <Html
+              center
+              distanceFactor={5.35}
+              style={{ pointerEvents: "auto", userSelect: "none" }}
+              zIndexRange={[100, 0]}
+            >
             <div className="flex flex-col items-center">
               <div
-                className={`relative rounded-full p-[3px] shadow-[0_0_28px_rgba(0,229,255,0.55),0_0_2px_rgba(0,229,255,0.9)] ${
+                className={`relative rounded-full p-[2px] shadow-[0_0_24px_rgba(0,229,255,0.5),0_0_2px_rgba(0,229,255,0.85)] ${
                   online ? "opacity-100" : "opacity-45"
                 }`}
                 style={{
@@ -331,7 +331,7 @@ function OrbitingNode({
               >
                 <div
                   className={`flex items-center justify-center overflow-hidden rounded-full bg-[#030810] ${
-                    online ? "h-[4.5rem] w-[4.5rem] sm:h-[5.25rem] sm:w-[5.25rem]" : "h-[3rem] w-[3rem] sm:h-[3.35rem] sm:w-[3.35rem]"
+                    online ? "h-[4.1rem] w-[4.1rem] sm:h-[4.7rem] sm:w-[4.7rem]" : "h-[2.75rem] w-[2.75rem] sm:h-[3rem] sm:w-[3rem]"
                   }`}
                 >
                   {online && peer.avatarUrl ? (
@@ -424,7 +424,8 @@ function OrbitingNode({
               ) : null}
             </div>
           </Html>
-        </Billboard>
+          </Billboard>
+        </group>
       </group>
     </group>
   );

@@ -122,7 +122,7 @@ export function CommsOrbitalCommandDeck({
   }, [peers]);
 
   const orbitBoxRef = useRef<HTMLDivElement>(null);
-  const [orbitRadius, setOrbitRadius] = useState(200);
+  const [orbitRadius, setOrbitRadius] = useState(162);
   const orbitPhaseRef = useRef(0);
   const orbitVelRef = useRef(0);
   const dragRef = useRef({ active: false, lastX: 0 });
@@ -132,7 +132,7 @@ export function CommsOrbitalCommandDeck({
     if (!el) return;
     const ro = new ResizeObserver(() => {
       const w = el.clientWidth;
-      setOrbitRadius(Math.min(280, Math.max(104, w * 0.38)));
+      setOrbitRadius(Math.min(252, Math.max(94, w * 0.342)));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -429,7 +429,7 @@ export function CommsOrbitalCommandDeck({
         </div>
 
         {/* Central hub + five satellites on draggable orbit */}
-        <div className="relative z-[4] mx-auto -mt-1 flex w-full max-w-[min(1020px,98vw)] flex-col items-center sm:-mt-2">
+        <div className="relative z-[4] mx-auto -mt-1 flex w-full max-w-[min(918px,88vw)] flex-col items-center sm:-mt-2">
           <input
             ref={fileRef}
             type="file"
@@ -481,7 +481,7 @@ export function CommsOrbitalCommandDeck({
             onPointerUp={onOrbitPointerEnd}
             onPointerCancel={onOrbitPointerEnd}
             role="application"
-            aria-label="Orbit drag control — satellites revolve around Global Service Center"
+            aria-label="Orbit drag control — presence nodes around your hub"
           >
             <div
               className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/25"
@@ -510,12 +510,12 @@ export function CommsOrbitalCommandDeck({
           </div>
 
           <p
-            className="relative z-[3] mt-4 text-center text-[11px] font-bold uppercase tracking-[0.42em] text-cyan-50 sm:mt-5 sm:text-xs"
+            className="relative z-[3] mt-4 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-100/85 sm:mt-5 sm:text-[11px]"
             style={{
-              textShadow: "0 0 28px rgba(0,229,255,0.55), 0 0 2px rgba(0,229,255,0.8)",
+              textShadow: "0 0 20px rgba(0,229,255,0.45), 0 0 2px rgba(0,229,255,0.65)",
             }}
           >
-            Global Service Center
+            Communications console
           </p>
         </div>
       </div>
