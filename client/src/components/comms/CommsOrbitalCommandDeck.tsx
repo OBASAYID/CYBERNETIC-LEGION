@@ -17,6 +17,7 @@ import {
   Video,
 } from "lucide-react";
 import { CommsOrbitalPeerFocusPanel } from "./CommsOrbitalPeerFocusPanel";
+import { CommsGeodesicSphere } from "./CommsGeodesicSphere";
 
 export type OrbitalMainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
 
@@ -49,6 +50,18 @@ const REAR_MODULES: Array<{
   { id: "monitor", tab: "monitor", label: "Full intelligence & admin surface", short: "INTEL", Icon: Activity, anchorX: 92 },
 ];
 
+/** Reference layout: temporal arc (before / in / after event). */
+const PHASE_BANDS: Array<{ label: string; hint: string; moduleIds: string[] }> = [
+  { label: "Before event", hint: "Plan · align · async", moduleIds: ["chat", "pshare"] },
+  { label: "In event", hint: "Live mesh · streams", moduleIds: ["calls", "streams"] },
+  { label: "After event", hint: "Roster · AI command · intel", moduleIds: ["people", "ai", "monitor"] },
+];
+
+const MODULE_BY_ID = Object.fromEntries(REAR_MODULES.map((m) => [m.id, m])) as Record<
+  string,
+  (typeof REAR_MODULES)[number]
+>;
+
 export function CommsOrbitalCommandDeck({
   darkMode,
   displayName,
@@ -62,8 +75,14 @@ export function CommsOrbitalCommandDeck({
   onPeerCall,
   onPeerMessage,
   onPeerVideoInvite,
+  onPeerHubSendText,
+  onPeerHubSendMedia,
+  onPeerHubSendVoice,
+  onPeerOpenGroupHub,
   /** Secondary systems (e.g. unified mesh strip) wired below the constellation */
   footerSlot,
+  /** Reference-style story rail — quick jumps fused to main tabs. */
+  storyRail,
   className = "",
 }: {
   darkMode: boolean;
@@ -79,7 +98,12 @@ export function CommsOrbitalCommandDeck({
   onPeerMessage?: (peerId: string, peerName: string) => void;
   /** Video-session invite (e.g. chat ping); falls back to video call if omitted */
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
+  onPeerHubSendText?: (userId: string, text: string) => void;
+  onPeerHubSendMedia?: (userId: string, file: File, caption: string) => void;
+  onPeerHubSendVoice?: (userId: string, blob: Blob, duration: number) => void;
+  onPeerOpenGroupHub?: () => void;
   footerSlot?: ReactNode;
+  storyRail?: Array<{ id: string; label: string; tab: OrbitalMainTab }>;
   className?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -100,6 +124,13 @@ export function CommsOrbitalCommandDeck({
   const visiblePeers = peers.slice(0, 8);
   const overflow = peers.length - visiblePeers.length;
 
+  const activePhaseIdx = useMemo(() => {
+    const idx = PHASE_BANDS.findIndex((b) =>
+      b.moduleIds.some((mid) => MODULE_BY_ID[mid]?.tab === activeTab),
+    );
+    return idx;
+  }, [activeTab]);
+
   const focusedPeer = useMemo(
     () => (focusedPeerId ? peers.find((p) => p.id === focusedPeerId) ?? null : null),
     [peers, focusedPeerId]
@@ -115,31 +146,32 @@ export function CommsOrbitalCommandDeck({
     setFocusedPeerId(null);
   }, [activeTab]);
 
+  /* Scene-integrated: floats in the holo field, not a separate “app card”. */
   const shell = darkMode
-    ? "border-cyan-400/25 bg-[#000b1a]/85 shadow-[0_0_80px_-20px_rgba(0,229,255,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]"
-    : "border-sky-300/40 bg-slate-100/90 shadow-[0_0_40px_-12px_rgba(14,165,233,0.35)]";
+    ? "border-cyan-400/35 bg-black/30 shadow-[0_0_70px_-28px_rgba(0,229,255,0.38),inset_0_1px_0_rgba(0,229,255,0.12)]"
+    : "border-sky-400/40 bg-white/45 shadow-[0_0_36px_-14px_rgba(14,165,233,0.28)]";
 
   const textMuted = darkMode ? "text-white/45" : "text-slate-600";
   const textBright = darkMode ? "text-cyan-100/90" : "text-sky-900";
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${shell} backdrop-blur-xl ${className}`}
+      className={`relative overflow-hidden rounded-2xl border ${shell} backdrop-blur-2xl ${className}`}
       aria-label="Nexus orbital command deck"
     >
-      {/* Perspective grid floor */}
+      {/* Local depth cue — lighter than full scene grid */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        className="pointer-events-none absolute inset-0 opacity-[0.08]"
         style={{
           backgroundImage: `
             linear-gradient(90deg, ${CYAN}22 1px, transparent 1px),
             linear-gradient(${DEEP_NAVY} 0%, transparent 80%),
-            linear-gradient(180deg, transparent 0%, ${CYAN}08 100%)
+            linear-gradient(180deg, transparent 0%, ${CYAN}06 100%)
           `,
-          backgroundSize: "48px 48px, 100% 100%, 100% 100%",
-          transform: "perspective(420px) rotateX(56deg) scale(1.15)",
+          backgroundSize: "40px 40px, 100% 100%, 100% 100%",
+          transform: "perspective(420px) rotateX(52deg) scale(1.08)",
           transformOrigin: "50% 100%",
-          maskImage: "linear-gradient(to bottom, transparent 0%, black 35%, black 85%, transparent 100%)",
+          maskImage: "linear-gradient(to bottom, transparent 0%, black 40%, black 88%, transparent 100%)",
         }}
       />
 
@@ -165,13 +197,13 @@ export function CommsOrbitalCommandDeck({
         </defs>
         {/* Horizon */}
         <ellipse cx="50" cy="28" rx="48" ry="6" fill="none" stroke={`${CYAN}18`} strokeWidth="0.15" />
-        {/* Trunk lines from hub to rear arc */}
-        {REAR_MODULES.map((m) => (
+        {/* Trunk lines — one wire per reference phase band */}
+        {[17, 50, 83].map((x) => (
           <line
-            key={m.id}
+            key={x}
             x1="50"
             y1="56"
-            x2={m.anchorX}
+            x2={x}
             y2="22"
             stroke={`url(#${gradId})`}
             strokeWidth="0.12"
@@ -199,58 +231,88 @@ export function CommsOrbitalCommandDeck({
             className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider ${
               isConnected
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300/90"
-                : "border-amber-500/35 bg-amber-500/10 text-amber-200/90"
+                : "border-violet-400/40 bg-violet-500/12 text-violet-200/90 shadow-[0_0_12px_-2px_rgba(167,139,250,0.35)]"
             }`}
           >
             {isConnected ? "Mesh sync" : "Handshaking"}
           </span>
         </div>
 
-        {/* Rear module arc — visually “behind” via scale + opacity */}
-        <div className="relative z-0 mb-1 flex w-full max-w-4xl justify-center sm:mb-2">
+        {/* Rear arc — reference: Before / In / After event bands with glass tiles */}
+        <div className="relative z-0 mb-2 w-full max-w-4xl px-1 sm:mb-3 sm:px-2">
           <div
-            className="flex w-full items-end justify-between gap-0.5 px-1 sm:gap-1 sm:px-2"
-            style={{ transform: "scale(0.92)", transformOrigin: "50% 100%" }}
+            className="grid w-full grid-cols-3 gap-1.5 sm:gap-2"
+            style={{ transform: "scale(0.96)", transformOrigin: "50% 100%" }}
           >
-            {REAR_MODULES.map((mod) => {
-              const active = activeTab === mod.tab;
-              const isAi = mod.ai === true;
+            {PHASE_BANDS.map((band, bandIdx) => {
+              const phaseLive = activePhaseIdx === bandIdx;
               return (
-                <button
-                  key={mod.id}
-                  type="button"
-                  title={mod.label}
-                  onClick={() => onSelectTab(mod.tab)}
-                  className={`group relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-t-lg border px-0.5 py-1.5 transition-all sm:px-1 sm:py-2 ${
-                    isAi
-                      ? active
-                        ? "border-violet-400/70 bg-violet-500/25 shadow-[0_0_24px_-4px_rgba(167,139,250,0.7)]"
-                        : "border-violet-500/35 bg-violet-950/40 hover:border-violet-400/55 hover:bg-violet-900/35"
-                      : active
-                        ? "border-cyan-400/60 bg-cyan-500/15 shadow-[0_0_20px_-6px_rgba(0,229,255,0.5)]"
-                        : "border-white/10 bg-slate-950/30 hover:border-cyan-400/35 hover:bg-slate-900/40"
-                  } ${!darkMode && !isAi ? "bg-white/70 hover:bg-white/85" : ""} ${!darkMode && isAi ? "bg-violet-100/80" : ""}`}
-                >
-                  <mod.Icon
-                    className={`h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5 ${
-                      isAi ? "text-violet-200" : active ? "text-cyan-200" : "text-cyan-400/70"
-                    }`}
-                    aria-hidden
-                  />
-                  <span
-                    className={`max-w-[3.5rem] truncate font-mono text-[7px] font-semibold uppercase leading-none tracking-tight sm:max-w-none sm:text-[8px] ${
-                      isAi ? "text-violet-100/95" : textBright
-                    }`}
-                  >
-                    {mod.short}
-                  </span>
-                  {isAi ? (
-                    <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-violet-600/90 px-1 py-px font-mono text-[6px] uppercase tracking-wider text-white shadow-lg sm:text-[7px]">
-                      Command
-                    </span>
-                  ) : null}
-                </button>
-              );
+              <div
+                key={band.label}
+                className={`flex min-w-0 flex-col gap-1 rounded-t-xl border px-1 pb-1.5 pt-1.5 sm:px-1.5 sm:pt-2 ${
+                  darkMode
+                    ? "border-cyan-500/30 bg-gradient-to-b from-cyan-950/40 to-black/20"
+                    : "border-sky-400/40 bg-white/50"
+                } ${
+                  phaseLive
+                    ? darkMode
+                      ? "ring-1 ring-cyan-400/50 shadow-[0_0_32px_-10px_rgba(0,229,255,0.35)]"
+                      : "ring-2 ring-sky-400/55 shadow-md"
+                    : ""
+                }`}
+              >
+                <div className="border-b border-cyan-400/25 pb-1 text-center">
+                  <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-cyan-300/95 sm:text-[8px]">
+                    {band.label}
+                  </p>
+                  <p className={`text-[6px] sm:text-[7px] ${textMuted}`}>{band.hint}</p>
+                </div>
+                <div className="flex min-h-[3.25rem] flex-wrap items-stretch justify-center gap-1 sm:min-h-[3.5rem]">
+                  {band.moduleIds.map((mid) => {
+                    const mod = MODULE_BY_ID[mid];
+                    if (!mod) return null;
+                    const active = activeTab === mod.tab;
+                    const isAi = mod.ai === true;
+                    return (
+                      <button
+                        key={mod.id}
+                        type="button"
+                        title={mod.label}
+                        onClick={() => onSelectTab(mod.tab)}
+                        className={`group relative flex min-w-0 flex-1 basis-[40%] flex-col items-center gap-0.5 rounded-lg border px-0.5 py-1 transition-all sm:px-1 sm:py-1.5 ${
+                          isAi
+                            ? active
+                              ? "border-violet-400/75 bg-violet-500/30 shadow-[0_0_18px_-3px_rgba(167,139,250,0.65)]"
+                              : "border-violet-500/40 bg-violet-950/35 hover:border-violet-400/55"
+                            : active
+                              ? "border-cyan-400/65 bg-cyan-500/20 shadow-[0_0_16px_-4px_rgba(0,229,255,0.45)]"
+                              : "border-white/10 bg-slate-950/35 hover:border-cyan-400/40"
+                        } ${!darkMode && !isAi ? "bg-white/75 hover:bg-white/90" : ""} ${!darkMode && isAi ? "bg-violet-100/85" : ""}`}
+                      >
+                        <mod.Icon
+                          className={`h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5 ${
+                            isAi ? "text-violet-200" : active ? "text-cyan-200" : "text-cyan-400/75"
+                          }`}
+                          aria-hidden
+                        />
+                        <span
+                          className={`max-w-[3rem] truncate font-mono text-[6px] font-bold uppercase leading-none tracking-tight sm:max-w-[4rem] sm:text-[7px] ${
+                            isAi ? "text-violet-100/95" : textBright
+                          }`}
+                        >
+                          {mod.short}
+                        </span>
+                        {isAi ? (
+                          <span className="absolute -top-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-violet-600/95 px-0.5 py-px font-mono text-[5px] uppercase tracking-wider text-white shadow-md sm:text-[6px]">
+                            AI
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
             })}
           </div>
         </div>
@@ -282,20 +344,24 @@ export function CommsOrbitalCommandDeck({
                 onChange={onFileChange}
               />
 
-              <div className="relative">
+              <div className="relative flex items-center justify-center">
+                {/* Geodesic lattice (reference hologram cage) */}
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2">
+                  <CommsGeodesicSphere size={172} className="opacity-[0.92]" />
+                </div>
                 {/* Glow core */}
                 <div
-                  className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-cyan-400/25 via-violet-500/15 to-transparent blur-2xl sm:h-44 sm:w-44"
+                  className="absolute left-1/2 top-1/2 z-[1] h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-cyan-400/25 via-violet-500/15 to-transparent blur-2xl sm:h-44 sm:w-44"
                   aria-hidden
                 />
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={photoUploading}
-                  className="group relative flex h-28 w-28 cursor-pointer items-center justify-center rounded-full border-2 border-cyan-400/55 bg-gradient-to-b from-slate-900/90 to-[#000b1a] shadow-[0_0_40px_-8px_rgba(0,229,255,0.55),inset_0_0_20px_rgba(0,229,255,0.12)] transition hover:border-cyan-300/90 hover:shadow-[0_0_52px_-6px_rgba(0,229,255,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/80 disabled:opacity-60 sm:h-36 sm:w-36"
+                  className="group relative z-[2] flex h-28 w-28 cursor-pointer items-center justify-center rounded-full border-2 border-cyan-400/55 bg-gradient-to-b from-slate-900/90 to-[#000b1a] shadow-[0_0_40px_-8px_rgba(0,229,255,0.55),inset_0_0_20px_rgba(0,229,255,0.12)] transition hover:border-cyan-300/90 hover:shadow-[0_0_52px_-6px_rgba(0,229,255,0.75)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/80 disabled:opacity-60 sm:h-36 sm:w-36"
                   aria-label="Upload your photo for the command sphere"
                 >
-                  <div className="absolute inset-[5px] overflow-hidden rounded-full border border-white/15 bg-slate-950/80">
+                  <div className="absolute inset-[5px] z-[1] overflow-hidden rounded-full border border-white/15 bg-slate-950/80">
                     {mainUserPhotoUrl ? (
                       <img
                         src={mainUserPhotoUrl}
@@ -345,11 +411,11 @@ export function CommsOrbitalCommandDeck({
               <CommsOrbitalPeerFocusPanel
                 peer={focusedPeer}
                 darkMode={darkMode}
-                textDisabled={!onPeerMessage}
+                textDisabled={!onPeerHubSendText && !onPeerMessage}
                 onClose={() => setFocusedPeerId(null)}
                 onVoice={() => onPeerCall(focusedPeer.id, focusedPeer.displayName, "audio")}
                 onVideo={() => onPeerCall(focusedPeer.id, focusedPeer.displayName, "video")}
-                onText={() => onPeerMessage?.(focusedPeer.id, focusedPeer.displayName)}
+                onOpenFullChat={() => onPeerMessage?.(focusedPeer.id, focusedPeer.displayName)}
                 onInvite={() => {
                   if (onPeerVideoInvite) {
                     onPeerVideoInvite(focusedPeer.id, focusedPeer.displayName);
@@ -357,6 +423,10 @@ export function CommsOrbitalCommandDeck({
                     onPeerCall(focusedPeer.id, focusedPeer.displayName, "video");
                   }
                 }}
+                onSendText={onPeerHubSendText}
+                onSendMedia={onPeerHubSendMedia}
+                onSendVoice={onPeerHubSendVoice}
+                onOpenGroupHub={onPeerOpenGroupHub}
               />
             ) : null}
             {visiblePeers.length === 0 ? (
@@ -398,7 +468,7 @@ export function CommsOrbitalCommandDeck({
                         </div>
                       )}
                       {p.inCall ? (
-                        <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
+                        <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.85)]" />
                       ) : (
                         <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
                       )}
@@ -455,6 +525,36 @@ export function CommsOrbitalCommandDeck({
             )}
           </div>
         </div>
+
+        {storyRail && storyRail.length > 0 ? (
+          <div
+            className="relative z-[1] mt-4 flex w-full max-w-[42rem] flex-wrap justify-center gap-2 px-2 sm:gap-2.5"
+            role="navigation"
+            aria-label="Nexus story rail"
+          >
+            {storyRail.map((s) => {
+              const on = activeTab === s.tab;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onSelectTab(s.tab)}
+                  className={`rounded-full border px-3 py-1.5 font-mono text-[8px] uppercase tracking-[0.22em] transition sm:text-[9px] ${
+                    on
+                      ? darkMode
+                        ? "border-cyan-400/70 bg-cyan-500/20 text-cyan-50 shadow-[0_0_20px_-6px_rgba(0,229,255,0.45)]"
+                        : "border-sky-500/60 bg-sky-100 text-sky-950 shadow-sm"
+                      : darkMode
+                        ? "border-white/12 bg-black/30 text-cyan-200/65 hover:border-cyan-400/45 hover:text-cyan-50"
+                        : "border-slate-300/90 bg-white/80 text-slate-700 hover:border-sky-400"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {footerSlot ? (
           <div

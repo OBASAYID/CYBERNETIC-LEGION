@@ -32,9 +32,20 @@ import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
 import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
-import { CommsOrbitalCommandDeck } from "../components/comms/CommsOrbitalCommandDeck";
+import { CommsOrbitalCommandDeck, type OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
+import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
+
+/** Fused story rail — maps reference “Challenge → Value” language to Cyrus tabs. */
+const NEXUS_STORY_RAIL: { id: string; label: string; tab: OrbitalMainTab }[] = [
+  { id: "challenge", label: "Challenge", tab: "monitor" },
+  { id: "solution", label: "Solution", tab: "chat" },
+  { id: "capability", label: "Capability", tab: "calls" },
+  { id: "value", label: "Value", tab: "pshare" },
+  { id: "network", label: "Network", tab: "people" },
+  { id: "broadcast", label: "Broadcast", tab: "streams" },
+];
 
 const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
   chat: "Encrypted messaging, voice notes, and media",
@@ -771,6 +782,16 @@ export function CommsPage() {
     setActiveTab("chat");
   }, []);
 
+  /** Orbital HUD text console — send without leaving mesh view. */
+  const handlePeerHubSendText = useCallback(
+    (userId: string, text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      presenceSendChatMessage(userId, { message: t, messageType: "text" });
+    },
+    [presenceSendChatMessage]
+  );
+
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
     callUser(userId, userName, type);
   }, [callUser]);
@@ -912,7 +933,7 @@ export function CommsPage() {
   const themeClass = darkMode ? "" : "light-theme";
 
   return (
-    <ModuleWorkspacePageShell mode="page">
+    <ModuleWorkspacePageShell mode="page" hidePageBackdrop>
     <CommsP2PLayerProvider displayName={displayName}>
     <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
       <CommsCallDiagnosticsOverlay
@@ -1016,7 +1037,12 @@ export function CommsPage() {
             onPeerCall={handleUserCall}
             onPeerMessage={handleUserMessage}
             onPeerVideoInvite={handleOrbitalVideoInvite}
+            onPeerHubSendText={handlePeerHubSendText}
+            onPeerHubSendMedia={handleSendMedia}
+            onPeerHubSendVoice={handleSendVoice}
+            onPeerOpenGroupHub={() => setActiveTab("calls")}
             footerSlot={<CommsP2PUnifiedStrip />}
+            storyRail={NEXUS_STORY_RAIL}
           />
         }
         moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
@@ -1024,18 +1050,18 @@ export function CommsPage() {
         socialChannelTab={socialChannelTab}
       >
         {anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies && (
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 sm:px-4">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-violet-400/30 bg-gradient-to-r from-cyan-950/35 via-violet-950/30 to-cyan-950/25 px-3 py-2 backdrop-blur-sm sm:px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
-              <span className="text-xs font-medium text-amber-200">
+              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.7)]" />
+              <span className="text-xs font-medium text-cyan-100/95">
                 {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
-                <span className="font-normal text-amber-100/60">· {anomalyData.anomalies[0]?.description}</span>
+                <span className="font-normal text-violet-200/75">· {anomalyData.anomalies[0]?.description}</span>
               </span>
             </div>
             <button
               type="button"
               onClick={() => setDismissedAnomalies(true)}
-              className="shrink-0 rounded-lg p-1 text-amber-300/80 transition hover:bg-amber-500/20 hover:text-amber-100"
+              className="shrink-0 rounded-lg p-1 text-cyan-300/80 transition hover:bg-cyan-500/15 hover:text-cyan-50"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />
@@ -1043,9 +1069,17 @@ export function CommsPage() {
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-hidden p-1 sm:p-2">
+        <div
+          className={`min-h-0 flex-1 overflow-hidden p-1 sm:p-2 ${
+            darkMode
+              ? "bg-gradient-to-b from-cyan-950/10 via-transparent to-[#000b1a]/40"
+              : "bg-gradient-to-b from-sky-50/30 via-transparent to-slate-100/50"
+          }`}
+        >
                 {activeTab === "chat" && (
+                  <NexusModuleSurface variant="flush">
                   <CommsPlatform
+                    holoSurface
                     conversations={conversations}
                     messages={commsMessages}
                     currentUserId={myId}
@@ -1073,6 +1107,7 @@ export function CommsPage() {
                     newChatPickCandidates={newChatPickCandidates}
                     roster={
                       <CommsUserRoster
+                        holoSurface
                         users={rosterUsers}
                         myUserId={myId}
                         onUploadAvatar={handleChatAvatarUpload}
@@ -1083,39 +1118,47 @@ export function CommsPage() {
                       />
                     }
                   />
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "pshare" && (
-                  <div className="h-full min-h-0">
-                    <PsharePanel
-                      myUserId={myId}
-                      allUsers={allUsers}
-                      highlightPostId={psharePostHighlight}
-                      onClearHighlight={() => setPsharePostHighlight(null)}
-                      initialPostBody={commsHandoffText}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 p-1 sm:p-2">
+                      <PsharePanel
+                        holoBlend
+                        myUserId={myId}
+                        allUsers={allUsers}
+                        highlightPostId={psharePostHighlight}
+                        onClearHighlight={() => setPsharePostHighlight(null)}
+                        initialPostBody={commsHandoffText}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "people" && (
-                  <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <UserDiscoveryWithMesh
-                      onlineUsers={onlineUsers}
-                      allUsers={allUsers}
-                      contacts={contacts}
-                      myDeviceId={myDeviceId}
-                      onMessage={handleUserMessage}
-                      onCall={handleUserCall}
-                      onAddContact={handleAddContact}
-                      onRemoveContact={handleRemoveContact}
-                      onOpenMeshCalls={() => setActiveTab("calls")}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                      <UserDiscoveryWithMesh
+                        nexusChrome
+                        onlineUsers={onlineUsers}
+                        allUsers={allUsers}
+                        contacts={contacts}
+                        myDeviceId={myDeviceId}
+                        onMessage={handleUserMessage}
+                        onCall={handleUserCall}
+                        onAddContact={handleAddContact}
+                        onRemoveContact={handleRemoveContact}
+                        onOpenMeshCalls={() => setActiveTab("calls")}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "streams" && (
-                  <div className="h-full min-h-0">
+                  <NexusModuleSurface>
                     <LiveStreamPanel
+                      holoBlend
                       streams={liveStreams}
                       currentUserId={myUserId || myDeviceId}
                       onStartStream={handleStartStream}
@@ -1124,26 +1167,30 @@ export function CommsPage() {
                       onLeaveStream={handleLeaveStream}
                       onRefreshList={refreshLiveStreams}
                     />
-                  </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "monitor" && (
-                  <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
-                    <CommsIntelligence userId={myId} />
-                    <AdminDashboard />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
+                      <CommsIntelligence userId={myId} />
+                      <AdminDashboard />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "calls" && (
-                  <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <CallHistoryPanel
-                      myDeviceId={myDeviceId}
-                      displayName={displayName}
-                      allUsers={allUsers}
-                      onlineUsers={onlineUsers}
-                      onCall={handleUserCall}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                      <CallHistoryPanel
+                        myDeviceId={myDeviceId}
+                        displayName={displayName}
+                        allUsers={allUsers}
+                        onlineUsers={onlineUsers}
+                        onCall={handleUserCall}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
         </div>
       </CommsNexusWorkspace>
@@ -1168,9 +1215,10 @@ export function CommsPage() {
 function UserDiscoveryWithMesh(
   props: Omit<React.ComponentProps<typeof UserDiscovery>, "meshPeerIds" | "meshLinkReady" | "meshInCall" | "onMeshCall"> & {
     onOpenMeshCalls: () => void;
+    nexusChrome?: boolean;
   },
 ) {
-  const { onOpenMeshCalls, ...rest } = props;
+  const { onOpenMeshCalls, nexusChrome, ...rest } = props;
   const { meshPeerIds, startMeshCall, linkConnected, linkJoined, inMeshCall } = useCommsP2PLayer();
   const onMeshCall = useCallback(
     (userId: string, _userName: string, type: "audio" | "video") => {
@@ -1182,6 +1230,7 @@ function UserDiscoveryWithMesh(
   return (
     <UserDiscovery
       {...rest}
+      nexusChrome={nexusChrome}
       meshPeerIds={meshPeerIds}
       meshLinkReady={linkConnected && linkJoined}
       meshInCall={inMeshCall}
@@ -1277,19 +1326,49 @@ function CallHistoryPanel({
         </h3>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "HD Voice", desc: "Crystal-clear audio", color: "emerald" },
-            { label: "HD Video", desc: "1080p video calls", color: "blue" },
-            { label: "Screen Share", desc: "Share your screen", color: "purple" },
-            { label: "Group Calls", desc: "Up to 20 participants", color: "amber" },
-            { label: "In-Call Chat", desc: "Message during calls", color: "cyan" },
-            { label: "E2E Encrypted", desc: "Secure communication", color: "red" },
+            {
+              label: "HD Voice",
+              desc: "Crystal-clear audio",
+              border: "border-emerald-500/25",
+              title: "text-emerald-400",
+            },
+            {
+              label: "HD Video",
+              desc: "1080p video calls",
+              border: "border-sky-500/25",
+              title: "text-sky-400",
+            },
+            {
+              label: "Screen Share",
+              desc: "Share your screen",
+              border: "border-violet-500/25",
+              title: "text-violet-400",
+            },
+            {
+              label: "Group Calls",
+              desc: "Up to 20 participants",
+              border: "border-cyan-500/25",
+              title: "text-cyan-400",
+            },
+            {
+              label: "In-Call Chat",
+              desc: "Message during calls",
+              border: "border-teal-500/25",
+              title: "text-teal-400",
+            },
+            {
+              label: "E2E Encrypted",
+              desc: "Secure communication",
+              border: "border-rose-500/25",
+              title: "text-rose-400",
+            },
           ].map((feature) => (
             <div
               key={feature.label}
-              className={`p-3 rounded-lg bg-gray-900/40 border border-${feature.color}-900/20`}
+              className={`rounded-lg border bg-black/25 p-3 backdrop-blur-sm ${feature.border}`}
             >
-              <p className={`text-sm font-medium text-${feature.color}-400`}>{feature.label}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{feature.desc}</p>
+              <p className={`text-sm font-medium ${feature.title}`}>{feature.label}</p>
+              <p className="mt-0.5 text-xs text-cyan-200/40">{feature.desc}</p>
             </div>
           ))}
         </div>

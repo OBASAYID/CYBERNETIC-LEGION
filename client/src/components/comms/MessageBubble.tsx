@@ -57,6 +57,7 @@ interface MessageBubbleProps {
   /** Resolved avatar URL; overrides `message.senderAvatarUrl` if set */
   senderAvatarUrl?: string | null;
   onReact?: (messageId: string, emoji: string) => void;
+  holoSurface?: boolean;
 }
 
 function bubbleInitials(name: string) {
@@ -68,7 +69,13 @@ function bubbleInitials(name: string) {
     .slice(0, 2);
 }
 
-export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrlProp, onReact }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isOwn,
+  senderAvatarUrl: senderAvatarUrlProp,
+  onReact,
+  holoSurface = false,
+}: MessageBubbleProps) {
   const [showReactions, setShowReactions] = useState(false);
   const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
@@ -131,7 +138,11 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
               </div>
             )}
             {isAud && url && (
-              <div className="min-w-[220px] max-w-sm rounded-lg border border-amber-500/25 bg-slate-950/50 px-2 py-1.5">
+              <div
+                className={`min-w-[220px] max-w-sm rounded-lg border bg-slate-950/50 px-2 py-1.5 ${
+                  holoSurface ? "border-cyan-400/35" : "border-amber-500/25"
+                }`}
+              >
                 <p className="mb-1 truncate text-[10px] text-cyan-200/80">
                   {message.fileName || "Audio"}
                 </p>
@@ -160,7 +171,10 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                     <ExternalLink className="h-3 w-3" />
                     Open
                   </a>
-                  <a href={downloadUrl} className="inline-flex items-center gap-1 text-amber-200/90 underline">
+                  <a
+                    href={downloadUrl}
+                    className={`inline-flex items-center gap-1 underline ${holoSurface ? "text-cyan-200/90" : "text-amber-200/90"}`}
+                  >
                     <Download className="h-3 w-3" />
                     Download
                   </a>
@@ -169,7 +183,7 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
             )}
             {isHtml && url && (
               <div className="max-w-full space-y-1">
-                <p className="text-[10px] text-amber-200/70">
+                <p className={`text-[10px] ${holoSurface ? "text-cyan-200/65" : "text-amber-200/70"}`}>
                   HTML preview is sandboxed (scripts disabled). Open in a new tab for full behavior.
                 </p>
                 <details className="rounded-lg border border-white/10 bg-black/25">
@@ -193,7 +207,10 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                     <ExternalLink className="h-3 w-3" />
                     Open in browser
                   </a>
-                  <a href={downloadUrl} className="inline-flex items-center gap-1 text-amber-200/90 underline">
+                  <a
+                    href={downloadUrl}
+                    className={`inline-flex items-center gap-1 underline ${holoSurface ? "text-cyan-200/90" : "text-amber-200/90"}`}
+                  >
                     <Download className="h-3 w-3" />
                     Download
                   </a>
@@ -210,16 +227,22 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                   <a href={url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">
                     View
                   </a>
-                  <a href={downloadUrl} className="text-amber-200/90 underline">
+                  <a href={downloadUrl} className={`underline ${holoSurface ? "text-cyan-200/90" : "text-amber-200/90"}`}>
                     Download
                   </a>
                 </div>
               </div>
             )}
             {isOffice && url && !isPdf && !isHtml && (
-              <div className="flex min-w-0 max-w-sm flex-col gap-1 rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+              <div
+                className={`flex min-w-0 max-w-sm flex-col gap-1 rounded-lg border px-3 py-2 ${
+                  holoSurface
+                    ? "border-cyan-400/30 bg-cyan-950/15"
+                    : "border-amber-500/20 bg-amber-950/20"
+                }`}
+              >
                 <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 shrink-0 text-amber-300" />
+                  <FileText className={`h-5 w-5 shrink-0 ${holoSurface ? "text-cyan-300" : "text-amber-300"}`} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{message.fileName || "Document"}</p>
                     <p className="text-[10px] text-white/45">Download and open in Word, Excel, or similar.</p>
@@ -227,7 +250,11 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                 </div>
                 <a
                   href={downloadUrl}
-                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100"
+                  className={`inline-flex w-fit items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${
+                    holoSurface
+                      ? "border-cyan-400/35 bg-cyan-500/12 text-cyan-50"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                  }`}
                 >
                   <Download className="h-3.5 w-3.5" />
                   Download
@@ -240,7 +267,7 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
                 className="flex min-w-0 max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
               >
                 {(message.fileName || "").match(/\.(mp3|m4a|wav|ogg|flac|aac)$/i) ? (
-                  <FileAudio className="h-5 w-5 shrink-0 text-amber-300" />
+                  <FileAudio className={`h-5 w-5 shrink-0 ${holoSurface ? "text-cyan-300" : "text-amber-300"}`} />
                 ) : (
                   <FileText className="h-5 w-5 shrink-0 text-cyan-400" />
                 )}
@@ -313,9 +340,11 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
       <div className={`max-w-[75%] relative ${isOwn ? "items-end" : "items-start"}`}>
         {senderAvatarUrl && (
           <div
-            className={`absolute z-20 -top-2 h-8 w-8 overflow-hidden rounded-full border-2 border-amber-400/50 bg-slate-900 shadow-lg shadow-amber-500/25 ${
-              isOwn ? "right-0" : "right-0"
-            }`}
+            className={`absolute z-20 -top-2 h-8 w-8 overflow-hidden rounded-full border-2 bg-slate-900 shadow-lg ${
+              holoSurface
+                ? "border-cyan-400/50 shadow-cyan-500/20"
+                : "border-amber-400/50 shadow-amber-500/25"
+            } ${isOwn ? "right-0" : "right-0"}`}
             style={{ top: "-0.5rem" }}
             title={message.senderName}
           >
@@ -325,9 +354,13 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
         {!senderAvatarUrl && (
           <div
             className={`absolute -top-1 right-0 z-20 flex h-7 w-7 items-center justify-center rounded-full border-2 text-[9px] font-bold text-white shadow-md ${
-              isOwn
-                ? "border-cyan-400/40 bg-gradient-to-br from-cyan-600/80 to-amber-600/65"
-                : "border-amber-500/35 bg-gradient-to-br from-amber-600/70 to-cyan-600/60"
+              holoSurface
+                ? isOwn
+                  ? "border-cyan-300/50 bg-gradient-to-br from-cyan-600/85 to-violet-700/70"
+                  : "border-cyan-400/40 bg-gradient-to-br from-slate-700/90 to-cyan-700/55"
+                : isOwn
+                  ? "border-cyan-400/40 bg-gradient-to-br from-cyan-600/80 to-amber-600/65"
+                  : "border-amber-500/35 bg-gradient-to-br from-amber-600/70 to-cyan-600/60"
             }`}
             title={message.senderName}
           >
@@ -335,13 +368,19 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
           </div>
         )}
         {!isOwn && (
-          <p className="mb-0.5 ml-1 pr-9 text-[10px] font-medium text-amber-200/90">{message.senderName}</p>
+          <p className={`mb-0.5 ml-1 pr-9 text-[10px] font-medium ${holoSurface ? "text-cyan-200/90" : "text-amber-200/90"}`}>
+            {message.senderName}
+          </p>
         )}
         <div
           className={`mt-2 rounded-2xl px-3.5 py-2 ${
-            isOwn
-              ? "rounded-br-md bg-gradient-to-br from-amber-500/95 via-orange-500/88 to-cyan-600/85 text-white shadow-[0_4px_22px_-4px_rgba(251,146,60,0.5),0_0_26px_-8px_rgba(6,182,212,0.38)]"
-              : "rounded-bl-md border border-amber-500/25 bg-slate-900/80 text-amber-50/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm"
+            holoSurface
+              ? isOwn
+                ? "rounded-br-md bg-gradient-to-br from-cyan-500/92 via-sky-500/85 to-violet-600/82 text-white shadow-[0_4px_22px_-4px_rgba(0,229,255,0.45),0_0_26px_-8px_rgba(139,92,246,0.32)]"
+                : "rounded-bl-md border border-cyan-400/28 bg-slate-900/82 text-cyan-50/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm"
+              : isOwn
+                ? "rounded-br-md bg-gradient-to-br from-amber-500/95 via-orange-500/88 to-cyan-600/85 text-white shadow-[0_4px_22px_-4px_rgba(251,146,60,0.5),0_0_26px_-8px_rgba(6,182,212,0.38)]"
+                : "rounded-bl-md border border-amber-500/25 bg-slate-900/80 text-amber-50/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm"
           }`}
         >
           {renderContent()}
@@ -360,7 +399,9 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
             {groupReactions(message.reactions).map(({ emoji, count }) => (
               <span
                 key={emoji}
-                className="cursor-pointer rounded-full border border-amber-500/30 bg-slate-900/90 px-1.5 py-0.5 text-xs transition-colors hover:border-cyan-400/35 hover:bg-amber-950/40"
+                className={`cursor-pointer rounded-full border bg-slate-900/90 px-1.5 py-0.5 text-xs transition-colors hover:border-cyan-400/35 ${
+                  holoSurface ? "border-cyan-500/35 hover:bg-cyan-950/35" : "border-amber-500/30 hover:bg-amber-950/40"
+                }`}
                 onClick={() => onReact?.(message.id, emoji)}
               >
                 {emoji} {count > 1 && count}
@@ -371,7 +412,11 @@ export function MessageBubble({ message, isOwn, senderAvatarUrl: senderAvatarUrl
 
         {showReactions && onReact && (
           <div
-            className={`absolute ${isOwn ? "right-0" : "left-0"} -top-8 z-10 flex gap-1 rounded-full border border-amber-500/30 bg-slate-950/95 px-2 py-1 shadow-xl shadow-orange-500/15 backdrop-blur-md`}
+            className={`absolute ${isOwn ? "right-0" : "left-0"} -top-8 z-10 flex gap-1 rounded-full border bg-slate-950/95 px-2 py-1 shadow-xl backdrop-blur-md ${
+              holoSurface
+                ? "border-cyan-400/35 shadow-cyan-500/12"
+                : "border-amber-500/30 shadow-orange-500/15"
+            }`}
           >
             {quickReactions.map((emoji) => (
               <button

@@ -18,7 +18,7 @@ export function CommsMeshLinkHeaderBadge({
     <p className="truncate text-[10px] font-mono text-cyan-100/50 sm:text-[11px]">
       {presenceLinePrefix}
       <span className="text-white/35"> · </span>
-      <span className={mesh ? "text-sky-300/90" : "text-amber-400/80"}>
+      <span className={mesh ? "text-sky-300/90" : "text-violet-300/85"}>
         Mesh {mesh ? "on" : "…"} ({meshUsers.length} peer{meshUsers.length === 1 ? "" : "s"})
       </span>
       <span className="text-white/35"> · </span>
@@ -61,7 +61,7 @@ export function CommsP2PUnifiedStrip() {
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/70">
         <span className="inline-flex items-center gap-1.5">
-          <Radio className={`h-3.5 w-3.5 ${mesh ? "text-emerald-400" : "text-amber-400"}`} />
+          <Radio className={`h-3.5 w-3.5 ${mesh ? "text-emerald-400" : "text-violet-400/90"}`} />
           {mesh ? "Registry joined" : linkConnected ? "Joining…" : "Socket offline"}
         </span>
         <span className="text-white/35">|</span>
@@ -71,7 +71,7 @@ export function CommsP2PUnifiedStrip() {
         {inMeshCall ? (
           <>
             <span className="text-white/35">|</span>
-            <span className="text-amber-200/90">Mesh call active — see Calls tab for video</span>
+            <span className="text-fuchsia-200/90">Mesh call active — see Calls tab for video</span>
           </>
         ) : null}
         <label className="ml-auto flex cursor-pointer items-center gap-2 text-[11px] text-white/65">

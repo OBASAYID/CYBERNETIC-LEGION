@@ -40,6 +40,8 @@ export type ModuleWorkspacePageShellProps = {
   /** Optional small files to include in pipeline handoff (same limits as session handoff). */
   commandHandoffAttachments?: () => ModuleHandoffAttachment[] | undefined;
   commandHandoffLargeRefs?: () => ModuleHandoffLargeRef[] | undefined;
+  /** When `mode="page"`, skip the default field backdrop so the child can own the full scene (e.g. comms HUD). */
+  hidePageBackdrop?: boolean;
 };
 
 function ModuleWorkspaceBackdrop() {
@@ -88,13 +90,14 @@ export function ModuleWorkspacePageShell({
   commandHandoffSource,
   commandHandoffAttachments,
   commandHandoffLargeRefs,
+  hidePageBackdrop = false,
 }: ModuleWorkspacePageShellProps) {
   const [commandConsoleMinimized, setCommandConsoleMinimized] = useState(false);
 
   if (mode === "page") {
     return (
       <div className="relative min-h-screen w-full overflow-x-hidden text-white">
-        <ModuleWorkspaceBackdrop />
+        {!hidePageBackdrop ? <ModuleWorkspaceBackdrop /> : null}
         <div className="relative z-10 min-h-0 w-full min-w-0">{children}</div>
       </div>
     );

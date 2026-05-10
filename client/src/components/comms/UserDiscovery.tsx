@@ -60,6 +60,8 @@ interface UserDiscoveryProps {
   meshLinkReady?: boolean;
   meshInCall?: boolean;
   onMeshCall?: (userId: string, userName: string, type: "audio" | "video") => void;
+  /** Cyan glass roster inside NEXUS carousel (vs legacy gray panels). */
+  nexusChrome?: boolean;
 }
 
 export function UserDiscovery({
@@ -75,6 +77,7 @@ export function UserDiscovery({
   meshLinkReady = false,
   meshInCall = false,
   onMeshCall,
+  nexusChrome = false,
 }: UserDiscoveryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<{
@@ -125,9 +128,9 @@ export function UserDiscovery({
   }, [allUsers, onlineUsers, searchQuery, myDeviceId]);
 
   const getStatusColor = (isOnline: boolean, inCall: boolean) => {
-    if (inCall) return "text-amber-400";
+    if (inCall) return nexusChrome ? "text-fuchsia-400" : "text-amber-400";
     if (isOnline) return "text-green-400";
-    return "text-gray-500";
+    return nexusChrome ? "text-cyan-200/35" : "text-gray-500";
   };
 
   const getStatusLabel = (isOnline: boolean, inCall: boolean) => {
@@ -163,18 +166,28 @@ export function UserDiscovery({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800/50">
+      <div
+        className={`p-4 border-b ${
+          nexusChrome ? "border-cyan-500/22 bg-cyan-950/10" : "border-gray-800/50"
+        }`}
+      >
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search
+            className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${nexusChrome ? "text-cyan-400/45" : "text-gray-500"}`}
+          />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search users by name..."
-            className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+            className={`w-full rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all ${
+              nexusChrome
+                ? "border border-cyan-500/25 bg-black/35 placeholder-cyan-200/25"
+                : "bg-gray-800/60 border border-gray-700/50 placeholder-gray-500"
+            }`}
           />
         </div>
-        <p className="mt-2 text-[10px] leading-snug text-gray-500">
+        <p className={`mt-2 text-[10px] leading-snug ${nexusChrome ? "text-cyan-200/45" : "text-gray-500"}`}>
           GPS on the ops map appears only when a user turns on <span className="text-cyan-400/90">Live location</span> in
           Mesh (Calls tab) — coordinates are throttled and stored for the team roster.
         </p>
@@ -185,7 +198,9 @@ export function UserDiscovery({
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              <h3
+                className={`text-xs font-semibold uppercase tracking-wider ${nexusChrome ? "text-cyan-200/70" : "text-gray-400"}`}
+              >
                 Online — {filteredOnlineUsers.length}
               </h3>
             </div>
@@ -193,7 +208,11 @@ export function UserDiscovery({
               {filteredOnlineUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="group bg-gray-800/40 hover:bg-gray-800/70 border border-gray-700/30 hover:border-cyan-500/20 rounded-xl p-3 transition-all cursor-pointer"
+                  className={`group rounded-xl border p-3 transition-all cursor-pointer ${
+                    nexusChrome
+                      ? "border-cyan-500/20 bg-black/28 hover:border-cyan-400/40 hover:bg-cyan-950/25"
+                      : "bg-gray-800/40 hover:bg-gray-800/70 border border-gray-700/30 hover:border-cyan-500/20"
+                  }`}
                   onClick={() => {
                     const full = profileFromDirectory(user.id);
                     setSelectedUser({
@@ -310,15 +329,17 @@ export function UserDiscovery({
 
         <div className="p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Users className="w-3.5 h-3.5 text-gray-500" />
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <Users className={`w-3.5 h-3.5 ${nexusChrome ? "text-cyan-400/50" : "text-gray-500"}`} />
+            <h3
+              className={`text-xs font-semibold uppercase tracking-wider ${nexusChrome ? "text-cyan-200/70" : "text-gray-400"}`}
+            >
               All Users {filteredAllUsers.length > 0 && `— ${filteredAllUsers.length}`}
             </h3>
           </div>
           {filteredAllUsers.length === 0 && filteredOnlineUsers.length === 0 ? (
             <div className="text-center py-8">
-              <Users className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">
+              <Users className={`w-10 h-10 mx-auto mb-3 ${nexusChrome ? "text-cyan-700/60" : "text-gray-600"}`} />
+              <p className={`text-sm ${nexusChrome ? "text-cyan-200/50" : "text-gray-500"}`}>
                 {searchQuery ? "No users found matching your search" : "No other users available"}
               </p>
             </div>
@@ -327,7 +348,11 @@ export function UserDiscovery({
               {filteredAllUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="group bg-gray-800/40 hover:bg-gray-800/70 border border-gray-700/30 hover:border-gray-600/50 rounded-xl p-3 transition-all cursor-pointer"
+                  className={`group rounded-xl border p-3 transition-all cursor-pointer ${
+                    nexusChrome
+                      ? "border-cyan-500/18 bg-black/22 hover:border-cyan-400/35 hover:bg-cyan-950/20"
+                      : "bg-gray-800/40 hover:bg-gray-800/70 border border-gray-700/30 hover:border-gray-600/50"
+                  }`}
                   onClick={() =>
                     setSelectedUser({
                       id: user.id,
@@ -343,7 +368,13 @@ export function UserDiscovery({
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center text-gray-300 text-sm font-bold">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                          nexusChrome
+                            ? "bg-gradient-to-br from-slate-700 to-cyan-900 text-cyan-100/90"
+                            : "bg-gradient-to-br from-gray-600 to-gray-700 text-gray-300"
+                        }`}
+                      >
                         {getInitials(user.displayName)}
                       </div>
                       <Circle
@@ -354,7 +385,7 @@ export function UserDiscovery({
                       <p className="text-sm font-medium text-white truncate">
                         {user.displayName}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className={`text-xs ${nexusChrome ? "text-cyan-200/45" : "text-gray-500"}`}>
                         {user.isOnline
                           ? "Online"
                           : user.lastSeen

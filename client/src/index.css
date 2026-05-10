@@ -177,7 +177,7 @@
   }
 }
 
-/* Comms: orange light sweep when starting a new chat (5s) */
+/* Comms: holo cyan/violet sweep when starting a new chat (5s) */
 @keyframes comms-cascade-up {
   0% {
     transform: translateY(100%);
@@ -208,12 +208,12 @@
   height: 55%;
   background: linear-gradient(
     0deg,
-    rgba(249, 115, 22, 0.5) 0%,
-    rgba(251, 191, 36, 0.25) 35%,
-    rgba(34, 211, 238, 0.08) 70%,
+    rgba(139, 92, 246, 0.22) 0%,
+    rgba(0, 229, 255, 0.28) 40%,
+    rgba(34, 211, 238, 0.12) 72%,
     transparent 100%
   );
   filter: blur(2px);
   animation: comms-cascade-up 5s ease-out forwards;
-  box-shadow: 0 -20px 60px -10px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 -20px 60px -10px rgba(0, 229, 255, 0.35);
 }

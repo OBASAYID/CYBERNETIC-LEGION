@@ -76,6 +76,7 @@ export function PsharePanel({
   highlightPostId,
   onClearHighlight,
   initialPostBody,
+  holoBlend = false,
 }: {
   myUserId: string;
   allUsers: PshareUser[];
@@ -83,6 +84,8 @@ export function PsharePanel({
   onClearHighlight?: () => void;
   /** Pre-fills the composer (e.g. module pipeline handoff from Command or Vision). */
   initialPostBody?: string | null;
+  /** Match NEXUS holo chrome (cyan/violet) instead of legacy amber when embedded in comms. */
+  holoBlend?: boolean;
 }) {
   const [posts, setPosts] = useState<PsharePost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -325,10 +328,18 @@ export function PsharePanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-3 border-b border-amber-500/25 p-3 sm:p-4">
+      <div
+        className={`shrink-0 space-y-3 border-b p-3 sm:p-4 ${
+          holoBlend ? "border-cyan-500/28 bg-cyan-950/10" : "border-amber-500/25"
+        }`}
+      >
         <div>
           <h2
-            className="bg-gradient-to-r from-amber-200 via-yellow-100 to-orange-200/90 bg-clip-text text-base font-bold text-transparent"
+            className={
+              holoBlend
+                ? "bg-gradient-to-r from-cyan-200 via-sky-100 to-violet-200/90 bg-clip-text text-base font-bold text-transparent"
+                : "bg-gradient-to-r from-amber-200 via-yellow-100 to-orange-200/90 bg-clip-text text-base font-bold text-transparent"
+            }
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             Pshare
@@ -421,7 +432,7 @@ export function PsharePanel({
               Attached: {pendingFile.fileName}
               <button
                 type="button"
-                className="ml-2 text-amber-300/90 underline"
+                className={`ml-2 underline ${holoBlend ? "text-violet-300/90" : "text-amber-300/90"}`}
                 onClick={() => setPendingFile(null)}
               >
                 remove
@@ -449,7 +460,9 @@ export function PsharePanel({
                 onClick={() => setVisibility("selected")}
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 transition ${
                   visibility === "selected"
-                    ? "border-orange-500/45 bg-orange-500/15 text-orange-100"
+                    ? holoBlend
+                      ? "border-violet-500/45 bg-violet-500/15 text-violet-100"
+                      : "border-orange-500/45 bg-orange-500/15 text-orange-100"
                     : "border-white/10 text-white/60"
                 }`}
               >
@@ -470,7 +483,11 @@ export function PsharePanel({
               type="button"
               disabled={submitting}
               onClick={() => void submit()}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-gradient-to-r from-amber-600/35 to-cyan-600/25 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/95 shadow-lg shadow-amber-500/15 transition hover:from-amber-500/45 hover:to-cyan-500/30 disabled:opacity-50"
+              className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/95 shadow-lg transition disabled:opacity-50 ${
+                holoBlend
+                  ? "border-cyan-400/40 bg-gradient-to-r from-cyan-600/35 to-violet-600/28 shadow-cyan-500/20 hover:from-cyan-500/45 hover:to-violet-500/35"
+                  : "border-amber-500/35 bg-gradient-to-r from-amber-600/35 to-cyan-600/25 shadow-amber-500/15 hover:from-amber-500/45 hover:to-cyan-500/30"
+              }`}
             >
               <Send className="h-3.5 w-3.5" />
               Post
@@ -478,8 +495,14 @@ export function PsharePanel({
           </div>
 
           {visibility === "selected" && (
-            <div className="max-h-32 overflow-y-auto rounded-lg border border-orange-500/20 bg-slate-950/50 p-2">
-              <p className="mb-1 text-[10px] font-mono uppercase text-amber-200/55">Include users (required)</p>
+            <div
+              className={`max-h-32 overflow-y-auto rounded-lg border bg-slate-950/50 p-2 ${
+                holoBlend ? "border-violet-500/28" : "border-orange-500/20"
+              }`}
+            >
+              <p className={`mb-1 text-[10px] font-mono uppercase ${holoBlend ? "text-violet-200/60" : "text-amber-200/55"}`}>
+                Include users (required)
+              </p>
               {others.length === 0 ? (
                 <p className="text-xs text-white/40">No other users in directory yet</p>
               ) : (
@@ -491,7 +514,9 @@ export function PsharePanel({
                       onClick={() => toggleUser(u.id)}
                       className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
                         selectedUserIds.includes(u.id)
-                          ? "border-orange-500/45 bg-orange-500/15 text-orange-100"
+                          ? holoBlend
+                            ? "border-violet-500/45 bg-violet-500/15 text-violet-100"
+                            : "border-orange-500/45 bg-orange-500/15 text-orange-100"
                           : "border-white/10 text-white/55 hover:border-white/25"
                       }`}
                     >
@@ -523,7 +548,11 @@ export function PsharePanel({
             ref={(el) => {
               cardRefs.current[post.id] = el;
             }}
-            className="rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-[0_0_30px_-12px_rgba(251,146,60,0.22)]"
+            className={`rounded-2xl border border-white/10 bg-slate-950/55 p-3 ${
+              holoBlend
+                ? "shadow-[0_0_30px_-12px_rgba(0,229,255,0.18)]"
+                : "shadow-[0_0_30px_-12px_rgba(251,146,60,0.22)]"
+            }`}
           >
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
@@ -538,7 +567,13 @@ export function PsharePanel({
                   </span>
                 )}
                 {post.visibility === "selected" && (
-                  <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-mono uppercase text-amber-200/85">
+                  <span
+                    className={`rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase ${
+                      holoBlend
+                        ? "border-violet-400/35 bg-violet-500/12 text-violet-200/90"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-200/85"
+                    }`}
+                  >
                     Selected
                   </span>
                 )}
@@ -594,7 +629,7 @@ export function PsharePanel({
                   />
                 ) : (
                   <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-xs text-white/70">
-                    <FileText className="h-4 w-4 text-amber-300/80" />
+                    <FileText className={`h-4 w-4 ${holoBlend ? "text-cyan-300/85" : "text-amber-300/80"}`} />
                     {post.fileName || "File"}
                   </div>
                 )}
@@ -652,7 +687,11 @@ export function PsharePanel({
               <button
                 type="button"
                 onClick={() => void systemShare(post)}
-                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/20 px-2 py-1 text-[11px] text-amber-200/80"
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] ${
+                  holoBlend
+                    ? "border-cyan-500/28 text-cyan-200/85 hover:border-cyan-400/40"
+                    : "border-amber-500/20 text-amber-200/80"
+                }`}
               >
                 <Share2 className="h-3.5 w-3.5" />
                 System share
