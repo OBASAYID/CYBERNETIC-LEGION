@@ -125,6 +125,14 @@ export function CommsNexusWorkspace({
         }}
         aria-hidden
       />
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-[length:min(100%,920px)] bg-top bg-no-repeat opacity-[0.06] mix-blend-screen sm:opacity-[0.08]"
+        style={{
+          backgroundImage: "url(/comms/ref-assurance-exact.png)",
+          maskImage: "radial-gradient(ellipse 90% 72% at 50% 26%, black 0%, transparent 78%)",
+        }}
+        aria-hidden
+      />
 
       <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-2 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-3">
         {handoff}

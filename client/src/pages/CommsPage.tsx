@@ -21,7 +21,7 @@ import { PsharePanel } from "../components/comms/PsharePanel";
 import { useAnomalyAlerts } from "../hooks/useCommsIntelligence";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { CommsP2PLayerProvider, useCommsP2PLayer } from "../components/comms/CommsP2PLayerContext";
-import { CommsP2PUnifiedStrip, CommsP2PCallDock } from "../components/comms/CommsP2PUnifiedUI";
+import { CommsP2PCallDock } from "../components/comms/CommsP2PUnifiedUI";
 import {
   fromSocketMessageSent,
   fromSocketNewMessage,
@@ -36,16 +36,6 @@ import { CommsOrbitalCommandDeck, type OrbitalMainTab } from "../components/comm
 import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
-
-/** Fused story rail — maps reference “Challenge → Value” language to Cyrus tabs. */
-const NEXUS_STORY_RAIL: { id: string; label: string; tab: OrbitalMainTab }[] = [
-  { id: "challenge", label: "Challenge", tab: "monitor" },
-  { id: "solution", label: "Solution", tab: "chat" },
-  { id: "capability", label: "Capability", tab: "calls" },
-  { id: "value", label: "Value", tab: "pshare" },
-  { id: "network", label: "Network", tab: "people" },
-  { id: "broadcast", label: "Broadcast", tab: "streams" },
-];
 
 const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
   chat: "Encrypted messaging, voice notes, and media",
@@ -974,8 +964,8 @@ export function CommsPage() {
         displayName={displayName}
         isConnected={isConnected}
         onlineUsersLength={onlineUsers.length}
-        sceneTitle="Key event assurance service"
-        sceneSubtitle="Mission-grade communications orchestration · unified mesh"
+        sceneTitle="Key Event Assurance Service"
+        sceneSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
         handoff={
           commsHandoffText ? (
             <div
@@ -1029,8 +1019,6 @@ export function CommsPage() {
             onPeerCall={handleUserCall}
             onPeerMessage={handleUserMessage}
             onPeerVideoInvite={handleOrbitalVideoInvite}
-            footerSlot={<CommsP2PUnifiedStrip />}
-            storyRail={NEXUS_STORY_RAIL}
           />
         }
         moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
