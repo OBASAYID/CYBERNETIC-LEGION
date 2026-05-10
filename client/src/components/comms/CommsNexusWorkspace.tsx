@@ -20,6 +20,8 @@ export function CommsNexusWorkspace({
   onlineUsersLength,
   handoff,
   commandDeck,
+  /** When set, chat (or other full-width console) sits under the orbital deck and the lower carousel is hidden. */
+  integratedConsole,
   moduleLabel,
   moduleSublabel,
   socialChannelTab,
@@ -34,6 +36,7 @@ export function CommsNexusWorkspace({
   onlineUsersLength: number;
   handoff: ReactNode;
   commandDeck: ReactNode;
+  integratedConsole?: ReactNode;
   moduleLabel: string;
   moduleSublabel?: string;
   socialChannelTab: boolean;
@@ -134,7 +137,7 @@ export function CommsNexusWorkspace({
         aria-hidden
       />
 
-      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-2 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-3">
+      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[min(1920px,calc(100%-0.5rem))] flex-1 flex-col px-2 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-3">
         {handoff}
 
         {/* Micro HUD bar — minimal chrome */}
@@ -227,12 +230,27 @@ export function CommsNexusWorkspace({
           </div>
         </header>
 
-        {/* Orbital constellation — full width, scene-integrated */}
-        <div className="relative z-[3] shrink-0">{commandDeck}</div>
+        {/* Orbital deck + optional integrated console (e.g. chat) or lower module carousel */}
+        <div className="relative z-[3] mt-1 flex min-h-0 flex-1 flex-col gap-2 sm:mt-2 sm:gap-3">
+          <div className="relative shrink-0">{commandDeck}</div>
 
-        {/* Curved glass carousel — primary content surface (reference panels) */}
+          {integratedConsole ? (
+            <div
+              className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border-2 sm:rounded-3xl ${
+                isDark
+                  ? "border-cyan-400/50 bg-gradient-to-b from-cyan-950/35 via-slate-950/80 to-[#000b1a]/96 shadow-[0_0_72px_-16px_rgba(0,229,255,0.38),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  : "border-sky-400/55 bg-gradient-to-b from-white/92 via-sky-50/85 to-slate-100/96 shadow-[0_0_44px_-10px_rgba(14,165,233,0.32)]"
+            }`}
+              style={{ backdropFilter: "blur(18px)" }}
+            >
+              <div className="relative min-h-0 flex-1 overflow-hidden">{integratedConsole}</div>
+            </div>
+          ) : null}
+
+        {/* Curved glass carousel — modules other than integrated console */}
+        {!integratedConsole ? (
         <div
-          className="relative z-[3] mt-2 flex min-h-0 flex-1 flex-col sm:mt-3"
+          className="relative z-[3] flex min-h-0 flex-1 flex-col"
           style={{ perspective: "1400px" }}
         >
           <div
@@ -321,6 +339,8 @@ export function CommsNexusWorkspace({
 
             <div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
           </div>
+        </div>
+        ) : null}
         </div>
       </div>
 

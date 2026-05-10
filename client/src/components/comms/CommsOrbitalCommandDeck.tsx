@@ -122,7 +122,7 @@ export function CommsOrbitalCommandDeck({
   }, [peers]);
 
   const orbitBoxRef = useRef<HTMLDivElement>(null);
-  const [orbitRadius, setOrbitRadius] = useState(132);
+  const [orbitRadius, setOrbitRadius] = useState(200);
   const orbitPhaseRef = useRef(0);
   const orbitVelRef = useRef(0);
   const dragRef = useRef({ active: false, lastX: 0 });
@@ -132,7 +132,7 @@ export function CommsOrbitalCommandDeck({
     if (!el) return;
     const ro = new ResizeObserver(() => {
       const w = el.clientWidth;
-      setOrbitRadius(Math.min(176, Math.max(96, w * 0.37)));
+      setOrbitRadius(Math.min(280, Math.max(104, w * 0.38)));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -429,7 +429,7 @@ export function CommsOrbitalCommandDeck({
         </div>
 
         {/* Central hub + five satellites on draggable orbit */}
-        <div className="relative z-[4] mx-auto -mt-1 flex w-full max-w-[min(460px,94vw)] flex-col items-center sm:-mt-2">
+        <div className="relative z-[4] mx-auto -mt-1 flex w-full max-w-[min(1020px,98vw)] flex-col items-center sm:-mt-2">
           <input
             ref={fileRef}
             type="file"

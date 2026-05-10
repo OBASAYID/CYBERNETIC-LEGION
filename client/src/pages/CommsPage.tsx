@@ -912,6 +912,33 @@ export function CommsPage() {
 
   const themeClass = darkMode ? "" : "light-theme";
 
+  const anomalyBanner =
+    anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies ? (
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-violet-400/30 bg-gradient-to-r from-cyan-950/35 via-violet-950/30 to-cyan-950/25 px-3 py-2 backdrop-blur-sm sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.7)]" />
+          <span className="text-xs font-medium text-cyan-100/95">
+            {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
+            <span className="font-normal text-violet-200/75">· {anomalyData.anomalies[0]?.description}</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissedAnomalies(true)}
+          className="shrink-0 rounded-lg p-1 text-cyan-300/80 transition hover:bg-cyan-500/15 hover:text-cyan-50"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    ) : null;
+
+  const modulePanelShell = `min-h-0 flex-1 overflow-hidden p-1 sm:p-2 ${
+    darkMode
+      ? "bg-gradient-to-b from-cyan-950/10 via-transparent to-[#000b1a]/40"
+      : "bg-gradient-to-b from-sky-50/30 via-transparent to-slate-100/50"
+  }`;
+
   return (
     <ModuleWorkspacePageShell mode="page" hidePageBackdrop>
     <CommsP2PLayerProvider displayName={displayName}>
@@ -1021,39 +1048,36 @@ export function CommsPage() {
             onPeerVideoInvite={handleOrbitalVideoInvite}
           />
         }
-        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
-        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
-        socialChannelTab={socialChannelTab}
-      >
-        {anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies && (
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-violet-400/30 bg-gradient-to-r from-cyan-950/35 via-violet-950/30 to-cyan-950/25 px-3 py-2 backdrop-blur-sm sm:px-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.7)]" />
-              <span className="text-xs font-medium text-cyan-100/95">
-                {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
-                <span className="font-normal text-violet-200/75">· {anomalyData.anomalies[0]?.description}</span>
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDismissedAnomalies(true)}
-              className="shrink-0 rounded-lg p-1 text-cyan-300/80 transition hover:bg-cyan-500/15 hover:text-cyan-50"
-              aria-label="Dismiss"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        <div
-          className={`min-h-0 flex-1 overflow-hidden p-1 sm:p-2 ${
-            darkMode
-              ? "bg-gradient-to-b from-cyan-950/10 via-transparent to-[#000b1a]/40"
-              : "bg-gradient-to-b from-sky-50/30 via-transparent to-slate-100/50"
-          }`}
-        >
-                {activeTab === "chat" && (
-                  <NexusModuleSurface variant="flush">
+        integratedConsole={
+          activeTab === "chat" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              {anomalyBanner}
+              <div
+                className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-5 sm:py-2.5 ${
+                  darkMode ? "border-cyan-500/25 bg-black/25" : "border-sky-200/60 bg-white/40"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p
+                    className={`font-mono text-[8px] uppercase tracking-[0.42em] sm:text-[9px] ${
+                      darkMode ? "text-cyan-400/65" : "text-sky-600/80"
+                    }`}
+                  >
+                    NEXUS console · messaging band
+                  </p>
+                  <p
+                    className={`truncate text-sm font-semibold sm:text-base ${darkMode ? "text-white" : "text-slate-900"}`}
+                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    Chat
+                  </p>
+                  <p className={`truncate text-[10px] sm:text-[11px] ${darkMode ? "text-white/45" : "text-slate-600"}`}>
+                    {MODULE_SECTOR_SUBTITLE.chat}
+                  </p>
+                </div>
+              </div>
+              <div className={modulePanelShell}>
+                <NexusModuleSurface variant="flush">
                   <CommsPlatform
                     holoSurface
                     conversations={conversations}
@@ -1094,8 +1118,18 @@ export function CommsPage() {
                       />
                     }
                   />
-                  </NexusModuleSurface>
-                )}
+                </NexusModuleSurface>
+              </div>
+            </div>
+          ) : undefined
+        }
+        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
+        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
+        socialChannelTab={socialChannelTab}
+      >
+        {activeTab !== "chat" ? (
+        <div className={modulePanelShell}>
+          {anomalyBanner}
 
                 {activeTab === "pshare" && (
                   <NexusModuleSurface>
@@ -1169,6 +1203,7 @@ export function CommsPage() {
                   </NexusModuleSurface>
                 )}
         </div>
+        ) : null}
       </CommsNexusWorkspace>
 
       {showEmojiPicker && (
