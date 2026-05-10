@@ -126,7 +126,7 @@ export function CommsNexusWorkspace({
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 z-0 bg-[length:min(100%,920px)] bg-top bg-no-repeat opacity-[0.06] mix-blend-screen sm:opacity-[0.08]"
+        className="pointer-events-none absolute inset-0 z-0 bg-[length:min(100%,920px)] bg-top bg-no-repeat opacity-[0.09] mix-blend-screen sm:opacity-[0.11]"
         style={{
           backgroundImage: "url(/comms/ref-assurance-exact.png)",
           maskImage: "radial-gradient(ellipse 90% 72% at 50% 26%, black 0%, transparent 78%)",

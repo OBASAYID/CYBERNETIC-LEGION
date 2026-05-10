@@ -85,6 +85,27 @@
   }
 }
 
+@keyframes kessSphereDrift {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes kessTimelineGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(0, 229, 255, 0.45));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.85));
+  }
+}
+
 @layer utilities {
   .text-gradient-premium {
     background: linear-gradient(90deg, #22d3ee 0%, #60a5fa 50%, #a855f7 100%);
