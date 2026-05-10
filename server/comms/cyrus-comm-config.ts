@@ -92,9 +92,15 @@ export function getCyrusCommWebRtcConfigResponse(query?: CyrusCommWebRtcConfigQu
     process.env.CYRUS_COMM_DEFAULT_LINK === "satellite" ||
     process.env.CYRUS_COMM_DEFAULT_LINK === "ntn";
 
+  const iceTransportPolicy =
+    process.env.CYRUS_COMM_ICE_TRANSPORT_POLICY === "relay" ? ("relay" as const) : ("all" as const);
+
   return {
     iceServers: CYRUS_COMM_ICE_SERVERS,
     sfu: CYRUS_COMM_SFU,
     linkHints: buildLinkHints(satellite),
+    /** Hint for clients; browser policy still follows RTCPeerConnection config. */
+    iceTransportPolicy,
+    relayConfigured: Boolean(process.env.TURN_URLS && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL),
   };
 }

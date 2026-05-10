@@ -43,6 +43,8 @@ interface CallViewProps {
   isVideoEnabled: boolean;
   callDuration: number;
   callQuality?: "HD" | "SD" | "Low";
+  /** True while ICE/DTLS or remote tracks are still coming up (avoid “connected but silent” UX). */
+  mediaEstablishing?: boolean;
   isScreenSharing?: boolean;
   screenShareStream?: MediaStream | null;
   screenSharerName?: string;
@@ -57,6 +59,8 @@ interface CallViewProps {
   chatMessages?: { senderId: string; senderName: string; message: string; timestamp: string }[];
   reactions?: Reaction[];
   socketRef?: React.MutableRefObject<any>;
+  /** Fires when remote media `play()` is blocked (autoplay policy). */
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
 }
 
 interface IncomingCallOverlayProps {
@@ -146,10 +150,12 @@ function ParticipantVideo({
   participant,
   isSelf,
   gridSize,
+  onRemotePlaybackDiagnostics,
 }: {
   participant: CallParticipant;
   isSelf?: boolean;
   gridSize: number;
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -158,11 +164,20 @@ function ParticipantVideo({
       videoRef.current.srcObject = participant.stream;
       videoRef.current.muted = !!isSelf;
       videoRef.current.volume = 1;
-      void videoRef.current.play().catch(() => {
-        // Browser autoplay policies may require explicit user interaction.
-      });
+      void videoRef.current.play().then(
+        () => {
+          if (!isSelf) {
+            onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
+          }
+        },
+        () => {
+          if (!isSelf) {
+            onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
+          }
+        }
+      );
     }
-  }, [participant.stream, isSelf]);
+  }, [participant.stream, isSelf, onRemotePlaybackDiagnostics]);
 
   const qualityColor =
     participant.connectionQuality === "excellent"
@@ -265,6 +280,7 @@ export function CallView({
   isVideoEnabled,
   callDuration,
   callQuality,
+  mediaEstablishing = false,
   isScreenSharing,
   screenShareStream,
   screenSharerName,
@@ -279,6 +295,7 @@ export function CallView({
   chatMessages = [],
   reactions = [],
   socketRef,
+  onRemotePlaybackDiagnostics,
 }: CallViewProps) {
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -361,6 +378,11 @@ export function CallView({
               {callQuality}
             </span>
           )}
+          {mediaEstablishing && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+              Establishing media…
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -407,6 +429,7 @@ export function CallView({
                       participant={p}
                       isSelf={p.id === currentUserId}
                       gridSize={totalCount}
+                      onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                     />
                   </div>
                 ))}
@@ -420,6 +443,7 @@ export function CallView({
                   participant={p}
                   isSelf={p.id === currentUserId}
                   gridSize={totalCount}
+                  onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                 />
               ))}
             </div>

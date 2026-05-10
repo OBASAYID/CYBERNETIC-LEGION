@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy duplicate of `/cyrus-io` signaling — the app uses `PresenceProvider` + `usePresence()` as the
+ * single Socket.IO authority for Comms. Do not wire new features here; it will be removed in a consolidation pass.
+ */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
