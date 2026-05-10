@@ -16,6 +16,7 @@ import {
   invalidateLocationShareCache,
 } from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
+import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1118,6 +1119,23 @@ router.get("/api/comms/status", (req, res) => {
     websocket: '/ws',
     ...stats,
   });
+});
+
+/** Phase 4: lightweight WebRTC readiness probe for ops / dashboards (no secrets). */
+router.get("/api/comms/webrtc-health", (_req, res) => {
+  try {
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({
+      ok: true,
+      relayConfigured: cfg.relayConfigured,
+      iceServerCount: Array.isArray(cfg.iceServers) ? cfg.iceServers.length : 0,
+      iceTransportPolicy: cfg.iceTransportPolicy,
+      encodingProfile: cfg.linkHints?.encodingProfile,
+      satelliteBackhaulCapable: cfg.linkHints?.satelliteBackhaulCapable,
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "webrtc-health failed" });
+  }
 });
 
 router.post(

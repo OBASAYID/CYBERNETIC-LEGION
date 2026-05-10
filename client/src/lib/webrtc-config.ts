@@ -35,7 +35,7 @@ function parseViteIceServers(): RTCIceServer[] {
   }
 }
 
-function getRuntimeIceServers(): RTCIceServer[] {
+export function getRuntimeIceServers(): RTCIceServer[] {
   const viteIce = parseViteIceServers();
   const appendDefaults = import.meta.env.VITE_RTC_APPEND_DEFAULT_ICE !== "false";
 
@@ -73,6 +73,16 @@ function getRuntimeIceServers(): RTCIceServer[] {
     out.push(s);
   }
   return out.length > 0 ? out : base;
+}
+
+/** Temporary test: `localStorage.setItem("cyrus-relay-only-test","1")` forces `iceTransportPolicy: "relay"`. */
+export function isRelayOnlyTestMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("cyrus-relay-only-test") === "1";
+  } catch {
+    return false;
+  }
 }
 
 function shouldPreferRelayTransport(): boolean {
@@ -188,16 +198,39 @@ export const MEDIA_CONSTRAINTS = {
   },
 };
 
-export function createPeerConnectionConfig(): RTCConfiguration {
-  const iceServers = getRuntimeIceServers();
-  const preferRelay = shouldPreferRelayTransport();
+/** Dedupe ICE server entries for stable RTCPeerConnection config. */
+export function mergeIceServerLists(a: RTCIceServer[], b: RTCIceServer[]): RTCIceServer[] {
+  const seen = new Set<string>();
+  const out: RTCIceServer[] = [];
+  for (const s of [...a, ...b]) {
+    if (!s || typeof s !== "object" || !("urls" in s)) continue;
+    const key = `${JSON.stringify(s.urls)}|${(s as RTCIceServer).username || ""}|${(s as RTCIceServer).credential || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out.length > 0 ? out : getRuntimeIceServers();
+}
+
+export function getIceTransportPolicy(): RTCIceTransportPolicy {
+  if (import.meta.env.VITE_RTC_ICE_TRANSPORT_POLICY === "relay") return "relay";
+  if (isRelayOnlyTestMode()) return "relay";
+  return shouldPreferRelayTransport() ? "relay" : "all";
+}
+
+/** Build final RTCConfiguration; prefer server-provided TURN (via fetch) merged with client defaults. */
+export function buildRtcConfiguration(iceServers: RTCIceServer[]): RTCConfiguration {
   return {
     iceServers,
-    iceTransportPolicy: preferRelay ? "relay" : "all",
+    iceTransportPolicy: getIceTransportPolicy(),
     bundlePolicy: "max-bundle",
     rtcpMuxPolicy: "require",
     iceCandidatePoolSize: 20,
   };
+}
+
+export function createPeerConnectionConfig(): RTCConfiguration {
+  return buildRtcConfiguration(getRuntimeIceServers());
 }
 
 export function getOptimalVideoConstraints(): MediaTrackConstraints {
@@ -228,6 +261,84 @@ export function getAudioConstraints(): MediaTrackConstraints {
     noiseSuppression: true,
     autoGainControl: true,
   };
+}
+
+/** Operator / UX toggles for constrained networks (localStorage `cyrus-comms-network-mode`). */
+export type CyrusCommsNetworkMode =
+  | "normal"
+  | "low_bandwidth"
+  | "audio_priority"
+  | "emergency"
+  | "degraded";
+
+export function getCyrusCommsNetworkMode(): CyrusCommsNetworkMode {
+  if (typeof window === "undefined") return "normal";
+  try {
+    const v = localStorage.getItem("cyrus-comms-network-mode");
+    if (
+      v === "low_bandwidth" ||
+      v === "audio_priority" ||
+      v === "emergency" ||
+      v === "degraded"
+    ) {
+      return v;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "normal";
+}
+
+export function getVideoConstraintsForCommsCall(
+  callType: "audio" | "video",
+  networkMode: CyrusCommsNetworkMode
+): boolean | MediaTrackConstraints {
+  if (callType !== "video") return false;
+  if (networkMode === "audio_priority" || networkMode === "emergency") {
+    return false;
+  }
+  if (networkMode === "low_bandwidth" || networkMode === "degraded") {
+    return {
+      ...MEDIA_CONSTRAINTS.video.mobile,
+      frameRate: { ideal: 12, max: 20 },
+    };
+  }
+  return getOptimalVideoConstraints();
+}
+
+/** Prefer Opus (audio) and VP8/H264 (video) when the browser supports setCodecPreferences. */
+export function applyPreferredCodecsToPeerConnection(pc: RTCPeerConnection): void {
+  if (typeof RTCRtpSender === "undefined" || !RTCRtpSender.getCapabilities) return;
+  try {
+    const audioCaps = RTCRtpSender.getCapabilities("audio");
+    const videoCaps = RTCRtpSender.getCapabilities("video");
+    for (const t of pc.getTransceivers()) {
+      const track = t.sender?.track;
+      if (!track || typeof t.setCodecPreferences !== "function") continue;
+      if (track.kind === "audio" && audioCaps?.codecs?.length) {
+        const opus = audioCaps.codecs.filter((c) => /opus/i.test(c.mimeType));
+        const others = audioCaps.codecs.filter((c) => !/opus/i.test(c.mimeType));
+        if (opus.length) t.setCodecPreferences([...opus, ...others]);
+      } else if (track.kind === "video" && videoCaps?.codecs?.length) {
+        const pref = videoCaps.codecs.filter(
+          (c) => /vp8/i.test(c.mimeType) || /h264/i.test(c.mimeType)
+        );
+        const rest = videoCaps.codecs.filter(
+          (c) => !/vp8/i.test(c.mimeType) && !/h264/i.test(c.mimeType)
+        );
+        if (pref.length) t.setCodecPreferences([...pref, ...rest]);
+      }
+    }
+  } catch {
+    /* not supported or rejected */
+  }
+}
+
+/** Bandwidth ceiling hint for future SFU / publisher caps (kbps). */
+export function getCyrusPublisherBitrateCapKbps(networkMode: CyrusCommsNetworkMode): number {
+  if (networkMode === "emergency" || networkMode === "audio_priority") return 0;
+  if (networkMode === "low_bandwidth" || networkMode === "degraded") return 900;
+  return 4000;
 }
 
 export async function getCallQualityMetrics(
@@ -299,19 +410,27 @@ export async function getCallQualityMetrics(
 
 export async function applyBandwidthConstraints(
   peerConnection: RTCPeerConnection,
-  preset: keyof typeof QUALITY_PRESETS
+  preset: keyof typeof QUALITY_PRESETS,
+  networkMode?: CyrusCommsNetworkMode
 ): Promise<void> {
   const config = QUALITY_PRESETS[preset];
-  
+  const capKbps =
+    networkMode !== undefined ? getCyrusPublisherBitrateCapKbps(networkMode) : null;
+  const capBps = capKbps !== null && capKbps > 0 ? capKbps * 1000 : null;
+
   const senders = peerConnection.getSenders();
-  
+
   for (const sender of senders) {
     if (sender.track?.kind === "video") {
       const params = sender.getParameters();
       if (!params.encodings || params.encodings.length === 0) {
         params.encodings = [{}];
       }
-      params.encodings[0].maxBitrate = config.maxVideoBitrate;
+      let maxVideo = config.maxVideoBitrate;
+      if (capBps !== null) {
+        maxVideo = Math.min(maxVideo, capBps);
+      }
+      params.encodings[0].maxBitrate = maxVideo;
       params.encodings[0].maxFramerate = config.targetFrameRate;
       await sender.setParameters(params);
     } else if (sender.track?.kind === "audio") {
@@ -372,7 +491,7 @@ export class AdaptiveBitrateController {
 
     if (newPreset !== this.currentPreset) {
       this.currentPreset = newPreset;
-      await applyBandwidthConstraints(this.peerConnection, newPreset);
+      await applyBandwidthConstraints(this.peerConnection, newPreset, getCyrusCommsNetworkMode());
       this.onQualityChange?.(newPreset, metrics);
     }
   }

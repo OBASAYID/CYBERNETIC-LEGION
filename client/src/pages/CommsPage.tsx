@@ -4,21 +4,8 @@ import { readHandoff } from "@shared/module-handoff";
 import { systemFetch, commsAssetUrl } from "@shared/cyrus-api-client";
 import { useComms } from "../hooks/useComms";
 import { usePresence } from "../contexts/PresenceContext";
-import { Link, useLocation } from "wouter";
-import {
-  MessageSquare,
-  Phone,
-  Users,
-  Activity,
-  Sun,
-  Moon,
-  ArrowLeft,
-  Smile,
-  X,
-  Radio,
-  Share2,
-  Satellite,
-} from "lucide-react";
+import { useLocation } from "wouter";
+import { MessageSquare, Phone, Users, Activity, Smile, X, Radio, Share2 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
 import { Conversation } from "../components/comms/ConversationList";
@@ -34,19 +21,29 @@ import { PsharePanel } from "../components/comms/PsharePanel";
 import { useAnomalyAlerts } from "../hooks/useCommsIntelligence";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { CommsP2PLayerProvider, useCommsP2PLayer } from "../components/comms/CommsP2PLayerContext";
-import {
-  CommsMeshLinkHeaderBadge,
-  CommsP2PUnifiedStrip,
-  CommsP2PCallDock,
-} from "../components/comms/CommsP2PUnifiedUI";
+import { CommsP2PUnifiedStrip, CommsP2PCallDock } from "../components/comms/CommsP2PUnifiedUI";
 import {
   fromSocketMessageSent,
   fromSocketNewMessage,
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
+import { callShellVisible } from "@shared/calls/call-session-types";
+import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
+import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
+import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
+import { CommsOrbitalCommandDeck } from "../components/comms/CommsOrbitalCommandDeck";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
+
+const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
+  chat: "Encrypted messaging, voice notes, and media",
+  pshare: "Timeline, handoffs, and field posts",
+  calls: "Mesh calls, quick dial, and conference bridge",
+  people: "Presence, roster, and discovery",
+  streams: "Live broadcast mesh",
+  monitor: "AI command console · intelligence & admin",
+};
 
 function conversationPreviewLine(msg: {
   content: string;
@@ -132,6 +129,9 @@ export function CommsPage() {
     sendMessage: presenceSendMessage,
     sendChatMessage: presenceSendChatMessage,
     wsRef,
+    callDiagnostics,
+    reportRemoteMediaPlayback,
+    recoverCallMedia,
   } = usePresence();
 
   const myUserIdRef = useRef(myUserId);
@@ -177,28 +177,34 @@ export function CommsPage() {
     localStorage.setItem("cyrus-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
-  useEffect(() => {
+  const refreshLiveStreams = useCallback(() => {
     systemFetch("/api/comms/live-streams")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.streams) {
-          setLiveStreams(data.streams.map((s: any) => ({
-            streamId: s.streamId,
-            streamName: s.streamName,
-            sourceType: s.sourceType,
-            sourceUrl: s.sourceUrl,
-            broadcasterId: s.broadcasterId,
-            broadcasterName: s.broadcasterName,
-            viewers: s.viewers || [],
-            status: s.status,
-            quality: s.quality || "720p",
-            startTime: s.startTime,
-            endTime: s.endTime,
-          })));
+          setLiveStreams(
+            data.streams.map((s: Record<string, unknown>) => ({
+              streamId: String(s.streamId),
+              streamName: String(s.streamName),
+              sourceType: s.sourceType as LiveStream["sourceType"],
+              sourceUrl: s.sourceUrl ? String(s.sourceUrl) : undefined,
+              broadcasterId: String(s.broadcasterId),
+              broadcasterName: s.broadcasterName ? String(s.broadcasterName) : undefined,
+              viewers: (s.viewers as LiveStream["viewers"]) || [],
+              status: (s.status as LiveStream["status"]) || "active",
+              quality: (s.quality as LiveStream["quality"]) || "720p",
+              startTime: String(s.startTime),
+              endTime: s.endTime ? String(s.endTime) : undefined,
+            })),
+          );
         }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshLiveStreams();
+  }, [refreshLiveStreams]);
 
   useEffect(() => {
     const socket = wsRef.current;
@@ -438,6 +444,18 @@ export function CommsPage() {
     (id: string) => commsAssetUrl(avatarByUserId.get(id) ?? null),
     [avatarByUserId]
   );
+
+  const orbitalPeers = useMemo(() => {
+    const skip = new Set<string>([myId || "", "cyrus-001"].filter(Boolean));
+    return onlineUsers
+      .filter((u) => u.id && !skip.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        displayName: u.displayName,
+        inCall: u.inCall,
+        avatarUrl: getAvatarForUser(u.id),
+      }));
+  }, [onlineUsers, myId, getAvatarForUser]);
 
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
@@ -757,6 +775,20 @@ export function CommsPage() {
     callUser(userId, userName, type);
   }, [callUser]);
 
+  /** Orbital HUD: soft invite via chat + jump to channel (distinct from immediate video dial). */
+  const handleOrbitalVideoInvite = useCallback(
+    (userId: string, _userName: string) => {
+      setActiveTab("chat");
+      setSelectedConvForMessage(userId);
+      presenceSendChatMessage(userId, {
+        message: `📹 ${displayName} invites you to a video session — open Calls when you're ready to connect.`,
+        messageType: "text",
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [displayName, presenceSendChatMessage]
+  );
+
   const handleEmojiSelect = useCallback((emoji: string) => {
     setShowEmojiPicker(false);
   }, []);
@@ -883,7 +915,12 @@ export function CommsPage() {
     <ModuleWorkspacePageShell mode="page">
     <CommsP2PLayerProvider displayName={displayName}>
     <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
-      {activeCall && activeCall.status === "connected" && (
+      <CommsCallDiagnosticsOverlay
+        diagnostics={callDiagnostics}
+        callStatus={activeCall?.status}
+        onRecoverCallMedia={recoverCallMedia}
+      />
+      {activeCall && callShellVisible(activeCall.status) && (
         <CallView
           roomId={activeCall.roomId}
           callType={activeCall.callType}
@@ -895,6 +932,7 @@ export function CommsPage() {
           isVideoEnabled={mediaControls.isVideoEnabled}
           callDuration={callDuration}
           callQuality={callQuality}
+          mediaEstablishing={activeCall.status !== "connected"}
           onToggleMute={toggleMute}
           onToggleVideo={toggleVideo}
           onEndCall={endCall}
@@ -906,6 +944,7 @@ export function CommsPage() {
           chatMessages={callChatMessages}
           reactions={callReactions}
           socketRef={wsRef}
+          onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
         />
       )}
 
@@ -918,9 +957,14 @@ export function CommsPage() {
         />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 flex-col gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3 lg:px-6">
-          {commsHandoffText && (
+      <CommsNexusWorkspace
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        displayName={displayName}
+        isConnected={isConnected}
+        onlineUsersLength={onlineUsers.length}
+        handoff={
+          commsHandoffText ? (
             <div
               role="status"
               className="flex flex-col gap-2 rounded-xl border border-cyan-500/35 bg-cyan-950/45 px-3 py-2.5 text-cyan-50 sm:flex-row sm:items-center sm:justify-between"
@@ -956,161 +1000,50 @@ export function CommsPage() {
                 </button>
               </div>
             </div>
-          )}
-          <header className="flex shrink-0 flex-col gap-3 border-b border-white/10 bg-slate-950/50 pb-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:pb-0">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link href="/">
-                <button
-                  type="button"
-                  className="rounded-xl border border-white/12 bg-slate-950/55 p-2.5 text-white/85 transition hover:border-cyan-500/30 hover:text-white"
-                  aria-label="Back to command center"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-              </Link>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
-                <MessageSquare className="h-5 w-5 text-cyan-300" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-200/60">
-                  3GPP NTN · global satellite IoT
-                </p>
-                <h1
-                  className="bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent sm:text-xl"
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  NEXUS COMMS
-                </h1>
-                <CommsMeshLinkHeaderBadge
-                  presenceLinePrefix={`${isConnected ? "Connected" : "Connecting…"} · ${onlineUsers.length} online`}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 sm:pl-2">
-              <button
-                type="button"
-                onClick={() => setDarkMode(!darkMode)}
-                className="rounded-lg border border-white/10 bg-slate-950/40 p-2 text-white/60 transition hover:border-cyan-500/30 hover:text-cyan-200"
-                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5">
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    isConnected ? "animate-pulse bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-red-500"
-                  }`}
-                />
-                <span className="max-w-[10rem] truncate font-mono text-[10px] text-emerald-100/90 sm:text-xs">
-                  {displayName}
-                </span>
-              </div>
-            </div>
-          </header>
-
-          <div
-            className="rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-950/50 via-slate-950/40 to-indigo-950/45 px-3 py-2.5 shadow-[0_0_28px_-12px_rgba(56,189,248,0.45)] sm:px-4"
-            role="region"
-            aria-label="Satellite IoT and NTN capability"
-          >
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-sky-200/80">
-              <Satellite className="h-3.5 w-3.5 shrink-0 text-sky-300" aria-hidden />
-              <span>Robust IoT–NTN</span>
-              <span className="hidden text-white/25 sm:inline">·</span>
-              <span className="text-white/55 normal-case tracking-normal">
-                messaging, tracking, emergency · utilities · infrastructure · maritime · agriculture · fleet telematics
+          ) : null
+        }
+        commandDeck={
+          <CommsOrbitalCommandDeck
+            darkMode={darkMode}
+            displayName={displayName}
+            isConnected={isConnected}
+            mainUserPhotoUrl={localChatAvatar}
+            onMainUserPhotoUpload={handleChatAvatarUpload}
+            photoUploading={avatarUploading}
+            peers={orbitalPeers}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onPeerCall={handleUserCall}
+            onPeerMessage={handleUserMessage}
+            onPeerVideoInvite={handleOrbitalVideoInvite}
+            footerSlot={<CommsP2PUnifiedStrip />}
+          />
+        }
+        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
+        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
+        socialChannelTab={socialChannelTab}
+      >
+        {anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies && (
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+              <span className="text-xs font-medium text-amber-200">
+                {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
+                <span className="font-normal text-amber-100/60">· {anomalyData.anomalies[0]?.description}</span>
               </span>
             </div>
-            <p className="mt-1.5 text-[10px] leading-snug text-white/55 sm:text-[11px]">
-              Aligned with 3GPP non-terrestrial network (NTN) work: satellite overlay where terrestrial infrastructure alone cannot
-              close coverage gaps — from remote monitoring at scale to mission-critical reach-back.
-            </p>
+            <button
+              type="button"
+              onClick={() => setDismissedAnomalies(true)}
+              className="shrink-0 rounded-lg p-1 text-amber-300/80 transition hover:bg-amber-500/20 hover:text-amber-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+        )}
 
-          <CommsP2PUnifiedStrip />
-
-          <nav
-            className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-            aria-label="Comms modules"
-          >
-            <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-white/40 sm:sr-only">Channel</p>
-            <div className="flex flex-1 flex-wrap justify-center gap-1 rounded-2xl border border-white/10 bg-slate-950/45 p-1 sm:justify-start">
-              {tabConfig.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                    activeTab === tab.id
-                      ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
-                      : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/25 hover:text-white/90"
-                  }`}
-                >
-                  <tab.icon className="h-3.5 w-3.5" />
-                  <span className="sm:inline">{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </nav>
-
-          <div
-            className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-slate-950/60 p-1 ${
-              socialChannelTab
-                ? "border-amber-500/30 shadow-[0_0_70px_-18px_rgba(251,146,60,0.38),0_0_50px_-25px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]"
-                : "border-cyan-500/20 shadow-[0_0_60px_-20px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]"
-            }`}
-          >
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.1]"
-              style={{
-                backgroundImage:
-                  socialChannelTab
-                    ? "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.3) 1px, transparent 0), radial-gradient(circle at 1px 1px, rgba(251, 191, 36, 0.22) 1px, transparent 0)"
-                    : "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.35) 1px, transparent 0)",
-                backgroundSize: socialChannelTab ? "22px 22px, 30px 30px" : "22px 22px",
-                backgroundPosition: socialChannelTab ? "0 0, 11px 5px" : undefined,
-              }}
-            />
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                socialChannelTab
-                  ? "bg-gradient-to-br from-amber-500/10 via-transparent to-orange-500/8"
-                  : "bg-gradient-to-br from-cyan-500/5 via-transparent to-orange-500/10"
-              }`}
-            />
-            <div
-              className={`absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent ${
-                socialChannelTab ? "via-amber-400/50" : "via-cyan-400/50"
-              }`}
-            />
-            <div
-              className={`absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent to-transparent ${
-                socialChannelTab ? "via-cyan-400/30" : "via-orange-500/35"
-              }`}
-            />
-
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/40 backdrop-blur-sm">
-              {anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies && (
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 sm:px-4">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
-                    <span className="text-xs font-medium text-amber-200">
-                      {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
-                      <span className="font-normal text-amber-100/60">· {anomalyData.anomalies[0]?.description}</span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDismissedAnomalies(true)}
-                    className="shrink-0 rounded-lg p-1 text-amber-300/80 transition hover:bg-amber-500/20 hover:text-amber-100"
-                    aria-label="Dismiss"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-
-              <div className="min-h-0 flex-1 overflow-hidden p-1 sm:p-2">
+        <div className="min-h-0 flex-1 overflow-hidden p-1 sm:p-2">
                 {activeTab === "chat" && (
                   <CommsPlatform
                     conversations={conversations}
@@ -1189,6 +1122,7 @@ export function CommsPage() {
                       onEndStream={handleEndStream}
                       onJoinStream={handleJoinStream}
                       onLeaveStream={handleLeaveStream}
+                      onRefreshList={refreshLiveStreams}
                     />
                   </div>
                 )}
@@ -1204,17 +1138,15 @@ export function CommsPage() {
                   <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
                     <CallHistoryPanel
                       myDeviceId={myDeviceId}
+                      displayName={displayName}
                       allUsers={allUsers}
                       onlineUsers={onlineUsers}
                       onCall={handleUserCall}
                     />
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+      </CommsNexusWorkspace>
 
       {showEmojiPicker && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
@@ -1260,11 +1192,13 @@ function UserDiscoveryWithMesh(
 
 function CallHistoryPanel({
   myDeviceId,
+  displayName,
   allUsers,
   onlineUsers,
   onCall,
 }: {
   myDeviceId: string;
+  displayName: string;
   allUsers: { id: string; displayName: string; isOnline: boolean; lastSeen: string | null; status: string }[];
   onlineUsers: { id: string; displayName: string; deviceId: string; inCall: boolean }[];
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
@@ -1273,6 +1207,7 @@ function CallHistoryPanel({
 
   return (
     <div className="space-y-6">
+      <ConferenceQuickPanel displayName={displayName} />
       <CommsP2PCallDock />
       <div>
         <h3

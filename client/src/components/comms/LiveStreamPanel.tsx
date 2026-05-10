@@ -40,6 +40,8 @@ interface LiveStreamPanelProps {
   onEndStream?: (streamId: string) => void;
   onJoinStream?: (streamId: string) => void;
   onLeaveStream?: (streamId: string) => void;
+  /** Phase 3: recover from stale list / failed viewer attach */
+  onRefreshList?: () => void;
 }
 
 const sourceTypeConfig: Record<
@@ -197,6 +199,7 @@ export function LiveStreamPanel({
   onEndStream,
   onJoinStream,
   onLeaveStream,
+  onRefreshList,
 }: LiveStreamPanelProps) {
   const [showNewStream, setShowNewStream] = useState(false);
   const [newStreamName, setNewStreamName] = useState("");
@@ -234,17 +237,28 @@ export function LiveStreamPanel({
             {activeStreams.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => setShowNewStream(!showNewStream)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-xs font-medium transition-colors border border-cyan-600/20"
-        >
-          {showNewStream ? (
-            <X className="w-3.5 h-3.5" />
-          ) : (
-            <Plus className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-2">
+          {onRefreshList && (
+            <button
+              type="button"
+              onClick={() => onRefreshList()}
+              className="rounded-lg border border-white/10 bg-gray-800/50 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:border-cyan-500/30 hover:text-white"
+            >
+              Refresh
+            </button>
           )}
-          {showNewStream ? "Cancel" : "New Stream"}
-        </button>
+          <button
+            onClick={() => setShowNewStream(!showNewStream)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-xs font-medium transition-colors border border-cyan-600/20"
+          >
+            {showNewStream ? (
+              <X className="w-3.5 h-3.5" />
+            ) : (
+              <Plus className="w-3.5 h-3.5" />
+            )}
+            {showNewStream ? "Cancel" : "New Stream"}
+          </button>
+        </div>
       </div>
 
       {showNewStream && (
