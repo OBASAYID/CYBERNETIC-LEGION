@@ -782,16 +782,6 @@ export function CommsPage() {
     setActiveTab("chat");
   }, []);
 
-  /** Orbital HUD text console — send without leaving mesh view. */
-  const handlePeerHubSendText = useCallback(
-    (userId: string, text: string) => {
-      const t = text.trim();
-      if (!t) return;
-      presenceSendChatMessage(userId, { message: t, messageType: "text" });
-    },
-    [presenceSendChatMessage]
-  );
-
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
     callUser(userId, userName, type);
   }, [callUser]);
@@ -984,6 +974,8 @@ export function CommsPage() {
         displayName={displayName}
         isConnected={isConnected}
         onlineUsersLength={onlineUsers.length}
+        sceneTitle="Key event assurance service"
+        sceneSubtitle="Mission-grade communications orchestration · unified mesh"
         handoff={
           commsHandoffText ? (
             <div
@@ -1037,10 +1029,6 @@ export function CommsPage() {
             onPeerCall={handleUserCall}
             onPeerMessage={handleUserMessage}
             onPeerVideoInvite={handleOrbitalVideoInvite}
-            onPeerHubSendText={handlePeerHubSendText}
-            onPeerHubSendMedia={handleSendMedia}
-            onPeerHubSendVoice={handleSendVoice}
-            onPeerOpenGroupHub={() => setActiveTab("calls")}
             footerSlot={<CommsP2PUnifiedStrip />}
             storyRail={NEXUS_STORY_RAIL}
           />

@@ -23,6 +23,8 @@ export function CommsNexusWorkspace({
   moduleLabel,
   moduleSublabel,
   socialChannelTab,
+  sceneTitle,
+  sceneSubtitle,
   children,
 }: {
   darkMode: boolean;
@@ -35,6 +37,9 @@ export function CommsNexusWorkspace({
   moduleLabel: string;
   moduleSublabel?: string;
   socialChannelTab: boolean;
+  /** When set, replaces default NEXUS header (reference: Key Event Assurance). */
+  sceneTitle?: string;
+  sceneSubtitle?: string;
   children: ReactNode;
 }) {
   const isDark = darkMode;
@@ -112,6 +117,14 @@ export function CommsNexusWorkspace({
         }}
         aria-hidden
       />
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-contain bg-top bg-no-repeat opacity-[0.07] mix-blend-screen sm:opacity-[0.09]"
+        style={{
+          backgroundImage: "url(/comms/ref-key-event-assurance.png)",
+          maskImage: "radial-gradient(ellipse 88% 70% at 50% 28%, black 0%, transparent 76%)",
+        }}
+        aria-hidden
+      />
 
       <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-2 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-3">
         {handoff}
@@ -154,7 +167,7 @@ export function CommsNexusWorkspace({
                 }`}
               >
                 <Satellite className="h-2.5 w-2.5 shrink-0 opacity-90" aria-hidden />
-                Holo-link · NTN mesh
+                {sceneTitle ? "Assurance layer · NEXUS" : "Holo-link · NTN mesh"}
               </p>
               <h1
                 className={`truncate text-sm font-bold tracking-tight sm:text-base ${
@@ -164,8 +177,13 @@ export function CommsNexusWorkspace({
                 }`}
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
-                NEXUS · FIELD HUD
+                {sceneTitle ?? "NEXUS · FIELD HUD"}
               </h1>
+              {sceneSubtitle ? (
+                <p className={`mt-0.5 line-clamp-2 text-[9px] leading-snug sm:text-[10px] ${isDark ? "text-white/50" : "text-slate-600"}`}>
+                  {sceneSubtitle}
+                </p>
+              ) : null}
               <CommsMeshLinkHeaderBadge
                 presenceLinePrefix={`${isConnected ? "Linked" : "Sync…"} · ${onlineUsersLength} nodes`}
               />
