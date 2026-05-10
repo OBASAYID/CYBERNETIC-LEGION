@@ -1,10 +1,10 @@
 /**
- * High-fidelity 3D orbital layout (reference: heliocentric diagram):
- * emissive central sun, elliptic path, axially tilted lit spheres, star field.
- * `orbitPhaseRef.current` is synced in degrees with the parent (same as 2D orbitDeg).
+ * High-fidelity 3D orbital layout: emissive hub, elliptic path, hub→node tethers,
+ * large matte user spheres with cyan rim glow (reference: command-center aesthetic).
+ * `orbitPhaseRef.current` is orbit angle in degrees (synced with parent drag/wheel).
  */
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Billboard, Html, Line, Stars, useTexture } from "@react-three/drei";
 import * as THREE from "three";
@@ -19,7 +19,6 @@ type ScenePeer = {
 export type ForwardOrbitSlot = { refLabel: string; peer: ScenePeer | null };
 
 type Props = {
-  /** Radians = (orbitPhaseRef.current * Math.PI) / 180 */
   orbitPhaseRef: React.MutableRefObject<number>;
   darkMode: boolean;
   forwardSlots: ForwardOrbitSlot[];
@@ -32,12 +31,20 @@ type Props = {
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
 };
 
+const CYAN = "#00e5ff";
 const AXIAL_TILT = (23.4 * Math.PI) / 180;
-const ORBIT_A = 2.38;
-const ORBIT_B = 1.58;
-const PLANET_R = 0.17;
+const ORBIT_A = 2.62;
+const ORBIT_B = 1.72;
+/** Base radius for user presence spheres (enlarged vs earlier build). */
+const PLANET_R = 0.34;
 const SUN_R = 0.42;
 
+function orbitXZ(index: number, deg: number) {
+  const phi = (deg * Math.PI) / 180 + index * ((Math.PI * 2) / 5);
+  return { x: ORBIT_A * Math.cos(phi), z: ORBIT_B * Math.sin(phi) };
+}
+
+/** Photo mapped onto the center hub sphere (main / operator user). */
 function SunTextured({ url }: { url: string }) {
   const tex = useTexture(url);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -45,44 +52,216 @@ function SunTextured({ url }: { url: string }) {
   return (
     <mesh>
       <sphereGeometry args={[SUN_R, 72, 72]} />
-      <meshStandardMaterial map={tex} emissive="#332208" emissiveIntensity={0.35} roughness={0.5} metalness={0.05} />
+      <meshStandardMaterial map={tex} emissive="#1a2838" emissiveIntensity={0.22} roughness={0.48} metalness={0.06} />
     </mesh>
   );
 }
 
-function SunProcedural() {
+/** Shared cyan accent: command-center rim + wireframe (center hub only). */
+function HubRimAccents() {
   return (
-    <mesh>
-      <sphereGeometry args={[SUN_R, 72, 72]} />
-      <meshStandardMaterial
-        color="#fff6e0"
-        emissive="#ffcc66"
-        emissiveIntensity={1.35}
-        roughness={0.38}
-        metalness={0.08}
-      />
-    </mesh>
+    <group>
+      <mesh scale={1.06}>
+        <sphereGeometry args={[SUN_R, 48, 48]} />
+        <meshBasicMaterial
+          color={CYAN}
+          side={THREE.BackSide}
+          transparent
+          opacity={0.26}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[SUN_R * 1.04, 0.012, 12, 96]} />
+        <meshStandardMaterial
+          color={CYAN}
+          emissive={CYAN}
+          emissiveIntensity={2}
+          roughness={0.35}
+          metalness={0.38}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[SUN_R * 1.018, 36, 18]} />
+        <meshBasicMaterial color={CYAN} wireframe transparent opacity={0.11} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 
-function PlanetTextured({ url }: { url: string }) {
-  const tex = useTexture(url);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+/** Empty hub: dark core prompting main-user photo upload (not a generic “sun”). */
+function HubAwaitingMainPhoto({ darkMode }: { darkMode: boolean }) {
+  const base = darkMode ? "#050c14" : "#0a1520";
   return (
-    <mesh>
-      <sphereGeometry args={[PLANET_R, 64, 64]} />
-      <meshStandardMaterial map={tex} roughness={0.62} metalness={0.06} />
-    </mesh>
+    <group>
+      <mesh>
+        <sphereGeometry args={[SUN_R, 64, 64]} />
+        <meshStandardMaterial
+          color={base}
+          roughness={0.9}
+          metalness={0.07}
+          emissive="#021018"
+          emissiveIntensity={0.4}
+        />
+      </mesh>
+      <HubRimAccents />
+    </group>
   );
 }
 
-function PlanetProcedural({ ocean, land }: { ocean: string; land: string }) {
+/**
+ * Center sphere = main user (operator). Texture fills the mesh when `mainUserPhotoUrl` is set;
+ * upload is triggered from the face-on control (Html) so orbit drag on the parent still works.
+ */
+function MainUserHub({
+  mainUserPhotoUrl,
+  displayName,
+  photoUploading,
+  darkMode,
+  onPhotoClick,
+}: {
+  mainUserPhotoUrl: string | null;
+  displayName: string;
+  photoUploading: boolean;
+  darkMode: boolean;
+  onPhotoClick: () => void;
+}) {
+  const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
+  const hasPhoto = !!mainUserPhotoUrl;
+  /** With a texture on the sphere, keep copy lower so it does not mask the face. */
+  const hubLabelPos: [number, number, number] = hasPhoto ? [0, -SUN_R * 0.62, SUN_R * 0.98] : [0, 0, SUN_R * 1.12];
+
   return (
-    <mesh>
-      <sphereGeometry args={[PLANET_R, 64, 64]} />
-      <meshStandardMaterial color={ocean} roughness={0.58} metalness={0.18} emissive={land} emissiveIntensity={0.12} />
-    </mesh>
+    <group>
+      <Suspense fallback={<HubAwaitingMainPhoto darkMode={darkMode} />}>
+        {hasPhoto ? (
+          <group>
+            <SunTextured url={mainUserPhotoUrl!} />
+            <HubRimAccents />
+          </group>
+        ) : (
+          <HubAwaitingMainPhoto darkMode={darkMode} />
+        )}
+      </Suspense>
+
+      <Billboard follow position={hubLabelPos}>
+        <Html
+          center
+          distanceFactor={5.25}
+          style={{ pointerEvents: "auto", userSelect: "none" }}
+          zIndexRange={[250, 0]}
+        >
+          <div className="flex flex-col items-center">
+            <button
+              type="button"
+              disabled={photoUploading}
+              onClick={onPhotoClick}
+              title={hasPhoto ? "Change your hub photo" : "Upload your photo for the center hub"}
+              className="flex flex-col items-center rounded-lg border-0 bg-transparent p-0 transition hover:brightness-110 disabled:opacity-50"
+            >
+              {!hasPhoto ? (
+                <div
+                  className="relative rounded-full p-[3px] shadow-[0_0_32px_rgba(0,229,255,0.5)]"
+                  style={{ background: `linear-gradient(145deg, ${CYAN}dd, rgba(0,229,255,0.2))` }}
+                >
+                  <div className="flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full bg-[#030810] sm:h-[6rem] sm:w-[6rem]">
+                    <span className="text-4xl font-bold text-cyan-100 sm:text-5xl">{initial}</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="mt-2 max-w-[14rem] text-center font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-200/90 drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]">
+                Global Service Center
+              </p>
+              <p
+                className={`mt-0.5 text-center text-sm font-semibold sm:text-base ${
+                  darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
+                }`}
+              >
+                {displayName}
+              </p>
+              <p className="mt-1 rounded-md border border-cyan-500/40 bg-black/45 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-cyan-100 backdrop-blur-sm">
+                {photoUploading ? "Uploading…" : hasPhoto ? "Tap to change hub photo" : "Tap to upload your hub photo"}
+              </p>
+            </button>
+          </div>
+        </Html>
+      </Billboard>
+    </group>
+  );
+}
+
+/** Glowing link from Global Service Center to each orbit node (reference: data tether). */
+function HubTether({ orbitPhaseRef, index }: { orbitPhaseRef: React.MutableRefObject<number>; index: number }) {
+  const lineObj = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const arr = new Float32Array(6);
+    const attr = new THREE.BufferAttribute(arr, 3);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute("position", attr);
+    const mat = new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.38 });
+    return new THREE.Line(g, mat);
+  }, []);
+
+  useFrame(() => {
+    const { x, z } = orbitXZ(index, orbitPhaseRef.current);
+    const geo = lineObj.geometry;
+    const arr = geo.attributes.position.array as Float32Array;
+    arr[0] = 0;
+    arr[1] = 0;
+    arr[2] = 0;
+    arr[3] = -x;
+    arr[4] = 0;
+    arr[5] = -z;
+    geo.attributes.position.needsUpdate = true;
+  });
+
+  return <primitive object={lineObj} />;
+}
+
+function UserSphereBody({ darkMode, online }: { darkMode: boolean; online: boolean }) {
+  const base = darkMode ? "#050a10" : "#0c1520";
+  return (
+    <group>
+      <mesh>
+        <sphereGeometry args={[PLANET_R, 64, 64]} />
+        <meshStandardMaterial
+          color={base}
+          roughness={0.93}
+          metalness={0.06}
+          emissive={online ? "#001820" : "#000000"}
+          emissiveIntensity={online ? 0.35 : 0.08}
+        />
+      </mesh>
+      {/* Cyan rim glow — backface shell */}
+      <mesh scale={1.085}>
+        <sphereGeometry args={[PLANET_R, 48, 48]} />
+        <meshBasicMaterial
+          color={CYAN}
+          side={THREE.BackSide}
+          transparent
+          opacity={online ? 0.32 : 0.14}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      {/* Sharp equator ring */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[PLANET_R * 1.02, 0.009, 12, 96]} />
+        <meshStandardMaterial
+          color={CYAN}
+          emissive={CYAN}
+          emissiveIntensity={online ? 2.2 : 0.6}
+          roughness={0.35}
+          metalness={0.4}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -103,119 +282,150 @@ function OrbitingNode({
   darkMode: boolean;
 } & Pick<Props, "onPeerCall" | "onPeerMessage" | "onPeerVideoInvite">) {
   const root = useRef<THREE.Group>(null);
+  const blob = useRef<THREE.Group>(null);
+  const scaleCurrent = useRef(0.25);
 
-  useFrame(() => {
-    const deg = orbitPhaseRef.current;
-    const phi = (deg * Math.PI) / 180 + index * ((Math.PI * 2) / 5);
-    const x = ORBIT_A * Math.cos(phi);
-    const z = ORBIT_B * Math.sin(phi);
+  const online = !!peer;
+
+  useEffect(() => {
+    if (online) scaleCurrent.current = Math.min(scaleCurrent.current, 0.2);
+  }, [online, peer?.id]);
+
+  useFrame((_, dt) => {
+    const { x, z } = orbitXZ(index, orbitPhaseRef.current);
     if (root.current) root.current.position.set(x, 0, z);
-  });
 
-  const ocean = darkMode ? "#1e5a7a" : "#2a7ab0";
-  const land = darkMode ? "#0d2838" : "#1a4d30";
+    const target = online ? 1 : 0.38;
+    const k = Math.min(12 * dt, 1);
+    scaleCurrent.current += (target - scaleCurrent.current) * k;
+    if (blob.current) blob.current.scale.setScalar(Math.max(0.08, scaleCurrent.current));
+  });
 
   return (
     <group ref={root}>
-      <group rotation={[AXIAL_TILT, 0, 0]}>
-        <Suspense
-          fallback={
-            <mesh>
-              <sphereGeometry args={[PLANET_R, 48, 48]} />
-              <meshStandardMaterial color={ocean} roughness={0.6} metalness={0.15} />
-            </mesh>
-          }
-        >
-          {peer?.avatarUrl ? (
-            <PlanetTextured url={peer.avatarUrl} />
-          ) : peer ? (
-            <PlanetProcedural ocean={ocean} land={land} />
-          ) : (
-            <mesh>
-              <sphereGeometry args={[PLANET_R, 48, 48]} />
-              <meshStandardMaterial color="#0f1f2e" roughness={0.85} metalness={0.05} wireframe={false} />
-            </mesh>
-          )}
-        </Suspense>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[PLANET_R * 1.03, 0.006, 8, 64]} />
-          <meshBasicMaterial color="#c44" transparent opacity={0.75} depthWrite={false} />
-        </mesh>
-      </group>
+      <HubTether orbitPhaseRef={orbitPhaseRef} index={index} />
 
-      <Billboard follow position={[0, -0.38, 0]}>
-        <Html
-          center
-          distanceFactor={5.2}
-          style={{ pointerEvents: "auto", userSelect: "none" }}
-          zIndexRange={[100, 0]}
-        >
-          <div
-            className={`min-w-[3.2rem] rounded border px-1 py-0.5 text-center shadow-lg backdrop-blur-md ${
-              darkMode ? "border-cyan-500/40 bg-black/55 text-cyan-100" : "border-sky-400/50 bg-white/85 text-slate-900"
-            }`}
+      <group ref={blob}>
+        <group rotation={[AXIAL_TILT, 0, 0]}>
+          <Suspense fallback={null}>
+            <UserSphereBody darkMode={darkMode} online={online} />
+          </Suspense>
+        </group>
+
+        {/* Face-on portrait + name (reference: circular photo on sphere) */}
+        <Billboard follow position={[0, 0, PLANET_R * 1.06]}>
+          <Html
+            center
+            distanceFactor={4.85}
+            style={{ pointerEvents: "auto", userSelect: "none" }}
+            zIndexRange={[100, 0]}
           >
-            <p className="font-mono text-[8px] font-bold uppercase tracking-wide">{refLabel}</p>
-            {peer ? (
-              <>
-                <p className="max-w-[4.5rem] truncate text-[6px] uppercase opacity-80">{peer.displayName}</p>
-                <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
+            <div className="flex flex-col items-center">
+              <div
+                className={`relative rounded-full p-[3px] shadow-[0_0_28px_rgba(0,229,255,0.55),0_0_2px_rgba(0,229,255,0.9)] ${
+                  online ? "opacity-100" : "opacity-45"
+                }`}
+                style={{
+                  background: `linear-gradient(145deg, ${CYAN}cc, rgba(0,229,255,0.15))`,
+                }}
+              >
+                <div
+                  className={`flex items-center justify-center overflow-hidden rounded-full bg-[#030810] ${
+                    online ? "h-[4.5rem] w-[4.5rem] sm:h-[5.25rem] sm:w-[5.25rem]" : "h-[3rem] w-[3rem] sm:h-[3.35rem] sm:w-[3.35rem]"
+                  }`}
+                >
+                  {online && peer.avatarUrl ? (
+                    <img src={peer.avatarUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+                  ) : online ? (
+                    <span className="text-2xl font-bold text-cyan-100 sm:text-3xl">
+                      {peer.displayName.charAt(0).toUpperCase()}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-sm font-bold text-cyan-500/40">—</span>
+                  )}
+                </div>
+                {online && peer.inCall ? (
+                  <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.95)]" />
+                ) : online ? (
+                  <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
+                ) : null}
+              </div>
+
+              <p className="mt-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-cyan-100/90 drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">
+                {refLabel}
+              </p>
+              {online ? (
+                <p
+                  className={`mt-0.5 max-w-[7.5rem] text-center text-[10px] font-semibold leading-tight sm:max-w-[9rem] sm:text-[11px] ${
+                    darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
+                  }`}
+                >
+                  {peer.displayName}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-center font-mono text-[8px] uppercase tracking-wider text-cyan-400/45">
+                  Offline
+                </p>
+              )}
+
+              {online ? (
+                <div className="mt-1.5 flex flex-wrap justify-center gap-1">
                   <button
                     type="button"
                     title="Voice"
                     disabled={peer.inCall}
-                    className="rounded border border-emerald-500/50 bg-emerald-950/80 px-1 py-0.5 text-[8px] text-emerald-100 disabled:opacity-40"
+                    className="rounded-md border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-1 text-[9px] text-emerald-100 disabled:opacity-40"
                     onClick={(e) => {
                       e.stopPropagation();
                       onPeerCall(peer.id, peer.displayName, "audio");
                     }}
                   >
-                    ♪
+                    Voice
                   </button>
                   <button
                     type="button"
                     title="Video"
                     disabled={peer.inCall}
-                    className="rounded border border-sky-500/50 bg-sky-950/80 px-1 py-0.5 text-[8px] text-sky-100 disabled:opacity-40"
+                    className="rounded-md border border-sky-500/50 bg-sky-950/85 px-1.5 py-1 text-[9px] text-sky-100 disabled:opacity-40"
                     onClick={(e) => {
                       e.stopPropagation();
                       onPeerCall(peer.id, peer.displayName, "video");
                     }}
                   >
-                    ▶
+                    Video
                   </button>
                   {onPeerMessage ? (
                     <button
                       type="button"
                       title="Message"
-                      className="rounded border border-violet-500/50 bg-violet-950/70 px-1 py-0.5 text-[8px] text-violet-100"
+                      className="rounded-md border border-violet-500/50 bg-violet-950/75 px-1.5 py-1 text-[9px] text-violet-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         onPeerMessage(peer.id, peer.displayName);
                       }}
                     >
-                      ✉
+                      Msg
                     </button>
                   ) : null}
                   {onPeerVideoInvite ? (
                     <button
                       type="button"
                       title="Invite"
-                      className="rounded border border-amber-500/45 bg-amber-950/60 px-1 py-0.5 text-[8px] text-amber-100"
+                      className="rounded-md border border-amber-500/45 bg-amber-950/65 px-1.5 py-1 text-[9px] text-amber-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         onPeerVideoInvite(peer.id, peer.displayName);
                       }}
                     >
-                      ✦
+                      Invite
                     </button>
                   ) : null}
                 </div>
-              </>
-            ) : null}
-          </div>
-        </Html>
-      </Billboard>
+              ) : null}
+            </div>
+          </Html>
+        </Billboard>
+      </group>
     </group>
   );
 }
@@ -234,20 +444,24 @@ function SceneInner(props: Props) {
   return (
     <group rotation={[-0.14, 0, 0]}>
       <color attach="background" args={[fogColor]} />
-      <fog attach="fog" args={[fogColor, 8, 38]} />
+      <fog attach="fog" args={[fogColor, 8, 42]} />
 
       <Stars radius={120} depth={70} count={7000} factor={2.8} saturation={0.12} fade speed={0.4} />
 
       <ambientLight intensity={darkMode ? 0.09 : 0.18} color="#8cf" />
-      <directionalLight position={[4, 6, 3]} intensity={0.35} color="#dff" />
+      <directionalLight position={[4, 6, 3]} intensity={0.38} color="#dff" />
 
-      <pointLight position={[0, 0, 0]} intensity={5} color="#fff6e6" distance={22} decay={2} />
+      <pointLight position={[0, 0, 0]} intensity={5.5} color="#fff6e6" distance={26} decay={2} />
 
-      <Suspense fallback={<SunProcedural />}>
-        {mainUserPhotoUrl ? <SunTextured url={mainUserPhotoUrl} /> : <SunProcedural />}
-      </Suspense>
+      <MainUserHub
+        mainUserPhotoUrl={mainUserPhotoUrl}
+        displayName={displayName}
+        photoUploading={photoUploading}
+        darkMode={darkMode}
+        onPhotoClick={onPhotoClick}
+      />
 
-      <Line points={ellipsePoints} color={darkMode ? "#6ee7ff" : "#0ea5e9"} lineWidth={1.2} opacity={0.55} transparent dashed={false} />
+      <Line points={ellipsePoints} color={darkMode ? "#6ee7ff" : "#0ea5e9"} lineWidth={1.2} opacity={0.5} transparent dashed={false} />
 
       {forwardSlots.map((slot, i) => (
         <OrbitingNode
@@ -262,26 +476,6 @@ function SceneInner(props: Props) {
           onPeerVideoInvite={onPeerVideoInvite}
         />
       ))}
-
-      <Billboard follow position={[0, -0.72, 0]}>
-        <Html center distanceFactor={4.8} style={{ pointerEvents: "auto" }} zIndexRange={[200, 0]}>
-          <button
-            type="button"
-            disabled={photoUploading}
-            onClick={onPhotoClick}
-            className={`rounded-full border-2 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.2em] shadow-[0_0_24px_rgba(0,229,255,0.35)] backdrop-blur-md transition hover:brightness-110 disabled:opacity-50 ${
-              darkMode
-                ? "border-cyan-400/60 bg-black/50 text-cyan-100"
-                : "border-sky-500/60 bg-white/90 text-sky-900"
-            }`}
-          >
-            {photoUploading ? "…" : "Set photo"}
-          </button>
-          <p className={`mt-1 text-center font-mono text-[8px] uppercase tracking-widest ${darkMode ? "text-cyan-200/80" : "text-sky-800/90"}`}>
-            {displayName}
-          </p>
-        </Html>
-      </Billboard>
     </group>
   );
 }
@@ -299,7 +493,7 @@ export function CommsOrbitalScene3D(props: Props) {
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: 1.05,
       }}
-      camera={{ position: [0, 1.95, 6.45], fov: 40, near: 0.08, far: 160 }}
+      camera={{ position: [0, 2.05, 6.85], fov: 40, near: 0.08, far: 160 }}
       style={{ width: "100%", height: "100%", display: "block", pointerEvents: "none" }}
       onCreated={({ gl }) => {
         gl.domElement.style.pointerEvents = "none";
