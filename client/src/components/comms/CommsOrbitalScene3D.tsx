@@ -4,7 +4,7 @@
  * `orbitPhaseRef.current` is orbit angle in degrees (synced with parent drag/wheel).
  */
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Billboard, Html, Line, Stars, useTexture } from "@react-three/drei";
 import * as THREE from "three";
@@ -43,6 +43,20 @@ const SUN_R = 0.42 * S;
 /** Front cap offset so Html sits flush on sphere (not floating). */
 const HUB_FACE_Z = SUN_R * 1.002;
 const NODE_FACE_Z = PLANET_R * 1.003;
+/** Second Billboard sits under the limb so labels don’t pull the ring off-center. */
+const HUB_LABEL_Y = -SUN_R * 1.12;
+const NODE_LABEL_Y = -PLANET_R * 1.22;
+/** Html scale at hub pole — same for ring + labels so photo frame stays concentric with mesh. */
+const HUB_HTML_DISTANCE = 5.25;
+const NODE_HTML_DISTANCE = 5.35;
+
+const HTML_INLINE_CENTER: CSSProperties = {
+  pointerEvents: "auto",
+  userSelect: "none",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
 
 function orbitXZ(index: number, deg: number) {
   const phi = (deg * Math.PI) / 180 + index * ((Math.PI * 2) / 5);
@@ -136,8 +150,6 @@ function MainUserHub({
 }) {
   const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
   const hasPhoto = !!mainUserPhotoUrl;
-  /** Photo ring sits on sphere cap; with texture, only captions sit below the limb. */
-  const hubLabelPos: [number, number, number] = hasPhoto ? [0, -SUN_R * 0.58, SUN_R * 0.9] : [0, 0, HUB_FACE_Z];
 
   return (
     <group>
@@ -152,43 +164,59 @@ function MainUserHub({
         )}
       </Suspense>
 
-      <Billboard follow position={hubLabelPos}>
-        <Html
-          center
-          distanceFactor={hasPhoto ? 5.1 : 5.45}
-          style={{ pointerEvents: "auto", userSelect: "none" }}
-          zIndexRange={[250, 0]}
-        >
-          <div className="flex flex-col items-center">
+      {/* Ring / tap target: alone so Html `center` = sphere pole (inlined with mesh). */}
+      <Billboard follow position={[0, 0, HUB_FACE_Z]}>
+        <Html center distanceFactor={HUB_HTML_DISTANCE} style={HTML_INLINE_CENTER} zIndexRange={[250, 0]}>
+          {hasPhoto ? (
             <button
               type="button"
               disabled={photoUploading}
               onClick={onPhotoClick}
-              title={hasPhoto ? "Change your profile photo" : "Upload your profile photo"}
-              className="flex flex-col items-center rounded-lg border-0 bg-transparent p-0 transition hover:brightness-110 disabled:opacity-50"
+              title="Change your profile photo"
+              aria-label="Change your profile photo"
+              className="flex items-center justify-center rounded-full border-0 bg-transparent p-0 transition hover:brightness-110 disabled:opacity-50"
             >
-              {!hasPhoto ? (
-                <div
-                  className="relative rounded-full p-[2px] shadow-[0_0_28px_rgba(0,229,255,0.45)]"
-                  style={{ background: `linear-gradient(145deg, ${CYAN}dd, rgba(0,229,255,0.2))` }}
-                >
-                  <div className="flex h-[4.65rem] w-[4.65rem] items-center justify-center rounded-full bg-[#030810] sm:h-[5.35rem] sm:w-[5.35rem]">
-                    <span className="text-3xl font-bold text-cyan-100 sm:text-4xl">{initial}</span>
-                  </div>
-                </div>
-              ) : null}
-
-              <p
-                className={`mt-2 text-center text-sm font-semibold sm:text-base ${
-                  darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
-                }`}
+              <div
+                className="relative rounded-full p-[2px] shadow-[0_0_28px_rgba(0,229,255,0.45)]"
+                style={{ background: `linear-gradient(145deg, ${CYAN}dd, rgba(0,229,255,0.2))` }}
               >
-                {displayName}
-              </p>
-              <p className="mt-1 rounded-md border border-cyan-500/40 bg-black/45 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-cyan-100 backdrop-blur-sm">
-                {photoUploading ? "Uploading…" : hasPhoto ? "Tap to change photo" : "Tap to add photo"}
-              </p>
+                <div className="h-[4.65rem] w-[4.65rem] rounded-full bg-transparent sm:h-[5.35rem] sm:w-[5.35rem]" />
+              </div>
             </button>
+          ) : (
+            <button
+              type="button"
+              disabled={photoUploading}
+              onClick={onPhotoClick}
+              title="Upload your profile photo"
+              className="flex items-center justify-center rounded-full border-0 bg-transparent p-0 transition hover:brightness-110 disabled:opacity-50"
+            >
+              <div
+                className="relative rounded-full p-[2px] shadow-[0_0_28px_rgba(0,229,255,0.45)]"
+                style={{ background: `linear-gradient(145deg, ${CYAN}dd, rgba(0,229,255,0.2))` }}
+              >
+                <div className="flex h-[4.65rem] w-[4.65rem] shrink-0 items-center justify-center rounded-full bg-[#030810] sm:h-[5.35rem] sm:w-[5.35rem]">
+                  <span className="text-3xl font-bold text-cyan-100 sm:text-4xl">{initial}</span>
+                </div>
+              </div>
+            </button>
+          )}
+        </Html>
+      </Billboard>
+
+      <Billboard follow position={[0, HUB_LABEL_Y, HUB_FACE_Z * 0.96]}>
+        <Html center distanceFactor={HUB_HTML_DISTANCE} style={HTML_INLINE_CENTER} zIndexRange={[240, 0]}>
+          <div className="flex flex-col items-center justify-center text-center">
+            <p
+              className={`text-sm font-semibold sm:text-base ${
+                darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
+              }`}
+            >
+              {displayName}
+            </p>
+            <p className="mt-1 rounded-md border border-cyan-500/40 bg-black/45 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-cyan-100 backdrop-blur-sm">
+              {photoUploading ? "Uploading…" : hasPhoto ? "Tap center to change photo" : "Tap the ring to add photo"}
+            </p>
           </div>
         </Html>
       </Billboard>
@@ -312,15 +340,9 @@ function OrbitingNode({
           <Suspense fallback={null}>
             <UserSphereBody darkMode={darkMode} online={online} />
           </Suspense>
-          {/* Ring + portrait on sphere cap (same tilt as mesh) */}
+          {/* Portrait ring only — centered on sphere cap (tilt group). */}
           <Billboard follow position={[0, 0, NODE_FACE_Z]}>
-            <Html
-              center
-              distanceFactor={5.35}
-              style={{ pointerEvents: "auto", userSelect: "none" }}
-              zIndexRange={[100, 0]}
-            >
-            <div className="flex flex-col items-center">
+            <Html center distanceFactor={NODE_HTML_DISTANCE} style={HTML_INLINE_CENTER} zIndexRange={[100, 0]}>
               <div
                 className={`relative rounded-full p-[2px] shadow-[0_0_24px_rgba(0,229,255,0.5),0_0_2px_rgba(0,229,255,0.85)] ${
                   online ? "opacity-100" : "opacity-45"
@@ -350,80 +372,83 @@ function OrbitingNode({
                   <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
                 ) : null}
               </div>
+            </Html>
+          </Billboard>
 
-              <p className="mt-1.5 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-cyan-100/90 drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">
-                {refLabel}
-              </p>
-              {online ? (
-                <p
-                  className={`mt-0.5 max-w-[7.5rem] text-center text-[10px] font-semibold leading-tight sm:max-w-[9rem] sm:text-[11px] ${
-                    darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
-                  }`}
-                >
-                  {peer.displayName}
+          <Billboard follow position={[0, NODE_LABEL_Y, NODE_FACE_Z * 0.96]}>
+            <Html center distanceFactor={NODE_HTML_DISTANCE} style={HTML_INLINE_CENTER} zIndexRange={[90, 0]}>
+              <div className="flex max-w-[10rem] flex-col items-center justify-center text-center">
+                <p className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-cyan-100/90 drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">
+                  {refLabel}
                 </p>
-              ) : (
-                <p className="mt-0.5 text-center font-mono text-[8px] uppercase tracking-wider text-cyan-400/45">
-                  Offline
-                </p>
-              )}
+                {online ? (
+                  <p
+                    className={`mt-0.5 max-w-[7.5rem] text-[10px] font-semibold leading-tight sm:max-w-[9rem] sm:text-[11px] ${
+                      darkMode ? "text-white drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" : "text-slate-900"
+                    }`}
+                  >
+                    {peer.displayName}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 font-mono text-[8px] uppercase tracking-wider text-cyan-400/45">Offline</p>
+                )}
 
-              {online ? (
-                <div className="mt-1.5 flex flex-wrap justify-center gap-1">
-                  <button
-                    type="button"
-                    title="Voice"
-                    disabled={peer.inCall}
-                    className="rounded-md border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-1 text-[9px] text-emerald-100 disabled:opacity-40"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPeerCall(peer.id, peer.displayName, "audio");
-                    }}
-                  >
-                    Voice
-                  </button>
-                  <button
-                    type="button"
-                    title="Video"
-                    disabled={peer.inCall}
-                    className="rounded-md border border-sky-500/50 bg-sky-950/85 px-1.5 py-1 text-[9px] text-sky-100 disabled:opacity-40"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPeerCall(peer.id, peer.displayName, "video");
-                    }}
-                  >
-                    Video
-                  </button>
-                  {onPeerMessage ? (
+                {online ? (
+                  <div className="mt-1.5 flex flex-wrap justify-center gap-1">
                     <button
                       type="button"
-                      title="Message"
-                      className="rounded-md border border-violet-500/50 bg-violet-950/75 px-1.5 py-1 text-[9px] text-violet-100"
+                      title="Voice"
+                      disabled={peer.inCall}
+                      className="rounded-md border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-1 text-[9px] text-emerald-100 disabled:opacity-40"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPeerMessage(peer.id, peer.displayName);
+                        onPeerCall(peer.id, peer.displayName, "audio");
                       }}
                     >
-                      Msg
+                      Voice
                     </button>
-                  ) : null}
-                  {onPeerVideoInvite ? (
                     <button
                       type="button"
-                      title="Invite"
-                      className="rounded-md border border-amber-500/45 bg-amber-950/65 px-1.5 py-1 text-[9px] text-amber-100"
+                      title="Video"
+                      disabled={peer.inCall}
+                      className="rounded-md border border-sky-500/50 bg-sky-950/85 px-1.5 py-1 text-[9px] text-sky-100 disabled:opacity-40"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPeerVideoInvite(peer.id, peer.displayName);
+                        onPeerCall(peer.id, peer.displayName, "video");
                       }}
                     >
-                      Invite
+                      Video
                     </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </Html>
+                    {onPeerMessage ? (
+                      <button
+                        type="button"
+                        title="Message"
+                        className="rounded-md border border-violet-500/50 bg-violet-950/75 px-1.5 py-1 text-[9px] text-violet-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPeerMessage(peer.id, peer.displayName);
+                        }}
+                      >
+                        Msg
+                      </button>
+                    ) : null}
+                    {onPeerVideoInvite ? (
+                      <button
+                        type="button"
+                        title="Invite"
+                        className="rounded-md border border-amber-500/45 bg-amber-950/65 px-1.5 py-1 text-[9px] text-amber-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPeerVideoInvite(peer.id, peer.displayName);
+                        }}
+                      >
+                        Invite
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </Html>
           </Billboard>
         </group>
       </group>
@@ -440,13 +465,8 @@ function SceneInner(props: Props) {
     return curve.getPoints(200).map((p) => new THREE.Vector3(p.x, 0, p.y));
   }, []);
 
-  const fogColor = darkMode ? "#030810" : "#e8f4fc";
-
   return (
     <group rotation={[-0.14, 0, 0]}>
-      <color attach="background" args={[fogColor]} />
-      <fog attach="fog" args={[fogColor, 8, 42]} />
-
       <Stars radius={120} depth={70} count={7000} factor={2.8} saturation={0.12} fade speed={0.4} />
 
       <ambientLight intensity={darkMode ? 0.09 : 0.18} color="#8cf" />
@@ -489,14 +509,16 @@ export function CommsOrbitalScene3D(props: Props) {
       dpr={[1, dpr]}
       gl={{
         antialias: true,
-        alpha: false,
+        alpha: true,
         powerPreference: "high-performance",
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: 1.05,
       }}
       camera={{ position: [0, 2.05, 6.85], fov: 40, near: 0.08, far: 160 }}
       style={{ width: "100%", height: "100%", display: "block", pointerEvents: "none" }}
-      onCreated={({ gl }) => {
+      onCreated={({ gl, scene }) => {
+        gl.setClearColor(0x000000, 0);
+        scene.background = null;
         gl.domElement.style.pointerEvents = "none";
       }}
     >

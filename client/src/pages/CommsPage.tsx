@@ -942,7 +942,7 @@ export function CommsPage() {
   return (
     <ModuleWorkspacePageShell mode="page" hidePageBackdrop>
     <CommsP2PLayerProvider displayName={displayName}>
-    <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
+    <div className={`flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden ${themeClass}`}>
       <CommsCallDiagnosticsOverlay
         diagnostics={callDiagnostics}
         callStatus={activeCall?.status}
@@ -986,6 +986,7 @@ export function CommsPage() {
       )}
 
       <CommsNexusWorkspace
+        className="min-h-0 flex-1"
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         displayName={displayName}

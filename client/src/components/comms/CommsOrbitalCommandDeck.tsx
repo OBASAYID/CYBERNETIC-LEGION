@@ -28,7 +28,6 @@ export interface OrbitalPeerNode {
   avatarUrl: string | null;
 }
 
-const DEEP_NAVY = "#000b1a";
 const CYAN = "#00e5ff";
 
 type PhaseIdx = 0 | 1 | 2;
@@ -188,52 +187,16 @@ export function CommsOrbitalCommandDeck({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  const shell = darkMode
-    ? "border-cyan-400/45 bg-gradient-to-b from-[#030d18]/98 via-[#000b1a]/95 to-[#010408] shadow-[0_0_100px_-28px_rgba(0,229,255,0.45),0_0_1px_rgba(0,229,255,0.35),inset_0_1px_0_rgba(0,229,255,0.18)]"
-    : "border-sky-400/45 bg-white/55 shadow-[0_0_40px_-12px_rgba(14,165,233,0.3)]";
-
   const textTitle = darkMode ? "text-white" : "text-slate-900";
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${shell} backdrop-blur-2xl ${className}`}
+      className={`relative bg-transparent ${className}`}
       aria-label="Key Event Assurance Service"
     >
-      {/* Vignette + floor grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-100"
-        style={{
-          background: darkMode
-            ? `radial-gradient(ellipse 85% 65% at 50% 42%, transparent 0%, rgba(0,4,12,0.5) 62%, rgba(0,0,0,0.75) 100%),
-               radial-gradient(ellipse 55% 40% at 50% 88%, rgba(0,229,255,0.08), transparent 55%)`
-            : "radial-gradient(ellipse 80% 60% at 50% 40%, transparent 40%, rgba(240,249,255,0.9) 100%)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.22] sm:opacity-[0.26]"
-        style={{
-          backgroundImage: `
-            linear-gradient(90deg, ${CYAN}35 1px, transparent 1px),
-            linear-gradient(180deg, transparent 0%, ${DEEP_NAVY} 45%, transparent 100%)
-          `,
-          backgroundSize: "40px 40px, 100% 100%",
-          transform: "perspective(480px) rotateX(60deg) scale(1.18)",
-          transformOrigin: "50% 100%",
-          maskImage: "linear-gradient(to bottom, transparent 0%, black 28%, black 88%, transparent 100%)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage: `linear-gradient(105deg, transparent 40%, ${CYAN}22 48%, transparent 56%)`,
-          backgroundSize: "200% 100%",
-          animation: "kessTimelineGlow 11s ease-in-out infinite",
-        }}
-      />
-
-      <div className="relative z-[1] flex flex-col px-3 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-6">
+      <div className="relative z-[1] flex w-full max-w-[min(100%,80rem)] flex-col self-center px-0.5 pb-3 pt-2 sm:px-2 sm:pb-4 sm:pt-3">
         {/* Header */}
-        <div className="mb-5 flex w-full max-w-6xl flex-col gap-1 self-start text-left sm:mb-7">
+        <div className="mb-3 flex w-full flex-col gap-1 text-left sm:mb-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2
@@ -267,9 +230,9 @@ export function CommsOrbitalCommandDeck({
         </div>
 
         {/* Timeline */}
-        <div className="relative mx-auto mb-2 w-full max-w-6xl px-1">
+        <div className="relative mx-auto mb-1.5 w-full px-0 sm:mb-2">
           <svg
-            className="h-16 w-full overflow-visible sm:h-[4.5rem] md:h-20"
+            className="h-12 w-full overflow-visible sm:h-14 md:h-[4rem]"
             viewBox="0 0 900 96"
             preserveAspectRatio="xMidYMid meet"
             aria-hidden
@@ -346,15 +309,15 @@ export function CommsOrbitalCommandDeck({
         </div>
 
         {/* Nine functions — glass arc */}
-        <div className="relative mx-auto w-full max-w-[85rem]" style={{ perspective: "1100px" }}>
+        <div className="relative mx-auto w-full max-w-full xl:max-w-[85rem]" style={{ perspective: "1100px" }}>
           <div
-            className="relative flex h-[148px] w-full items-end justify-center sm:h-[168px] md:h-[180px]"
+            className="relative flex h-[118px] w-full items-end justify-center sm:h-[142px] md:h-[158px]"
             style={{ transform: "rotateX(16deg)", transformOrigin: "50% 100%" }}
           >
             {ASSURANCE_ARC.map((mod, i) => {
               const n = ASSURANCE_ARC.length;
               const t = n > 1 ? i / (n - 1) : 0.5;
-              const arcLift = 32 - Math.pow(t - 0.5, 2) * 108;
+              const arcLift = 26 - Math.pow(t - 0.5, 2) * 92;
               const active = activeTab === mod.tab;
               const phaseHot = activePhase === mod.phase;
               return (
@@ -429,7 +392,7 @@ export function CommsOrbitalCommandDeck({
         </div>
 
         {/* Central hub + five satellites on draggable orbit */}
-        <div className="relative z-[4] mx-auto -mt-1 flex w-full max-w-[min(918px,88vw)] flex-col items-center sm:-mt-2">
+        <div className="relative z-[4] mx-auto -mt-0.5 flex w-full max-w-full flex-col items-center sm:-mt-1">
           <input
             ref={fileRef}
             type="file"
@@ -438,7 +401,7 @@ export function CommsOrbitalCommandDeck({
             onChange={onFileChange}
           />
 
-          <div className="mb-2 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+          <div className="mb-1 flex flex-wrap items-center justify-center gap-1.5 sm:mb-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => bumpOrbit(-2.8)}
@@ -472,10 +435,13 @@ export function CommsOrbitalCommandDeck({
 
           <div
             ref={orbitBoxRef}
-            className={`relative aspect-square w-full cursor-grab touch-none select-none active:cursor-grabbing ${
+            className={`relative mx-auto aspect-square cursor-grab touch-none select-none active:cursor-grabbing ${
               darkMode ? "" : ""
             }`}
-            style={{ touchAction: "none" }}
+            style={{
+              touchAction: "none",
+              width: "min(100%, min(92vw, 54dvh, 920px))",
+            }}
             onPointerDown={onOrbitPointerDown}
             onPointerMove={onOrbitPointerMove}
             onPointerUp={onOrbitPointerEnd}
@@ -484,11 +450,11 @@ export function CommsOrbitalCommandDeck({
             aria-label="Orbit drag control — presence nodes around your hub"
           >
             <div
-              className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/25"
+              className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/15"
               style={{
                 width: orbitRadius * 2 + 56,
                 height: orbitRadius * 2 + 56,
-                boxShadow: "inset 0 0 48px rgba(0,229,255,0.07), 0 0 32px rgba(0,229,255,0.1)",
+                boxShadow: "inset 0 0 28px rgba(0,229,255,0.04), 0 0 18px rgba(0,229,255,0.06)",
               }}
               aria-hidden
             />
@@ -510,7 +476,7 @@ export function CommsOrbitalCommandDeck({
           </div>
 
           <p
-            className="relative z-[3] mt-4 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-100/85 sm:mt-5 sm:text-[11px]"
+            className="relative z-[3] mt-2 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-100/85 sm:mt-3 sm:text-[11px]"
             style={{
               textShadow: "0 0 20px rgba(0,229,255,0.45), 0 0 2px rgba(0,229,255,0.65)",
             }}
@@ -520,7 +486,7 @@ export function CommsOrbitalCommandDeck({
         </div>
       </div>
 
-      <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.45]" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+      <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.2] sm:opacity-[0.26]" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         <defs>
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={CYAN} stopOpacity="0.08" />

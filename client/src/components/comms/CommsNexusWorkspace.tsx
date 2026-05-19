@@ -28,6 +28,7 @@ export function CommsNexusWorkspace({
   sceneTitle,
   sceneSubtitle,
   children,
+  className = "",
 }: {
   darkMode: boolean;
   onToggleDarkMode: () => void;
@@ -44,14 +45,16 @@ export function CommsNexusWorkspace({
   sceneTitle?: string;
   sceneSubtitle?: string;
   children: ReactNode;
+  /** Merge with root (e.g. flex-1 min-h-0 from page shell). */
+  className?: string;
 }) {
   const isDark = darkMode;
 
   return (
     <div
-      className={`relative flex min-h-screen min-h-0 flex-1 flex-col overflow-hidden ${
+      className={`relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden ${
         isDark ? "text-white" : "text-slate-900"
-      }`}
+      } ${className}`.trim()}
       style={{
         background: isDark
           ? `radial-gradient(ellipse 85% 55% at 50% -15%, rgba(0,229,255,0.14), transparent 52%),
@@ -137,12 +140,12 @@ export function CommsNexusWorkspace({
         aria-hidden
       />
 
-      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[min(1920px,calc(100%-0.5rem))] flex-1 flex-col px-2 pb-3 pt-2 sm:px-4 sm:pb-5 sm:pt-3">
+      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[100%] flex-1 flex-col px-1.5 pb-2 pt-1.5 sm:px-3 sm:pb-3 sm:pt-2 lg:mx-auto lg:max-w-[min(1920px,100%)] lg:px-5">
         {handoff}
 
         {/* Micro HUD bar — minimal chrome */}
         <header
-          className={`mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border px-2.5 py-2 backdrop-blur-xl sm:px-3 ${
+          className={`mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border px-2.5 py-1.5 backdrop-blur-xl sm:mb-2 sm:px-3 sm:py-2 ${
             isDark
               ? "border-cyan-500/25 bg-black/35 shadow-[0_0_40px_-12px_rgba(0,229,255,0.25)]"
               : "border-sky-300/40 bg-white/75 shadow-md"
@@ -231,19 +234,19 @@ export function CommsNexusWorkspace({
         </header>
 
         {/* Orbital deck + optional integrated console (e.g. chat) or lower module carousel */}
-        <div className="relative z-[3] mt-1 flex min-h-0 flex-1 flex-col gap-2 sm:mt-2 sm:gap-3">
-          <div className="relative shrink-0">{commandDeck}</div>
+        <div className="relative z-[3] mt-0 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden sm:mt-1 sm:gap-2">
+          <div className="relative min-h-0 w-full shrink-0 overflow-x-hidden">{commandDeck}</div>
 
           {integratedConsole ? (
             <div
-              className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border-2 sm:rounded-3xl ${
+              className={`relative flex min-h-[clamp(220px,32dvh,520px)] flex-1 basis-0 flex-col overflow-hidden rounded-2xl border-2 sm:rounded-3xl ${
                 isDark
                   ? "border-cyan-400/50 bg-gradient-to-b from-cyan-950/35 via-slate-950/80 to-[#000b1a]/96 shadow-[0_0_72px_-16px_rgba(0,229,255,0.38),inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : "border-sky-400/55 bg-gradient-to-b from-white/92 via-sky-50/85 to-slate-100/96 shadow-[0_0_44px_-10px_rgba(14,165,233,0.32)]"
             }`}
               style={{ backdropFilter: "blur(18px)" }}
             >
-              <div className="relative min-h-0 flex-1 overflow-hidden">{integratedConsole}</div>
+              <div className="relative min-h-0 flex-1 basis-0 overflow-hidden">{integratedConsole}</div>
             </div>
           ) : null}
 
