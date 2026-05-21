@@ -15,16 +15,9 @@ import {
   Wrench,
   Cable,
 } from "lucide-react";
-import { CommsOrbitalScene3D } from "./CommsOrbitalScene3D";
+import { CommsOrbitalScene3D, type ForwardOrbitSlot } from "./CommsOrbitalScene3D";
 
-export type OrbitalMainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
-
-export interface OrbitalPeerNode {
-  id: string;
-  displayName: string;
-  inCall?: boolean;
-  avatarUrl: string | null;
-}
+export type { ForwardOrbitSlot };
 
 const CYAN = "#00e5ff";
 
@@ -56,7 +49,8 @@ const ASSURANCE_ARC: AssuranceModule[] = [
   { id: "summary", tab: "monitor", label: "Adjustment & Summary", Icon: ClipboardList, phase: 2 },
 ];
 
-const FORWARD_NODE_LABELS = ["TAC", "GTAC", "RSPC", "GSPC", "GSLC"] as const;
+export type OrbitalMainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
+
 export function CommsOrbitalCommandDeck({
   darkMode,
   displayName,
@@ -64,12 +58,15 @@ export function CommsOrbitalCommandDeck({
   mainUserPhotoUrl,
   onMainUserPhotoUpload,
   photoUploading,
-  peers,
+  forwardSlots,
+  selectedPeerId,
   activeTab,
   onSelectTab,
   onPeerCall,
   onPeerMessage,
   onPeerVideoInvite,
+  onEmptySlotClick,
+  onHubActivate,
   className = "",
   serviceTitle = "Key Event Assurance Service",
   serviceSubtitle = "— Delivering Network Resilience to Maintain Customer Satisfaction",
@@ -80,12 +77,15 @@ export function CommsOrbitalCommandDeck({
   mainUserPhotoUrl: string | null;
   onMainUserPhotoUpload: (file: File) => void;
   photoUploading: boolean;
-  peers: OrbitalPeerNode[];
+  forwardSlots: ForwardOrbitSlot[];
+  selectedPeerId?: string | null;
   activeTab: OrbitalMainTab;
   onSelectTab: (t: OrbitalMainTab) => void;
   onPeerCall: (peerId: string, peerName: string, type: "audio" | "video") => void;
-  onPeerMessage?: (peerId: string, peerName: string) => void;
+  onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
+  onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;
+  onHubActivate?: () => void;
   className?: string;
   serviceTitle?: string;
   serviceSubtitle?: string;
@@ -111,13 +111,6 @@ export function CommsOrbitalCommandDeck({
     const m = ASSURANCE_ARC.find((x) => x.tab === activeTab);
     return m ? m.phase : null;
   }, [activeTab]);
-
-  const forwardSlots = useMemo(() => {
-    return FORWARD_NODE_LABELS.map((refLabel, i) => ({
-      refLabel,
-      peer: peers[i] ?? null,
-    }));
-  }, [peers]);
 
   const textTitle = darkMode ? "text-white" : "text-slate-900";
 
@@ -373,10 +366,13 @@ export function CommsOrbitalCommandDeck({
                 mainUserPhotoUrl={mainUserPhotoUrl}
                 displayName={displayName}
                 photoUploading={photoUploading}
+                selectedPeerId={selectedPeerId}
                 onPhotoClick={() => fileRef.current?.click()}
                 onPeerCall={onPeerCall}
                 onPeerMessage={onPeerMessage}
                 onPeerVideoInvite={onPeerVideoInvite}
+                onEmptySlotClick={onEmptySlotClick}
+                onHubActivate={onHubActivate}
               />
             </div>
           </div>

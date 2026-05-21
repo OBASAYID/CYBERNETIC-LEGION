@@ -28,6 +28,7 @@ import {
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
+import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbital-integration";
 import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
@@ -99,6 +100,8 @@ export function CommsPage() {
   const [newChatMode, setNewChatMode] = useState(false);
   const [newChatCascadeKey, setNewChatCascadeKey] = useState(0);
   const [newChatPicks, setNewChatPicks] = useState<string[]>([]);
+  const [orbitalAssignSlot, setOrbitalAssignSlot] = useState<number | null>(null);
+  const [slotPinRevision, setSlotPinRevision] = useState(0);
 
   const {
     messages,
@@ -446,17 +449,17 @@ export function CommsPage() {
     [avatarByUserId]
   );
 
-  const orbitalPeers = useMemo(() => {
-    const skip = new Set<string>([myId || "", "cyrus-001"].filter(Boolean));
-    return onlineUsers
-      .filter((u) => u.id && !skip.has(u.id))
-      .map((u) => ({
-        id: u.id,
-        displayName: u.displayName,
-        inCall: u.inCall,
-        avatarUrl: getAvatarForUser(u.id),
-      }));
-  }, [onlineUsers, myId, getAvatarForUser]);
+  const forwardSlots = useMemo(() => {
+    return buildOrbitalForwardSlots({
+      myId: myId || "",
+      onlineUsers,
+      allUsers: allUsers || [],
+      contacts: contacts || [],
+      resolveAvatar: getAvatarForUser,
+    });
+  }, [myId, onlineUsers, allUsers, contacts, getAvatarForUser, slotPinRevision]);
+
+  const selectedOrbitalPeerId = pendingConversationId;
 
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
@@ -767,8 +770,29 @@ export function CommsPage() {
     deleteContact.mutate(contactId);
   }, [deleteContact]);
 
-  const handleUserMessage = useCallback((userId: string, userName: string) => {
+  const handleUserMessage = useCallback((userId: string, _userName: string) => {
+    if (orbitalAssignSlot !== null) {
+      writeOrbitalSlotPin(orbitalAssignSlot, userId);
+      setOrbitalAssignSlot(null);
+      setSlotPinRevision((r) => r + 1);
+    }
     setSelectedConvForMessage(userId);
+    setActiveTab("chat");
+  }, [orbitalAssignSlot]);
+
+  const handleOrbitalPeerMessage = useCallback((userId: string, _userName: string, slotIndex: number) => {
+    writeOrbitalSlotPin(slotIndex, userId);
+    setSlotPinRevision((r) => r + 1);
+    setSelectedConvForMessage(userId);
+    setActiveTab("chat");
+  }, []);
+
+  const handleEmptyOrbitalSlot = useCallback((slotIndex: number, _refLabel: string) => {
+    setOrbitalAssignSlot(slotIndex);
+    setActiveTab("people");
+  }, []);
+
+  const handleOrbitalHubActivate = useCallback(() => {
     setActiveTab("chat");
   }, []);
 
@@ -1041,12 +1065,15 @@ export function CommsPage() {
             mainUserPhotoUrl={localChatAvatar}
             onMainUserPhotoUpload={handleChatAvatarUpload}
             photoUploading={avatarUploading}
-            peers={orbitalPeers}
+            forwardSlots={forwardSlots}
+            selectedPeerId={selectedOrbitalPeerId}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
             onPeerCall={handleUserCall}
-            onPeerMessage={handleUserMessage}
+            onPeerMessage={handleOrbitalPeerMessage}
             onPeerVideoInvite={handleOrbitalVideoInvite}
+            onEmptySlotClick={handleEmptyOrbitalSlot}
+            onHubActivate={handleOrbitalHubActivate}
           />
         }
         integratedConsole={

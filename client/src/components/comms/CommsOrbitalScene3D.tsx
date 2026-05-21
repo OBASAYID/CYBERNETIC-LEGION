@@ -8,14 +8,9 @@ import { Canvas } from "@react-three/fiber";
 import { Billboard, Grid, Html } from "@react-three/drei";
 import * as THREE from "three";
 
-type ScenePeer = {
-  id: string;
-  displayName: string;
-  inCall?: boolean;
-  avatarUrl: string | null;
-};
+import { ORBITAL_HUB_LABEL, type OrbitalForwardSlot } from "../../lib/comms-orbital-integration";
 
-export type ForwardOrbitSlot = { refLabel: string; peer: ScenePeer | null };
+export type ForwardOrbitSlot = OrbitalForwardSlot;
 
 type Props = {
   orbitPhaseRef: React.MutableRefObject<number>;
@@ -26,8 +21,11 @@ type Props = {
   photoUploading: boolean;
   onPhotoClick: () => void;
   onPeerCall: (peerId: string, peerName: string, type: "audio" | "video") => void;
-  onPeerMessage?: (peerId: string, peerName: string) => void;
+  onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
+  selectedPeerId?: string | null;
+  onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;
+  onHubActivate?: () => void;
 };
 
 const CYAN = "#00e5ff";
@@ -129,13 +127,18 @@ function PortraitCard({
   online,
   inCall,
   isHub,
+  isEmpty,
+  isSelected,
   photoUploading,
   darkMode,
   onPhotoClick,
   onPeerCall,
   onPeerMessage,
   onPeerVideoInvite,
+  onEmptyClick,
+  onHubActivate,
   peerId,
+  slotIndex,
 }: {
   refLabel: string;
   displayName: string;
@@ -143,24 +146,46 @@ function PortraitCard({
   online: boolean;
   inCall?: boolean;
   isHub: boolean;
+  isEmpty?: boolean;
+  isSelected?: boolean;
   photoUploading?: boolean;
   darkMode: boolean;
   onPhotoClick?: () => void;
   onPeerCall?: (peerId: string, peerName: string, type: "audio" | "video") => void;
-  onPeerMessage?: (peerId: string, peerName: string) => void;
+  onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
+  onEmptyClick?: () => void;
+  onHubActivate?: () => void;
   peerId?: string;
+  slotIndex?: number;
 }) {
   const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
-  const showActions = online && !isHub && peerId && onPeerCall;
+  const hasPeer = !!peerId;
+  const showCallActions = hasPeer && online && !isHub && onPeerCall;
+  const showMessageAction = hasPeer && !isHub && onPeerMessage && slotIndex !== undefined;
 
   return (
     <div
+      role={isEmpty ? "button" : undefined}
+      tabIndex={isEmpty ? 0 : undefined}
+      onClick={isEmpty ? onEmptyClick : undefined}
+      onKeyDown={
+        isEmpty
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onEmptyClick?.();
+              }
+            }
+          : undefined
+      }
       className={`flex w-[min(112px,22vw)] flex-col overflow-hidden rounded-md border shadow-[0_0_36px_rgba(0,229,255,0.38),inset_0_1px_0_rgba(255,255,255,0.08)] sm:w-[118px] ${
-        online || isHub
-          ? "border-cyan-400/65 bg-gradient-to-b from-[#062038]/96 via-[#041528]/94 to-[#020a14]/98"
-          : "border-cyan-500/25 bg-gradient-to-b from-[#041018]/90 to-[#020810]/95 opacity-70"
-      }`}
+        isSelected
+          ? "border-cyan-300 ring-2 ring-cyan-300/55"
+          : online || isHub
+            ? "border-cyan-400/65 bg-gradient-to-b from-[#062038]/96 via-[#041528]/94 to-[#020a14]/98"
+            : "border-cyan-500/25 bg-gradient-to-b from-[#041018]/90 to-[#020810]/95 opacity-70"
+      } ${isEmpty ? "cursor-pointer transition hover:border-cyan-400/50 hover:brightness-110" : ""}`}
     >
       <div className="border-b border-cyan-500/45 bg-gradient-to-r from-cyan-950/80 via-cyan-900/50 to-cyan-950/80 px-2 py-1 text-center">
         <span className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[8px]">
@@ -179,12 +204,23 @@ function PortraitCard({
           <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-[#051525] to-[#020810]">
-            <span className="text-3xl font-bold text-cyan-100/90">{initial}</span>
-            {isHub ? (
-              <span className="px-2 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/75">
-                {photoUploading ? "Uploading…" : "Tap to add photo"}
-              </span>
-            ) : null}
+            {isEmpty ? (
+              <>
+                <span className="text-2xl font-bold text-cyan-500/35">+</span>
+                <span className="px-2 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/55">
+                  Link channel
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-3xl font-bold text-cyan-100/90">{initial}</span>
+                {isHub ? (
+                  <span className="px-2 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/75">
+                    {photoUploading ? "Uploading…" : "Tap to add photo"}
+                  </span>
+                ) : null}
+              </>
+            )}
           </div>
         )}
         {(online || isHub) && inCall ? (
@@ -207,50 +243,62 @@ function PortraitCard({
           {displayName}
         </p>
         <p className="mt-0.5 font-mono text-[7px] uppercase tracking-wider text-cyan-300/65">
-          {isHub ? "Operator" : online ? (inCall ? "In call" : "Online") : "Offline"}
+          {isHub
+            ? "Operator · linked"
+            : isEmpty
+              ? "Open People to assign"
+              : online
+                ? inCall
+                  ? "In call"
+                  : "Online"
+                : "Offline"}
         </p>
       </div>
 
-      {showActions ? (
+      {showCallActions || showMessageAction ? (
         <div className="flex flex-wrap justify-center gap-1 border-t border-cyan-500/25 px-1.5 py-1.5">
-          <button
-            type="button"
-            title="Voice"
-            disabled={inCall}
-            className="rounded border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-0.5 text-[8px] text-emerald-100 disabled:opacity-40"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPeerCall!(peerId!, displayName, "audio");
-            }}
-          >
-            Voice
-          </button>
-          <button
-            type="button"
-            title="Video"
-            disabled={inCall}
-            className="rounded border border-sky-500/50 bg-sky-950/85 px-1.5 py-0.5 text-[8px] text-sky-100 disabled:opacity-40"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPeerCall!(peerId!, displayName, "video");
-            }}
-          >
-            Video
-          </button>
-          {onPeerMessage ? (
+          {showCallActions ? (
+            <>
+              <button
+                type="button"
+                title="Voice"
+                disabled={inCall}
+                className="rounded border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-0.5 text-[8px] text-emerald-100 disabled:opacity-40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPeerCall!(peerId!, displayName, "audio");
+                }}
+              >
+                Voice
+              </button>
+              <button
+                type="button"
+                title="Video"
+                disabled={inCall}
+                className="rounded border border-sky-500/50 bg-sky-950/85 px-1.5 py-0.5 text-[8px] text-sky-100 disabled:opacity-40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPeerCall!(peerId!, displayName, "video");
+                }}
+              >
+                Video
+              </button>
+            </>
+          ) : null}
+          {showMessageAction ? (
             <button
               type="button"
               title="Message"
               className="rounded border border-violet-500/50 bg-violet-950/75 px-1.5 py-0.5 text-[8px] text-violet-100"
               onClick={(e) => {
                 e.stopPropagation();
-                onPeerMessage(peerId!, displayName);
+                onPeerMessage!(peerId!, displayName, slotIndex!);
               }}
             >
               Msg
             </button>
           ) : null}
-          {onPeerVideoInvite ? (
+          {showCallActions && onPeerVideoInvite ? (
             <button
               type="button"
               title="Invite"
@@ -265,9 +313,13 @@ function PortraitCard({
           ) : null}
         </div>
       ) : isHub ? (
-        <div className="border-t border-cyan-500/25 px-2 py-1 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/60">
-          Communications hub
-        </div>
+        <button
+          type="button"
+          className="border-t border-cyan-500/25 px-2 py-1 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/75 transition hover:bg-cyan-500/10 hover:text-cyan-100"
+          onClick={onHubActivate}
+        >
+          Open chat console
+        </button>
       ) : null}
     </div>
   );
@@ -281,10 +333,13 @@ function ArcModule({
   displayName,
   photoUploading,
   darkMode,
+  selectedPeerId,
   onPhotoClick,
   onPeerCall,
   onPeerMessage,
   onPeerVideoInvite,
+  onEmptySlotClick,
+  onHubActivate,
 }: {
   layout: (typeof ARC_LAYOUT)[number];
   slot: ForwardOrbitSlot | null;
@@ -293,15 +348,20 @@ function ArcModule({
   displayName: string;
   photoUploading: boolean;
   darkMode: boolean;
+  selectedPeerId?: string | null;
   onPhotoClick: () => void;
   onPeerCall: Props["onPeerCall"];
   onPeerMessage?: Props["onPeerMessage"];
   onPeerVideoInvite?: Props["onPeerVideoInvite"];
+  onEmptySlotClick?: Props["onEmptySlotClick"];
+  onHubActivate?: Props["onHubActivate"];
 }) {
   const peer = slot?.peer ?? null;
-  const online = isHub || !!peer;
-  const refLabel = isHub ? "Operator" : slot?.refLabel ?? "—";
-  const name = isHub ? displayName : peer?.displayName ?? refLabel;
+  const slotIndex = layout.peerIndex;
+  const isEmpty = !isHub && !peer;
+  const online = isHub || !!peer?.isOnline;
+  const refLabel = isHub ? ORBITAL_HUB_LABEL : slot?.refLabel ?? "—";
+  const name = isHub ? displayName : isEmpty ? "Awaiting link" : peer!.displayName;
   const avatar = isHub ? mainUserPhotoUrl : peer?.avatarUrl ?? null;
 
   return (
@@ -317,13 +377,22 @@ function ArcModule({
             online={online}
             inCall={peer?.inCall}
             isHub={isHub}
+            isEmpty={isEmpty}
+            isSelected={!!peer?.id && peer.id === selectedPeerId}
             photoUploading={photoUploading}
             darkMode={darkMode}
             onPhotoClick={onPhotoClick}
             onPeerCall={onPeerCall}
             onPeerMessage={onPeerMessage}
             onPeerVideoInvite={onPeerVideoInvite}
+            onEmptyClick={
+              isEmpty && onEmptySlotClick && slotIndex >= 0
+                ? () => onEmptySlotClick(slotIndex, refLabel)
+                : undefined
+            }
+            onHubActivate={onHubActivate}
             peerId={peer?.id}
+            slotIndex={slotIndex >= 0 ? slotIndex : undefined}
           />
         </Html>
       </Billboard>
@@ -337,10 +406,13 @@ function SceneInner({
   mainUserPhotoUrl,
   displayName,
   photoUploading,
+  selectedPeerId,
   onPhotoClick,
   onPeerCall,
   onPeerMessage,
   onPeerVideoInvite,
+  onEmptySlotClick,
+  onHubActivate,
 }: Props) {
   return (
     <group rotation={[-0.22, 0, 0]}>
@@ -363,10 +435,13 @@ function SceneInner({
             displayName={displayName}
             photoUploading={photoUploading}
             darkMode={darkMode}
+            selectedPeerId={selectedPeerId}
             onPhotoClick={onPhotoClick}
             onPeerCall={onPeerCall}
             onPeerMessage={onPeerMessage}
             onPeerVideoInvite={onPeerVideoInvite}
+            onEmptySlotClick={onEmptySlotClick}
+            onHubActivate={onHubActivate}
           />
         );
       })}
