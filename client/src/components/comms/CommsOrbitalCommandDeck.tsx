@@ -3,7 +3,7 @@
  * neon depth, glowing timeline, glass icon arc, luminous hub, bright forward tethers.
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef } from "react";
 import {
   ClipboardList,
   Cog,
@@ -11,8 +11,6 @@ import {
   Handshake,
   Headphones,
   LineChart,
-  RotateCcw,
-  RotateCw,
   Users,
   Wrench,
   Cable,
@@ -93,6 +91,7 @@ export function CommsOrbitalCommandDeck({
   serviceSubtitle?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const orbitPhaseRef = useRef(0);
   const uid = useId();
   const sid = uid.replace(/:/g, "");
   const gradId = `kess-grad-${sid}`;
@@ -119,73 +118,6 @@ export function CommsOrbitalCommandDeck({
       peer: peers[i] ?? null,
     }));
   }, [peers]);
-
-  const orbitBoxRef = useRef<HTMLDivElement>(null);
-  const [orbitRadius, setOrbitRadius] = useState(162);
-  const orbitPhaseRef = useRef(0);
-  const orbitVelRef = useRef(0);
-  const dragRef = useRef({ active: false, lastX: 0 });
-
-  useEffect(() => {
-    const el = orbitBoxRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      setOrbitRadius(Math.min(252, Math.max(94, w * 0.342)));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    let id = 0;
-    const tick = () => {
-      const v = orbitVelRef.current;
-      orbitVelRef.current *= 0.992;
-      if (Math.abs(orbitVelRef.current) < 0.003) orbitVelRef.current = 0;
-      orbitPhaseRef.current += v;
-      id = requestAnimationFrame(tick);
-    };
-    id = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  const onOrbitPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button")) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { active: true, lastX: e.clientX };
-  }, []);
-
-  const onOrbitPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current.active) return;
-    const dx = e.clientX - dragRef.current.lastX;
-    dragRef.current.lastX = e.clientX;
-    orbitVelRef.current += dx * 0.14;
-  }, []);
-
-  const onOrbitPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    dragRef.current.active = false;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const bumpOrbit = useCallback((impulse: number) => {
-    orbitVelRef.current += impulse;
-  }, []);
-
-  useEffect(() => {
-    const el = orbitBoxRef.current;
-    if (!el) return;
-    const onWheel = (ev: WheelEvent) => {
-      ev.preventDefault();
-      orbitVelRef.current += ev.deltaY * 0.045;
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
 
   const textTitle = darkMode ? "text-white" : "text-slate-900";
 
@@ -391,7 +323,7 @@ export function CommsOrbitalCommandDeck({
           </div>
         </div>
 
-        {/* Central hub + five satellites on draggable orbit */}
+        {/* Reference arc — perspective grid + portrait presence modules */}
         <div className="relative z-[4] mx-auto -mt-0.5 flex w-full max-w-full flex-col items-center sm:-mt-1">
           <input
             ref={fileRef}
@@ -401,65 +333,39 @@ export function CommsOrbitalCommandDeck({
             onChange={onFileChange}
           />
 
-          <div className="mb-1 flex flex-wrap items-center justify-center gap-1.5 sm:mb-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => bumpOrbit(-2.8)}
-              className={`rounded-lg border px-2 py-1.5 transition hover:bg-cyan-500/15 ${
-                darkMode ? "border-cyan-500/40 text-cyan-200" : "border-sky-400/50 text-sky-800"
-              }`}
-              title="Nudge counter-clockwise"
-              aria-label="Rotate orbit counter-clockwise"
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            </button>
-            <p
-              className={`max-w-[14rem] text-center font-mono text-[8px] uppercase leading-snug tracking-[0.18em] sm:max-w-none sm:text-[9px] ${
-                darkMode ? "text-cyan-200/65" : "text-sky-700/85"
-              }`}
-            >
-              Drag horizontally · wheel · arrows — direction sets spin
-            </p>
-            <button
-              type="button"
-              onClick={() => bumpOrbit(2.8)}
-              className={`rounded-lg border px-2 py-1.5 transition hover:bg-cyan-500/15 ${
-                darkMode ? "border-cyan-500/40 text-cyan-200" : "border-sky-400/50 text-sky-800"
-              }`}
-              title="Nudge clockwise"
-              aria-label="Rotate orbit clockwise"
-            >
-              <RotateCw className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </div>
-
           <div
-            ref={orbitBoxRef}
-            className={`relative mx-auto aspect-square cursor-grab touch-none select-none active:cursor-grabbing ${
-              darkMode ? "" : ""
-            }`}
+            className="relative mx-auto w-full overflow-hidden rounded-xl"
             style={{
-              touchAction: "none",
-              width: "min(100%, min(92vw, 54dvh, 920px))",
+              width: "min(100%, min(96vw, 920px))",
+              height: "min(52dvh, clamp(280px, 52dvh, 520px))",
             }}
-            onPointerDown={onOrbitPointerDown}
-            onPointerMove={onOrbitPointerMove}
-            onPointerUp={onOrbitPointerEnd}
-            onPointerCancel={onOrbitPointerEnd}
-            role="application"
-            aria-label="Orbit drag control — presence nodes around your hub"
+            role="region"
+            aria-label="Communications presence arc — operator and linked peers"
           >
+            {/* City silhouette + horizon glow (reference backdrop) */}
             <div
-              className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/15"
+              className="pointer-events-none absolute inset-0 opacity-90"
               style={{
-                width: orbitRadius * 2 + 56,
-                height: orbitRadius * 2 + 56,
-                boxShadow: "inset 0 0 28px rgba(0,229,255,0.04), 0 0 18px rgba(0,229,255,0.06)",
+                background: darkMode
+                  ? `linear-gradient(180deg, rgba(2,12,28,0.15) 0%, rgba(2,18,38,0.55) 38%, rgba(1,8,18,0.92) 100%),
+                     radial-gradient(ellipse 90% 40% at 50% 100%, rgba(0,229,255,0.12), transparent 55%)`
+                  : "linear-gradient(180deg, rgba(224,242,254,0.4) 0%, rgba(241,245,249,0.85) 100%)",
+              }}
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-x-[8%] bottom-[18%] h-[22%] opacity-40"
+              style={{
+                background: darkMode
+                  ? "linear-gradient(180deg, transparent, rgba(0,229,255,0.08))"
+                  : "linear-gradient(180deg, transparent, rgba(14,165,233,0.12))",
+                clipPath:
+                  "polygon(0% 100%, 4% 55%, 9% 72%, 14% 48%, 20% 68%, 26% 42%, 32% 58%, 38% 38%, 44% 52%, 50% 28%, 56% 50%, 62% 35%, 68% 55%, 74% 40%, 80% 62%, 86% 45%, 92% 70%, 96% 52%, 100% 100%)",
               }}
               aria-hidden
             />
 
-            <div className="absolute inset-0 z-[2] overflow-hidden rounded-[inherit]">
+            <div className="absolute inset-0 z-[2]">
               <CommsOrbitalScene3D
                 orbitPhaseRef={orbitPhaseRef}
                 darkMode={darkMode}
