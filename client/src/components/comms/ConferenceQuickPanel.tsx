@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Check, Copy, Users } from "lucide-react";
 import {
   commsCreateConference,
   commsJoinConference,
+  readStoredConference,
+  persistStoredConference,
   type CommsConference,
 } from "../../lib/comms-conference-api";
-
-const LAST_CONFERENCE_KEY = "cyrus-comms-last-conference";
 
 type StoredConference = {
   conferenceId: string;
@@ -15,35 +15,34 @@ type StoredConference = {
 };
 
 function readStoredConferenceId(): string {
-  if (typeof sessionStorage === "undefined") return "";
-  try {
-    const raw = sessionStorage.getItem(LAST_CONFERENCE_KEY);
-    if (!raw) return "";
-    const j = JSON.parse(raw) as StoredConference;
-    return typeof j.conferenceId === "string" ? j.conferenceId : "";
-  } catch {
-    return "";
-  }
-}
-
-function persistConference(c: StoredConference) {
-  try {
-    sessionStorage.setItem(LAST_CONFERENCE_KEY, JSON.stringify(c));
-  } catch {
-    /* quota / private mode */
-  }
+  return readStoredConference()?.conferenceId ?? "";
 }
 
 /**
  * Minimal conference bootstrap (Phase 3). Full multi-peer WebRTC UI can layer on these room IDs later.
  */
-export function ConferenceQuickPanel({ displayName }: { displayName: string }) {
+export function ConferenceQuickPanel({
+  displayName,
+  seedConference,
+}: {
+  displayName: string;
+  seedConference?: CommsConference | null;
+}) {
   const [title, setTitle] = useState("CYRUS room");
   const [joinId, setJoinId] = useState(readStoredConferenceId);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [lastCreated, setLastCreated] = useState<CommsConference | null>(null);
+  const [lastCreated, setLastCreated] = useState<CommsConference | null>(
+    () => seedConference ?? readStoredConference() as CommsConference | null,
+  );
   const [copied, setCopied] = useState<null | "code" | "id">(null);
+
+  useEffect(() => {
+    if (!seedConference) return;
+    setLastCreated(seedConference);
+    setJoinId(seedConference.conferenceId);
+    setMessage(`Round-table group call active — room ${seedConference.roomCode}.`);
+  }, [seedConference]);
 
   const flashCopied = useCallback((which: "code" | "id") => {
     setCopied(which);
@@ -72,7 +71,7 @@ export function ConferenceQuickPanel({ displayName }: { displayName: string }) {
       setMessage(error || "Create failed");
       return;
     }
-    persistConference({
+    persistStoredConference({
       conferenceId: conference.conferenceId,
       roomCode: conference.roomCode,
       title: conference.title,
@@ -104,17 +103,10 @@ export function ConferenceQuickPanel({ displayName }: { displayName: string }) {
         title: lastCreated.title,
       };
     } else {
-      try {
-        const raw = sessionStorage.getItem(LAST_CONFERENCE_KEY);
-        if (raw) {
-          const prev = JSON.parse(raw) as StoredConference;
-          if (prev.conferenceId === id) next = prev;
-        }
-      } catch {
-        /* ignore */
-      }
+      const prev = readStoredConference();
+      if (prev?.conferenceId === id) next = prev;
     }
-    persistConference(next);
+    persistStoredConference(next);
     setMessage("Joined conference on server. Add SFU-backed media when available.");
   }, [joinId, displayName, lastCreated]);
 

@@ -1,14 +1,14 @@
 /**
- * Smart-city reference layout: perspective grid floor, five fixed arc slots
- * (2 back · 2 mid · 1 front), holographic cone + portrait user cards.
+ * NEXUS round-table — operator at front; each **online** user pops into a seat dynamically.
  */
 
-import { Suspense, type CSSProperties } from "react";
+import { Suspense, useId, useRef, type CSSProperties } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Billboard, Grid, Html } from "@react-three/drei";
 import * as THREE from "three";
 
 import { ORBITAL_HUB_LABEL, type OrbitalForwardSlot } from "../../lib/comms-orbital-integration";
+import { CommsContactHubPopover } from "./CommsContactHubPopover";
 
 export type ForwardOrbitSlot = OrbitalForwardSlot;
 
@@ -22,377 +22,335 @@ type Props = {
   onPhotoClick: () => void;
   onPeerCall: (peerId: string, peerName: string, type: "audio" | "video") => void;
   onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
+  onPeerGroupCall?: (peerId: string, peerName: string, slotIndex: number) => void;
   onPeerVideoInvite?: (peerId: string, peerName: string) => void;
   selectedPeerId?: string | null;
+  openHubPeerId?: string | null;
+  onHubPeerChange?: (peerId: string | null) => void;
   onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;
   onHubActivate?: () => void;
 };
 
 const CYAN = "#00e5ff";
-const CARD_HTML_DISTANCE = 6.8;
+const TABLE_RADIUS = 1.05;
+const SEAT_RADIUS = 2.35;
+const TABLE_Y = 0.38;
+const OPERATOR_ANGLE = 0;
 
-/** Reference arc: shallow V — back pair, mid pair, front center (operator). */
-const ARC_LAYOUT = [
-  { key: "back-l", peerIndex: 0, x: -2.05, z: -1.72, scale: 0.74 },
-  { key: "back-r", peerIndex: 1, x: 2.05, z: -1.72, scale: 0.74 },
-  { key: "mid-l", peerIndex: 2, x: -1.08, z: -0.48, scale: 0.88 },
-  { key: "mid-r", peerIndex: 3, x: 1.08, z: -0.48, scale: 0.88 },
-  { key: "front-c", peerIndex: -1, x: 0, z: 0.92, scale: 1.02 },
-] as const;
+const HTML: CSSProperties = { pointerEvents: "auto", userSelect: "none" };
 
-const HTML_CARD: CSSProperties = {
-  pointerEvents: "auto",
-  userSelect: "none",
-};
+function seatXZ(angle: number): { x: number; z: number } {
+  return { x: Math.sin(angle) * SEAT_RADIUS, z: Math.cos(angle) * SEAT_RADIUS };
+}
+
+function peerSeatAngles(peerCount: number): number[] {
+  if (peerCount <= 0) return [];
+  const step = (Math.PI * 2) / (peerCount + 1);
+  return Array.from({ length: peerCount }, (_, i) => step * (i + 1));
+}
 
 function PerspectiveFloor({ darkMode }: { darkMode: boolean }) {
-  const cell = darkMode ? "#0ea5e9" : "#0284c7";
-  const section = darkMode ? "#22d3ee" : "#0ea5e9";
   return (
     <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
       <Grid
         infiniteGrid
-        cellSize={0.42}
+        cellSize={0.5}
         cellThickness={0.65}
-        sectionSize={2.1}
-        sectionThickness={1.1}
-        fadeDistance={22}
-        fadeStrength={1.15}
-        cellColor={cell}
-        sectionColor={section}
+        sectionSize={2.5}
+        sectionThickness={1.15}
+        fadeDistance={28}
+        fadeStrength={1.1}
+        cellColor={darkMode ? "#0ea5e9" : "#0284c7"}
+        sectionColor={darkMode ? "#22d3ee" : "#0ea5e9"}
       />
     </group>
   );
 }
 
-function PlatformBase({ scale }: { scale: number }) {
-  const radii = [0.34, 0.48, 0.62];
+function ConferenceTable({ onlineCount }: { onlineCount: number }) {
   return (
-    <group scale={scale}>
-      {radii.map((r, i) => (
-        <mesh key={r} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004 * i, 0]}>
-          <ringGeometry args={[r * 0.82, r, 64]} />
-          <meshBasicMaterial
-            color={CYAN}
-            transparent
-            opacity={0.55 - i * 0.14}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-      ))}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <circleGeometry args={[0.08, 32]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.95} blending={THREE.AdditiveBlending} />
+    <group position={[0, TABLE_Y, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[TABLE_RADIUS, 64]} />
+        <meshStandardMaterial
+          color="#3d2817"
+          metalness={0.35}
+          roughness={0.28}
+          emissive="#1a0f08"
+          emissiveIntensity={0.15}
+        />
       </mesh>
-      <pointLight color={CYAN} intensity={1.8 * scale} distance={4 * scale} decay={2} position={[0, 0.15, 0]} />
-    </group>
-  );
-}
-
-function HologramCone({ scale }: { scale: number }) {
-  return (
-    <group scale={scale}>
-      <mesh position={[0, 0.52, 0]}>
-        <coneGeometry args={[0.2, 1.05, 32, 1, true]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}>
+        <ringGeometry args={[TABLE_RADIUS * 0.92, TABLE_RADIUS * 1.02, 64]} />
         <meshBasicMaterial
           color={CYAN}
           transparent
-          opacity={0.11}
-          side={THREE.DoubleSide}
-          depthWrite={false}
+          opacity={0.55}
           blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
       </mesh>
-      <mesh position={[0, 0.52, 0]}>
-        <coneGeometry args={[0.12, 0.95, 24, 1, true]} />
-        <meshBasicMaterial
-          color="#7dd3fc"
-          transparent
-          opacity={0.07}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+        <circleGeometry args={[TABLE_RADIUS * 0.88, 48]} />
+        <meshBasicMaterial color={CYAN} transparent opacity={0.06} depthWrite={false} />
+      </mesh>
+      <pointLight color={CYAN} intensity={1.4 + onlineCount * 0.12} distance={4} position={[0, 0.5, 0]} />
+    </group>
+  );
+}
+
+function ChairMesh() {
+  return (
+    <group position={[0, 0.18, 0.35]}>
+      <mesh position={[0, 0.12, 0]}>
+        <boxGeometry args={[0.42, 0.08, 0.42]} />
+        <meshStandardMaterial color="#111827" metalness={0.4} roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.38, -0.12]}>
+        <boxGeometry args={[0.42, 0.42, 0.06]} />
+        <meshStandardMaterial color="#0f172a" metalness={0.35} roughness={0.55} />
       </mesh>
     </group>
   );
 }
 
-function PortraitCard({
-  refLabel,
-  displayName,
-  avatarUrl,
-  online,
-  inCall,
-  isHub,
-  isEmpty,
-  isSelected,
-  photoUploading,
-  darkMode,
-  onPhotoClick,
-  onPeerCall,
-  onPeerMessage,
-  onPeerVideoInvite,
-  onEmptyClick,
-  onHubActivate,
-  peerId,
-  slotIndex,
-}: {
-  refLabel: string;
-  displayName: string;
-  avatarUrl: string | null;
-  online: boolean;
-  inCall?: boolean;
-  isHub: boolean;
-  isEmpty?: boolean;
-  isSelected?: boolean;
-  photoUploading?: boolean;
-  darkMode: boolean;
-  onPhotoClick?: () => void;
-  onPeerCall?: (peerId: string, peerName: string, type: "audio" | "video") => void;
-  onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
-  onPeerVideoInvite?: (peerId: string, peerName: string) => void;
-  onEmptyClick?: () => void;
-  onHubActivate?: () => void;
-  peerId?: string;
-  slotIndex?: number;
-}) {
-  const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
-  const hasPeer = !!peerId;
-  const showCallActions = hasPeer && online && !isHub && onPeerCall;
-  const showMessageAction = hasPeer && !isHub && onPeerMessage && slotIndex !== undefined;
-
+function HoloLaptop() {
   return (
-    <div
-      role={isEmpty ? "button" : undefined}
-      tabIndex={isEmpty ? 0 : undefined}
-      onClick={isEmpty ? onEmptyClick : undefined}
-      onKeyDown={
-        isEmpty
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onEmptyClick?.();
-              }
-            }
-          : undefined
-      }
-      className={`flex w-[min(112px,22vw)] flex-col overflow-hidden rounded-md border shadow-[0_0_36px_rgba(0,229,255,0.38),inset_0_1px_0_rgba(255,255,255,0.08)] sm:w-[118px] ${
-        isSelected
-          ? "border-cyan-300 ring-2 ring-cyan-300/55"
-          : online || isHub
-            ? "border-cyan-400/65 bg-gradient-to-b from-[#062038]/96 via-[#041528]/94 to-[#020a14]/98"
-            : "border-cyan-500/25 bg-gradient-to-b from-[#041018]/90 to-[#020810]/95 opacity-70"
-      } ${isEmpty ? "cursor-pointer transition hover:border-cyan-400/50 hover:brightness-110" : ""}`}
-    >
-      <div className="border-b border-cyan-500/45 bg-gradient-to-r from-cyan-950/80 via-cyan-900/50 to-cyan-950/80 px-2 py-1 text-center">
-        <span className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[8px]">
-          {refLabel}
-        </span>
-      </div>
+    <mesh position={[0, TABLE_Y + 0.04, -0.55]} rotation={[-0.35, 0, 0]}>
+      <boxGeometry args={[0.38, 0.02, 0.28]} />
+      <meshStandardMaterial color="#0a1628" emissive={CYAN} emissiveIntensity={0.35} metalness={0.5} roughness={0.4} />
+    </mesh>
+  );
+}
 
-      <button
-        type="button"
-        disabled={isHub && photoUploading}
-        onClick={isHub ? onPhotoClick : undefined}
-        className={`relative aspect-[3/4] w-full overflow-hidden bg-[#030810] ${isHub ? "cursor-pointer transition hover:brightness-110 disabled:opacity-50" : "cursor-default"}`}
-        title={isHub ? (avatarUrl ? "Change profile photo" : "Upload profile photo") : displayName}
-      >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
-        ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-[#051525] to-[#020810]">
-            {isEmpty ? (
-              <>
-                <span className="text-2xl font-bold text-cyan-500/35">+</span>
-                <span className="px-2 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/55">
-                  Link channel
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-3xl font-bold text-cyan-100/90">{initial}</span>
-                {isHub ? (
-                  <span className="px-2 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/75">
-                    {photoUploading ? "Uploading…" : "Tap to add photo"}
-                  </span>
-                ) : null}
-              </>
-            )}
-          </div>
-        )}
-        {(online || isHub) && inCall ? (
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-fuchsia-400 shadow-[0_0_8px_#e879f9]" />
-        ) : online || isHub ? (
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-        ) : null}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#020810]/90 to-transparent"
-          aria-hidden
-        />
-      </button>
-
-      <div className="border-t border-cyan-500/30 px-2 py-1.5 text-center">
-        <p
-          className={`truncate text-[10px] font-semibold leading-tight sm:text-[11px] ${
-            darkMode ? "text-white" : "text-slate-900"
-          }`}
-        >
-          {displayName}
-        </p>
-        <p className="mt-0.5 font-mono text-[7px] uppercase tracking-wider text-cyan-300/65">
-          {isHub
-            ? "Operator · linked"
-            : isEmpty
-              ? "Open People to assign"
-              : online
-                ? inCall
-                  ? "In call"
-                  : "Online"
-                : "Offline"}
-        </p>
-      </div>
-
-      {showCallActions || showMessageAction ? (
-        <div className="flex flex-wrap justify-center gap-1 border-t border-cyan-500/25 px-1.5 py-1.5">
-          {showCallActions ? (
-            <>
-              <button
-                type="button"
-                title="Voice"
-                disabled={inCall}
-                className="rounded border border-emerald-500/50 bg-emerald-950/85 px-1.5 py-0.5 text-[8px] text-emerald-100 disabled:opacity-40"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPeerCall!(peerId!, displayName, "audio");
-                }}
-              >
-                Voice
-              </button>
-              <button
-                type="button"
-                title="Video"
-                disabled={inCall}
-                className="rounded border border-sky-500/50 bg-sky-950/85 px-1.5 py-0.5 text-[8px] text-sky-100 disabled:opacity-40"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPeerCall!(peerId!, displayName, "video");
-                }}
-              >
-                Video
-              </button>
-            </>
-          ) : null}
-          {showMessageAction ? (
-            <button
-              type="button"
-              title="Message"
-              className="rounded border border-violet-500/50 bg-violet-950/75 px-1.5 py-0.5 text-[8px] text-violet-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPeerMessage!(peerId!, displayName, slotIndex!);
-              }}
-            >
-              Msg
-            </button>
-          ) : null}
-          {showCallActions && onPeerVideoInvite ? (
-            <button
-              type="button"
-              title="Invite"
-              className="rounded border border-amber-500/45 bg-amber-950/65 px-1.5 py-0.5 text-[8px] text-amber-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPeerVideoInvite(peerId!, displayName);
-              }}
-            >
-              Invite
-            </button>
-          ) : null}
-        </div>
-      ) : isHub ? (
-        <button
-          type="button"
-          className="border-t border-cyan-500/25 px-2 py-1 text-center font-mono text-[7px] uppercase tracking-wider text-cyan-300/75 transition hover:bg-cyan-500/10 hover:text-cyan-100"
-          onClick={onHubActivate}
-        >
-          Open chat console
-        </button>
-      ) : null}
+function HumanSilhouette({ initial }: { initial: string }) {
+  const gid = useId().replace(/:/g, "");
+  return (
+    <div className="relative flex h-full w-full flex-col items-center justify-end overflow-hidden bg-gradient-to-b from-[#1e3a5f] via-[#0f2744] to-[#081018] pb-[8%]">
+      <svg viewBox="0 0 100 130" className="h-[88%] w-[85%]" aria-hidden>
+        <defs>
+          <linearGradient id={`skin-${gid}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#94a3b8" />
+            <stop offset="100%" stopColor="#64748b" />
+          </linearGradient>
+        </defs>
+        <ellipse cx="50" cy="32" rx="17" ry="19" fill={`url(#skin-${gid})`} opacity="0.95" />
+        <path d="M22 128 C22 88 38 72 50 68 C62 72 78 88 78 128 Z" fill="#475569" opacity="0.92" />
+        <path d="M30 128 L30 95 Q50 82 70 95 L70 128 Z" fill="#334155" />
+      </svg>
+      <span className="absolute bottom-2 text-lg font-semibold text-cyan-100/90">{initial}</span>
     </div>
   );
 }
 
-function ArcModule({
-  layout,
+function HoloDataPanel({ inCall }: { inCall?: boolean }) {
+  const bars = [0.45, 0.72, 0.55, 0.88, 0.62];
+  return (
+    <div className="mt-1 w-full rounded border border-cyan-500/40 bg-[#021018]/90 px-1 py-1">
+      <div className="flex h-5 items-end justify-center gap-0.5">
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            className={`w-1 rounded-sm ${inCall ? "bg-fuchsia-400/80" : "bg-cyan-400/75"}`}
+            style={{ height: `${h * 100}%` }}
+          />
+        ))}
+      </div>
+      <p className="mt-0.5 text-center font-mono text-[5px] uppercase tracking-wider text-emerald-400/80">
+        {inCall ? "In call" : "Online"}
+      </p>
+    </div>
+  );
+}
+
+function PortraitSeatCard({
+  refLabel,
+  displayName,
+  avatarUrl,
+  inCall,
+  isHub,
+  isSelected,
+  hubOpen,
+  photoUploading,
+  onPhotoClick,
+  onHubActivate,
+  onPeerCall,
+  onPeerMessage,
+  onPeerGroupCall,
+  onHubToggle,
+  peerId,
+  seatIndex,
+}: {
+  refLabel: string;
+  displayName: string;
+  avatarUrl: string | null;
+  inCall?: boolean;
+  isHub: boolean;
+  isSelected?: boolean;
+  hubOpen?: boolean;
+  photoUploading?: boolean;
+  onPhotoClick?: () => void;
+  onHubActivate?: () => void;
+  onPeerCall?: (peerId: string, peerName: string, type: "audio" | "video") => void;
+  onPeerMessage?: (peerId: string, peerName: string, slotIndex: number) => void;
+  onPeerGroupCall?: (peerId: string, peerName: string, slotIndex: number) => void;
+  onHubToggle?: () => void;
+  peerId?: string;
+  seatIndex?: number;
+}) {
+  const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
+  const width = isHub ? "min(112px,21vw)" : "min(96px,18vw)";
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={cardRef}
+      className={`group relative flex flex-col overflow-visible border-2 shadow-[0_0_32px_rgba(0,229,255,0.35)] ${
+        isHub ? "sm:w-[118px]" : "sm:w-[102px]"
+      } ${hubOpen || isSelected ? "border-cyan-200 ring-2 ring-cyan-300/45" : "border-cyan-400/65"}`}
+      style={{
+        width,
+        background: "linear-gradient(165deg, rgba(0,28,52,0.95) 0%, rgba(0,8,16,0.98) 100%)",
+        animation: "commsSeatPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+      }}
+    >
+      <div className="border-b border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 to-slate-950/80 px-2 py-0.5 text-center">
+        <span className="font-mono text-[6px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[7px]">
+          {refLabel}
+        </span>
+      </div>
+
+      {!isHub && peerId && seatIndex !== undefined && onHubToggle ? (
+        <CommsContactHubPopover
+          displayName={displayName}
+          refLabel={refLabel}
+          avatarUrl={avatarUrl}
+          inCall={inCall}
+          open={!!hubOpen}
+          onClose={() => onHubToggle()}
+          anchorRef={cardRef}
+          onVoice={() => onPeerCall?.(peerId, displayName, "audio")}
+          onVideo={() => onPeerCall?.(peerId, displayName, "video")}
+          onText={() => onPeerMessage?.(peerId, displayName, seatIndex)}
+          onGroup={() => onPeerGroupCall?.(peerId, displayName, seatIndex)}
+        />
+      ) : null}
+
+      <button
+        type="button"
+        disabled={isHub && photoUploading}
+        onClick={
+          isHub
+            ? onPhotoClick
+            : peerId && onHubToggle
+              ? onHubToggle
+              : undefined
+        }
+        className="relative aspect-[3/4] w-full cursor-pointer overflow-hidden hover:brightness-110"
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
+        ) : (
+          <HumanSilhouette initial={initial} />
+        )}
+        <span
+          className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full shadow-[0_0_6px_currentColor] ${
+            inCall ? "bg-fuchsia-400" : "animate-pulse bg-emerald-400"
+          }`}
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-[#020810] to-transparent" />
+      </button>
+
+      <div className="border-t border-cyan-500/25 px-1.5 py-1">
+        <p className="truncate text-center text-[8px] font-semibold text-white sm:text-[9px]">{displayName}</p>
+        <HoloDataPanel inCall={inCall} />
+      </div>
+
+      {isHub ? (
+        <div className="flex justify-center gap-1 border-t border-cyan-500/20 px-1 py-1">
+          <button
+            type="button"
+            className="rounded border border-cyan-500/45 px-1.5 py-0.5 text-[6px] text-cyan-100"
+            onClick={onHubActivate}
+          >
+            Console
+          </button>
+          <button
+            type="button"
+            className="rounded border border-violet-500/40 px-1.5 py-0.5 text-[6px] text-violet-100"
+            onClick={onPhotoClick}
+          >
+            Photo
+          </button>
+        </div>
+      ) : (
+        <p className="border-t border-cyan-500/15 py-0.5 text-center font-mono text-[5px] uppercase tracking-wider text-cyan-400/55">
+          Tap for contact hub
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TableSeat({
+  angle,
   slot,
   isHub,
   mainUserPhotoUrl,
   displayName,
   photoUploading,
-  darkMode,
   selectedPeerId,
+  openHubPeerId,
+  onHubToggle,
   onPhotoClick,
   onPeerCall,
   onPeerMessage,
-  onPeerVideoInvite,
-  onEmptySlotClick,
+  onPeerGroupCall,
   onHubActivate,
 }: {
-  layout: (typeof ARC_LAYOUT)[number];
-  slot: ForwardOrbitSlot | null;
+  angle: number;
+  slot: OrbitalForwardSlot | null;
   isHub: boolean;
   mainUserPhotoUrl: string | null;
   displayName: string;
   photoUploading: boolean;
-  darkMode: boolean;
   selectedPeerId?: string | null;
+  openHubPeerId?: string | null;
+  onHubToggle?: (peerId: string) => void;
   onPhotoClick: () => void;
   onPeerCall: Props["onPeerCall"];
   onPeerMessage?: Props["onPeerMessage"];
-  onPeerVideoInvite?: Props["onPeerVideoInvite"];
-  onEmptySlotClick?: Props["onEmptySlotClick"];
+  onPeerGroupCall?: Props["onPeerGroupCall"];
   onHubActivate?: Props["onHubActivate"];
 }) {
+  const { x, z } = seatXZ(angle);
   const peer = slot?.peer ?? null;
-  const slotIndex = layout.peerIndex;
-  const isEmpty = !isHub && !peer;
-  const online = isHub || !!peer?.isOnline;
   const refLabel = isHub ? ORBITAL_HUB_LABEL : slot?.refLabel ?? "—";
-  const name = isHub ? displayName : isEmpty ? "Awaiting link" : peer!.displayName;
-  const avatar = isHub ? mainUserPhotoUrl : peer?.avatarUrl ?? null;
+  const name = isHub ? displayName : peer?.displayName ?? "—";
 
   return (
-    <group position={[layout.x, 0, layout.z]} scale={layout.scale}>
-      <PlatformBase scale={1} />
-      <HologramCone scale={1} />
-      <Billboard follow position={[0, 1.08, 0]}>
-        <Html center distanceFactor={CARD_HTML_DISTANCE} style={HTML_CARD} zIndexRange={[120, 0]}>
-          <PortraitCard
+    <group position={[x, 0, z]} rotation={[0, angle + Math.PI, 0]}>
+      <ChairMesh />
+      <HoloLaptop />
+      <Billboard follow position={[0, isHub ? 1.02 : 0.92, 0]}>
+        <Html center distanceFactor={isHub ? 8.8 : 8.2} style={HTML} zIndexRange={[110, 0]}>
+          <PortraitSeatCard
             refLabel={refLabel}
             displayName={name}
-            avatarUrl={avatar}
-            online={online}
+            avatarUrl={isHub ? mainUserPhotoUrl : peer?.avatarUrl ?? null}
             inCall={peer?.inCall}
             isHub={isHub}
-            isEmpty={isEmpty}
             isSelected={!!peer?.id && peer.id === selectedPeerId}
+            hubOpen={!!peer?.id && peer.id === openHubPeerId}
             photoUploading={photoUploading}
-            darkMode={darkMode}
             onPhotoClick={onPhotoClick}
+            onHubActivate={onHubActivate}
             onPeerCall={onPeerCall}
             onPeerMessage={onPeerMessage}
-            onPeerVideoInvite={onPeerVideoInvite}
-            onEmptyClick={
-              isEmpty && onEmptySlotClick && slotIndex >= 0
-                ? () => onEmptySlotClick(slotIndex, refLabel)
-                : undefined
-            }
-            onHubActivate={onHubActivate}
+            onPeerGroupCall={onPeerGroupCall}
+            onHubToggle={peer?.id && onHubToggle ? () => onHubToggle(peer.id) : undefined}
             peerId={peer?.id}
-            slotIndex={slotIndex >= 0 ? slotIndex : undefined}
+            seatIndex={slot?.seatIndex}
           />
         </Html>
       </Billboard>
@@ -400,79 +358,103 @@ function ArcModule({
   );
 }
 
-function SceneInner({
-  darkMode,
-  forwardSlots,
-  mainUserPhotoUrl,
-  displayName,
-  photoUploading,
-  selectedPeerId,
-  onPhotoClick,
-  onPeerCall,
-  onPeerMessage,
-  onPeerVideoInvite,
-  onEmptySlotClick,
-  onHubActivate,
-}: Props) {
+function SceneInner(props: Props) {
+  const {
+    darkMode,
+    forwardSlots,
+    displayName,
+    mainUserPhotoUrl,
+    photoUploading,
+    selectedPeerId,
+    openHubPeerId,
+    onHubPeerChange,
+    ...handlers
+  } = props;
+
+  const onlinePeers = forwardSlots.filter((s) => s.peer?.isOnline);
+  const angles = peerSeatAngles(onlinePeers.length);
+
+  const toggleHub = (peerId: string) => {
+    if (!onHubPeerChange) return;
+    onHubPeerChange(openHubPeerId === peerId ? null : peerId);
+  };
+
   return (
-    <group rotation={[-0.22, 0, 0]}>
+    <group rotation={[-0.12, 0, 0]}>
       <PerspectiveFloor darkMode={darkMode} />
+      <ambientLight intensity={0.22} color="#cfe" />
+      <directionalLight position={[3, 10, 5]} intensity={0.55} color="#fff" />
+      <directionalLight position={[-4, 6, -2]} intensity={0.18} color="#0ea5e9" />
+      <ConferenceTable onlineCount={onlinePeers.length} />
+      <Billboard follow position={[0, TABLE_Y + 0.55, 0]}>
+        <Html center distanceFactor={10} style={{ pointerEvents: "none" }} zIndexRange={[90, 0]}>
+          <div className="whitespace-nowrap rounded-full border border-cyan-500/35 bg-[#021018]/85 px-3 py-1 text-center shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+            <p className="font-mono text-[7px] uppercase tracking-[0.2em] text-cyan-300/75">
+              {onlinePeers.length === 0
+                ? "NEXUS round table · awaiting peers"
+                : `${onlinePeers.length} online at the table`}
+            </p>
+          </div>
+        </Html>
+      </Billboard>
 
-      <ambientLight intensity={darkMode ? 0.12 : 0.2} color="#8cf" />
-      <directionalLight position={[2, 8, 4]} intensity={0.45} color="#dff" />
-      <directionalLight position={[-3, 4, -2]} intensity={0.18} color="#0ea5e9" />
+      <TableSeat
+        angle={OPERATOR_ANGLE}
+        slot={null}
+        isHub
+        mainUserPhotoUrl={mainUserPhotoUrl}
+        displayName={displayName}
+        photoUploading={photoUploading}
+        selectedPeerId={selectedPeerId}
+        openHubPeerId={openHubPeerId}
+        onHubToggle={toggleHub}
+        {...handlers}
+      />
 
-      {ARC_LAYOUT.map((layout) => {
-        const isHub = layout.peerIndex === -1;
-        const slot = isHub ? null : forwardSlots[layout.peerIndex] ?? null;
-        return (
-          <ArcModule
-            key={layout.key}
-            layout={layout}
-            slot={slot}
-            isHub={isHub}
-            mainUserPhotoUrl={mainUserPhotoUrl}
-            displayName={displayName}
-            photoUploading={photoUploading}
-            darkMode={darkMode}
-            selectedPeerId={selectedPeerId}
-            onPhotoClick={onPhotoClick}
-            onPeerCall={onPeerCall}
-            onPeerMessage={onPeerMessage}
-            onPeerVideoInvite={onPeerVideoInvite}
-            onEmptySlotClick={onEmptySlotClick}
-            onHubActivate={onHubActivate}
-          />
-        );
-      })}
+      {onlinePeers.map((slot, i) => (
+        <TableSeat
+          key={slot.peer!.id}
+          angle={angles[i] ?? 0}
+          slot={slot}
+          isHub={false}
+          mainUserPhotoUrl={null}
+          displayName={slot.peer!.displayName}
+          photoUploading={false}
+          selectedPeerId={selectedPeerId}
+          openHubPeerId={openHubPeerId}
+          onHubToggle={toggleHub}
+          {...handlers}
+        />
+      ))}
     </group>
   );
 }
 
 export function CommsOrbitalScene3D(props: Props) {
   const dpr = typeof window !== "undefined" ? Math.min(2.25, window.devicePixelRatio || 1) : 1.5;
-
   return (
-    <Canvas
-      dpr={[1, dpr]}
-      gl={{
-        antialias: true,
-        alpha: true,
-        powerPreference: "high-performance",
-        toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.05,
-      }}
-      camera={{ position: [0, 2.85, 5.35], fov: 42, near: 0.08, far: 120 }}
-      style={{ width: "100%", height: "100%", display: "block" }}
-      onCreated={({ gl, scene, camera }) => {
-        gl.setClearColor(0x000000, 0);
-        scene.background = null;
-        camera.lookAt(0, 0.15, -0.15);
-      }}
-    >
-      <Suspense fallback={null}>
-        <SceneInner {...props} />
-      </Suspense>
-    </Canvas>
+    <>
+      <style>{`
+        @keyframes commsSeatPop {
+          from { opacity: 0; transform: scale(0.55) translateY(18px); filter: blur(4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+        }
+      `}</style>
+      <Canvas
+        dpr={[1, dpr]}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        camera={{ position: [0, 3.8, 5.8], fov: 44, near: 0.08, far: 120 }}
+        style={{ width: "100%", height: "100%", display: "block" }}
+        onCreated={({ gl, scene, camera }) => {
+          gl.setClearColor(0x000000, 0);
+          scene.background = null;
+          camera.lookAt(0, 0.45, 0);
+        }}
+      >
+        <Suspense fallback={null}>
+          <SceneInner {...props} />
+        </Suspense>
+      </Canvas>
+    </>
   );
 }

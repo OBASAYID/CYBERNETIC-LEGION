@@ -375,9 +375,18 @@ if (distPublic) {
       maxAge: STATIC_ASSET_MAX_AGE,
       immutable: true,
       setHeaders: (res, filePath) => {
-        // HTML must never be cached so users always get the latest shell
-        if (filePath.endsWith(".html")) {
+        const base = path.basename(filePath);
+        // HTML + PWA bootstrap must never be long-cached (stale shell/SW → old lazy chunks).
+        if (
+          filePath.endsWith(".html") ||
+          base === "sw.js" ||
+          base === "registerSW.js" ||
+          base === "manifest.webmanifest" ||
+          base.startsWith("workbox-")
+        ) {
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
         }
       },
     })(req, res, next);

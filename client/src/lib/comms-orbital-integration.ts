@@ -1,12 +1,14 @@
 /**
- * Orbital presence arc — slot labels, pin persistence, and peer assignment
- * (online roster, contacts, pinned users per TAC/GTAC/RSPC/GSPC).
+ * Round-table presence — online users appear at seats; stable seat map;
+ * pins for TAC/GTAC/RSPC/GSPC (+ overflow seats S5…).
  */
 
 export const ORBITAL_PEER_LABELS = ["TAC", "GTAC", "RSPC", "GSPC"] as const;
 export const ORBITAL_HUB_LABEL = "GSLC";
+export const MAX_TABLE_PEER_SEATS = 9;
 
 const PINS_KEY = "cyrus-comms-orbital-slot-pins";
+const SEAT_MAP_KEY = "cyrus-comms-table-seat-map";
 
 export type OrbitalSlotPeer = {
   id: string;
@@ -17,6 +19,7 @@ export type OrbitalSlotPeer = {
 };
 
 export type OrbitalForwardSlot = {
+  seatIndex: number;
   refLabel: string;
   peer: OrbitalSlotPeer | null;
 };
@@ -46,6 +49,45 @@ export function writeOrbitalSlotPin(slotIndex: number, userId: string | null): v
   }
 }
 
+function peerSeatLabel(seatIndex: number): string {
+  return ORBITAL_PEER_LABELS[seatIndex] ?? `S${seatIndex + 1}`;
+}
+
+function readTableSeatMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(SEAT_MAP_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "number" && v >= 0 && v < MAX_TABLE_PEER_SEATS) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeTableSeatMap(map: Record<string, number>): void {
+  try {
+    localStorage.setItem(SEAT_MAP_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
+function nextFreeSeat(occupied: Set<number>): number | null {
+  for (let i = 0; i < MAX_TABLE_PEER_SEATS; i++) {
+    if (!occupied.has(i)) return i;
+  }
+  return null;
+}
+
+/**
+ * Build table seats for every **online** peer (excluding operator).
+ * When a user goes offline they are removed; when they return they reclaim a stable seat.
+ */
 export function buildOrbitalForwardSlots(input: {
   myId: string;
   onlineUsers: Array<{ id: string; displayName: string; inCall?: boolean }>;
@@ -54,56 +96,59 @@ export function buildOrbitalForwardSlots(input: {
   resolveAvatar: (id: string) => string | null;
   slotPins?: (string | null)[];
 }): OrbitalForwardSlot[] {
+  void input.contacts;
+  void input.allUsers;
+
   const skip = new Set([input.myId, "cyrus-001"].filter(Boolean));
-  const onlineById = new Map(input.onlineUsers.map((u) => [u.id, u]));
+  const onlineOthers = input.onlineUsers.filter((u) => u.id && !skip.has(u.id));
+  const onlineIds = new Set(onlineOthers.map((u) => u.id));
   const pins = input.slotPins ?? readOrbitalSlotPins();
-  const assigned = new Map<number, OrbitalSlotPeer>();
-  const seen = new Set<string>();
+  const seatMap = readTableSeatMap();
+  const occupied = new Map<number, OrbitalForwardSlot>();
+  const assigned = new Set<string>();
 
-  const toPeer = (id: string, displayName: string): OrbitalSlotPeer => {
-    const live = onlineById.get(id);
-    return {
-      id,
-      displayName: live?.displayName ?? displayName,
-      inCall: live?.inCall,
-      avatarUrl: input.resolveAvatar(id),
-      isOnline: !!live,
-    };
+  const liveUser = (id: string) => onlineOthers.find((u) => u.id === id);
+
+  const placeOnline = (userId: string, seatIndex: number) => {
+    if (seatIndex < 0 || seatIndex >= MAX_TABLE_PEER_SEATS || occupied.has(seatIndex)) return;
+    const live = liveUser(userId);
+    if (!live) return;
+    occupied.set(seatIndex, {
+      seatIndex,
+      refLabel: peerSeatLabel(seatIndex),
+      peer: {
+        id: userId,
+        displayName: live.displayName,
+        inCall: live.inCall,
+        avatarUrl: input.resolveAvatar(userId),
+        isOnline: true,
+      },
+    });
+    assigned.add(userId);
+    seatMap[userId] = seatIndex;
   };
 
-  const claim = (id: string, displayName: string): OrbitalSlotPeer | null => {
-    if (!id || skip.has(id) || seen.has(id)) return null;
-    seen.add(id);
-    return toPeer(id, displayName);
-  };
-
-  // Pinned users occupy their slot index first.
-  for (let i = 0; i < ORBITAL_PEER_LABELS.length; i++) {
+  for (let i = 0; i < pins.length && i < MAX_TABLE_PEER_SEATS; i++) {
     const pinId = pins[i];
-    if (!pinId) continue;
-    const fromAll = input.allUsers.find((u) => u.id === pinId);
-    const fromOnline = onlineById.get(pinId);
-    const peer = claim(pinId, fromOnline?.displayName ?? fromAll?.displayName ?? pinId);
-    if (peer) assigned.set(i, peer);
+    if (pinId && onlineIds.has(pinId)) placeOnline(pinId, i);
   }
 
-  const fillNext = (id: string, displayName: string) => {
-    const peer = claim(id, displayName);
-    if (!peer) return;
-    for (let i = 0; i < ORBITAL_PEER_LABELS.length; i++) {
-      if (!assigned.has(i)) {
-        assigned.set(i, peer);
-        return;
-      }
+  for (const u of onlineOthers) {
+    if (assigned.has(u.id)) continue;
+    let seat = seatMap[u.id];
+    if (seat === undefined || seat >= MAX_TABLE_PEER_SEATS || occupied.has(seat)) {
+      const free = nextFreeSeat(new Set(occupied.keys()));
+      if (free === null) continue;
+      seat = free;
     }
-  };
+    placeOnline(u.id, seat);
+  }
 
-  for (const u of input.onlineUsers) fillNext(u.id, u.displayName);
-  for (const c of input.contacts) fillNext(c.contactId, c.contactName);
-  for (const u of input.allUsers) fillNext(u.id, u.displayName);
+  const pruned: Record<string, number> = {};
+  for (const [userId, seat] of Object.entries(seatMap)) {
+    if (onlineIds.has(userId)) pruned[userId] = seat;
+  }
+  writeTableSeatMap(pruned);
 
-  return ORBITAL_PEER_LABELS.map((refLabel, i) => ({
-    refLabel,
-    peer: assigned.get(i) ?? null,
-  }));
+  return [...occupied.values()].sort((a, b) => a.seatIndex - b.seatIndex);
 }
