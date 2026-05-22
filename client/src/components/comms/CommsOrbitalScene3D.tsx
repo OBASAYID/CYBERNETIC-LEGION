@@ -1,15 +1,26 @@
 /**
- * NEXUS round-table — operator at front; each **online** user pops into a seat dynamically.
+ * NEXUS round-table — operator always seated; each online peer pops into a seat dynamically.
+ * 3D reference-style figures + functional laptop screens + contact hub on tap.
  */
 
-import { Suspense, useId, useRef, type CSSProperties } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Billboard, Grid, Html } from "@react-three/drei";
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { Billboard, ContactShadows, Grid, Html } from "@react-three/drei";
 import * as THREE from "three";
 
 import { ORBITAL_HUB_LABEL, type OrbitalForwardSlot } from "../../lib/comms-orbital-integration";
 import { CommsContactHubPopover } from "./CommsContactHubPopover";
 import { COMMS_NEXUS_KEYFRAMES } from "./comms-nexus-motion";
+import { AnimatedSeatBody } from "./CommsRoundTableSeatAnimation";
+import {
+  ConferenceLaptop,
+  OfficeChair,
+  RoundTable,
+  StudioEnvironment,
+  StylizedAvatarFigure,
+  peerSeatAngles,
+  seatXZ,
+} from "./CommsRoundTableModels";
 
 export type ForwardOrbitSlot = OrbitalForwardSlot;
 
@@ -30,27 +41,21 @@ type Props = {
   onHubPeerChange?: (peerId: string | null) => void;
   onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;
   onHubActivate?: () => void;
+  /** studio = reference white floor; nexus = dark holo grid */
+  environment?: "studio" | "nexus";
 };
 
-const CYAN = "#00e5ff";
-const TABLE_RADIUS = 1.05;
-const SEAT_RADIUS = 2.35;
-const TABLE_Y = 0.38;
 const OPERATOR_ANGLE = 0;
-
 const HTML: CSSProperties = { pointerEvents: "auto", userSelect: "none" };
 
-function seatXZ(angle: number): { x: number; z: number } {
-  return { x: Math.sin(angle) * SEAT_RADIUS, z: Math.cos(angle) * SEAT_RADIUS };
-}
+type PeerSnapshot = {
+  slot: OrbitalForwardSlot;
+  angle: number;
+};
 
-function peerSeatAngles(peerCount: number): number[] {
-  if (peerCount <= 0) return [];
-  const step = (Math.PI * 2) / (peerCount + 1);
-  return Array.from({ length: peerCount }, (_, i) => step * (i + 1));
-}
+const enteredPeerIds = new Set<string>();
 
-function PerspectiveFloor({ darkMode }: { darkMode: boolean }) {
+function NexusGridFloor({ darkMode }: { darkMode: boolean }) {
   return (
     <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
       <Grid
@@ -68,114 +73,14 @@ function PerspectiveFloor({ darkMode }: { darkMode: boolean }) {
   );
 }
 
-function ConferenceTable({ onlineCount }: { onlineCount: number }) {
-  return (
-    <group position={[0, TABLE_Y, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[TABLE_RADIUS, 64]} />
-        <meshStandardMaterial
-          color="#3d2817"
-          metalness={0.35}
-          roughness={0.28}
-          emissive="#1a0f08"
-          emissiveIntensity={0.15}
-        />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}>
-        <ringGeometry args={[TABLE_RADIUS * 0.92, TABLE_RADIUS * 1.02, 64]} />
-        <meshBasicMaterial
-          color={CYAN}
-          transparent
-          opacity={0.55}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <circleGeometry args={[TABLE_RADIUS * 0.88, 48]} />
-        <meshBasicMaterial color={CYAN} transparent opacity={0.06} depthWrite={false} />
-      </mesh>
-      <pointLight color={CYAN} intensity={1.4 + onlineCount * 0.12} distance={4} position={[0, 0.5, 0]} />
-    </group>
-  );
-}
-
-function ChairMesh() {
-  return (
-    <group position={[0, 0.18, 0.35]}>
-      <mesh position={[0, 0.12, 0]}>
-        <boxGeometry args={[0.42, 0.08, 0.42]} />
-        <meshStandardMaterial color="#111827" metalness={0.4} roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 0.38, -0.12]}>
-        <boxGeometry args={[0.42, 0.42, 0.06]} />
-        <meshStandardMaterial color="#0f172a" metalness={0.35} roughness={0.55} />
-      </mesh>
-    </group>
-  );
-}
-
-function HoloLaptop() {
-  return (
-    <mesh position={[0, TABLE_Y + 0.04, -0.55]} rotation={[-0.35, 0, 0]}>
-      <boxGeometry args={[0.38, 0.02, 0.28]} />
-      <meshStandardMaterial color="#0a1628" emissive={CYAN} emissiveIntensity={0.35} metalness={0.5} roughness={0.4} />
-    </mesh>
-  );
-}
-
-function HumanSilhouette({ initial }: { initial: string }) {
-  const gid = useId().replace(/:/g, "");
-  return (
-    <div className="relative flex h-full w-full flex-col items-center justify-end overflow-hidden bg-gradient-to-b from-[#1e3a5f] via-[#0f2744] to-[#081018] pb-[8%]">
-      <svg viewBox="0 0 100 130" className="h-[88%] w-[85%]" aria-hidden>
-        <defs>
-          <linearGradient id={`skin-${gid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#94a3b8" />
-            <stop offset="100%" stopColor="#64748b" />
-          </linearGradient>
-        </defs>
-        <ellipse cx="50" cy="32" rx="17" ry="19" fill={`url(#skin-${gid})`} opacity="0.95" />
-        <path d="M22 128 C22 88 38 72 50 68 C62 72 78 88 78 128 Z" fill="#475569" opacity="0.92" />
-        <path d="M30 128 L30 95 Q50 82 70 95 L70 128 Z" fill="#334155" />
-      </svg>
-      <span className="absolute bottom-2 text-lg font-semibold text-cyan-100/90">{initial}</span>
-    </div>
-  );
-}
-
-function HoloDataPanel({ inCall }: { inCall?: boolean }) {
-  const bars = [0.45, 0.72, 0.55, 0.88, 0.62];
-  return (
-    <div className="mt-1 w-full rounded border border-cyan-500/40 bg-[#021018]/90 px-1 py-1">
-      <div className="flex h-5 items-end justify-center gap-0.5">
-        {bars.map((h, i) => (
-          <span
-            key={i}
-            className={`w-1 origin-bottom rounded-sm ${inCall ? "bg-fuchsia-400/80" : "bg-cyan-400/75"}`}
-            style={{
-              height: `${h * 100}%`,
-              animation: `commsHoloBar ${1.1 + i * 0.15}s ease-in-out infinite`,
-              animationDelay: `${i * 0.12}s`,
-            }}
-          />
-        ))}
-      </div>
-      <p className="mt-0.5 text-center font-mono text-[6px] uppercase tracking-wider text-emerald-400/85 sm:text-[7px]">
-        {inCall ? "In call" : "Online"}
-      </p>
-    </div>
-  );
-}
-
-function PortraitSeatCard({
+function SeatLabel({
   refLabel,
   displayName,
-  avatarUrl,
   inCall,
   isHub,
   isSelected,
   hubOpen,
+  avatarUrl,
   photoUploading,
   onPhotoClick,
   onHubActivate,
@@ -188,11 +93,11 @@ function PortraitSeatCard({
 }: {
   refLabel: string;
   displayName: string;
-  avatarUrl: string | null;
   inCall?: boolean;
   isHub: boolean;
   isSelected?: boolean;
   hubOpen?: boolean;
+  avatarUrl?: string | null;
   photoUploading?: boolean;
   onPhotoClick?: () => void;
   onHubActivate?: () => void;
@@ -203,47 +108,25 @@ function PortraitSeatCard({
   peerId?: string;
   seatIndex?: number;
 }) {
-  const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
-  const width = isHub ? "min(112px,21vw)" : "min(96px,18vw)";
   const cardRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
       ref={cardRef}
-      className={`group relative flex flex-col overflow-visible border-2 transition-shadow duration-300 ${
-        isHub ? "sm:w-[118px]" : "sm:w-[106px]"
-      } ${
+      className={`min-w-[88px] max-w-[120px] rounded-lg border backdrop-blur-md transition-all ${
         hubOpen
-          ? "border-cyan-100 shadow-[0_0_40px_rgba(0,229,255,0.55)] ring-2 ring-cyan-200/50"
+          ? "border-cyan-200 bg-[#021018]/95 shadow-[0_0_28px_rgba(0,229,255,0.45)]"
           : isSelected
-            ? "border-cyan-200 ring-2 ring-cyan-300/45 shadow-[0_0_32px_rgba(0,229,255,0.35)]"
-            : "border-cyan-400/65 shadow-[0_0_24px_rgba(0,229,255,0.22)]"
-      } ${isHub ? "ring-violet-400/25" : ""}`}
-      style={{
-        width,
-        background: isHub
-          ? "linear-gradient(165deg, rgba(20,12,48,0.96) 0%, rgba(0,8,16,0.98) 100%)"
-          : "linear-gradient(165deg, rgba(0,28,52,0.95) 0%, rgba(0,8,16,0.98) 100%)",
-        animation: hubOpen ? "commsHubPulse 2.4s ease-in-out infinite" : "commsSeatPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
-      }}
+            ? "border-cyan-300/70 bg-[#021018]/88"
+            : "border-cyan-500/35 bg-[#021018]/80"
+      }`}
+      style={{ animation: "commsSeatPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both" }}
     >
-      <div
-        className={`border-b px-2 py-0.5 text-center ${
-          isHub
-            ? "border-violet-500/35 bg-gradient-to-r from-violet-950/70 to-cyan-950/70"
-            : "border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 to-slate-950/80"
-        }`}
-      >
-        <span className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[8px]">
-          {refLabel}
-        </span>
-      </div>
-
       {!isHub && peerId && seatIndex !== undefined && onHubToggle ? (
         <CommsContactHubPopover
           displayName={displayName}
           refLabel={refLabel}
-          avatarUrl={avatarUrl}
+          avatarUrl={avatarUrl ?? null}
           inCall={inCall}
           open={!!hubOpen}
           onClose={() => onHubToggle()}
@@ -258,72 +141,39 @@ function PortraitSeatCard({
       <button
         type="button"
         disabled={isHub && photoUploading}
-        onClick={
-          isHub
-            ? onPhotoClick
-            : peerId && onHubToggle
-              ? onHubToggle
-              : undefined
-        }
-        className="relative aspect-[3/4] w-full cursor-pointer overflow-hidden transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70"
+        onClick={isHub ? onPhotoClick : onHubToggle}
+        className="w-full px-2 py-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70"
       >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
-        ) : (
-          <HumanSilhouette initial={initial} />
-        )}
-        {isHub && photoUploading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-300" />
-          </div>
-        ) : null}
-        <span
-          className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full shadow-[0_0_6px_currentColor] ${
-            inCall ? "bg-fuchsia-400" : "animate-pulse bg-emerald-400"
-          }`}
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-[#020810] to-transparent" />
+        <p className="font-mono text-[6px] uppercase tracking-[0.14em] text-cyan-400/75">{refLabel}</p>
+        <p className="truncate text-[10px] font-semibold text-white">{displayName}</p>
+        <p className="mt-0.5 font-mono text-[6px] uppercase tracking-wider text-emerald-400/85">
+          {inCall ? "In call" : isHub ? "You · host" : "Online · tap actions"}
+        </p>
       </button>
-
-      <div className="border-t border-cyan-500/25 px-1.5 py-1">
-        <p className="truncate text-center text-[9px] font-semibold text-white sm:text-[10px]">{displayName}</p>
-        <HoloDataPanel inCall={inCall} />
-      </div>
 
       {isHub ? (
         <div className="flex justify-center gap-1 border-t border-cyan-500/20 px-1 py-1">
           <button
             type="button"
-            className="rounded border border-cyan-500/45 px-2 py-0.5 text-[7px] text-cyan-100 transition hover:bg-cyan-500/15 focus-visible:outline focus-visible:outline-1 focus-visible:outline-cyan-400"
+            className="rounded border border-cyan-500/40 px-1.5 py-0.5 text-[6px] text-cyan-100 hover:bg-cyan-500/15"
             onClick={onHubActivate}
           >
-            Console
+            Chat
           </button>
           <button
             type="button"
-            className="rounded border border-violet-500/40 px-2 py-0.5 text-[7px] text-violet-100 transition hover:bg-violet-500/15 focus-visible:outline focus-visible:outline-1 focus-visible:outline-violet-400"
+            className="rounded border border-violet-500/35 px-1.5 py-0.5 text-[6px] text-violet-100 hover:bg-violet-500/15"
             onClick={onPhotoClick}
           >
             Photo
           </button>
         </div>
-      ) : (
-        <p
-          className={`border-t py-1 text-center font-mono text-[6px] uppercase tracking-wider sm:text-[7px] ${
-            hubOpen ? "text-cyan-200/90" : "text-cyan-400/55"
-          }`}
-        >
-          {hubOpen ? "Contact hub open" : "Tap · contact hub"}
-        </p>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function TableSeat({
-  angle,
-  slot,
-  isHub,
+function OperatorSeat({
   mainUserPhotoUrl,
   displayName,
   photoUploading,
@@ -336,9 +186,6 @@ function TableSeat({
   onPeerGroupCall,
   onHubActivate,
 }: {
-  angle: number;
-  slot: OrbitalForwardSlot | null;
-  isHub: boolean;
   mainUserPhotoUrl: string | null;
   displayName: string;
   photoUploading: boolean;
@@ -351,38 +198,90 @@ function TableSeat({
   onPeerGroupCall?: Props["onPeerGroupCall"];
   onHubActivate?: Props["onHubActivate"];
 }) {
-  const { x, z } = seatXZ(angle);
-  const peer = slot?.peer ?? null;
-  const refLabel = isHub ? ORBITAL_HUB_LABEL : slot?.refLabel ?? "—";
-  const name = isHub ? displayName : peer?.displayName ?? "—";
+  const { x, z } = seatXZ(OPERATOR_ANGLE);
 
   return (
-    <group position={[x, 0, z]} rotation={[0, angle + Math.PI, 0]}>
-      <ChairMesh />
-      <HoloLaptop />
-      <Billboard follow position={[0, isHub ? 1.02 : 0.92, 0]}>
-        <Html center distanceFactor={isHub ? 8.8 : 8.2} style={HTML} zIndexRange={[110, 0]}>
-          <PortraitSeatCard
-            refLabel={refLabel}
-            displayName={name}
-            avatarUrl={isHub ? mainUserPhotoUrl : peer?.avatarUrl ?? null}
-            inCall={peer?.inCall}
-            isHub={isHub}
-            isSelected={!!peer?.id && peer.id === selectedPeerId}
-            hubOpen={!!peer?.id && peer.id === openHubPeerId}
+    <group position={[x, 0, z]} rotation={[0, OPERATOR_ANGLE + Math.PI, 0]}>
+      <OfficeChair selected />
+      <ConferenceLaptop active />
+      <StylizedAvatarFigure isOperator selected />
+      <Billboard follow position={[0, 1.35, 0]}>
+        <Html center distanceFactor={9} style={HTML} zIndexRange={[120, 0]}>
+          <SeatLabel
+            refLabel={ORBITAL_HUB_LABEL}
+            displayName={displayName}
+            isHub
             photoUploading={photoUploading}
+            avatarUrl={mainUserPhotoUrl}
             onPhotoClick={onPhotoClick}
             onHubActivate={onHubActivate}
             onPeerCall={onPeerCall}
             onPeerMessage={onPeerMessage}
             onPeerGroupCall={onPeerGroupCall}
-            onHubToggle={peer?.id && onHubToggle ? () => onHubToggle(peer.id) : undefined}
-            peerId={peer?.id}
-            seatIndex={slot?.seatIndex}
           />
         </Html>
       </Billboard>
     </group>
+  );
+}
+
+function AnimatedPeerSeat({
+  snapshot,
+  mode,
+  onLeaveComplete,
+  selectedPeerId,
+  openHubPeerId,
+  onHubToggle,
+  onPeerCall,
+  onPeerMessage,
+  onPeerGroupCall,
+}: {
+  snapshot: PeerSnapshot;
+  mode: "enter" | "seated" | "leave";
+  onLeaveComplete?: () => void;
+  selectedPeerId?: string | null;
+  openHubPeerId?: string | null;
+  onHubToggle?: (peerId: string) => void;
+  onPeerCall: Props["onPeerCall"];
+  onPeerMessage?: Props["onPeerMessage"];
+  onPeerGroupCall?: Props["onPeerGroupCall"];
+}) {
+  const lockedMode = useRef(mode);
+  const peer = snapshot.slot.peer!;
+  const selected = peer.id === selectedPeerId;
+  const hubOpen = peer.id === openHubPeerId;
+  const showLabel = lockedMode.current !== "leave";
+
+  return (
+    <AnimatedSeatBody
+      angle={snapshot.angle}
+      mode={lockedMode.current}
+      onLeaveComplete={onLeaveComplete}
+      inCall={peer.inCall}
+      selected={selected}
+    >
+      {showLabel ? (
+        <Billboard follow position={[0, 1.35, 0]}>
+          <Html center distanceFactor={9} style={HTML} zIndexRange={[120, 0]}>
+            <SeatLabel
+              refLabel={snapshot.slot.refLabel}
+              displayName={peer.displayName}
+              inCall={peer.inCall}
+              isHub={false}
+              isSelected={selected}
+              hubOpen={hubOpen}
+              avatarUrl={peer.avatarUrl}
+              onPeerCall={onPeerCall}
+              onPeerMessage={onPeerMessage}
+              onPeerGroupCall={onPeerGroupCall}
+              onHubToggle={onHubToggle ? () => onHubToggle(peer.id) : undefined}
+              peerId={peer.id}
+              seatIndex={snapshot.slot.seatIndex}
+            />
+          </Html>
+        </Billboard>
+      ) : null}
+    </AnimatedSeatBody>
   );
 }
 
@@ -396,86 +295,198 @@ function SceneInner(props: Props) {
     selectedPeerId,
     openHubPeerId,
     onHubPeerChange,
-    ...handlers
+    environment = "studio",
+    onPhotoClick,
+    onPeerCall,
+    onPeerMessage,
+    onPeerGroupCall,
+    onHubActivate,
   } = props;
 
   const onlinePeers = forwardSlots.filter((s) => s.peer?.isOnline);
   const angles = peerSeatAngles(onlinePeers.length);
+  const knownRef = useRef<Map<string, PeerSnapshot>>(new Map());
+  const [departing, setDeparting] = useState<Map<string, PeerSnapshot>>(() => new Map());
+
+  useEffect(() => {
+    const nextKnown = new Map<string, PeerSnapshot>();
+    onlinePeers.forEach((slot, i) => {
+      nextKnown.set(slot.peer!.id, { slot, angle: angles[i] ?? 0 });
+    });
+
+    setDeparting((prev) => {
+      const next = new Map(prev);
+      for (const id of nextKnown.keys()) {
+        next.delete(id);
+      }
+      for (const [id, snap] of knownRef.current) {
+        if (!nextKnown.has(id)) next.set(id, snap);
+      }
+      return next;
+    });
+
+    knownRef.current = nextKnown;
+  }, [onlinePeers, angles]);
 
   const toggleHub = (peerId: string) => {
     if (!onHubPeerChange) return;
     onHubPeerChange(openHubPeerId === peerId ? null : peerId);
   };
 
+  const clearDeparting = (peerId: string) => {
+    enteredPeerIds.delete(peerId);
+    setDeparting((prev) => {
+      if (!prev.has(peerId)) return prev;
+      const next = new Map(prev);
+      next.delete(peerId);
+      return next;
+    });
+  };
+
+  const resolveEnterMode = (peerId: string): "enter" | "seated" => {
+    if (enteredPeerIds.has(peerId)) return "seated";
+    enteredPeerIds.add(peerId);
+    return "enter";
+  };
+
+  const tableCount = onlinePeers.length + departing.size;
+
   return (
-    <group rotation={[-0.12, 0, 0]}>
-      <PerspectiveFloor darkMode={darkMode} />
-      <ambientLight intensity={0.22} color="#cfe" />
-      <directionalLight position={[3, 10, 5]} intensity={0.55} color="#fff" />
-      <directionalLight position={[-4, 6, -2]} intensity={0.18} color="#0ea5e9" />
-      <ConferenceTable onlineCount={onlinePeers.length} />
-      <Billboard follow position={[0, TABLE_Y + 0.55, 0]}>
-        <Html center distanceFactor={10} style={{ pointerEvents: "none" }} zIndexRange={[90, 0]}>
-          <div className="whitespace-nowrap rounded-full border border-cyan-500/40 bg-[#021018]/88 px-3 py-1 text-center shadow-[0_0_24px_rgba(0,229,255,0.35)] backdrop-blur-sm">
-            <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-cyan-300/80 sm:text-[8px]">
-              {onlinePeers.length === 0
-                ? "NEXUS round table · awaiting peers"
-                : `${onlinePeers.length} peer${onlinePeers.length === 1 ? "" : "s"} at the table · tap a portrait`}
+    <group rotation={environment === "studio" ? [-0.08, 0, 0] : [-0.12, 0, 0]}>
+      <StudioEnvironment variant={environment} />
+      {environment === "nexus" ? <NexusGridFloor darkMode={darkMode} /> : null}
+
+      <SceneLighting environment={environment} />
+      <RoundTable peerCount={tableCount} />
+
+      <ContactShadows
+        position={[0, 0, 0]}
+        opacity={environment === "studio" ? 0.35 : 0.22}
+        scale={12}
+        blur={2.4}
+        far={6}
+      />
+
+      <Billboard follow position={[0, 2.8, 0]}>
+        <Html center distanceFactor={11} style={{ pointerEvents: "none" }} zIndexRange={[90, 0]}>
+          <div className="whitespace-nowrap rounded-full border border-cyan-500/35 bg-[#021018]/88 px-3 py-1 text-center shadow-[0_0_20px_rgba(0,229,255,0.25)] backdrop-blur-sm">
+            <p className="font-mono text-[7px] uppercase tracking-[0.16em] text-cyan-300/85 sm:text-[8px]">
+              {onlinePeers.length === 0 && departing.size === 0
+                ? "Round table · you are online · waiting for peers"
+                : `${onlinePeers.length + 1} seated · peers walk in when online · stand & leave when offline`}
             </p>
           </div>
         </Html>
       </Billboard>
 
-      <TableSeat
-        angle={OPERATOR_ANGLE}
-        slot={null}
-        isHub
+      <OperatorSeat
         mainUserPhotoUrl={mainUserPhotoUrl}
         displayName={displayName}
         photoUploading={photoUploading}
         selectedPeerId={selectedPeerId}
         openHubPeerId={openHubPeerId}
         onHubToggle={toggleHub}
-        {...handlers}
+        onPhotoClick={onPhotoClick}
+        onPeerCall={onPeerCall}
+        onPeerMessage={onPeerMessage}
+        onPeerGroupCall={onPeerGroupCall}
+        onHubActivate={onHubActivate}
       />
 
       {onlinePeers.map((slot, i) => (
-        <TableSeat
+        <AnimatedPeerSeat
           key={slot.peer!.id}
-          angle={angles[i] ?? 0}
-          slot={slot}
-          isHub={false}
-          mainUserPhotoUrl={null}
-          displayName={slot.peer!.displayName}
-          photoUploading={false}
+          snapshot={{ slot, angle: angles[i] ?? 0 }}
+          mode={resolveEnterMode(slot.peer!.id)}
+            selectedPeerId={selectedPeerId}
+            openHubPeerId={openHubPeerId}
+            onHubToggle={toggleHub}
+            onPeerCall={onPeerCall}
+            onPeerMessage={onPeerMessage}
+          onPeerGroupCall={onPeerGroupCall}
+        />
+      ))}
+
+      {[...departing.entries()].map(([peerId, snap]) => (
+        <AnimatedPeerSeat
+          key={`leave-${peerId}`}
+          snapshot={snap}
+          mode="leave"
+          onLeaveComplete={() => clearDeparting(peerId)}
           selectedPeerId={selectedPeerId}
           openHubPeerId={openHubPeerId}
           onHubToggle={toggleHub}
-          {...handlers}
+          onPeerCall={onPeerCall}
+          onPeerMessage={onPeerMessage}
+          onPeerGroupCall={onPeerGroupCall}
         />
       ))}
     </group>
   );
 }
 
+function SceneLighting({ environment }: { environment: "studio" | "nexus" }) {
+  if (environment === "studio") {
+    return (
+      <>
+        <ambientLight intensity={0.65} color="#ffffff" />
+        <directionalLight
+          castShadow
+          position={[4, 9, 6]}
+          intensity={1.1}
+          color="#ffffff"
+          shadow-mapSize={[2048, 2048]}
+        />
+        <directionalLight position={[-3, 5, -2]} intensity={0.35} color="#dbeafe" />
+      </>
+    );
+  }
+  return (
+    <>
+      <ambientLight intensity={0.22} color="#cfe" />
+      <directionalLight position={[3, 10, 5]} intensity={0.55} color="#fff" />
+      <directionalLight position={[-4, 6, -2]} intensity={0.18} color="#0ea5e9" />
+    </>
+  );
+}
+
+function CameraRig({ environment }: { environment: "studio" | "nexus" }) {
+  const { camera } = useThree();
+  camera.position.set(0, environment === "studio" ? 4.8 : 3.6, environment === "studio" ? 5.8 : 5.6);
+  camera.lookAt(0, 0.42, 0);
+  return null;
+}
+
 export function CommsOrbitalScene3D(props: Props) {
-  const dpr = typeof window !== "undefined" ? Math.min(2.25, window.devicePixelRatio || 1) : 1.5;
+  const environment = props.environment ?? "studio";
+  const dpr =
+    typeof window !== "undefined" ? Math.min(3, Math.max(1.5, window.devicePixelRatio || 1.5)) : 2;
+
   return (
     <>
       <style>{COMMS_NEXUS_KEYFRAMES}</style>
       <Canvas
         dpr={[1, dpr]}
-        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        camera={{ position: [0, 3.6, 5.6], fov: 42, near: 0.08, far: 120 }}
+        shadows
+        gl={{
+          antialias: true,
+          alpha: environment === "nexus",
+          powerPreference: "high-performance",
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: environment === "studio" ? 1.05 : 1,
+        }}
+        camera={{ fov: environment === "studio" ? 38 : 42, near: 0.08, far: 120 }}
         style={{ width: "100%", height: "100%", display: "block" }}
-        onCreated={({ gl, scene, camera }) => {
-          gl.setClearColor(0x000000, 0);
-          scene.background = null;
-          camera.lookAt(0, 0.45, 0);
+        onCreated={({ gl, scene }) => {
+          if (environment === "nexus") {
+            gl.setClearColor(0x000000, 0);
+            scene.background = null;
+          }
         }}
       >
         <Suspense fallback={null}>
-          <SceneInner {...props} />
+          <CameraRig environment={environment} />
+          <SceneInner {...props} environment={environment} />
         </Suspense>
       </Canvas>
     </>
