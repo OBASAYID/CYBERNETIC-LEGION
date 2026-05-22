@@ -1,4 +1,5 @@
-import { Camera, Check, Copy, Facebook, Mail, MessageCircle, Share2, X } from "lucide-react";
+import { Camera, Check, Copy, Mail, MessageCircle, Share2, X } from "lucide-react";
+import { FaFacebook } from "react-icons/fa";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -9,6 +10,8 @@ type Message = {
   timestamp: Date;
   hasImage?: boolean;
   imageUrl?: string;
+  hasVideo?: boolean;
+  videoUrl?: string;
 };
 
 export function LegacyMessageFeed({
@@ -56,6 +59,20 @@ export function LegacyMessageFeed({
                   <span className="text-xs font-medium text-white/60">CYRUS</span>
                 </div>
               )}
+              {message.hasVideo && message.videoUrl && (
+                <div className="mb-3 max-w-full rounded-xl overflow-hidden border border-white/15 bg-black/30">
+                  <video
+                    src={message.videoUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="max-h-64 w-full object-contain"
+                    data-testid="video-message-attachment"
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                </div>
+              )}
               {message.hasImage && message.imageUrl && (
                 <div className="mb-3">
                   <img
@@ -95,7 +112,7 @@ export function LegacyMessageFeed({
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-full text-xs font-medium transition-colors"
                           data-testid={`share-facebook-${message.id}`}
                         >
-                          <Facebook className="w-3.5 h-3.5" />
+                          <FaFacebook className="w-3.5 h-3.5" />
                           Facebook
                         </button>
                         <button

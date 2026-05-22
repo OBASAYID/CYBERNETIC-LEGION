@@ -11,6 +11,10 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
 import { ArrowLeft } from "lucide-react";
+import { ApiKeyModal } from "@/components/ApiKeyModal";
+import { useApiKey } from "@/hooks/use-api-key";
+import { CallProvider } from "@/contexts/CallContext";
+import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -42,6 +46,19 @@ function App() {
     () => readGateDraft(readStoredDisplayName()).password,
   );
   const prevAuthenticatedRef = useRef<boolean | null>(null);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const { isConfigured: apiKeyConfigured } = useApiKey();
+
+  useEffect(() => {
+    console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
+    return () => {
+      console.log("[CYRUS] App unmounted.");
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log("[CYRUS] Auth state changed:", isAuthenticated);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -58,33 +75,66 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
+  // Derive a stable userId from localStorage device ID (same key used by PresenceContext)
+  const callUserId =
+    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
+    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
+    `device_${Math.random().toString(36).substr(2, 9)}`;
+  const callDisplayName = gateUsername || readStoredDisplayName() || "User";
+  // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        setApiKeyModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAuthenticated]);
+
   return (
     <ThemeProvider>
       <AppErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <div className="min-h-screen bg-black text-white">
-            <ReturnHomeButton />
-            {!isAuthenticated ? (
-              <PasswordGate
-                key="cyrus-password-gate"
-                username={gateUsername}
-                password={gatePassword}
-                onUsernameChange={setGateUsername}
-                onPasswordChange={setGatePassword}
-                onAuthenticated={(sessionToken: string, profile: GateProfile) => {
-                  setGatePassword("");
-                  clearGateDraft();
-                  onAuthenticated(sessionToken, profile);
-                }}
-              />
-            ) : (
-              <TooltipProvider>
-                <Toaster />
-                <AppErrorBoundary>
-                  <AppRoutes />
-                </AppErrorBoundary>
-              </TooltipProvider>
-            )}
+          <div className="relative isolate min-h-screen overflow-x-hidden bg-black text-white">
+            <AtmosphericSmokeBackground />
+            <div className="relative z-10 min-h-screen">
+              <ReturnHomeButton />
+              {!isAuthenticated ? (
+                <PasswordGate
+                  key="cyrus-password-gate"
+                  username={gateUsername}
+                  password={gatePassword}
+                  onUsernameChange={setGateUsername}
+                  onPasswordChange={setGatePassword}
+                  onAuthenticated={(sessionToken: string, profile: GateProfile) => {
+                    setGatePassword("");
+                    clearGateDraft();
+                    onAuthenticated(sessionToken, profile);
+                  }}
+                />
+              ) : (
+                <TooltipProvider>
+                  <Toaster />
+                  <AppErrorBoundary>
+                    {/* CallProvider wraps all authenticated routes so incoming/active
+                        call overlays are globally available regardless of current page. */}
+                    <CallProvider
+                      webRTCOptions={{
+                        userId: callUserId,
+                        userName: callDisplayName,
+                        isAuthenticated,
+                      }}
+                    >
+                      <AppRoutes />
+                    </CallProvider>
+                  </AppErrorBoundary>
+                  <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
+                </TooltipProvider>
+              )}
+            </div>
           </div>
         </QueryClientProvider>
       </AppErrorBoundary>

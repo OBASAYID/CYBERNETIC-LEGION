@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { systemFetch } from "@shared/cyrus-api-client";
+import {
+  systemFetch,
+  resolveCyrusWebSocketUrl,
+  appendCommSignalingTokenToSearchParams,
+} from "@shared/cyrus-api-client";
 import {
   createPeerConnectionConfig,
   getOptimalVideoConstraints,
@@ -13,30 +17,12 @@ import {
   detectNetworkType,
   CallQualityMetrics,
 } from "../lib/webrtc-config";
-
-function getDeviceId(): string {
-  const presence = localStorage.getItem("cyrus_device_id");
-  const key = "cyrus-device-id";
-  const legacy = localStorage.getItem(key);
-  if (presence) {
-    if (legacy !== presence) {
-      localStorage.setItem(key, presence);
-    }
-    return presence;
-  }
-  let deviceId = legacy;
-  if (!deviceId) {
-    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-  localStorage.setItem(key, deviceId);
-  localStorage.setItem("cyrus_device_id", deviceId);
-  return deviceId;
-}
+import { getCommsDeviceId } from "../lib/comms-device-id";
 
 function commsHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "X-Device-Id": getDeviceId(),
+    "X-Device-Id": getCommsDeviceId(),
   };
 }
 
@@ -159,6 +145,14 @@ export function useComms() {
       lastSeen: string | null;
       status: string;
       profileImageUrl: string | null;
+      onlineSince?: string | null;
+      lastLocation?: {
+        lat: number;
+        lng: number;
+        accuracy?: number | null;
+        at: string;
+      } | null;
+      locationShareEnabled?: boolean;
     }[]
   >({
     queryKey: ["/api/comms/users/all", "includeSelf"],
@@ -173,7 +167,7 @@ export function useComms() {
   const remindersQuery = useQuery<Reminder[]>({
     queryKey: ["/api/comms/reminders"],
     queryFn: async () => {
-      const res = await systemFetch("/api/comms/reminders");
+      const res = await systemFetch("/api/comms/reminders", { headers: commsHeaders() });
       if (!res.ok) throw new Error("Failed to fetch reminders");
       return res.json();
     },
@@ -199,7 +193,7 @@ export function useComms() {
     }) => {
       const res = await systemFetch("/api/comms/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: commsHeaders(),
         body: JSON.stringify({ recipientId, content }),
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -214,7 +208,7 @@ export function useComms() {
     mutationFn: async (reminder: Omit<Reminder, "id" | "completed">) => {
       const res = await systemFetch("/api/comms/reminders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: commsHeaders(),
         body: JSON.stringify(reminder),
       });
       if (!res.ok) throw new Error("Failed to add reminder");
@@ -229,6 +223,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/reminders/${id}/complete`, {
         method: "POST",
+        headers: commsHeaders(),
       });
       if (!res.ok) throw new Error("Failed to complete reminder");
       return res.json();
@@ -242,6 +237,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/reminders/${id}`, {
         method: "DELETE",
+        headers: commsHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete reminder");
       return res.json();
@@ -293,10 +289,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -472,10 +468,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -598,10 +594,10 @@ export function useComms() {
 
         setLocalStream(stream);
 
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${wsProtocol}//${window.location.host}/ws?room=${roomId}`
-        );
+        const qRoom = new URLSearchParams();
+        qRoom.set("room", roomId);
+        appendCommSignalingTokenToSearchParams(qRoom);
+        const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${qRoom.toString()}`));
         wsRef.current = ws;
 
         const pc = new RTCPeerConnection(createPeerConnectionConfig());
@@ -792,13 +788,16 @@ export function useComms() {
   const connectPresence = useCallback((displayName: string = "User") => {
     if (presenceWsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const deviceId = `device_${navigator.userAgent.substring(0, 20).replace(/\s/g, '_')}`;
-    
-    const ws = new WebSocket(
-      `${wsProtocol}//${window.location.host}/ws?userId=${userId}&name=${encodeURIComponent(displayName)}&deviceId=${deviceId}`
-    );
+
+    const q = new URLSearchParams({
+      userId,
+      name: displayName,
+      deviceId,
+    });
+    appendCommSignalingTokenToSearchParams(q);
+    const ws = new WebSocket(resolveCyrusWebSocketUrl(`/ws?${q.toString()}`));
     presenceWsRef.current = ws;
 
     ws.onopen = () => {
@@ -931,7 +930,7 @@ export function useComms() {
     queryKey: ["/api/comms/contacts"],
     queryFn: async () => {
       const res = await systemFetch("/api/comms/contacts", {
-        headers: { "X-Device-Id": getDeviceId() },
+        headers: { "X-Device-Id": getCommsDeviceId() },
       });
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
@@ -957,7 +956,7 @@ export function useComms() {
     mutationFn: async (id: string) => {
       const res = await systemFetch(`/api/comms/contacts/${id}`, { 
         method: "DELETE",
-        headers: { "X-Device-Id": getDeviceId() },
+        headers: { "X-Device-Id": getCommsDeviceId() },
       });
       if (!res.ok) throw new Error("Failed to delete contact");
       return res.json();
@@ -1010,7 +1009,7 @@ export function useComms() {
     setVolume,
     switchCamera,
     getAudioLevel,
-    myDeviceId: getDeviceId(),
+    myDeviceId: getCommsDeviceId(),
     isLoading: messagesQuery.isLoading || remindersQuery.isLoading,
   };
 }

@@ -8,7 +8,10 @@ import {
   UserPlus,
   UserMinus,
   Circle,
+  Link2,
+  Compass,
 } from "lucide-react";
+import { Link } from "wouter";
 
 interface UserProfileCardProps {
   user: {
@@ -17,13 +20,23 @@ interface UserProfileCardProps {
     isOnline: boolean;
     inCall: boolean;
     lastSeen: string | null;
+    /** ISO time when current online session started (server). */
+    onlineSince?: string | null;
+    /** Last GPS fix when user opted into ops / team sharing. */
+    lastLocation?: { lat: number; lng: number; accuracy?: number | null; at: string } | null;
+    locationShareEnabled?: boolean;
   };
   isContact: boolean;
   isFavorite: boolean;
+  /** Peer is on /cyrus-comm-io mesh registry — show mesh call actions. */
+  meshReachable?: boolean;
+  meshInCall?: boolean;
   onClose: () => void;
   onMessage: () => void;
   onVoiceCall: () => void;
   onVideoCall: () => void;
+  onMeshVoiceCall?: () => void;
+  onMeshVideoCall?: () => void;
   onToggleContact: () => void;
 }
 
@@ -31,10 +44,14 @@ export function UserProfileCard({
   user,
   isContact,
   isFavorite,
+  meshReachable = false,
+  meshInCall = false,
   onClose,
   onMessage,
   onVoiceCall,
   onVideoCall,
+  onMeshVoiceCall,
+  onMeshVideoCall,
   onToggleContact,
 }: UserProfileCardProps) {
   const getInitials = (name: string) => {
@@ -44,6 +61,18 @@ export function UserProfileCard({
       .join("")
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const sessionLabel = () => {
+    if (!user.isOnline || !user.onlineSince) return null;
+    const start = new Date(user.onlineSince).getTime();
+    if (!Number.isFinite(start)) return null;
+    const mins = Math.max(0, Math.floor((Date.now() - start) / 60_000));
+    if (mins < 1) return "Session < 1 min";
+    if (mins < 60) return `Online this session · ${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `Online this session · ${h}h ${m}m`;
   };
 
   const getStatusText = () => {
@@ -69,6 +98,8 @@ export function UserProfileCard({
     return "text-gray-500";
   };
 
+  const sessionText = sessionLabel();
+
   return (
     <div
       className="fixed inset-0 flex items-center justify-center z-[10000]"
@@ -85,6 +116,11 @@ export function UserProfileCard({
             {isContact && (
               <span className="text-[10px] font-medium text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded-full">
                 Contact
+              </span>
+            )}
+            {meshReachable && (
+              <span className="text-[10px] font-medium text-violet-300 bg-violet-500/25 px-2 py-0.5 rounded-full">
+                Mesh
               </span>
             )}
           </div>
@@ -109,6 +145,16 @@ export function UserProfileCard({
             {user.displayName}
           </h3>
           <p className={`text-sm ${getStatusColor()}`}>{getStatusText()}</p>
+          {sessionText ? <p className="mt-1 text-[11px] text-cyan-200/70">{sessionText}</p> : null}
+          {user.lastLocation && user.locationShareEnabled ? (
+            <p className="mt-1 text-[10px] text-amber-200/80">
+              Last GPS{" "}
+              {user.lastLocation.accuracy != null
+                ? `(±${Math.round(user.lastLocation.accuracy)}m)`
+                : ""}{" "}
+              · {new Date(user.lastLocation.at).toLocaleString()}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-4 gap-2 mb-5">
@@ -140,15 +186,60 @@ export function UserProfileCard({
             </span>
           </button>
           <button
-            className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-colors group"
-            title="Share Location"
+            type="button"
+            disabled={!user.lastLocation || !user.locationShareEnabled}
+            onClick={() => {
+              if (!user.lastLocation || !user.locationShareEnabled) return;
+              const { lat, lng } = user.lastLocation;
+              window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank", "noopener,noreferrer");
+            }}
+            className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-colors group disabled:opacity-35"
+            title={
+              user.lastLocation && user.locationShareEnabled
+                ? "Open last shared position in maps"
+                : "No ops GPS stored (user must enable mesh live location + team share)"
+            }
           >
             <MapPin className="w-5 h-5 text-purple-400 group-hover:text-purple-300" />
             <span className="text-[10px] text-purple-400 group-hover:text-purple-300">
-              Location
+              Map
             </span>
           </button>
         </div>
+
+        {user.lastLocation && user.locationShareEnabled ? (
+          <Link
+            href={`/nav?pinUser=${encodeURIComponent(user.id)}`}
+            className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 py-2.5 text-[11px] font-medium text-orange-200 transition-colors hover:bg-orange-500/20"
+            onClick={onClose}
+          >
+            <Compass className="h-4 w-4 shrink-0" />
+            Open in Navigation (pin on map)
+          </Link>
+        ) : null}
+
+        {meshReachable && onMeshVoiceCall && onMeshVideoCall ? (
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            <button
+              type="button"
+              onClick={onMeshVoiceCall}
+              disabled={meshInCall}
+              className="flex flex-col items-center gap-1.5 p-3 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 rounded-xl transition-colors disabled:opacity-40 group"
+            >
+              <Link2 className="w-5 h-5 text-violet-300 group-hover:text-violet-200" />
+              <span className="text-[10px] text-violet-300">Mesh voice</span>
+            </button>
+            <button
+              type="button"
+              onClick={onMeshVideoCall}
+              disabled={meshInCall}
+              className="flex flex-col items-center gap-1.5 p-3 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/30 rounded-xl transition-colors disabled:opacity-40 group"
+            >
+              <Video className="w-5 h-5 text-fuchsia-300 group-hover:text-fuchsia-200" />
+              <span className="text-[10px] text-fuchsia-300">Mesh video</span>
+            </button>
+          </div>
+        ) : null}
 
         <button
           onClick={onToggleContact}

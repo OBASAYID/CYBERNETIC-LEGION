@@ -1,9 +1,24 @@
-import { Activity, Cpu, Gauge, LayoutGrid, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
+import { Activity, Cpu, Gauge, ShieldCheck, TerminalSquare } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import { getDesignatedModuleRouteForEngine } from "@/config/command-center-nav";
-import { getModuleTheme } from "@/config/module-tile-themes";
+import { MODULE_FOLDER_ICON_FILTER, MODULE_FOLDER_TILE_URL } from "@/lib/dashboard-backdrop";
+import { cn } from "@/lib/utils";
 import { StatusIcon, StatCard, metricIcons, statusTone } from "./ui";
 import type { DashboardModuleStatus, StackSummaryResponse } from "./types";
+
+/** Shared folder glyph — chrome tint; trim + darken removes PNG matte plate. */
+function ModulesFolderGlyph({ className = "" }: { className?: string }) {
+  return (
+    <img
+      src={MODULE_FOLDER_TILE_URL}
+      alt=""
+      className={cn("cyrus-module-folder-trim relative object-contain align-middle mix-blend-darken", className)}
+      style={{ filter: MODULE_FOLDER_ICON_FILTER }}
+      draggable={false}
+    />
+  );
+}
 
 export function HeroSection() {
   return (
@@ -25,9 +40,12 @@ export function HeroSection() {
         <Link href="/modules">
           <button
             type="button"
-            className="rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
+            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
+              <ModulesFolderGlyph className="h-7 w-7" />
+            </span>
             Open Orchestrator
           </button>
         </Link>
@@ -160,118 +178,95 @@ export function ModuleWorkspaceSection({
   moduleFilter,
   setModuleFilter,
 }: {
-  modules: { href: string; label: string; description?: string; Icon: React.ComponentType<{ className?: string }> }[];
+  modules: { href: string; label: string; description?: string; Icon: LucideIcon }[];
   moduleFilter: "all" | "core";
   setModuleFilter: (next: "all" | "core") => void;
 }) {
   return (
-    <div className="relative w-full">
-      <div
-        className="pointer-events-none absolute left-1/2 top-[55%] z-0 w-[min(76rem,108vw)] -translate-x-1/2 -translate-y-1/2"
-        aria-hidden
-      >
-        <div className="mx-auto h-80 max-w-5xl rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
-        <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
-      </div>
-    <section className="relative z-10 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/50 via-slate-950/75 to-orange-950/40 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_0_50px_-30px_rgba(251,191,36,0.07),0_12px_40px_rgba(0,0,0,0.4)]">
-      <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950" aria-hidden />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.1]"
-        style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.38) 1px, transparent 0)`,
-          backgroundSize: "24px 24px",
-        }}
-      />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-200/5 via-yellow-400/4 to-orange-500/10" />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.07),transparent_58%)]"
-        aria-hidden
-      />
-      <div className="relative z-10 rounded-[1.4rem] bg-gradient-to-b from-amber-950/35 via-slate-950/55 to-orange-950/30 p-4 shadow-inner shadow-black/15 backdrop-blur-sm">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
-              <LayoutGrid className="h-5 w-5 text-cyan-300" />
-            </div>
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-cyan-200/60">Field access</p>
-              <h2
-                className="mt-0.5 bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
-                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-              >
-                Module workspace
-              </h2>
-              <p className="mt-1 max-w-md text-xs text-white/70">
-                Each tile is a different mission channel—pick one to open its console.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setModuleFilter("all")}
-              className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                moduleFilter === "all"
-                  ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
-                  : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setModuleFilter("core")}
-              className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                moduleFilter === "core"
-                  ? "border-orange-400/50 bg-gradient-to-r from-orange-600/30 to-amber-500/20 text-amber-50 shadow-lg shadow-orange-500/15"
-                  : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
-              }`}
-            >
-              Core
-            </button>
-          </div>
+    <div className="relative z-10 w-full max-w-none">
+      <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
+          <h2
+            className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+            style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+          >
+            Module workspace
+          </h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
+            Open a module channel below—each tile uses the same icon as Command Center navigation, plus a short mission
+            readout.
+          </p>
         </div>
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setModuleFilter("all")}
+            className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
+              moduleFilter === "all"
+                ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
+                : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setModuleFilter("core")}
+            className={`rounded-full border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
+              moduleFilter === "core"
+                ? "border-orange-400/50 bg-gradient-to-r from-orange-600/30 to-amber-500/20 text-amber-50 shadow-lg shadow-orange-500/15"
+                : "border-white/12 bg-slate-950/50 text-white/70 hover:border-white/30 hover:text-white/92"
+            }`}
+          >
+            Core
+          </button>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-6">
-          {modules.map((item, i) => {
-            const t = getModuleTheme(item.href, i);
-            return (
-              <Link key={item.href} href={item.href} className="block">
+      <div className="grid w-full grid-cols-4 items-stretch gap-1.5 sm:gap-3">
+        {modules.map((item) => {
+          const BadgeIcon = item.Icon;
+          return (
+            <Link key={item.href} href={item.href} className="block min-w-0">
+              <div
+                className="group relative flex h-full min-h-0 w-full cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-slate-950/30 px-1.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 ease-out hover:-translate-y-px hover:border-cyan-400/25 hover:bg-slate-950/45 active:translate-y-0 sm:gap-2 sm:rounded-2xl sm:px-2 sm:py-2.5"
+                data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+              >
                 <div
-                  className={`
-                    group relative w-full cursor-pointer overflow-hidden rounded-2xl border p-3 text-left
-                    ${t.background} ${t.border} ${t.glow}
-                    transition duration-200 ease-out
-                    hover:z-[1] hover:scale-[1.02] hover:brightness-110
-                    active:scale-[0.99]
-                  `}
-                  data-testid={`fresh-module-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-100/32 bg-gradient-to-br from-white/22 via-slate-300/14 to-cyan-300/24 shadow-[0_0_14px_rgba(34,211,238,0.32),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-[2px] transition duration-300 group-hover:shadow-[0_0_22px_rgba(34,211,238,0.42)] sm:h-10 sm:w-10 sm:rounded-[0.85rem]"
+                  aria-hidden
                 >
-                  <div
-                    className={`pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br ${t.corner} to-transparent opacity-50 blur-xl transition group-hover:opacity-100`}
+                  <BadgeIcon
+                    className="h-5 w-5 text-cyan-50 drop-shadow-[0_0_6px_rgba(34,211,238,0.85)] [shape-rendering:geometricPrecision] antialiased sm:h-[1.35rem] sm:w-[1.35rem]"
+                    strokeWidth={1.65}
                   />
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/12 bg-slate-900/55 ${t.icon}`}
-                    >
-                      <item.Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <p className={`line-clamp-1 text-sm font-semibold ${t.label}`} style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
-                      {item.label}
-                    </p>
-                  </div>
-                  <p className={`line-clamp-2 pl-[2.25rem] text-[10px] leading-snug ${t.sub}`}>
-                    {item.description ?? "Open module"}
-                  </p>
-                  <div className="mt-2 h-px w-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 transition group-hover:opacity-100" />
                 </div>
-              </Link>
-            );
-          })}
-        </div>
+                <p
+                  className="w-full text-[10px] font-semibold leading-tight tracking-wide text-sky-50 antialiased sm:text-[11px]"
+                  style={{
+                    fontFamily: "'Orbitron', system-ui, sans-serif",
+                    textRendering: "optimizeLegibility",
+                    WebkitFontSmoothing: "antialiased",
+                    textShadow:
+                      "0 0 12px rgba(12,42,74,0.92), 0 1px 2px rgba(8,30,58,0.88), 0 0 16px rgba(56,189,248,0.4)",
+                  }}
+                >
+                  {item.label}
+                </p>
+                {item.description ? (
+                  <p
+                    className="line-clamp-2 w-full text-[9px] leading-snug text-cyan-100/72 antialiased sm:line-clamp-3 sm:text-[10px]"
+                    style={{ textRendering: "optimizeLegibility", WebkitFontSmoothing: "antialiased" }}
+                  >
+                    {item.description}
+                  </p>
+                ) : null}
+              </div>
+            </Link>
+          );
+        })}
       </div>
-    </section>
     </div>
   );
 }
@@ -421,7 +416,7 @@ export function LegacyBanner() {
 export function HeaderBadge({ livePort }: { livePort?: number }) {
   return (
     <span
-      className="rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-600/25 via-cyan-500/20 to-cyan-600/25 px-3 py-1.5 text-xs font-mono text-cyan-100 shadow-lg shadow-cyan-500/15"
+      className="inline-flex shrink-0 whitespace-nowrap rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-600/25 via-cyan-500/20 to-cyan-600/25 px-2.5 py-1.5 text-[11px] font-mono text-cyan-100 shadow-lg shadow-cyan-500/15 sm:px-3 sm:text-xs"
       style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
     >
       Fused {livePort ?? "—"}
@@ -432,10 +427,10 @@ export function HeaderBadge({ livePort }: { livePort?: number }) {
 export function HeaderTitle({ variant = "default" }: { variant?: "default" | "operator" }) {
   const isOperator = variant === "operator";
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative hidden h-12 w-12 shrink-0 sm:block">
+    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <div className="relative hidden h-10 w-10 shrink-0 sm:block md:h-12 md:w-12">
         <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-orange-500/20 blur-md" />
-        <div className="relative h-12 w-12 overflow-hidden rounded-full border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.35)]">
+        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.35)] md:h-12 md:w-12">
           <img
             src="/images/cyrus-logo.png"
             alt=""
@@ -444,12 +439,12 @@ export function HeaderTitle({ variant = "default" }: { variant?: "default" | "op
           />
         </div>
       </div>
-      <div>
-        <p className="text-xs font-mono uppercase tracking-[0.28em] text-cyan-200/80">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-200/80 sm:text-xs sm:tracking-[0.28em]">
           {isOperator ? "CYRUS" : "CYRUS Command"}
         </p>
         <h1
-          className="mt-0.5 text-xl font-bold tracking-wide"
+          className="mt-0.5 break-words text-base font-bold leading-tight tracking-wide sm:text-lg md:text-xl"
           style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
         >
           {isOperator ? (

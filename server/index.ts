@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import type { ChildProcess } from "child_process";
+import zlib from "zlib";
 import cors from "cors";
 import helmet from "helmet";
 import { createCyrusCorsOriginAccess, warnIfCorsMisconfigured } from "./cors-trusted.js";
@@ -12,11 +13,16 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import { logger } from "./observability/logger.js";
+import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
+import { parseExpressJsonBodyLimit } from "../shared/cyrus-document-limits.js";
+
 
 const dotenvResult = dotenv.config();
 syncFusedStackPortEnv();
+
+const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
 
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
@@ -26,10 +32,6 @@ function validateEnvironment(): string[] {
   // Optional but recommended
   if (!process.env.OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
     warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
-  }
-
-  if (!process.env.DATABASE_URL) {
-    warnings.push('⚠️ DATABASE_URL not set. Using in-memory storage.');
   }
 
   if (warnings.length > 0) {
@@ -59,7 +61,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 
-if (process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || ""))) {
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.TRUST_PROXY === "1" ||
+  /^true$/i.test(String(process.env.TRUST_PROXY || ""))
+) {
   app.set("trust proxy", 1);
 }
 
@@ -102,6 +108,49 @@ app.use(
   }),
 );
 
+// Gzip compression for all compressible responses
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const acceptEncoding = req.headers["accept-encoding"] ?? "";
+  if (!/\bgzip\b/.test(String(acceptEncoding))) return next();
+
+  const contentType = res.getHeader("content-type");
+  // Only compress text-based and JSON content; skip binary/media
+  const compressible = (type: string) =>
+    /json|text|javascript|xml|svg|font\/(woff|ttf|otf)/.test(type);
+
+  const originalWrite = res.write.bind(res);
+  const originalEnd = res.end.bind(res);
+  let gz: zlib.Gzip | null = null;
+  let headersSent = false;
+
+  const maybeInit = () => {
+    if (gz || headersSent) return;
+    const ct = String(res.getHeader("content-type") ?? "");
+    if (!compressible(ct)) return;
+    headersSent = true;
+    res.setHeader("Content-Encoding", "gzip");
+    res.removeHeader("Content-Length");
+    gz = zlib.createGzip({ level: zlib.constants.Z_DEFAULT_COMPRESSION });
+    gz.on("data", (chunk: Buffer) => originalWrite(chunk));
+    gz.on("end", () => (originalEnd as () => void)());
+    gz.on("error", () => next());
+  };
+
+  (res as any).write = function (chunk: any, encoding?: any, cb?: any) {
+    maybeInit();
+    if (gz) { gz.write(chunk, encoding); if (cb) cb(); return true; }
+    return originalWrite(chunk, encoding, cb);
+  };
+
+  (res as any).end = function (chunk?: any, encoding?: any, cb?: any) {
+    maybeInit();
+    if (gz) { gz.end(chunk, encoding); return res; }
+    return originalEnd(chunk, encoding, cb);
+  };
+
+  next();
+});
+
 function findDistPublic(): string | null {
   const explicitStaticDir = process.env.FRONTEND_STATIC_DIR?.trim();
   if (explicitStaticDir) {
@@ -121,6 +170,13 @@ function findDistPublic(): string | null {
     if (fs.existsSync(path.join(dir, "index.html"))) return dir;
   }
   return null;
+}
+
+/** Avoid CDN/browser caching the Vite shell across deploys (stale HTML → broken lazy chunks). */
+function setHtmlShellCacheHeaders(res: Response) {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
 }
 
 export function log(message: string, source = "express") {
@@ -181,8 +237,26 @@ How can I assist you today? Please specify the type of help you need (medical, t
 app.get("/__health", (_req, res) => res.status(200).send("ok"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
 app.get("/health/live", (_req, res) => res.status(200).json({ status: "alive" }));
-app.get("/health/ready", (_req, res) => {
-  res.status(systemReady ? 200 : 503).json({ status: systemReady ? "ready" : "initializing" });
+app.get("/health/ready", async (_req, res) => {
+  if (!systemReady) {
+    return res.status(503).json({ status: "initializing" });
+  }
+  // Verify database connectivity as part of readiness
+  let dbOk = false;
+  try {
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+  const status = dbOk ? "ready" : "degraded";
+  return res.status(dbOk ? 200 : 503).json({
+    status,
+    database: dbOk ? "connected" : "unavailable",
+    uptime: process.uptime(),
+  });
 });
 /** Same semantics as `/health/ready` for clients that only probe `/api/*` (single-channel stacks). */
 app.get("/api/ready", (_req, res) => {
@@ -205,11 +279,11 @@ app.get("/api/status", (_req, res) => {
       "Industrial device control and protocols",
       "AI teaching and learning systems",
     ],
-    accuracy: "99.999%",
-    uptime: "100%",
+    uptime: process.uptime(),
+    metrics: getMetrics(),
   });
 });
-app.post("/api/cyrus", express.json({ limit: "2mb" }), (req, res, next) => {
+app.post("/api/cyrus", express.json({ limit: CYRUS_JSON_BODY_LIMIT }), (req, res, next) => {
   // Keep the old canned demo response only when explicitly requested.
   // Otherwise, pass through so the richer handler in `server/routes.ts` can run.
   if (process.env.CYRUS_ENABLE_LEGACY_DEMO_ROUTE !== "true") {
@@ -286,23 +360,49 @@ app.use(helmet({
 }));
 
 const distPublic = process.env.NODE_ENV === "production" ? findDistPublic() : null;
+
+// Cache-Control durations for static assets
+const STATIC_ASSET_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days for versioned assets (JS/CSS)
+const STATIC_MEDIA_MAX_AGE = 24 * 60 * 60 * 1000;     // 1 day for images/videos
+
 if (distPublic) {
   log(`[Static] Serving from ${distPublic}`);
-  // Skip static serving for /api routes
+  // Skip static serving for /api routes; apply long-lived cache headers for hashed assets
   app.use((req, res, next) => {
     if (req.path.startsWith('/api')) return next();
-    express.static(distPublic, { index: "index.html" })(req, res, next);
+    express.static(distPublic, {
+      index: "index.html",
+      maxAge: STATIC_ASSET_MAX_AGE,
+      immutable: true,
+      setHeaders: (res, filePath) => {
+        // HTML must never be cached so users always get the latest shell
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        }
+      },
+    })(req, res, next);
   });
-  app.get("/", (_req, res) => res.status(200).sendFile(path.join(distPublic, "index.html")));
+  app.get("/", (_req, res) => {
+    setHtmlShellCacheHeaders(res);
+    return res.status(200).sendFile(path.join(distPublic, "index.html"));
+  });
 } else if (process.env.NODE_ENV === "production") {
   app.get("/", (_req, res) => res.status(200).json({ service: "CYRUS", status: "online" }));
 }
 // In dev mode Vite handles "/" via its own middleware, but ensure it reaches Vite:
 // The Vite /*path catch-all added later will handle it.
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
-app.use('/images', express.static(path.join(process.cwd(), 'public', 'images')));
-app.use('/videos', express.static(path.join(process.cwd(), 'public', 'videos')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), {
+  maxAge: STATIC_MEDIA_MAX_AGE,
+}));
+app.use('/images', express.static(path.join(process.cwd(), 'public', 'images'), {
+  maxAge: STATIC_MEDIA_MAX_AGE,
+  immutable: false,
+}));
+app.use('/videos', express.static(path.join(process.cwd(), 'public', 'videos'), {
+  maxAge: STATIC_MEDIA_MAX_AGE,
+  immutable: false,
+}));
 
 // Prevent transient "Cannot GET /comms" during boot while frontend middleware initializes.
 app.use((req, res, next) => {
@@ -355,7 +455,7 @@ declare module "http" {
   }
 }
 
-app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: CYRUS_JSON_BODY_LIMIT, verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use("/api", (req, res, next) => {
@@ -389,6 +489,7 @@ app.use((req, res, next) => {
         response: capturedJsonResponse,
         summary: logLine,
       });
+      recordApiRequest(`${req.method} ${reqPath}`, res.statusCode, duration);
     }
   });
   next();
@@ -448,6 +549,7 @@ async function initializeSystem() {
   const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 5));
   let isAuthenticatedMiddleware: any = null;
 
+  // Auth setup — critical; failure here means API auth middleware is absent
   try {
     if (process.env.REPL_ID) {
       const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("./replit_integrations/auth");
@@ -462,17 +564,23 @@ async function initializeSystem() {
       isAuthenticatedMiddleware = isAuthenticated;
       log("Standalone Auth initialized");
     }
+  } catch (e) {
+    console.error("[Init] Auth setup failed:", e);
+  }
 
-    if (process.env.CYRUS_DISABLE_FUSION_STUBS !== "true") {
-      try {
-        const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
-        app.use("/api", completeFusionApi);
-        log("[Fusion] Public demo routes from complete-fusion-api (before /api auth)");
-      } catch (e) {
-        console.warn("[Fusion] complete-fusion-api not loaded:", e);
-      }
+  // Optional fusion demo routes (non-fatal)
+  if (process.env.CYRUS_DISABLE_FUSION_STUBS !== "true") {
+    try {
+      const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
+      app.use("/api", completeFusionApi);
+      log("[Fusion] Public demo routes from complete-fusion-api (before /api auth)");
+    } catch (e) {
+      console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
     }
+  }
 
+  // Security middleware — non-fatal so the server still starts without it
+  try {
     const { createApiAuthMiddleware, createStandardLimiter, requireAdminForSensitiveApi } = await import("./security/middleware");
     app.use("/api", createApiAuthMiddleware(isAuthenticatedMiddleware));
     app.use("/api", requireAdminForSensitiveApi);
@@ -482,25 +590,67 @@ async function initializeSystem() {
     app.use("/api/cyrus/speak", limiter);
     app.use("/api/vision", limiter);
     app.use("/api/upload", limiter);
+  } catch (e) {
+    console.warn("[Init] Security middleware not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
 
+  // Core API routes — each wrapped individually so one failure doesn't block the rest
+  try {
     const { default: settingsRoutes } = await import("./settings/routes");
-    const { default: sysdbRoutes } = await import("./sysdb/routes");
-    const { default: queryRoutes } = await import("./query/router");
-    const { default: trainRoutes } = await import("./train/routes");
-    const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
-
     app.use("/api/settings", settingsRoutes);
+    log("[Routes] Settings registered");
+  } catch (e) {
+    console.warn("[Init] Settings routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
+    const { default: sysdbRoutes } = await import("./sysdb/routes");
     app.use("/api/sysdb", sysdbRoutes);
+    log("[Routes] SysDB registered");
+  } catch (e) {
+    console.warn("[Init] SysDB routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
+    const { default: queryRoutes } = await import("./query/router");
     app.use("/api/query", queryRoutes);
+    log("[Routes] Query registered");
+  } catch (e) {
+    console.warn("[Init] Query routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
+    const { default: trainRoutes } = await import("./train/routes");
     app.use("/api/train", trainRoutes);
+    log("[Routes] Train registered");
+  } catch (e) {
+    console.warn("[Init] Train routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
+    const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
     app.use("/api", intelligenceCoreRoutes);
+    log("[Routes] Intelligence core registered");
+  } catch (e) {
+    console.warn("[Init] Intelligence core routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
     const { default: stackRoutes } = await import("./routes/stack-routes.js");
     app.use("/api", stackRoutes);
+    log("[Routes] Stack routes registered");
+  } catch (e) {
+    console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
     const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
     app.use("/api", algorithmsRoutes);
+    log("[Routes] Algorithms routes registered");
   } catch (e) {
-    console.error("[Init] Auth setup failed (non-fatal):", e);
+    console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
+
   await tick();
 
   try {
@@ -508,7 +658,7 @@ async function initializeSystem() {
     app.use("/api/humanoid", humanoidRoutes);
     log("[Humanoid] Registered");
   } catch (e) {
-    console.error("[Init] Humanoid failed (non-fatal):", e);
+    console.warn("[Init] Humanoid routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
   await tick();
 
@@ -517,7 +667,7 @@ async function initializeSystem() {
     app.use("/api/vision", visionRoutes);
     log("[Vision] Registered");
   } catch (e) {
-    console.error("[Init] Vision failed (non-fatal):", e);
+    console.warn("[Init] Vision routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
   await tick();
 
@@ -525,7 +675,7 @@ async function initializeSystem() {
     const { registerRoutes } = await import("./routes");
     await registerRoutes(httpServer, app);
   } catch (e) {
-    console.error("[Init] Routes failed:", e);
+    console.warn("[Init] Routes module not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
   await tick();
 
@@ -544,13 +694,20 @@ async function initializeSystem() {
   systemReady = true;
   log("All systems initialized - accepting API traffic");
 
-  if (process.env.NODE_ENV === "production") {
+  const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
+  /** Lightweight Comms ML only (ml_service.py); does not start the heavy quantum bridge. */
+  const enableCommsMl = process.env.CYRUS_ENABLE_COMMS_ML === "1";
+
+  if (process.env.NODE_ENV === "production" && (enableFullPython || enableCommsMl)) {
     try {
       const { spawn } = await import("child_process");
-      const pythonServices = [
-        ["python3", ["server/quantum_ai/quantum_bridge.py"]],
-        ["python3", ["server/comms/ml_service.py"]],
-      ] as const;
+      const pythonServices: [string, string[]][] = [];
+      if (enableFullPython) {
+        pythonServices.push(["python3", ["server/quantum_ai/quantum_bridge.py"]]);
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      } else if (enableCommsMl) {
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      }
 
       for (const [command, args] of pythonServices) {
         const alreadyRunning = managedChildProcesses.some(
@@ -563,7 +720,7 @@ async function initializeSystem() {
       }
       log("Python services spawned");
     } catch (e) {
-      console.error("[Init] Python services failed (non-fatal):", e);
+      console.warn("[Init] Python services failed (non-fatal):", (e instanceof Error ? e.message : String(e)));
     }
   }
 }
@@ -582,7 +739,14 @@ async function setupFrontendRoutes() {
   if (dp) {
     app.use("/*path", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
-      res.sendFile(path.join(dp, "index.html"));
+      // Missing hashed bundles must not receive index.html (wrong MIME → "Failed to fetch dynamically imported module").
+      if (req.path.startsWith("/assets/") || req.path.startsWith("/node_modules/")) {
+        return res.status(404).type("text/plain").send("Not found");
+      }
+      setHtmlShellCacheHeaders(res);
+      res.sendFile(path.join(dp, "index.html"), (err) => {
+        if (err) next(err);
+      });
     });
   }
 

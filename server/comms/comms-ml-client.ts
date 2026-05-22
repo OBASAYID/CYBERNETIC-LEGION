@@ -1,4 +1,7 @@
-const ML_SERVICE_URL = process.env.COMMS_ML_URL || "http://comms-ml:5002";
+/** When CYRUS_ENABLE_COMMS_ML=1 the ML process is spawned on the same host (Railway single service). */
+const ML_SERVICE_URL =
+  (process.env.COMMS_ML_URL && process.env.COMMS_ML_URL.trim()) ||
+  (process.env.CYRUS_ENABLE_COMMS_ML === "1" ? "http://127.0.0.1:5002" : "http://comms-ml:5002");
 const TIMEOUT_MS = 5000;
 
 interface SentimentResult {

@@ -6,7 +6,7 @@ import cyrusEmblem from "@/assets/generated/cyrus_military_eagle_emblem.svg";
 
 export default function DroneControl() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen bg-transparent text-white">
       <header className="border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -28,7 +28,7 @@ export function ScreenShareView({
         ref={videoRef}
         autoPlay
         playsInline
-        muted
+        muted={isLocal}
         className="w-full h-full object-contain"
       />
 

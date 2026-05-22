@@ -40,6 +40,9 @@ interface LiveStreamPanelProps {
   onEndStream?: (streamId: string) => void;
   onJoinStream?: (streamId: string) => void;
   onLeaveStream?: (streamId: string) => void;
+  /** Phase 3: recover from stale list / failed viewer attach */
+  onRefreshList?: () => void;
+  holoBlend?: boolean;
 }
 
 const sourceTypeConfig: Record<
@@ -60,22 +63,33 @@ const qualityColors: Record<string, string> = {
   "480p": "bg-gray-500/20 text-gray-400 border-gray-500/30",
 };
 
+function qualityPillClass(quality: string, holoBlend: boolean) {
+  if (holoBlend && quality === "4K") {
+    return "bg-violet-500/20 text-violet-300 border-violet-500/35";
+  }
+  return qualityColors[quality] || qualityColors["720p"];
+}
+
 function StreamCard({
   stream,
   currentUserId,
   onEndStream,
   onJoinStream,
   onLeaveStream,
+  holoBlend = false,
 }: {
   stream: LiveStream;
   currentUserId: string;
   onEndStream?: (streamId: string) => void;
   onJoinStream?: (streamId: string) => void;
   onLeaveStream?: (streamId: string) => void;
+  holoBlend?: boolean;
 }) {
   const [viewing, setViewing] = useState(false);
   const config = sourceTypeConfig[stream.sourceType];
   const Icon = config.icon;
+  const iconColor =
+    holoBlend && stream.sourceType === "drone" ? "text-cyan-400" : config.color;
   const isOwner = stream.broadcasterId === currentUserId;
   const isViewing = stream.viewers.some((v) => v.userId === currentUserId);
   const elapsed = Math.floor(
@@ -95,12 +109,18 @@ function StreamCard({
   }, [viewing, stream.streamId, onJoinStream, onLeaveStream]);
 
   return (
-    <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 backdrop-blur-md overflow-hidden hover:border-cyan-800/40 transition-all">
+    <div
+      className={`rounded-xl border backdrop-blur-md overflow-hidden transition-all ${
+        holoBlend
+          ? "border-cyan-500/25 bg-black/30 hover:border-cyan-400/45"
+          : "border-gray-800/60 bg-gray-900/40 hover:border-cyan-800/40"
+      }`}
+    >
       {viewing && (
         <div className="relative w-full aspect-video bg-black flex items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 to-black/90 flex flex-col items-center justify-center gap-3">
             <div className="w-16 h-16 rounded-full bg-gray-800/80 flex items-center justify-center border border-gray-700/50">
-              <Icon className={`w-8 h-8 ${config.color}`} />
+              <Icon className={`w-8 h-8 ${iconColor}`} />
             </div>
             <p className="text-xs text-gray-500 font-mono">
               {stream.sourceType === "rtsp"
@@ -127,9 +147,13 @@ function StreamCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
-              className={`w-9 h-9 rounded-lg bg-gray-800/80 flex items-center justify-center border border-gray-700/40 flex-shrink-0`}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 border ${
+                holoBlend
+                  ? "border-cyan-500/25 bg-black/40"
+                  : "bg-gray-800/80 border-gray-700/40"
+              }`}
             >
-              <Icon className={`w-4.5 h-4.5 ${config.color}`} />
+              <Icon className={`w-4.5 h-4.5 ${iconColor}`} />
             </div>
             <div className="min-w-0">
               <h4 className="text-sm font-medium text-white truncate">
@@ -141,7 +165,7 @@ function StreamCard({
             </div>
           </div>
           <span
-            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex-shrink-0 ${qualityColors[stream.quality]}`}
+            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex-shrink-0 ${qualityPillClass(stream.quality, holoBlend)}`}
           >
             {stream.quality}
           </span>
@@ -158,7 +182,7 @@ function StreamCard({
               {minutes}:{seconds.toString().padStart(2, "0")}
             </span>
             <span
-              className={`flex items-center gap-1 ${config.color} opacity-70`}
+              className={`flex items-center gap-1 ${iconColor} opacity-70`}
             >
               {config.label}
             </span>
@@ -197,6 +221,8 @@ export function LiveStreamPanel({
   onEndStream,
   onJoinStream,
   onLeaveStream,
+  onRefreshList,
+  holoBlend = false,
 }: LiveStreamPanelProps) {
   const [showNewStream, setShowNewStream] = useState(false);
   const [newStreamName, setNewStreamName] = useState("");
@@ -221,6 +247,9 @@ export function LiveStreamPanel({
     setShowNewStream(false);
   }, [newStreamName, newSourceType, newSourceUrl, newQuality, onStartStream]);
 
+  const muted = holoBlend ? "text-cyan-200/45" : "text-gray-500";
+  const muted2 = holoBlend ? "text-cyan-200/35" : "text-gray-600";
+
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -229,26 +258,45 @@ export function LiveStreamPanel({
             <Radio className="w-4 h-4" />
             Live Streams
           </h3>
-          <p className="text-[11px] text-gray-500 mt-0.5">
+          <p className={`text-[11px] mt-0.5 ${muted}`}>
             {activeStreams.length} active stream
             {activeStreams.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => setShowNewStream(!showNewStream)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-xs font-medium transition-colors border border-cyan-600/20"
-        >
-          {showNewStream ? (
-            <X className="w-3.5 h-3.5" />
-          ) : (
-            <Plus className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-2">
+          {onRefreshList && (
+            <button
+              type="button"
+              onClick={() => onRefreshList()}
+              className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition hover:border-cyan-500/30 hover:text-white ${
+                holoBlend
+                  ? "border-cyan-500/20 bg-black/35 text-cyan-100/80"
+                  : "border-white/10 bg-gray-800/50 text-gray-300"
+              }`}
+            >
+              Refresh
+            </button>
           )}
-          {showNewStream ? "Cancel" : "New Stream"}
-        </button>
+          <button
+            onClick={() => setShowNewStream(!showNewStream)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-xs font-medium transition-colors border border-cyan-600/20"
+          >
+            {showNewStream ? (
+              <X className="w-3.5 h-3.5" />
+            ) : (
+              <Plus className="w-3.5 h-3.5" />
+            )}
+            {showNewStream ? "Cancel" : "New Stream"}
+          </button>
+        </div>
       </div>
 
       {showNewStream && (
-        <div className="rounded-xl border border-cyan-800/30 bg-gray-900/60 backdrop-blur-md p-4 space-y-3">
+        <div
+          className={`rounded-xl border backdrop-blur-md p-4 space-y-3 ${
+            holoBlend ? "border-cyan-500/28 bg-black/35" : "border-cyan-800/30 bg-gray-900/60"
+          }`}
+        >
           <h4 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">
             Start New Stream
           </h4>
@@ -323,7 +371,7 @@ export function LiveStreamPanel({
                     onClick={() => setNewQuality(q)}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-medium border transition-all ${
                       newQuality === q
-                        ? qualityColors[q]
+                        ? qualityPillClass(q, holoBlend)
                         : "border-gray-700/40 bg-gray-800/40 text-gray-500 hover:border-gray-600/50"
                     }`}
                   >
@@ -345,14 +393,20 @@ export function LiveStreamPanel({
       )}
 
       {activeStreams.length === 0 && !showNewStream ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-16 h-16 rounded-full bg-gray-800/60 flex items-center justify-center mb-4 border border-gray-700/40">
-            <Radio className="w-8 h-8 text-gray-600" />
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div
+            className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 border ${
+              holoBlend
+                ? "border-cyan-500/25 bg-cyan-950/30"
+                : "bg-gray-800/60 border-gray-700/40"
+            }`}
+          >
+            <Radio className={`w-8 h-8 ${holoBlend ? "text-cyan-500/50" : "text-gray-600"}`} />
           </div>
-          <p className="text-gray-500 text-sm font-medium">
+          <p className={`text-sm font-medium ${muted}`}>
             No active streams
           </p>
-          <p className="text-gray-600 text-xs mt-1">
+          <p className={`text-xs mt-1 ${muted2}`}>
             Start a new stream to broadcast drone, CCTV, or webcam feeds
           </p>
         </div>
@@ -366,13 +420,14 @@ export function LiveStreamPanel({
               onEndStream={onEndStream}
               onJoinStream={onJoinStream}
               onLeaveStream={onLeaveStream}
+              holoBlend={holoBlend}
             />
           ))}
         </div>
       )}
 
       <div className="pt-2">
-        <h4 className="text-[11px] text-gray-600 uppercase tracking-wider font-semibold mb-2">
+        <h4 className={`text-[11px] uppercase tracking-wider font-semibold mb-2 ${muted2}`}>
           Supported Sources
         </h4>
         <div className="grid grid-cols-2 gap-2">
@@ -386,10 +441,12 @@ export function LiveStreamPanel({
             return (
               <div
                 key={type}
-                className="flex items-center gap-2 p-2 rounded-lg bg-gray-900/30 border border-gray-800/30"
+                className={`flex items-center gap-2 p-2 rounded-lg border ${
+                  holoBlend ? "border-cyan-500/15 bg-black/22" : "bg-gray-900/30 border-gray-800/30"
+                }`}
               >
                 <TypeIcon className={`w-3.5 h-3.5 ${cfg.color}`} />
-                <span className="text-[11px] text-gray-500">{cfg.label}</span>
+                <span className={`text-[11px] ${muted}`}>{cfg.label}</span>
               </div>
             );
           })}

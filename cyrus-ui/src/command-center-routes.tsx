@@ -69,12 +69,12 @@ function RouteLoadingFallback() {
 
   if (!visible) {
     return (
-      <div className="min-h-screen bg-slate-950" aria-hidden="true" />
+      <div className="min-h-screen bg-transparent" aria-hidden="true" />
     );
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-3 overflow-x-hidden bg-slate-950 bg-gradient-to-b from-slate-950/95 via-slate-900/90 to-slate-950 font-mono text-sm tracking-widest text-cyan-400/90 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-3 overflow-x-hidden bg-transparent bg-gradient-to-b from-slate-950/35 via-slate-900/25 to-slate-950/40 font-mono text-sm tracking-widest text-cyan-400/90 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
         <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />

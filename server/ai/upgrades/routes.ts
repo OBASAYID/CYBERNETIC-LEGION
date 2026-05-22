@@ -44,7 +44,7 @@ async function ensureUpgradesLoaded() {
   await tick();
 
   upgradesLoaded = true;
-  console.log("[Advanced Upgrades] All 13 upgrade modules loaded");
+  console.log("[Advanced Upgrades] All 14 upgrade modules loaded");
 }
 
 export function registerAdvancedUpgradeRoutes(app: Express): void {

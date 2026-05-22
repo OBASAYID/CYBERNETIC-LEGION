@@ -182,8 +182,8 @@ export default function AIDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background" data-testid="page-ai-dashboard">
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
+    <div className="min-h-screen bg-transparent text-white" data-testid="page-ai-dashboard">
+      <div className="sticky top-0 z-50 bg-slate-950/55 backdrop-blur-xl border-b border-white/10">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">

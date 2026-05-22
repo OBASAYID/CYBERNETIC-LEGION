@@ -1,0 +1,57 @@
+FROM oven/bun:1 AS builder
+WORKDIR /app
+
+# Install root dependencies with Bun.
+COPY package.json package-lock.json ./
+RUN bun install --no-progress
+
+# Install cyrus-ui dependencies so Vite can resolve all imports at build time.
+COPY cyrus-ui/package.json ./cyrus-ui/package.json
+RUN cd cyrus-ui && bun install --no-progress
+
+COPY . .
+
+# Keep build behavior aligned with production defaults.
+ENV NODE_OPTIONS=--max-old-space-size=3072
+ENV CYRUS_UI_ROOT=cyrus-ui
+
+RUN bun run build
+
+FROM oven/bun:1-slim AS runtime
+WORKDIR /app
+
+# Python + Comms ML sidecar files (ml_service.py). Enable with CYRUS_ENABLE_COMMS_ML=1 on Railway.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    gfortran \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+RUN bun install --production --no-progress
+
+# Copy compiled server and UI build
+COPY --from=builder /app/dist /app/dist
+
+# Ensure all public assets are available (crack texture, images, etc.)
+COPY cyrus-ui/public /app/dist/public
+
+# Ensure server-side files are accessible
+COPY server /app/server
+
+COPY server/comms/requirements-ml.txt /app/server/comms/requirements-ml.txt
+COPY server/comms/ml_service.py /app/server/comms/ml_service.py
+RUN pip3 install --no-cache-dir --break-system-packages -r /app/server/comms/requirements-ml.txt \
+  || pip3 install --no-cache-dir -r /app/server/comms/requirements-ml.txt
+
+ENV NODE_ENV=production
+ENV CYRUS_ENABLE_PYTHON=0
+# Set to 1 in Railway to start Comms ML (sentiment, anomalies, etc.) on 127.0.0.1:5002
+ENV CYRUS_ENABLE_COMMS_ML=0
+ENV SERVER_HOST=0.0.0.0
+
+EXPOSE 8080
+
+CMD ["bun", "dist/server/index.js"]

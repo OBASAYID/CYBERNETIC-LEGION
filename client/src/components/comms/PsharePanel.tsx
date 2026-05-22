@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { systemFetch } from "@shared/cyrus-api-client";
+import { systemFetch, systemApiUrl } from "@shared/cyrus-api-client";
+import { getCommsDeviceId } from "../../lib/comms-device-id";
 import {
   Send,
   Link2,
@@ -14,6 +15,8 @@ import {
   ExternalLink,
   Image as ImageIcon,
   FileText,
+  ShoppingBag,
+  Megaphone,
 } from "lucide-react";
 
 type PshareUser = { id: string; displayName: string };
@@ -27,6 +30,10 @@ type PsharePost = {
   fileUrl: string | null;
   fileName: string | null;
   fileMimeType: string | null;
+  postKind?: string;
+  listingTitle?: string | null;
+  listingPrice?: string | null;
+  listingCurrency?: string | null;
   visibility: string;
   allowComments: boolean;
   allowedUserIds: string[];
@@ -45,13 +52,9 @@ type PshareComment = {
 };
 
 function commsDeviceHeaders(): HeadersInit {
-  const d =
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
-    "";
   return {
     "Content-Type": "application/json",
-    "X-Device-Id": d,
+    "X-Device-Id": getCommsDeviceId(),
   };
 }
 
@@ -61,12 +64,19 @@ function formatTime(iso: string | null) {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Same-origin or split API base — media URLs from uploads are often `/api/comms/media/...`. */
+function resolveMediaUrl(pathOrUrl: string | null | undefined): string {
+  if (!pathOrUrl) return "";
+  return systemApiUrl(pathOrUrl);
+}
+
 export function PsharePanel({
   myUserId,
   allUsers,
   highlightPostId,
   onClearHighlight,
   initialPostBody,
+  holoBlend = false,
 }: {
   myUserId: string;
   allUsers: PshareUser[];
@@ -74,6 +84,8 @@ export function PsharePanel({
   onClearHighlight?: () => void;
   /** Pre-fills the composer (e.g. module pipeline handoff from Command or Vision). */
   initialPostBody?: string | null;
+  /** Match NEXUS holo chrome (cyan/violet) instead of legacy amber when embedded in comms. */
+  holoBlend?: boolean;
 }) {
   const [posts, setPosts] = useState<PsharePost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +96,10 @@ export function PsharePanel({
   const [visibility, setVisibility] = useState<"all" | "selected">("all");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [allowComments, setAllowComments] = useState(true);
+  const [postKind, setPostKind] = useState<"general" | "listing">("general");
+  const [listingTitle, setListingTitle] = useState("");
+  const [listingPrice, setListingPrice] = useState("");
+  const [listingCurrency, setListingCurrency] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingFile, setPendingFile] = useState<{
     fileUrl: string;
@@ -150,11 +166,9 @@ export function PsharePanel({
     if (!f) return;
     const form = new FormData();
     form.append("file", f);
-    const d =
-      (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) || "";
     const res = await systemFetch("/api/comms/upload", {
       method: "POST",
-      headers: d ? { "X-Device-Id": d } : {},
+      headers: { "X-Device-Id": getCommsDeviceId() },
       body: form,
     });
     const data = await res.json();
@@ -183,6 +197,10 @@ export function PsharePanel({
           fileUrl: pendingFile?.fileUrl || null,
           fileName: pendingFile?.fileName || null,
           fileMimeType: pendingFile?.fileMimeType || null,
+          postKind,
+          listingTitle: postKind === "listing" ? listingTitle.trim() || null : null,
+          listingPrice: postKind === "listing" ? listingPrice.trim() || null : null,
+          listingCurrency: postKind === "listing" ? listingCurrency.trim() || null : null,
           visibility,
           allowComments,
           allowedUserIds: visibility === "selected" ? selectedUserIds : [],
@@ -193,6 +211,10 @@ export function PsharePanel({
       setBody("");
       setLinkInput("");
       setPendingFile(null);
+      setPostKind("general");
+      setListingTitle("");
+      setListingPrice("");
+      setListingCurrency("");
       setVisibility("all");
       setSelectedUserIds([]);
       setAllowComments(true);
@@ -284,7 +306,14 @@ export function PsharePanel({
   };
 
   const systemShare = async (post: PsharePost) => {
-    const text = [post.body, post.linkUrl, post.fileUrl].filter(Boolean).join(" — ");
+    const text = [
+      post.postKind === "listing" ? [post.listingTitle, post.listingPrice, post.listingCurrency].filter(Boolean).join(" ") : null,
+      post.body,
+      post.linkUrl,
+      post.fileUrl ? resolveMediaUrl(post.fileUrl) : null,
+    ]
+      .filter(Boolean)
+      .join(" — ");
     const url = shareUrl(post.id);
     try {
       if (navigator.share) {
@@ -299,23 +328,86 @@ export function PsharePanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-3 border-b border-amber-500/25 p-3 sm:p-4">
+      <div
+        className={`shrink-0 space-y-3 border-b p-3 sm:p-4 ${
+          holoBlend ? "border-cyan-500/28 bg-cyan-950/10" : "border-amber-500/25"
+        }`}
+      >
         <div>
           <h2
-            className="bg-gradient-to-r from-amber-200 via-yellow-100 to-orange-200/90 bg-clip-text text-base font-bold text-transparent"
+            className={
+              holoBlend
+                ? "bg-gradient-to-r from-cyan-200 via-sky-100 to-violet-200/90 bg-clip-text text-base font-bold text-transparent"
+                : "bg-gradient-to-r from-amber-200 via-yellow-100 to-orange-200/90 bg-clip-text text-base font-bold text-transparent"
+            }
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             Pshare
           </h2>
           <p className="text-[11px] text-white/50">
-            Share to the in-app public feed. Choose everyone or a private audience, and control comments.
+            Community timeline — post updates, photos, and listings. Everyone (or a chosen audience) can like, comment, and share.
           </p>
         </div>
+
+        <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-slate-950/50 p-2">
+          <span className="w-full text-[10px] font-mono uppercase tracking-wider text-white/45">Post type</span>
+          <button
+            type="button"
+            onClick={() => setPostKind("general")}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition ${
+              postKind === "general"
+                ? "border-cyan-500/45 bg-cyan-500/15 text-cyan-100"
+                : "border-white/10 text-white/55 hover:border-white/20"
+            }`}
+          >
+            <Megaphone className="h-3.5 w-3.5" />
+            Update / share
+          </button>
+          <button
+            type="button"
+            onClick={() => setPostKind("listing")}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition ${
+              postKind === "listing"
+                ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-100"
+                : "border-white/10 text-white/55 hover:border-white/20"
+            }`}
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            For sale / offer
+          </button>
+        </div>
+
+        {postKind === "listing" && (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <input
+              className="rounded-xl border border-emerald-500/20 bg-slate-950/60 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-emerald-500/40 focus:outline-none sm:col-span-3"
+              placeholder="Title (e.g. Vintage synth, 2-bedroom sublet)"
+              value={listingTitle}
+              onChange={(e) => setListingTitle(e.target.value)}
+            />
+            <input
+              className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-cyan-500/40 focus:outline-none"
+              placeholder="Price (e.g. 1200)"
+              value={listingPrice}
+              onChange={(e) => setListingPrice(e.target.value)}
+            />
+            <input
+              className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-cyan-500/40 focus:outline-none sm:col-span-2"
+              placeholder="Currency / label (e.g. USD, ZAR, or “negotiable”)"
+              value={listingCurrency}
+              onChange={(e) => setListingCurrency(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <textarea
             className="min-h-[4.5rem] w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-cyan-500/40 focus:outline-none"
-            placeholder="What do you want to share?"
+            placeholder={
+              postKind === "listing"
+                ? "Describe the item or service, condition, pickup, contact preference…"
+                : "What do you want to share with the community?"
+            }
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
@@ -340,7 +432,7 @@ export function PsharePanel({
               Attached: {pendingFile.fileName}
               <button
                 type="button"
-                className="ml-2 text-amber-300/90 underline"
+                className={`ml-2 underline ${holoBlend ? "text-violet-300/90" : "text-amber-300/90"}`}
                 onClick={() => setPendingFile(null)}
               >
                 remove
@@ -368,7 +460,9 @@ export function PsharePanel({
                 onClick={() => setVisibility("selected")}
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 transition ${
                   visibility === "selected"
-                    ? "border-orange-500/45 bg-orange-500/15 text-orange-100"
+                    ? holoBlend
+                      ? "border-violet-500/45 bg-violet-500/15 text-violet-100"
+                      : "border-orange-500/45 bg-orange-500/15 text-orange-100"
                     : "border-white/10 text-white/60"
                 }`}
               >
@@ -389,7 +483,11 @@ export function PsharePanel({
               type="button"
               disabled={submitting}
               onClick={() => void submit()}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-gradient-to-r from-amber-600/35 to-cyan-600/25 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/95 shadow-lg shadow-amber-500/15 transition hover:from-amber-500/45 hover:to-cyan-500/30 disabled:opacity-50"
+              className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-white/95 shadow-lg transition disabled:opacity-50 ${
+                holoBlend
+                  ? "border-cyan-400/40 bg-gradient-to-r from-cyan-600/35 to-violet-600/28 shadow-cyan-500/20 hover:from-cyan-500/45 hover:to-violet-500/35"
+                  : "border-amber-500/35 bg-gradient-to-r from-amber-600/35 to-cyan-600/25 shadow-amber-500/15 hover:from-amber-500/45 hover:to-cyan-500/30"
+              }`}
             >
               <Send className="h-3.5 w-3.5" />
               Post
@@ -397,8 +495,14 @@ export function PsharePanel({
           </div>
 
           {visibility === "selected" && (
-            <div className="max-h-32 overflow-y-auto rounded-lg border border-orange-500/20 bg-slate-950/50 p-2">
-              <p className="mb-1 text-[10px] font-mono uppercase text-amber-200/55">Include users (required)</p>
+            <div
+              className={`max-h-32 overflow-y-auto rounded-lg border bg-slate-950/50 p-2 ${
+                holoBlend ? "border-violet-500/28" : "border-orange-500/20"
+              }`}
+            >
+              <p className={`mb-1 text-[10px] font-mono uppercase ${holoBlend ? "text-violet-200/60" : "text-amber-200/55"}`}>
+                Include users (required)
+              </p>
               {others.length === 0 ? (
                 <p className="text-xs text-white/40">No other users in directory yet</p>
               ) : (
@@ -410,7 +514,9 @@ export function PsharePanel({
                       onClick={() => toggleUser(u.id)}
                       className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
                         selectedUserIds.includes(u.id)
-                          ? "border-orange-500/45 bg-orange-500/15 text-orange-100"
+                          ? holoBlend
+                            ? "border-violet-500/45 bg-violet-500/15 text-violet-100"
+                            : "border-orange-500/45 bg-orange-500/15 text-orange-100"
                           : "border-white/10 text-white/55 hover:border-white/25"
                       }`}
                     >
@@ -429,7 +535,12 @@ export function PsharePanel({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-2 sm:p-3">
         {loading && <p className="text-center text-sm text-white/40">Loading feed…</p>}
         {!loading && posts.length === 0 && (
-          <p className="text-center text-sm text-white/45">No Pshare posts yet. Be the first to share.</p>
+          <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-6 text-center">
+            <p className="text-sm text-white/55">No posts yet — this is your system timeline.</p>
+            <p className="mt-2 text-xs text-white/40">
+              Share text and images, sell or offer something, and let others comment and react.
+            </p>
+          </div>
         )}
         {posts.map((post) => (
           <div
@@ -437,7 +548,11 @@ export function PsharePanel({
             ref={(el) => {
               cardRefs.current[post.id] = el;
             }}
-            className="rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-[0_0_30px_-12px_rgba(251,146,60,0.22)]"
+            className={`rounded-2xl border border-white/10 bg-slate-950/55 p-3 ${
+              holoBlend
+                ? "shadow-[0_0_30px_-12px_rgba(0,229,255,0.18)]"
+                : "shadow-[0_0_30px_-12px_rgba(251,146,60,0.22)]"
+            }`}
           >
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
@@ -445,8 +560,20 @@ export function PsharePanel({
                 <p className="text-[10px] font-mono text-white/40">{formatTime(post.createdAt)}</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-1">
+                {post.postKind === "listing" && (
+                  <span className="inline-flex items-center gap-0.5 rounded border border-emerald-500/35 bg-emerald-500/12 px-1.5 py-0.5 text-[9px] font-mono uppercase text-emerald-200/90">
+                    <ShoppingBag className="h-3 w-3" />
+                    For sale
+                  </span>
+                )}
                 {post.visibility === "selected" && (
-                  <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-mono uppercase text-amber-200/85">
+                  <span
+                    className={`rounded border px-1.5 py-0.5 text-[9px] font-mono uppercase ${
+                      holoBlend
+                        ? "border-violet-400/35 bg-violet-500/12 text-violet-200/90"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-200/85"
+                    }`}
+                  >
                     Selected
                   </span>
                 )}
@@ -463,6 +590,18 @@ export function PsharePanel({
                 )}
               </div>
             </div>
+            {post.postKind === "listing" && (post.listingTitle || post.listingPrice || post.listingCurrency) && (
+              <div className="mb-2 rounded-xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2">
+                {post.listingTitle ? (
+                  <p className="text-sm font-semibold text-emerald-100/95">{post.listingTitle}</p>
+                ) : null}
+                {(post.listingPrice || post.listingCurrency) ? (
+                  <p className="mt-0.5 text-sm text-white/85">
+                    {[post.listingCurrency, post.listingPrice].filter(Boolean).join(" ") || post.listingPrice}
+                  </p>
+                ) : null}
+              </div>
+            )}
             {post.body ? <p className="whitespace-pre-wrap text-sm text-white/90">{post.body}</p> : null}
             {post.linkUrl ? (
               <a
@@ -478,19 +617,19 @@ export function PsharePanel({
               <div className="mt-2">
                 {post.fileMimeType?.startsWith("image/") ? (
                   <img
-                    src={post.fileUrl}
+                    src={resolveMediaUrl(post.fileUrl)}
                     alt={post.fileName || ""}
-                    className="max-h-64 max-w-full rounded-lg border border-white/10"
+                    className="max-h-72 max-w-full rounded-lg border border-white/10 object-contain"
                   />
                 ) : post.fileMimeType?.startsWith("video/") ? (
                   <video
-                    src={post.fileUrl}
+                    src={resolveMediaUrl(post.fileUrl)}
                     controls
                     className="max-h-64 max-w-full rounded-lg border border-white/10"
                   />
                 ) : (
                   <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-xs text-white/70">
-                    <FileText className="h-4 w-4 text-amber-300/80" />
+                    <FileText className={`h-4 w-4 ${holoBlend ? "text-cyan-300/85" : "text-amber-300/80"}`} />
                     {post.fileName || "File"}
                   </div>
                 )}
@@ -519,7 +658,7 @@ export function PsharePanel({
               </button>
               {post.fileUrl && (
                 <a
-                  href={post.fileUrl}
+                  href={resolveMediaUrl(post.fileUrl)}
                   download={post.fileName || undefined}
                   className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/60"
                 >
@@ -529,7 +668,7 @@ export function PsharePanel({
               )}
               {post.fileUrl && post.fileMimeType?.startsWith("image/") && (
                 <a
-                  href={post.fileUrl}
+                  href={resolveMediaUrl(post.fileUrl)}
                   download={post.fileName || "image"}
                   className="inline-flex items-center gap-1 text-[10px] text-cyan-300/80"
                 >
@@ -548,7 +687,11 @@ export function PsharePanel({
               <button
                 type="button"
                 onClick={() => void systemShare(post)}
-                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/20 px-2 py-1 text-[11px] text-amber-200/80"
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] ${
+                  holoBlend
+                    ? "border-cyan-500/28 text-cyan-200/85 hover:border-cyan-400/40"
+                    : "border-amber-500/20 text-amber-200/80"
+                }`}
               >
                 <Share2 className="h-3.5 w-3.5" />
                 System share

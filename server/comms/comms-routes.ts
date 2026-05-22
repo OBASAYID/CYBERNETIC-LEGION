@@ -8,7 +8,15 @@ import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
 import { commsIntelligence } from "./comms-intelligence.js";
 import { refreshCommsUserAvatar } from "./socket-signaling.js";
+import {
+  parseDeviceInfo,
+  mergeDeviceInfoForOnlineTransition,
+  setLocationShareEnabled,
+  persistLastKnownLocation,
+  invalidateLocationShareCache,
+} from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
+import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -26,8 +34,35 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
+
+/** Served with correct Content-Type so PDF/HTML open in-browser; ?download=1 forces attachment. */
+const COMMS_SERVE_MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".xml": "application/xml",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+};
 
 const avatarUpload = multer({
   storage: multer.diskStorage({
@@ -37,7 +72,7 @@ const avatarUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
@@ -84,7 +119,12 @@ router.get("/api/comms/users", async (req: any, res) => {
     const users = await db.select().from(onlineUsers).where(eq(onlineUsers.isOnline, true));
     const filteredUsers = users.filter(u => u.id !== userId);
     res.json(filteredUsers);
-  } catch (error) {
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching online users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -95,17 +135,37 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     const userId = getUserId(req);
     const includeSelf = String(req.query.includeSelf) === "1" || String(req.query.includeSelf) === "true";
     const allUsers = await db.select().from(onlineUsers);
-    const mapRow = (u: typeof allUsers[number]) => ({
-      id: u.id,
-      displayName: u.displayName || "Unknown User",
-      isOnline: u.isOnline || false,
-      lastSeen: u.lastSeen?.toISOString() || null,
-      profileImageUrl: u.profileImageUrl || null,
-      status: u.status || "offline",
-    });
+    const mapRow = (u: (typeof allUsers)[number]) => {
+      const di = parseDeviceInfo(u.deviceInfo);
+      const lastLocation =
+        di.locationShareEnabled && di.lastLocation
+          ? {
+              lat: di.lastLocation.lat,
+              lng: di.lastLocation.lng,
+              accuracy: di.lastLocation.accuracy ?? null,
+              at: di.lastLocation.at,
+            }
+          : null;
+      return {
+        id: u.id,
+        displayName: u.displayName || "Unknown User",
+        isOnline: u.isOnline || false,
+        lastSeen: u.lastSeen?.toISOString() || null,
+        profileImageUrl: u.profileImageUrl || null,
+        status: u.status || "offline",
+        onlineSince: di.onlineSince || null,
+        lastLocation,
+        locationShareEnabled: !!di.locationShareEnabled,
+      };
+    };
     const filteredUsers = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
     res.json(filteredUsers);
-  } catch (error) {
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching all users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -116,30 +176,80 @@ router.post("/api/comms/user/status", async (req: any, res) => {
     const userId = getUserId(req) || `anon_${Date.now()}`;
     const { isOnline, socketId, displayName } = req.body;
     const claims = req.user?.claims || {};
+    const nextOnline = isOnline !== false;
+    const dn =
+      displayName ||
+      `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() ||
+      claims?.email ||
+      "Anonymous";
 
-    await db.insert(onlineUsers).values({
-      id: userId,
-      displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
-      email: claims?.email,
-      profileImageUrl: claims?.profile_image_url,
-      lastSeen: new Date(),
-      isOnline: isOnline !== false,
-      socketId,
-    }).onConflictDoUpdate({
-      target: onlineUsers.id,
-      set: {
-        lastSeen: new Date(),
-        isOnline: isOnline !== false,
-        socketId,
-        displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
+    const [existing] = await db.select().from(onlineUsers).where(eq(onlineUsers.id, userId)).limit(1);
+    const mergedDevice = mergeDeviceInfoForOnlineTransition(existing?.deviceInfo, nextOnline);
+
+    await db
+      .insert(onlineUsers)
+      .values({
+        id: userId,
+        displayName: dn,
+        email: claims?.email,
         profileImageUrl: claims?.profile_image_url,
-      },
-    });
+        lastSeen: new Date(),
+        isOnline: nextOnline,
+        socketId,
+        deviceInfo: mergedDevice,
+      })
+      .onConflictDoUpdate({
+        target: onlineUsers.id,
+        set: {
+          lastSeen: new Date(),
+          isOnline: nextOnline,
+          socketId,
+          displayName: dn,
+          profileImageUrl: claims?.profile_image_url,
+          deviceInfo: mergedDevice,
+        },
+      });
 
     res.json({ success: true });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.post("/api/comms/user/location-share", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required (X-User-Id or X-Device-Id)" });
+    }
+    const enabled = Boolean(req.body?.enabled);
+    await setLocationShareEnabled(userId, enabled);
+    invalidateLocationShareCache(userId);
+    res.json({ success: true, locationShareEnabled: enabled });
+  } catch (error: any) {
+    console.error("Error updating location share:", error);
+    res.status(500).json({ error: "Failed to update location share" });
+  }
+});
+
+router.post("/api/comms/user/location", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required" });
+    }
+    const lat = Number(req.body?.latitude);
+    const lng = Number(req.body?.longitude);
+    const accuracy = typeof req.body?.accuracy === "number" ? req.body.accuracy : undefined;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: "latitude and longitude required" });
+    }
+    await persistLastKnownLocation(userId, lat, lng, accuracy);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Error persisting location:", error);
+    res.status(500).json({ error: "Failed to persist location" });
   }
 });
 
@@ -175,7 +285,15 @@ router.get("/api/comms/messages", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: if the table doesn't exist yet, return empty array
+    // instead of a 500 so the UI doesn't break on first boot.
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -214,7 +332,14 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -243,7 +368,23 @@ router.post("/api/comms/messages", async (req: any, res) => {
       timestamp: message.createdAt?.toISOString() || new Date().toISOString(),
       read: false
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready — message not persisted");
+      // Return a synthetic response so the UI doesn't break
+      return res.json({
+        id: `tmp_${Date.now()}`,
+        senderId: getUserId(req) || "unknown",
+        recipientId: req.body?.recipientId || "broadcast",
+        content: req.body?.content || "",
+        timestamp: new Date().toISOString(),
+        read: false,
+        _persisted: false,
+      });
+    }
     console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
   }
@@ -980,6 +1121,23 @@ router.get("/api/comms/status", (req, res) => {
   });
 });
 
+/** Phase 4: lightweight WebRTC readiness probe for ops / dashboards (no secrets). */
+router.get("/api/comms/webrtc-health", (_req, res) => {
+  try {
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({
+      ok: true,
+      relayConfigured: cfg.relayConfigured,
+      iceServerCount: Array.isArray(cfg.iceServers) ? cfg.iceServers.length : 0,
+      iceTransportPolicy: cfg.iceTransportPolicy,
+      encodingProfile: cfg.linkHints?.encodingProfile,
+      satelliteBackhaulCapable: cfg.linkHints?.satelliteBackhaulCapable,
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "webrtc-health failed" });
+  }
+});
+
 router.post(
   "/api/comms/user/avatar",
   (req, res, next) => {
@@ -999,8 +1157,8 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ error: "No image file uploaded" });
       }
-      const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-      const fileUrl = `/api/comms/media/${fileId}`;
+      const safeFilename = path.basename(req.file.filename);
+      const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
 
       await db
         .insert(onlineUsers)
@@ -1074,14 +1232,42 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
 
 router.get("/api/comms/media/:id", (req, res) => {
   try {
-    const { id } = req.params;
-    const safeId = path.basename(id);
-    const files = fs.readdirSync(COMMS_UPLOAD_DIR);
-    const match = files.find(f => f.startsWith(safeId));
-    if (!match) {
+    const raw = decodeURIComponent(String(req.params.id || ""));
+    const safeName = path.basename(raw);
+    if (!safeName) {
       return res.status(404).json({ error: "Media not found" });
     }
-    const filePath = path.join(COMMS_UPLOAD_DIR, match);
+    let filePath = path.join(COMMS_UPLOAD_DIR, safeName);
+    let resolvedName = safeName;
+    if (!fs.existsSync(filePath)) {
+      const files = fs.readdirSync(COMMS_UPLOAD_DIR);
+      const match = files.find((f) => f === safeName || f.startsWith(safeName));
+      if (!match) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      resolvedName = match;
+      filePath = path.join(COMMS_UPLOAD_DIR, match);
+    }
+    const ext = path.extname(resolvedName).toLowerCase();
+    const mime = COMMS_SERVE_MIME[ext] || "application/octet-stream";
+    res.setHeader("Content-Type", mime);
+    const forceDownload = String(req.query.download || "") === "1";
+    const baseName = path.basename(resolvedName);
+    if (forceDownload) {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
+    } else if (
+      mime.startsWith("application/pdf") ||
+      mime.startsWith("text/html") ||
+      mime.startsWith("text/plain") ||
+      mime.startsWith("text/csv") ||
+      mime.startsWith("image/") ||
+      mime.startsWith("video/") ||
+      mime.startsWith("audio/")
+    ) {
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(baseName)}"`);
+    } else {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
+    }
     res.sendFile(filePath);
   } catch (error: any) {
     console.error("Error serving media:", error);
@@ -1219,16 +1405,31 @@ router.get("/api/comms/users/search", async (req: any, res) => {
       .limit(20);
 
     const filtered = results
-      .filter(u => u.id !== userId)
-      .map(u => ({
-        id: u.id,
-        displayName: u.displayName || "Unknown User",
-        email: u.email,
-        isOnline: u.isOnline || false,
-        lastSeen: u.lastSeen?.toISOString() || null,
-        profileImageUrl: u.profileImageUrl || null,
-        status: u.status || "offline",
-      }));
+      .filter((u) => u.id !== userId)
+      .map((u) => {
+        const di = parseDeviceInfo(u.deviceInfo);
+        const lastLocation =
+          di.locationShareEnabled && di.lastLocation
+            ? {
+                lat: di.lastLocation.lat,
+                lng: di.lastLocation.lng,
+                accuracy: di.lastLocation.accuracy ?? null,
+                at: di.lastLocation.at,
+              }
+            : null;
+        return {
+          id: u.id,
+          displayName: u.displayName || "Unknown User",
+          email: u.email,
+          isOnline: u.isOnline || false,
+          lastSeen: u.lastSeen?.toISOString() || null,
+          profileImageUrl: u.profileImageUrl || null,
+          status: u.status || "offline",
+          onlineSince: di.onlineSince || null,
+          lastLocation,
+          locationShareEnabled: !!di.locationShareEnabled,
+        };
+      });
 
     res.json(filtered);
   } catch (error: any) {

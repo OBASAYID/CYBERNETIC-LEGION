@@ -1,13 +1,34 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
+import { getCommsDeviceId } from "../lib/comms-device-id";
 import {
-  createPeerConnectionConfig,
-  getOptimalVideoConstraints,
   getAudioConstraints,
   getCallQualityMetrics,
-  AudioProcessor,
-  CallQualityMetrics,
+  AdaptiveBitrateController,
+  applyBandwidthConstraints,
+  isRelayOnlyTestMode,
+  getCyrusCommsNetworkMode,
+  getVideoConstraintsForCommsCall,
+  applyPreferredCodecsToPeerConnection,
 } from "../lib/webrtc-config";
+import type { CallSessionStatus } from "@shared/calls/call-session-types";
+import { isIcePathLive } from "@shared/calls/call-session-types";
+import { fetchCyrusCommRtcConfiguration } from "../realtime/fetch-rtc-config";
+import { CYRUS_ICE_RESTART_VERIFY_MS } from "../realtime/ice-recovery-policy";
+import { addIceCandidateSafe, toIceCandidateInit } from "../realtime/webrtc-ice-utils";
+import type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
+import {
+  createEmptyReliabilityReport,
+  createDefaultTransportDiagnostics,
+} from "../realtime/webrtc-diagnostics-types";
+import { WebRtcDiagnosticsSession } from "../realtime/webrtc-diagnostics-session";
+import { RtcRecoveryManager } from "../realtime/rtc-recovery-manager";
+import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinator";
+import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
+import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
+import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
+
+export type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
 
 export interface OnlineUser {
   id: string;
@@ -39,7 +60,8 @@ export interface ActiveCallState {
   peerId: string;
   callType: "audio" | "video";
   isInitiator: boolean;
-  status: "ringing" | "connected" | "ended";
+  /** Single source of truth for call UI + WebRTC lifecycle */
+  status: CallSessionStatus;
 }
 
 export interface MediaCallControls {
@@ -49,7 +71,7 @@ export interface MediaCallControls {
 
 export type ChatOutboundPayload = {
   message: string;
-  messageType?: "text" | "emoji" | "media" | "voice-note" | "location" | "system";
+  messageType?: "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
   fileUrl?: string;
   fileName?: string;
   fileMimeType?: string;
@@ -83,6 +105,11 @@ interface PresenceContextType {
   sendChatMessage: (targetUserId: string, payload: ChatOutboundPayload) => void;
   clearNotification: (id: string) => void;
   wsRef: React.MutableRefObject<Socket | null>;
+  callDiagnostics: CallDiagnosticsSnapshot | null;
+  /** Remote `<video>` play() outcome for autoplay-policy diagnostics */
+  reportRemoteMediaPlayback: (autoplayBlocked: boolean) => void;
+  /** User or tooling: retry AudioContext + remote stream reattach (silent audio / blocked autoplay). */
+  recoverCallMedia: () => Promise<void>;
 }
 
 const PresenceContext = createContext<PresenceContextType | null>(null);
@@ -110,15 +137,31 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [mediaControls, setMediaControls] = useState<MediaCallControls>({ isMuted: false, isVideoEnabled: true });
   const [callDuration, setCallDuration] = useState(0);
+  const [callDiagnostics, setCallDiagnostics] = useState<CallDiagnosticsSnapshot | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const currentUserIdRef = useRef<string | null>(null);
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const activeCallRef = useRef<ActiveCallState | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const pendingCandidatesRef = useRef<RTCIceCandidate[]>([]);
+  const remoteStreamRef = useRef<MediaStream>(new MediaStream());
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  /** Invalidates in-flight setupWebRTCMedia when a new call starts or teardown runs. */
+  const webrtcSessionGenerationRef = useRef(0);
+  /** Answerer: SDP may arrive before the peer connection exists. */
+  const pendingRemoteOfferRef = useRef<{ offer: RTCSessionDescriptionInit; roomId: string } | null>(null);
+  /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
+  const negotiationBusyRef = useRef(false);
+  const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
+  const iceRestartAttemptsRef = useRef(0);
+  const iceRestartVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Ignore spurious ICE "disconnected" before we have ever reached a live path. */
+  const mediaWasLiveRef = useRef(false);
+  const webrtcDiagSessionRef = useRef<WebRtcDiagnosticsSession | null>(null);
+  const recoveryManagerRef = useRef(new RtcRecoveryManager());
+  const negotiationCoordinatorRef = useRef(new RtcNegotiationCoordinator());
 
   useEffect(() => {
     incomingCallRef.current = incomingCall;
@@ -146,6 +189,24 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cleanupMedia = useCallback(() => {
+    webrtcSessionGenerationRef.current += 1;
+    pendingRemoteOfferRef.current = null;
+    negotiationBusyRef.current = false;
+    mediaWasLiveRef.current = false;
+    iceRestartAttemptsRef.current = 0;
+    if (iceRestartVerifyTimerRef.current) {
+      clearTimeout(iceRestartVerifyTimerRef.current);
+      iceRestartVerifyTimerRef.current = null;
+    }
+    if (abrControllerRef.current) {
+      abrControllerRef.current.stop();
+      abrControllerRef.current = null;
+    }
+    webrtcDiagSessionRef.current?.dispose();
+    webrtcDiagSessionRef.current = null;
+    recoveryManagerRef.current.reset();
+    negotiationCoordinatorRef.current.reset();
+    setCallDiagnostics(null);
     if (callTimerRef.current) {
       clearInterval(callTimerRef.current);
       callTimerRef.current = null;
@@ -159,18 +220,32 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       localStreamRef.current = null;
     }
     if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.getSenders().forEach((s) => {
+          try {
+            void s.replaceTrack(null);
+          } catch {
+            /* ignore */
+          }
+        });
+      } catch {
+        /* ignore */
+      }
       peerConnectionRef.current.ontrack = null;
       peerConnectionRef.current.onicecandidate = null;
       peerConnectionRef.current.oniceconnectionstatechange = null;
+      peerConnectionRef.current.onconnectionstatechange = null;
+      peerConnectionRef.current.onnegotiationneeded = null;
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
     if (socketRef.current) {
-      socketRef.current.off('webrtc-offer');
-      socketRef.current.off('webrtc-answer');
-      socketRef.current.off('webrtc-ice-candidate');
+      socketRef.current.removeAllListeners("webrtc-offer");
+      socketRef.current.removeAllListeners("webrtc-answer");
+      socketRef.current.removeAllListeners("webrtc-ice-candidate");
     }
     pendingCandidatesRef.current = [];
+    remoteStreamRef.current = new MediaStream();
     setLocalStream(null);
     setRemoteStream(null);
     setCallDuration(0);
@@ -185,112 +260,411 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }, 1000);
   }, []);
 
-  const setupWebRTCMedia = useCallback(async (
-    roomId: string,
-    callType: "audio" | "video",
-    isInitiator: boolean,
-    socket: Socket
-  ) => {
-    try {
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.ontrack = null;
-        peerConnectionRef.current.onicecandidate = null;
-        peerConnectionRef.current.oniceconnectionstatechange = null;
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(t => t.stop());
-        localStreamRef.current = null;
-      }
-      socket.off('webrtc-offer');
-      socket.off('webrtc-answer');
-      socket.off('webrtc-ice-candidate');
-      pendingCandidatesRef.current = [];
+  const setupWebRTCMedia = useCallback(
+    async (roomId: string, callType: "audio" | "video", isInitiator: boolean, socket: Socket) => {
+      const sessionGen = ++webrtcSessionGenerationRef.current;
+      const alive = () => sessionGen === webrtcSessionGenerationRef.current;
 
-      const videoConstraints = callType === "video" ? getOptimalVideoConstraints() : false;
-      const audioConstraints = getAudioConstraints();
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: audioConstraints,
-      });
-
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-
-      const pc = new RTCPeerConnection(createPeerConnectionConfig());
-      peerConnectionRef.current = pc;
-
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-      pc.ontrack = (event) => {
-        console.log("[WebRTC-Presence] Remote track received:", event.track.kind);
-        setRemoteStream(event.streams[0]);
-        startCallTimer();
-      };
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && socket.connected) {
-          socket.emit('webrtc-ice-candidate', { roomId, candidate: event.candidate });
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log("[WebRTC-Presence] ICE state:", pc.iceConnectionState);
-        if (pc.iceConnectionState === "failed") {
-          addNotification("error", "Call connection failed");
-        }
-      };
-
-      socket.on('webrtc-offer', async (data: { offer: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        console.log("[WebRTC-Presence] Received offer");
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
-        for (const candidate of pendingCandidatesRef.current) {
-          await peerConnectionRef.current.addIceCandidate(candidate);
-        }
-        pendingCandidatesRef.current = [];
-        const answer = await peerConnectionRef.current.createAnswer();
-        await peerConnectionRef.current.setLocalDescription(answer);
-        socket.emit('webrtc-answer', { roomId, answer });
-      });
-
-      socket.on('webrtc-answer', async (data: { answer: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        console.log("[WebRTC-Presence] Received answer");
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
-        for (const candidate of pendingCandidatesRef.current) {
-          await peerConnectionRef.current.addIceCandidate(candidate);
-        }
-        pendingCandidatesRef.current = [];
-      });
-
-      socket.on('webrtc-ice-candidate', async (data: { candidate: any; roomId: string }) => {
-        if (data.roomId !== roomId || !peerConnectionRef.current) return;
-        if (peerConnectionRef.current.remoteDescription) {
-          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } else {
-          pendingCandidatesRef.current.push(new RTCIceCandidate(data.candidate));
-        }
-      });
-
-      if (isInitiator) {
-        console.log("[WebRTC-Presence] Creating offer as initiator...");
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: callType === "video",
+      const promoteMediaConnected = () => {
+        if (!alive()) return;
+        mediaWasLiveRef.current = true;
+        setActiveCall((prev) => {
+          if (!prev || prev.roomId !== roomId) return prev;
+          if (prev.status === "connected") return prev;
+          return { ...prev, status: "connected" as CallSessionStatus };
         });
-        await pc.setLocalDescription(offer);
-        socket.emit('webrtc-offer', { roomId, offer });
-      }
+        startCallTimer();
+        if (callType === "video") {
+          const pcNow = peerConnectionRef.current;
+          if (!pcNow || abrControllerRef.current) return;
+          const ctl = new AdaptiveBitrateController(pcNow);
+          abrControllerRef.current = ctl;
+          const net = getCyrusCommsNetworkMode();
+          const initialPreset =
+            net === "low_bandwidth" || net === "degraded" || net === "emergency"
+              ? "low"
+              : net === "audio_priority"
+                ? "low"
+                : "medium";
+          void applyBandwidthConstraints(pcNow, initialPreset, getCyrusCommsNetworkMode()).then(() => {
+            if (abrControllerRef.current === ctl && alive()) ctl.start();
+          });
+        }
+      };
 
-      console.log(`[WebRTC-Presence] Media setup complete - initiator: ${isInitiator}, type: ${callType}`);
-    } catch (err) {
-      console.error("[WebRTC-Presence] Media setup failed:", err);
-      addNotification("error", "Failed to access camera/microphone");
-    }
-  }, [addNotification, startCallTimer]);
+      const flushIce = async () => {
+        const p = peerConnectionRef.current;
+        if (!p) return;
+        for (const c of pendingCandidatesRef.current) {
+          await addIceCandidateSafe(p, c);
+        }
+        pendingCandidatesRef.current = [];
+      };
+
+      try {
+        iceRestartAttemptsRef.current = 0;
+        recoveryManagerRef.current.reset();
+        negotiationCoordinatorRef.current.reset();
+        if (iceRestartVerifyTimerRef.current) {
+          clearTimeout(iceRestartVerifyTimerRef.current);
+          iceRestartVerifyTimerRef.current = null;
+        }
+        const prevDiag = webrtcDiagSessionRef.current;
+        const prevPc = peerConnectionRef.current;
+        if (prevDiag && prevPc && prevPc.connectionState !== "closed") {
+          prevDiag.logZombieCleanup(prevPc.connectionState);
+        }
+        prevDiag?.dispose();
+        webrtcDiagSessionRef.current = null;
+        if (peerConnectionRef.current) {
+          peerConnectionRef.current.ontrack = null;
+          peerConnectionRef.current.onicecandidate = null;
+          peerConnectionRef.current.oniceconnectionstatechange = null;
+          peerConnectionRef.current.onconnectionstatechange = null;
+          peerConnectionRef.current.onnegotiationneeded = null;
+          peerConnectionRef.current.close();
+          peerConnectionRef.current = null;
+        }
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+          localStreamRef.current = null;
+        }
+        socket.removeAllListeners("webrtc-offer");
+        socket.removeAllListeners("webrtc-answer");
+        socket.removeAllListeners("webrtc-ice-candidate");
+        pendingCandidatesRef.current = [];
+        pendingRemoteOfferRef.current = null;
+        negotiationBusyRef.current = false;
+        remoteStreamRef.current = new MediaStream();
+
+        setActiveCall((prev) =>
+          prev && prev.roomId === roomId ? { ...prev, status: "negotiating" } : prev
+        );
+
+        if (!isInitiator) {
+          socket.on("webrtc-offer", (data: { offer: RTCSessionDescriptionInit; roomId: string }) => {
+            void negotiationCoordinatorRef.current.runExclusive(async () => {
+              try {
+                if (data.roomId !== roomId || !alive() || isInitiator) return;
+                const p = peerConnectionRef.current;
+                if (!p) {
+                  pendingRemoteOfferRef.current = { offer: data.offer, roomId: data.roomId };
+                  if (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-call-debug") === "1") {
+                    console.log("[CYRUS-Call] Buffered offer (PC not ready)");
+                  }
+                  return;
+                }
+                if (p.signalingState === "have-local-offer") {
+                  webrtcDiagSessionRef.current?.recordRecoveryAction("glare_inbound_offer_while_have_local_offer");
+                }
+                const diag = webrtcDiagSessionRef.current;
+                diag?.setNegotiationLocked(true, "remote_offer");
+                try {
+                  try {
+                    await p.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    diag?.logSdpFlow("setRemoteOffer", true);
+                  } catch (e) {
+                    diag?.logSdpFlow("setRemoteOffer", false, { error: String(e) });
+                    throw e;
+                  }
+                  await flushIce();
+                  negotiationBusyRef.current = true;
+                  try {
+                    const answer = await p.createAnswer();
+                    diag?.logSdpFlow("createAnswer", true);
+                    await p.setLocalDescription(answer);
+                    diag?.logSdpFlow("setLocalAnswer", true);
+                    if (alive() && socket.connected) socket.emit("webrtc-answer", { roomId, answer });
+                  } catch (e) {
+                    diag?.logSdpFlow("createAnswer", false, { error: String(e) });
+                    throw e;
+                  } finally {
+                    negotiationBusyRef.current = false;
+                  }
+                } finally {
+                  diag?.setNegotiationLocked(false);
+                }
+              } catch (e) {
+                console.warn("[WebRTC-Presence] webrtc-offer handler failed:", e);
+              }
+            });
+          });
+        }
+
+        const rtcConfig = await fetchCyrusCommRtcConfiguration();
+        if (!alive()) return;
+
+        const networkMode = getCyrusCommsNetworkMode();
+        const videoConstraints = getVideoConstraintsForCommsCall(callType, networkMode);
+        const audioConstraints = getAudioConstraints();
+
+        try {
+          const devs = await navigator.mediaDevices.enumerateDevices();
+          if (!devs.some((d) => d.kind === "audioinput")) {
+            addNotification("warning", "No microphone detected — check device permissions.");
+          }
+        } catch {
+          /* ignore */
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        });
+        if (!alive()) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+
+        const pc = new RTCPeerConnection(rtcConfig);
+        peerConnectionRef.current = pc;
+
+        const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
+        diagSession.attach();
+        webrtcDiagSessionRef.current = diagSession;
+        void diagSession.probeAudioContext();
+
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream);
+          diagSession.logAddTrack(track);
+        });
+        applyPreferredCodecsToPeerConnection(pc);
+
+        pc.onnegotiationneeded = () => {
+          webrtcDiagSessionRef.current?.logNegotiationNeeded();
+        };
+
+        const applyPendingOfferIfAny = async () => {
+          const pending = pendingRemoteOfferRef.current;
+          const p = peerConnectionRef.current;
+          const diag = webrtcDiagSessionRef.current;
+          if (!pending || pending.roomId !== roomId || !p) return;
+          pendingRemoteOfferRef.current = null;
+          await negotiationCoordinatorRef.current.runExclusive(async () => {
+            diag?.setNegotiationLocked(true, "buffered_remote_offer");
+            try {
+              try {
+                await p.setRemoteDescription(new RTCSessionDescription(pending.offer));
+                diag?.logSdpFlow("setRemoteOffer", true, { buffered: true });
+              } catch (e) {
+                diag?.logSdpFlow("setRemoteOffer", false, { error: String(e), buffered: true });
+                throw e;
+              }
+              await flushIce();
+              negotiationBusyRef.current = true;
+              try {
+                const answer = await p.createAnswer();
+                diag?.logSdpFlow("createAnswer", true, { buffered: true });
+                await p.setLocalDescription(answer);
+                diag?.logSdpFlow("setLocalAnswer", true, { buffered: true });
+                if (alive() && socket.connected) socket.emit("webrtc-answer", { roomId, answer });
+              } finally {
+                negotiationBusyRef.current = false;
+              }
+            } finally {
+              diag?.setNegotiationLocked(false);
+            }
+          });
+        };
+
+        pc.ontrack = (event) => {
+          webrtcDiagSessionRef.current?.logOnTrack(event);
+          const inbound = remoteStreamRef.current;
+          const alreadyPresent = inbound.getTracks().some((t) => t.id === event.track.id);
+          if (!alreadyPresent) inbound.addTrack(event.track);
+          setRemoteStream(new MediaStream(inbound.getTracks()));
+          if (event.track.kind === "audio" && event.track.readyState === "live") {
+            promoteMediaConnected();
+          }
+          if (callType === "video" && event.track.kind === "video" && event.track.readyState === "live") {
+            promoteMediaConnected();
+          }
+        };
+
+        pc.onicecandidate = (event) => {
+          const diag = webrtcDiagSessionRef.current;
+          if (event.candidate) {
+            const plain =
+              typeof event.candidate.toJSON === "function"
+                ? event.candidate.toJSON()
+                : event.candidate;
+            diag?.logIceCandidate("local", plain);
+            if (socket.connected && alive()) {
+              socket.emit("webrtc-ice-candidate", { roomId, candidate: plain });
+            }
+          } else {
+            diag?.logIceCandidate("local", { candidate: "" });
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (!alive()) return;
+          recoveryManagerRef.current.onIceStateChange(pc.iceConnectionState, Date.now());
+          const maxAttempts = recoveryManagerRef.current.maxRestartAttempts();
+          if (isIcePathLive(pc.iceConnectionState)) {
+            iceRestartAttemptsRef.current = 0;
+            if (iceRestartVerifyTimerRef.current) {
+              clearTimeout(iceRestartVerifyTimerRef.current);
+              iceRestartVerifyTimerRef.current = null;
+            }
+            promoteMediaConnected();
+          }
+          if (
+            pc.iceConnectionState === "disconnected" &&
+            mediaWasLiveRef.current &&
+            iceRestartAttemptsRef.current < maxAttempts
+          ) {
+            iceRestartAttemptsRef.current += 1;
+            recoveryManagerRef.current.recordManualRestart();
+            webrtcDiagSessionRef.current?.logReconnectAttempt(
+              iceRestartAttemptsRef.current,
+              maxAttempts
+            );
+            setActiveCall((prev) =>
+              prev && prev.roomId === roomId ? { ...prev, status: "reconnecting" } : prev
+            );
+            addNotification("warning", `Recovering media (${iceRestartAttemptsRef.current}/${maxAttempts})…`);
+            try {
+              pc.restartIce();
+            } catch (e) {
+              console.warn("[WebRTC-Presence] restartIce error:", e);
+            }
+            if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
+            iceRestartVerifyTimerRef.current = setTimeout(() => {
+              if (!alive() || peerConnectionRef.current !== pc) return;
+              if (isIcePathLive(pc.iceConnectionState)) return;
+              if (iceRestartAttemptsRef.current >= maxAttempts) {
+                webrtcDiagSessionRef.current?.logReconnectExhausted();
+                addNotification("error", "Media path lost after reconnect attempts.");
+                if (socket.connected) socket.emit("end-call", { roomId });
+                cleanupMedia();
+                setActiveCall(null);
+                activeCallRef.current = null;
+              }
+            }, CYRUS_ICE_RESTART_VERIFY_MS);
+          }
+          if (pc.iceConnectionState === "failed") {
+            webrtcDiagSessionRef.current?.recordTurnFailure(
+              isRelayOnlyTestMode()
+                ? "ICE failed during relay-only test — verify TURN is reachable and credentials."
+                : "ICE connectionState failed (handler)"
+            );
+            addNotification("error", "Media path failed (ICE). Try relay mode or check TURN.");
+            if (socket.connected) socket.emit("end-call", { roomId });
+            cleanupMedia();
+            setActiveCall(null);
+            activeCallRef.current = null;
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (!alive()) return;
+          if (pc.connectionState === "connected") {
+            promoteMediaConnected();
+          }
+          if (pc.connectionState === "failed") {
+            webrtcDiagSessionRef.current?.recordNegotiationFailure("RTCPeerConnection connectionState failed");
+            addNotification("error", "Call transport failed");
+            if (socket.connected) socket.emit("end-call", { roomId });
+            cleanupMedia();
+            setActiveCall(null);
+            activeCallRef.current = null;
+          }
+        };
+
+        socket.on("webrtc-answer", (data: { answer: RTCSessionDescriptionInit; roomId: string }) => {
+          void negotiationCoordinatorRef.current.runExclusive(async () => {
+            try {
+              if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
+              if (!isInitiator) return;
+              const diag = webrtcDiagSessionRef.current;
+              const p = peerConnectionRef.current;
+              diag?.setNegotiationLocked(true, "webrtc_answer");
+              try {
+                await p.setRemoteDescription(new RTCSessionDescription(data.answer));
+                diag?.logSdpFlow("setRemoteAnswer", true);
+                await flushIce();
+              } catch (e) {
+                diag?.logSdpFlow("setRemoteAnswer", false, { error: String(e) });
+                throw e;
+              } finally {
+                diag?.setNegotiationLocked(false);
+              }
+            } catch (e) {
+              console.warn("[WebRTC-Presence] webrtc-answer handler failed:", e);
+            }
+          });
+        });
+
+        socket.on("webrtc-ice-candidate", async (data: { candidate: unknown; roomId: string }) => {
+          try {
+            if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
+            const p = peerConnectionRef.current;
+            webrtcDiagSessionRef.current?.logIceCandidate("remote", data.candidate);
+            if (p.remoteDescription) {
+              await addIceCandidateSafe(p, data.candidate);
+            } else {
+              const init = toIceCandidateInit(data.candidate);
+              if (init) pendingCandidatesRef.current.push(init);
+            }
+          } catch (e) {
+            console.warn("[WebRTC-Presence] webrtc-ice-candidate handler failed:", e);
+          }
+        });
+
+        await applyPendingOfferIfAny();
+        if (!alive()) return;
+
+        if (isInitiator) {
+          if (negotiationBusyRef.current) {
+            console.warn("[WebRTC-Presence] createOffer skipped: negotiation still busy");
+          } else {
+            negotiationBusyRef.current = true;
+            webrtcDiagSessionRef.current?.setNegotiationLocked(true, "createOffer");
+            try {
+              await negotiationCoordinatorRef.current.runExclusive(async () => {
+                let offer: RTCSessionDescriptionInit | undefined;
+                try {
+                  offer = await pc.createOffer();
+                  webrtcDiagSessionRef.current?.logSdpFlow("createOffer", true);
+                } catch (e) {
+                  webrtcDiagSessionRef.current?.logSdpFlow("createOffer", false, { error: String(e) });
+                  offer = undefined;
+                }
+                if (offer !== undefined) {
+                  try {
+                    await pc.setLocalDescription(offer);
+                    webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", true);
+                    if (alive() && socket.connected) socket.emit("webrtc-offer", { roomId, offer });
+                  } catch (e2) {
+                    webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", false, { error: String(e2) });
+                  }
+                }
+              });
+            } finally {
+              negotiationBusyRef.current = false;
+              webrtcDiagSessionRef.current?.setNegotiationLocked(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[WebRTC-Presence] Media setup failed:", err);
+        webrtcDiagSessionRef.current?.recordNegotiationFailure(
+          `Media setup failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+        addNotification("error", "Failed to access camera/microphone or start call");
+        if (alive()) {
+          setActiveCall((prev) =>
+            prev && prev.roomId === roomId ? { ...prev, status: "failed" } : prev
+          );
+        }
+      }
+    },
+    [addNotification, startCallTimer, cleanupMedia]
+  );
 
   const connectPresence = useCallback((displayName: string = "User") => {
     console.log("[Presence] connectPresence called, displayName:", displayName);
@@ -305,10 +679,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
     }
 
-    const deviceId = localStorage.getItem('cyrus_device_id') || `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('cyrus_device_id', deviceId);
-    localStorage.setItem('cyrus-device-id', deviceId);
-    
+    const deviceId = getCommsDeviceId();
     const userId = deviceId;
     currentUserIdRef.current = userId;
 
@@ -319,6 +690,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     
     const socket = io(socketUrl, {
       path: "/cyrus-io",
+      // Match server: polling-only (Railway / Bun often fail Engine.IO WS upgrade).
       transports: ["polling"],
       reconnection: true,
       reconnectionAttempts: 20,
@@ -336,6 +708,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect', () => {
       console.log("[Presence] CONNECTED - Socket ID:", socket.id);
+      // Show live status as soon as the transport is up; `registered` still confirms server-side presence.
+      setIsConnected(true);
       const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
       socket.emit("register", {
         userId,
@@ -404,18 +778,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         peerId: data.peerId,
         peerName: data.peerName,
         callType,
-        status: "connected",
+        status: "connecting",
       } : {
         roomId: data.roomId,
         peerName: data.peerName,
         peerId: data.peerId,
         callType,
         isInitiator: true,
-        status: "connected",
+        status: "connecting",
       });
       setIncomingCall(null);
       incomingCallRef.current = null;
-      addNotification("success", `Connected to ${data.peerName}`);
+      addNotification("success", `Connecting to ${data.peerName}…`);
       setupWebRTCMedia(data.roomId, callType, true, socket);
     });
 
@@ -428,11 +802,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         peerId: data.peerId,
         callType,
         isInitiator: data.isInitiator || false,
-        status: "connected",
+        status: "connecting",
       });
       setIncomingCall(null);
       incomingCallRef.current = null;
-      addNotification("success", `Connected to ${data.peerName}`);
+      addNotification("success", `Connecting to ${data.peerName}…`);
       setupWebRTCMedia(data.roomId, callType, false, socket);
     });
 
@@ -482,6 +856,16 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect_error', (error) => {
       console.error("[Presence] Connection error:", error.message);
+      setIsConnected(false);
+    });
+
+    socket.on('force-logout', (data: { type: string; message: string }) => {
+      console.warn("[Presence] FORCE_LOGOUT received:", data.message);
+      // Clear all local auth state so the user is fully signed out
+      localStorage.clear();
+      sessionStorage.clear();
+      // Redirect to the root — the app will show the login screen
+      window.location.href = "/";
     });
 
   }, [addNotification, setupWebRTCMedia, cleanupMedia]);
@@ -575,7 +959,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks();
-      audioTracks.forEach(track => { track.enabled = !track.enabled; });
+      audioTracks.forEach(track => {
+        track.enabled = !track.enabled;
+        webrtcDiagSessionRef.current?.logLocalTrackControl(
+          track.enabled ? "enable" : "disable",
+          "audio",
+          track.id
+        );
+      });
       setMediaControls(prev => ({ ...prev, isMuted: !prev.isMuted }));
     }
   }, []);
@@ -583,7 +974,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const toggleVideo = useCallback(() => {
     if (localStreamRef.current) {
       const videoTracks = localStreamRef.current.getVideoTracks();
-      videoTracks.forEach(track => { track.enabled = !track.enabled; });
+      videoTracks.forEach(track => {
+        track.enabled = !track.enabled;
+        webrtcDiagSessionRef.current?.logLocalTrackControl(
+          track.enabled ? "enable" : "disable",
+          "video",
+          track.id
+        );
+      });
       setMediaControls(prev => ({ ...prev, isVideoEnabled: !prev.isVideoEnabled }));
     }
   }, []);
@@ -617,6 +1015,36 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     [sendChatMessage]
   );
 
+  const reportRemoteMediaPlayback = useCallback((autoplayBlocked: boolean) => {
+    webrtcDiagSessionRef.current?.reportRemotePlayback(autoplayBlocked);
+    if (autoplayBlocked) {
+      void resumeCyrusAudioPipeline();
+      window.setTimeout(() => {
+        const ms = remoteStreamRef.current;
+        if (!ms || ms.getTracks().length === 0) return;
+        webrtcDiagSessionRef.current?.recordRecoveryAction("remote_stream_reattach_playback_retry");
+        setRemoteStream(new MediaStream(ms.getTracks()));
+      }, 400);
+    }
+  }, []);
+
+  const recoverCallMedia = useCallback(async () => {
+    const ok = await resumeCyrusAudioPipeline();
+    webrtcDiagSessionRef.current?.recordRecoveryAction("user_recover_call_media", {
+      audioPipeline: ok,
+    });
+    const ms = remoteStreamRef.current;
+    if (ms?.getTracks().length) {
+      setRemoteStream(new MediaStream(ms.getTracks()));
+    }
+    addNotification(
+      "info",
+      ok
+        ? "CYRUS retried audio playback and reattached remote media."
+        : "Remote stream reattached — use in-call controls or tap the video if audio is still silent."
+    );
+  }, [addNotification]);
+
   useEffect(() => {
     return () => {
       cleanupMedia();
@@ -625,6 +1053,137 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [cleanupMedia]);
+
+  useEffect(() => {
+    if (!activeCall || activeCall.status === "failed") {
+      setCallDiagnostics(null);
+      return;
+    }
+    const tick = async () => {
+      const pc = peerConnectionRef.current;
+      if (!pc) return;
+      try {
+        const m = await getCallQualityMetrics(pc);
+        const session = webrtcDiagSessionRef.current;
+        const call = activeCallRef.current;
+        if (session) {
+          const snap = await session.composeSnapshot(m, abrControllerRef.current?.getCurrentPreset());
+          setCallDiagnostics(snap);
+
+          const rec = recoveryManagerRef.current;
+          rec.onIceStateChange(pc.iceConnectionState, Date.now());
+          const res = rec.tick({
+            now: Date.now(),
+            iceState: pc.iceConnectionState,
+            packetLossPct: snap.packetLossRate,
+            bitrateKbps: snap.bitrateKbps,
+            isVideoCall: call?.callType === "video",
+            mediaWasLive: mediaWasLiveRef.current,
+            remoteStalled: snap.remoteStalled,
+          });
+          const maxA = rec.maxRestartAttempts();
+          if (res.action === "ice_restart") {
+            if (iceRestartAttemptsRef.current >= maxA) return;
+            iceRestartAttemptsRef.current += 1;
+            session.recordRecoveryAction("auto_ice_restart", { reason: res.reason });
+            webrtcDiagSessionRef.current?.logReconnectAttempt(iceRestartAttemptsRef.current, maxA);
+            setActiveCall((prev) =>
+              prev && prev.roomId === call?.roomId ? { ...prev, status: "reconnecting" } : prev
+            );
+            addNotification("warning", `Auto-recovering (${res.reason})…`);
+            try {
+              pc.restartIce();
+            } catch (e) {
+              console.warn("[WebRTC-Presence] auto restartIce error:", e);
+            }
+            if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
+            const rid = call?.roomId;
+            iceRestartVerifyTimerRef.current = setTimeout(() => {
+              if (peerConnectionRef.current !== pc) return;
+              if (isIcePathLive(pc.iceConnectionState)) return;
+              if (iceRestartAttemptsRef.current >= maxA && rid && socketRef.current?.connected) {
+                webrtcDiagSessionRef.current?.logReconnectExhausted();
+                socketRef.current.emit("end-call", { roomId: rid });
+                cleanupMedia();
+                setActiveCall(null);
+                activeCallRef.current = null;
+              }
+            }, CYRUS_ICE_RESTART_VERIFY_MS);
+          } else if (res.action === "escalate_relay_preference") {
+            session.recordRecoveryAction("relay_escalation", { reason: res.reason });
+            addNotification(
+              "info",
+              "CYRUS saved relay preference for this browser (auto-escalation). New calls use more aggressive TURN."
+            );
+          }
+          return;
+        }
+        const rtt = Math.round((m.roundTripTime || 0) * 1000);
+        const jitter = Math.round((m.jitter || 0) * 1000);
+        const loss = m.packetLossRate;
+        const bitrate = Math.round((m.bitrate / 1000) * 10) / 10;
+        const basePartial = {
+          iceConnectionState: pc.iceConnectionState,
+          connectionState: pc.connectionState,
+          signalingState: pc.signalingState,
+          iceGatheringState: pc.iceGatheringState,
+          qualityScore: m.qualityScore,
+          rttMs: rtt,
+          packetLossRate: loss,
+          jitterMs: jitter,
+          bitrateKbps: bitrate,
+          abrPreset: abrControllerRef.current?.getCurrentPreset(),
+          localCandidateTypes: [] as string[],
+          remoteCandidateTypes: [] as string[],
+          relayCandidateSeen: false,
+          relayActive: false,
+          relayOnlyTestMode: isRelayOnlyTestMode(),
+          turnWarning: null,
+          remoteTracks: [] as CallDiagnosticsSnapshot["remoteTracks"],
+          remotePlaybackBlocked: false,
+          remoteStalled: false,
+          audioFlatlineSuspected: false,
+          videoBlackScreenSuspected: false,
+          audioContextSuspended: null as boolean | null,
+          negotiationInProgress: false,
+          reliabilityReport: createEmptyReliabilityReport(),
+          structuredLogTail: [] as CallDiagnosticsSnapshot["structuredLogTail"],
+          transport: createDefaultTransportDiagnostics(),
+          recoveryActions: [] as string[],
+          rtcTimeline: [] as CallDiagnosticsSnapshot["rtcTimeline"],
+          bitrateHistory: [] as number[],
+          lossHistory: [] as number[],
+          qualityScores: computeCommsQualityScores({
+            rttMs: rtt,
+            jitterMs: jitter,
+            packetLossPct: loss,
+            bitrateKbps: bitrate,
+            iceLive: isIcePathLive(pc.iceConnectionState),
+            relayActive: false,
+            remoteStalled: false,
+            remotePlaybackBlocked: false,
+            reconnectCount: 0,
+            negotiationFailures: 0,
+            audioFlatlineSuspected: false,
+            videoBlackScreenSuspected: false,
+          }),
+          failureHints: [] as string[],
+          activeCodecs: {} as CallDiagnosticsSnapshot["activeCodecs"],
+          networkMode: getCyrusCommsNetworkMode(),
+          relayEscalationActive: false,
+        };
+        setCallDiagnostics({
+          ...basePartial,
+          failureHints: classifyRtcFailures(basePartial as CallDiagnosticsSnapshot),
+        });
+      } catch {
+        /* stats may fail during teardown */
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 1500);
+    return () => clearInterval(id);
+  }, [activeCall?.roomId, activeCall?.status, addNotification, cleanupMedia]);
 
   return (
     <PresenceContext.Provider
@@ -651,6 +1210,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         sendChatMessage,
         clearNotification,
         wsRef: socketRef as any,
+        callDiagnostics,
+        reportRemoteMediaPlayback,
+        recoverCallMedia,
       }}
     >
       {children}

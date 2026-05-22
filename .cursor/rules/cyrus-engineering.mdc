@@ -8,7 +8,7 @@ alwaysApply: true
 ## Stack
 
 - **Single dev process:** `npm run dev` from repo root — one public port via **`CYRUS_LIVE_PORT`** (`PORT` synced at boot; default 3020); Vite middleware serves `cyrus-ui` on the same origin.
-- **API surface:** Use `systemFetch` / `systemApiUrl` from `cyrus-ui/src/lib/system-api.ts` for new browser→server calls. Do not add parallel “base URL” helpers.
+- **API surface:** Use `systemFetch` / `systemApiUrl` / `resolveCyrusWebSocketUrl` from `cyrus-ui/src/lib/system-api.ts` (re-exporting `@shared/cyrus-api-client`) for browser→server HTTP and `/ws` signaling. Do not add parallel “base URL” helpers.
 - **Lazy Command Center:** `client/` pages rely on same-origin `/api/*` or the fused `fetch` patch when `VITE_CYRUS_API_BASE` is set.
 
 ## Auth
@@ -24,4 +24,5 @@ alwaysApply: true
 ## Safety
 
 - Respect `systemReady` / `GET /api/ready` 503 with `SYSTEM_INITIALIZING` for client retries.
+- Optional public signaling lock: server `CYRUS_COMM_WS_TOKEN` (must match browser `VITE_CYRUS_COMM_WS_TOKEN` on `/ws` query `token`). Operators can use `probeCyrusConnectivity` / Comms Wi‑Fi button to verify HTTP + `/ws?probe=1`.
 - Run **`npm run typecheck:all`** after non-trivial TypeScript changes.

@@ -29,7 +29,11 @@ router.get("/stack/summary", async (_req, res) => {
   };
   try {
     const mo = await import("../ai/upgrades/module-orchestrator.js");
-    await mo.moduleOrchestrator.init();
+    // Keep summary responsive even if deep module init is slow or blocked.
+    await Promise.race([
+      mo.moduleOrchestrator.init(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("module orchestrator init timeout")), 1200)),
+    ]);
     orchestrator = {
       totalModules: mo.moduleOrchestrator.getAllModuleStatus().length,
       initialized: true,

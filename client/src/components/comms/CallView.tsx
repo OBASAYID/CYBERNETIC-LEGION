@@ -43,6 +43,8 @@ interface CallViewProps {
   isVideoEnabled: boolean;
   callDuration: number;
   callQuality?: "HD" | "SD" | "Low";
+  /** True while ICE/DTLS or remote tracks are still coming up (avoid “connected but silent” UX). */
+  mediaEstablishing?: boolean;
   isScreenSharing?: boolean;
   screenShareStream?: MediaStream | null;
   screenSharerName?: string;
@@ -57,6 +59,8 @@ interface CallViewProps {
   chatMessages?: { senderId: string; senderName: string; message: string; timestamp: string }[];
   reactions?: Reaction[];
   socketRef?: React.MutableRefObject<any>;
+  /** Fires when remote media `play()` is blocked (autoplay policy). */
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
 }
 
 interface IncomingCallOverlayProps {
@@ -123,8 +127,11 @@ export function IncomingCallOverlay({
             <PhoneOff className="w-7 h-7 text-white" />
           </button>
           <button
+            type="button"
+            data-testid="comms-accept-call"
             onClick={onAccept}
             className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-600/30 transition-all active:scale-95 animate-pulse"
+            aria-label="Accept call"
           >
             <Phone className="w-7 h-7 text-white" />
           </button>
@@ -143,18 +150,34 @@ function ParticipantVideo({
   participant,
   isSelf,
   gridSize,
+  onRemotePlaybackDiagnostics,
 }: {
   participant: CallParticipant;
   isSelf?: boolean;
   gridSize: number;
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (videoRef.current && participant.stream) {
       videoRef.current.srcObject = participant.stream;
+      videoRef.current.muted = !!isSelf;
+      videoRef.current.volume = 1;
+      void videoRef.current.play().then(
+        () => {
+          if (!isSelf) {
+            onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
+          }
+        },
+        () => {
+          if (!isSelf) {
+            onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
+          }
+        }
+      );
     }
-  }, [participant.stream]);
+  }, [participant.stream, isSelf, onRemotePlaybackDiagnostics]);
 
   const qualityColor =
     participant.connectionQuality === "excellent"
@@ -257,6 +280,7 @@ export function CallView({
   isVideoEnabled,
   callDuration,
   callQuality,
+  mediaEstablishing = false,
   isScreenSharing,
   screenShareStream,
   screenSharerName,
@@ -271,6 +295,7 @@ export function CallView({
   chatMessages = [],
   reactions = [],
   socketRef,
+  onRemotePlaybackDiagnostics,
 }: CallViewProps) {
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -353,6 +378,11 @@ export function CallView({
               {callQuality}
             </span>
           )}
+          {mediaEstablishing && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+              Establishing media…
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -399,6 +429,7 @@ export function CallView({
                       participant={p}
                       isSelf={p.id === currentUserId}
                       gridSize={totalCount}
+                      onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                     />
                   </div>
                 ))}
@@ -412,6 +443,7 @@ export function CallView({
                   participant={p}
                   isSelf={p.id === currentUserId}
                   gridSize={totalCount}
+                  onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                 />
               ))}
             </div>
@@ -590,8 +622,11 @@ export function CallView({
         )}
 
         <button
+          type="button"
+          data-testid="comms-end-call"
           onClick={onEndCall}
           className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-xl shadow-red-600/30 transition-all active:scale-95"
+          aria-label="End call"
         >
           <PhoneOff className="w-6 h-6 text-white" />
         </button>

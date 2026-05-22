@@ -1,23 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { readHandoff } from "@shared/module-handoff";
-import { systemFetch } from "@shared/cyrus-api-client";
+import { systemFetch, commsAssetUrl } from "@shared/cyrus-api-client";
 import { useComms } from "../hooks/useComms";
 import { usePresence } from "../contexts/PresenceContext";
-import { Link, useLocation } from "wouter";
-import {
-  MessageSquare,
-  Phone,
-  Users,
-  Activity,
-  Sun,
-  Moon,
-  ArrowLeft,
-  Smile,
-  X,
-  Radio,
-  Share2,
-} from "lucide-react";
+import { useLocation } from "wouter";
+import { MessageSquare, Phone, Users, Activity, Smile, X, Radio, Share2 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
 import { Conversation } from "../components/comms/ConversationList";
@@ -32,13 +20,32 @@ import { CommsIntelligence } from "../components/comms/CommsIntelligence";
 import { PsharePanel } from "../components/comms/PsharePanel";
 import { useAnomalyAlerts } from "../hooks/useCommsIntelligence";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { CommsP2PLayerProvider, useCommsP2PLayer } from "../components/comms/CommsP2PLayerContext";
+import { CommsP2PCallDock } from "../components/comms/CommsP2PUnifiedUI";
 import {
   fromSocketMessageSent,
   fromSocketNewMessage,
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
+import { getCommsDeviceId } from "../lib/comms-device-id";
+import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbital-integration";
+import { callShellVisible } from "@shared/calls/call-session-types";
+import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
+import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
+import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
+import { CommsOrbitalCommandDeck, type OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
+import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
+
+const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
+  chat: "Encrypted messaging, voice notes, and media",
+  pshare: "Timeline, handoffs, and field posts",
+  calls: "Mesh calls, quick dial, and conference bridge",
+  people: "Presence, roster, and discovery",
+  streams: "Live broadcast mesh",
+  monitor: "AI command console · intelligence & admin",
+};
 
 function conversationPreviewLine(msg: {
   content: string;
@@ -93,6 +100,8 @@ export function CommsPage() {
   const [newChatMode, setNewChatMode] = useState(false);
   const [newChatCascadeKey, setNewChatCascadeKey] = useState(0);
   const [newChatPicks, setNewChatPicks] = useState<string[]>([]);
+  const [orbitalAssignSlot, setOrbitalAssignSlot] = useState<number | null>(null);
+  const [slotPinRevision, setSlotPinRevision] = useState(0);
 
   const {
     messages,
@@ -124,6 +133,9 @@ export function CommsPage() {
     sendMessage: presenceSendMessage,
     sendChatMessage: presenceSendChatMessage,
     wsRef,
+    callDiagnostics,
+    reportRemoteMediaPlayback,
+    recoverCallMedia,
   } = usePresence();
 
   const myUserIdRef = useRef(myUserId);
@@ -136,9 +148,10 @@ export function CommsPage() {
   useEffect(() => {
     const savedName = localStorage.getItem("cyrus-display-name") || "CYRUS User";
     setDisplayName(savedName);
-    if (!isConnected) {
-      connectPresence(savedName);
-    }
+    // Always ask Presence to connect on mount; it no-ops if already connected (avoids stale
+    // `isConnected` from a previous mount under React Strict Mode leaving the socket disconnected).
+    connectPresence(savedName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap; connectPresence is stable enough for first paint
   }, []);
 
   useEffect(() => {
@@ -146,6 +159,9 @@ export function CommsPage() {
     const p = new URLSearchParams(window.location.search);
     if (p.get("tab") === "pshare") {
       setActiveTab("pshare");
+    }
+    if (p.get("tab") === "p2p") {
+      setActiveTab("calls");
     }
     const pid = p.get("post");
     if (pid) {
@@ -165,28 +181,34 @@ export function CommsPage() {
     localStorage.setItem("cyrus-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
-  useEffect(() => {
+  const refreshLiveStreams = useCallback(() => {
     systemFetch("/api/comms/live-streams")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.streams) {
-          setLiveStreams(data.streams.map((s: any) => ({
-            streamId: s.streamId,
-            streamName: s.streamName,
-            sourceType: s.sourceType,
-            sourceUrl: s.sourceUrl,
-            broadcasterId: s.broadcasterId,
-            broadcasterName: s.broadcasterName,
-            viewers: s.viewers || [],
-            status: s.status,
-            quality: s.quality || "720p",
-            startTime: s.startTime,
-            endTime: s.endTime,
-          })));
+          setLiveStreams(
+            data.streams.map((s: Record<string, unknown>) => ({
+              streamId: String(s.streamId),
+              streamName: String(s.streamName),
+              sourceType: s.sourceType as LiveStream["sourceType"],
+              sourceUrl: s.sourceUrl ? String(s.sourceUrl) : undefined,
+              broadcasterId: String(s.broadcasterId),
+              broadcasterName: s.broadcasterName ? String(s.broadcasterName) : undefined,
+              viewers: (s.viewers as LiveStream["viewers"]) || [],
+              status: (s.status as LiveStream["status"]) || "active",
+              quality: (s.quality as LiveStream["quality"]) || "720p",
+              startTime: String(s.startTime),
+              endTime: s.endTime ? String(s.endTime) : undefined,
+            })),
+          );
         }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshLiveStreams();
+  }, [refreshLiveStreams]);
 
   useEffect(() => {
     const socket = wsRef.current;
@@ -247,6 +269,7 @@ export function CommsPage() {
         if (prev.some((m) => m.id === newMsg.id)) return prev;
         return [...prev, newMsg];
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
     const handleMessageSent = (data: {
@@ -286,6 +309,7 @@ export function CommsPage() {
         if (prev.some((m) => m.id === sentMsg.id)) return prev;
         return [...prev, sentMsg];
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
     const handleCallChatMessage = (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
@@ -372,7 +396,7 @@ export function CommsPage() {
       socket.off("stream-viewer-joined", handleStreamViewerJoined);
       socket.off("stream-viewer-left", handleStreamViewerLeft);
     };
-  }, [wsRef.current]);
+  }, [queryClient, isConnected, myUserId]);
 
   const myId = myUserId || myDeviceId;
 
@@ -403,7 +427,7 @@ export function CommsPage() {
     return allUsers.map((u) => ({
       id: u.id,
       displayName: u.displayName,
-      profileImageUrl: liveProfile.get(u.id) ?? u.profileImageUrl ?? null,
+      profileImageUrl: commsAssetUrl(liveProfile.get(u.id) ?? u.profileImageUrl) ?? null,
       isOnline: on.has(u.id),
     }));
   }, [allUsers, onlineUsers]);
@@ -421,9 +445,21 @@ export function CommsPage() {
   }, [allUsers, onlineUsers, myId, localChatAvatar]);
 
   const getAvatarForUser = useCallback(
-    (id: string) => avatarByUserId.get(id) ?? null,
+    (id: string) => commsAssetUrl(avatarByUserId.get(id) ?? null),
     [avatarByUserId]
   );
+
+  const forwardSlots = useMemo(() => {
+    return buildOrbitalForwardSlots({
+      myId: myId || "",
+      onlineUsers,
+      allUsers: allUsers || [],
+      contacts: contacts || [],
+      resolveAvatar: getAvatarForUser,
+    });
+  }, [myId, onlineUsers, allUsers, contacts, getAvatarForUser, slotPinRevision]);
+
+  const selectedOrbitalPeerId = pendingConversationId;
 
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
@@ -437,11 +473,15 @@ export function CommsPage() {
           body: fd,
           headers: { "X-User-Id": myId, "X-Device-Id": myId },
         });
-        const data = await res.json();
+        const data = (await res.json().catch(() => ({}))) as { profileImageUrl?: string; error?: string };
         if (res.ok && data.profileImageUrl) {
+          const resolved = commsAssetUrl(data.profileImageUrl) ?? data.profileImageUrl;
           localStorage.setItem("cyrus-chat-avatar", data.profileImageUrl);
-          setLocalChatAvatar(data.profileImageUrl);
+          setLocalChatAvatar(resolved);
           await queryClient.invalidateQueries({ queryKey: ["/api/comms/users/all"] });
+        } else {
+          console.error("Avatar upload failed:", data.error || res.status);
+          window.alert(data.error || `Photo upload failed (${res.status}). Try a smaller JPG or PNG.`);
         }
       } catch (e) {
         console.error("Avatar upload failed:", e);
@@ -451,15 +491,6 @@ export function CommsPage() {
     },
     [myId, queryClient]
   );
-
-  useEffect(() => {
-    if (localMessages.length > 0) {
-      const timer = setTimeout(() => {
-        setLocalMessages([]);
-      }, 20000);
-      return () => clearTimeout(timer);
-    }
-  }, [localMessages.length]);
 
   useEffect(() => {
     if (selectedConvForMessage) {
@@ -625,16 +656,19 @@ export function CommsPage() {
         const res = await systemFetch("/api/comms/upload", {
           method: "POST",
           body: formData,
-          headers: { "X-Device-Id": uid, "X-User-Id": uid },
+          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
         });
         if (res.ok) {
           const data = (await res.json()) as { fileUrl: string; fileName: string; mimeType?: string };
+          const mime = data.mimeType || file.type || "";
+          const isRichMedia =
+            mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
           presenceSendChatMessage(conversationId, {
             message: caption || " ",
-            messageType: "media",
+            messageType: isRichMedia ? "media" : "file",
             fileUrl: data.fileUrl,
             fileName: data.fileName || file.name,
-            fileMimeType: data.mimeType || file.type,
+            fileMimeType: mime || undefined,
             fileSizeBytes: file.size,
           });
         }
@@ -654,7 +688,7 @@ export function CommsPage() {
         const res = await systemFetch("/api/comms/voice-note", {
           method: "POST",
           body: formData,
-          headers: { "X-Device-Id": uid, "X-User-Id": uid },
+          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
         });
         if (res.ok) {
           const data = (await res.json()) as { fileUrl: string; mimeType?: string };
@@ -736,14 +770,49 @@ export function CommsPage() {
     deleteContact.mutate(contactId);
   }, [deleteContact]);
 
-  const handleUserMessage = useCallback((userId: string, userName: string) => {
+  const handleUserMessage = useCallback((userId: string, _userName: string) => {
+    if (orbitalAssignSlot !== null) {
+      writeOrbitalSlotPin(orbitalAssignSlot, userId);
+      setOrbitalAssignSlot(null);
+      setSlotPinRevision((r) => r + 1);
+    }
     setSelectedConvForMessage(userId);
+    setActiveTab("chat");
+  }, [orbitalAssignSlot]);
+
+  const handleOrbitalPeerMessage = useCallback((userId: string, _userName: string, slotIndex: number) => {
+    writeOrbitalSlotPin(slotIndex, userId);
+    setSlotPinRevision((r) => r + 1);
+    setSelectedConvForMessage(userId);
+    setActiveTab("chat");
+  }, []);
+
+  const handleEmptyOrbitalSlot = useCallback((slotIndex: number, _refLabel: string) => {
+    setOrbitalAssignSlot(slotIndex);
+    setActiveTab("people");
+  }, []);
+
+  const handleOrbitalHubActivate = useCallback(() => {
     setActiveTab("chat");
   }, []);
 
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
     callUser(userId, userName, type);
   }, [callUser]);
+
+  /** Orbital HUD: soft invite via chat + jump to channel (distinct from immediate video dial). */
+  const handleOrbitalVideoInvite = useCallback(
+    (userId: string, _userName: string) => {
+      setActiveTab("chat");
+      setSelectedConvForMessage(userId);
+      presenceSendChatMessage(userId, {
+        message: `📹 ${displayName} invites you to a video session — open Calls when you're ready to connect.`,
+        messageType: "text",
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [displayName, presenceSendChatMessage]
+  );
 
   const handleEmojiSelect = useCallback((emoji: string) => {
     setShowEmojiPicker(false);
@@ -856,7 +925,7 @@ export function CommsPage() {
 
   const tabConfig = [
     { id: "chat" as MainTab, icon: MessageSquare, label: "Chat" },
-    { id: "pshare" as MainTab, icon: Share2, label: "Pshare" },
+    { id: "pshare" as MainTab, icon: Share2, label: "Timeline" },
     { id: "calls" as MainTab, icon: Phone, label: "Calls" },
     { id: "people" as MainTab, icon: Users, label: "People" },
     { id: "streams" as MainTab, icon: Radio, label: "Streams" },
@@ -867,10 +936,43 @@ export function CommsPage() {
 
   const themeClass = darkMode ? "" : "light-theme";
 
+  const anomalyBanner =
+    anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies ? (
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-violet-400/30 bg-gradient-to-r from-cyan-950/35 via-violet-950/30 to-cyan-950/25 px-3 py-2 backdrop-blur-sm sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.7)]" />
+          <span className="text-xs font-medium text-cyan-100/95">
+            {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
+            <span className="font-normal text-violet-200/75">· {anomalyData.anomalies[0]?.description}</span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissedAnomalies(true)}
+          className="shrink-0 rounded-lg p-1 text-cyan-300/80 transition hover:bg-cyan-500/15 hover:text-cyan-50"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    ) : null;
+
+  const modulePanelShell = `min-h-0 flex-1 overflow-hidden p-1 sm:p-2 ${
+    darkMode
+      ? "bg-gradient-to-b from-cyan-950/10 via-transparent to-[#000b1a]/40"
+      : "bg-gradient-to-b from-sky-50/30 via-transparent to-slate-100/50"
+  }`;
+
   return (
-    <ModuleWorkspacePageShell mode="page">
-    <div className={`flex h-screen min-h-0 flex-col ${themeClass}`}>
-      {activeCall && activeCall.status === "connected" && (
+    <ModuleWorkspacePageShell mode="page" hidePageBackdrop>
+    <CommsP2PLayerProvider displayName={displayName}>
+    <div className={`flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden ${themeClass}`}>
+      <CommsCallDiagnosticsOverlay
+        diagnostics={callDiagnostics}
+        callStatus={activeCall?.status}
+        onRecoverCallMedia={recoverCallMedia}
+      />
+      {activeCall && callShellVisible(activeCall.status) && (
         <CallView
           roomId={activeCall.roomId}
           callType={activeCall.callType}
@@ -882,6 +984,7 @@ export function CommsPage() {
           isVideoEnabled={mediaControls.isVideoEnabled}
           callDuration={callDuration}
           callQuality={callQuality}
+          mediaEstablishing={activeCall.status !== "connected"}
           onToggleMute={toggleMute}
           onToggleVideo={toggleVideo}
           onEndCall={endCall}
@@ -893,6 +996,7 @@ export function CommsPage() {
           chatMessages={callChatMessages}
           reactions={callReactions}
           socketRef={wsRef}
+          onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
         />
       )}
 
@@ -905,9 +1009,17 @@ export function CommsPage() {
         />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 flex-col gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3 lg:px-6">
-          {commsHandoffText && (
+      <CommsNexusWorkspace
+        className="min-h-0 flex-1"
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        displayName={displayName}
+        isConnected={isConnected}
+        onlineUsersLength={onlineUsers.length}
+        sceneTitle="Key Event Assurance Service"
+        sceneSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
+        handoff={
+          commsHandoffText ? (
             <div
               role="status"
               className="flex flex-col gap-2 rounded-xl border border-cyan-500/35 bg-cyan-950/45 px-3 py-2.5 text-cyan-50 sm:flex-row sm:items-center sm:justify-between"
@@ -943,140 +1055,59 @@ export function CommsPage() {
                 </button>
               </div>
             </div>
-          )}
-          <header className="flex shrink-0 flex-col gap-3 border-b border-white/10 bg-slate-950/50 pb-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:pb-0">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link href="/">
-                <button
-                  type="button"
-                  className="rounded-xl border border-white/12 bg-slate-950/55 p-2.5 text-white/85 transition hover:border-cyan-500/30 hover:text-white"
-                  aria-label="Back to command center"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-              </Link>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
-                <MessageSquare className="h-5 w-5 text-cyan-300" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-200/60">Secure channels</p>
-                <h1
-                  className="bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent sm:text-xl"
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  NEXUS COMMS
-                </h1>
-                <p className="truncate text-[10px] font-mono text-cyan-100/50 sm:text-[11px]">
-                  {isConnected ? "Connected" : "Connecting…"} · {onlineUsers.length} online
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 sm:pl-2">
-              <button
-                type="button"
-                onClick={() => setDarkMode(!darkMode)}
-                className="rounded-lg border border-white/10 bg-slate-950/40 p-2 text-white/60 transition hover:border-cyan-500/30 hover:text-cyan-200"
-                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          ) : null
+        }
+        commandDeck={
+          <CommsOrbitalCommandDeck
+            darkMode={darkMode}
+            displayName={displayName}
+            isConnected={isConnected}
+            mainUserPhotoUrl={localChatAvatar}
+            onMainUserPhotoUpload={handleChatAvatarUpload}
+            photoUploading={avatarUploading}
+            forwardSlots={forwardSlots}
+            selectedPeerId={selectedOrbitalPeerId}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onPeerCall={handleUserCall}
+            onPeerMessage={handleOrbitalPeerMessage}
+            onPeerVideoInvite={handleOrbitalVideoInvite}
+            onEmptySlotClick={handleEmptyOrbitalSlot}
+            onHubActivate={handleOrbitalHubActivate}
+          />
+        }
+        integratedConsole={
+          activeTab === "chat" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              {anomalyBanner}
+              <div
+                className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-5 sm:py-2.5 ${
+                  darkMode ? "border-cyan-500/25 bg-black/25" : "border-sky-200/60 bg-white/40"
+                }`}
               >
-                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5">
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    isConnected ? "animate-pulse bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-red-500"
-                  }`}
-                />
-                <span className="max-w-[10rem] truncate font-mono text-[10px] text-emerald-100/90 sm:text-xs">
-                  {displayName}
-                </span>
-              </div>
-            </div>
-          </header>
-
-          <nav
-            className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-            aria-label="Comms modules"
-          >
-            <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-white/40 sm:sr-only">Channel</p>
-            <div className="flex flex-1 flex-wrap justify-center gap-1 rounded-2xl border border-white/10 bg-slate-950/45 p-1 sm:justify-start">
-              {tabConfig.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-xl border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                    activeTab === tab.id
-                      ? "border-cyan-400/50 bg-gradient-to-r from-cyan-600/30 to-cyan-500/20 text-cyan-50 shadow-lg shadow-cyan-500/15"
-                      : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/25 hover:text-white/90"
-                  }`}
-                >
-                  <tab.icon className="h-3.5 w-3.5" />
-                  <span className="sm:inline">{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </nav>
-
-          <div
-            className={`relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-slate-950/60 p-1 ${
-              socialChannelTab
-                ? "border-amber-500/30 shadow-[0_0_70px_-18px_rgba(251,146,60,0.38),0_0_50px_-25px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]"
-                : "border-cyan-500/20 shadow-[0_0_60px_-20px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]"
-            }`}
-          >
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.1]"
-              style={{
-                backgroundImage:
-                  socialChannelTab
-                    ? "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.3) 1px, transparent 0), radial-gradient(circle at 1px 1px, rgba(251, 191, 36, 0.22) 1px, transparent 0)"
-                    : "radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.35) 1px, transparent 0)",
-                backgroundSize: socialChannelTab ? "22px 22px, 30px 30px" : "22px 22px",
-                backgroundPosition: socialChannelTab ? "0 0, 11px 5px" : undefined,
-              }}
-            />
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                socialChannelTab
-                  ? "bg-gradient-to-br from-amber-500/10 via-transparent to-orange-500/8"
-                  : "bg-gradient-to-br from-cyan-500/5 via-transparent to-orange-500/10"
-              }`}
-            />
-            <div
-              className={`absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent ${
-                socialChannelTab ? "via-amber-400/50" : "via-cyan-400/50"
-              }`}
-            />
-            <div
-              className={`absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent to-transparent ${
-                socialChannelTab ? "via-cyan-400/30" : "via-orange-500/35"
-              }`}
-            />
-
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/40 backdrop-blur-sm">
-              {anomalyData?.anomalies && anomalyData.anomalies.length > 0 && !dismissedAnomalies && (
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 sm:px-4">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
-                    <span className="text-xs font-medium text-amber-200">
-                      {anomalyData.anomalies.length} behavioral anomal{anomalyData.anomalies.length === 1 ? "y" : "ies"}{" "}
-                      <span className="font-normal text-amber-100/60">· {anomalyData.anomalies[0]?.description}</span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDismissedAnomalies(true)}
-                    className="shrink-0 rounded-lg p-1 text-amber-300/80 transition hover:bg-amber-500/20 hover:text-amber-100"
-                    aria-label="Dismiss"
+                <div className="min-w-0">
+                  <p
+                    className={`font-mono text-[8px] uppercase tracking-[0.42em] sm:text-[9px] ${
+                      darkMode ? "text-cyan-400/65" : "text-sky-600/80"
+                    }`}
                   >
-                    <X className="h-4 w-4" />
-                  </button>
+                    NEXUS console · messaging band
+                  </p>
+                  <p
+                    className={`truncate text-sm font-semibold sm:text-base ${darkMode ? "text-white" : "text-slate-900"}`}
+                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    Chat
+                  </p>
+                  <p className={`truncate text-[10px] sm:text-[11px] ${darkMode ? "text-white/45" : "text-slate-600"}`}>
+                    {MODULE_SECTOR_SUBTITLE.chat}
+                  </p>
                 </div>
-              )}
-
-              <div className="min-h-0 flex-1 overflow-hidden p-1 sm:p-2">
-                {activeTab === "chat" && (
+              </div>
+              <div className={modulePanelShell}>
+                <NexusModuleSurface variant="flush">
                   <CommsPlatform
+                    holoSurface
                     conversations={conversations}
                     messages={commsMessages}
                     currentUserId={myId}
@@ -1104,6 +1135,7 @@ export function CommsPage() {
                     newChatPickCandidates={newChatPickCandidates}
                     roster={
                       <CommsUserRoster
+                        holoSurface
                         users={rosterUsers}
                         myUserId={myId}
                         onUploadAvatar={handleChatAvatarUpload}
@@ -1114,70 +1146,93 @@ export function CommsPage() {
                       />
                     }
                   />
-                )}
+                </NexusModuleSurface>
+              </div>
+            </div>
+          ) : undefined
+        }
+        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
+        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
+        socialChannelTab={socialChannelTab}
+      >
+        {activeTab !== "chat" ? (
+        <div className={modulePanelShell}>
+          {anomalyBanner}
 
                 {activeTab === "pshare" && (
-                  <div className="h-full min-h-0">
-                    <PsharePanel
-                      myUserId={myId}
-                      allUsers={allUsers}
-                      highlightPostId={psharePostHighlight}
-                      onClearHighlight={() => setPsharePostHighlight(null)}
-                      initialPostBody={commsHandoffText}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 p-1 sm:p-2">
+                      <PsharePanel
+                        holoBlend
+                        myUserId={myId}
+                        allUsers={allUsers}
+                        highlightPostId={psharePostHighlight}
+                        onClearHighlight={() => setPsharePostHighlight(null)}
+                        initialPostBody={commsHandoffText}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "people" && (
-                  <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <UserDiscovery
-                      onlineUsers={onlineUsers}
-                      allUsers={allUsers}
-                      contacts={contacts}
-                      myDeviceId={myDeviceId}
-                      onMessage={handleUserMessage}
-                      onCall={handleUserCall}
-                      onAddContact={handleAddContact}
-                      onRemoveContact={handleRemoveContact}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                      <UserDiscoveryWithMesh
+                        nexusChrome
+                        onlineUsers={onlineUsers}
+                        allUsers={allUsers}
+                        contacts={contacts}
+                        myDeviceId={myDeviceId}
+                        onMessage={handleUserMessage}
+                        onCall={handleUserCall}
+                        onAddContact={handleAddContact}
+                        onRemoveContact={handleRemoveContact}
+                        onOpenMeshCalls={() => setActiveTab("calls")}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "streams" && (
-                  <div className="h-full min-h-0">
+                  <NexusModuleSurface>
                     <LiveStreamPanel
+                      holoBlend
                       streams={liveStreams}
                       currentUserId={myUserId || myDeviceId}
                       onStartStream={handleStartStream}
                       onEndStream={handleEndStream}
                       onJoinStream={handleJoinStream}
                       onLeaveStream={handleLeaveStream}
+                      onRefreshList={refreshLiveStreams}
                     />
-                  </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "monitor" && (
-                  <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
-                    <CommsIntelligence userId={myId} />
-                    <AdminDashboard />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
+                      <CommsIntelligence userId={myId} />
+                      <AdminDashboard />
+                    </div>
+                  </NexusModuleSurface>
                 )}
 
                 {activeTab === "calls" && (
-                  <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                    <CallHistoryPanel
-                      myDeviceId={myDeviceId}
-                      allUsers={allUsers}
-                      onlineUsers={onlineUsers}
-                      onCall={handleUserCall}
-                    />
-                  </div>
+                  <NexusModuleSurface>
+                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                      <CallHistoryPanel
+                        myDeviceId={myDeviceId}
+                        displayName={displayName}
+                        allUsers={allUsers}
+                        onlineUsers={onlineUsers}
+                        onCall={handleUserCall}
+                      />
+                    </div>
+                  </NexusModuleSurface>
                 )}
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+        ) : null}
+      </CommsNexusWorkspace>
 
       {showEmojiPicker && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
@@ -1191,17 +1246,47 @@ export function CommsPage() {
         </div>
       )}
     </div>
+    </CommsP2PLayerProvider>
     </ModuleWorkspacePageShell>
+  );
+}
+
+function UserDiscoveryWithMesh(
+  props: Omit<React.ComponentProps<typeof UserDiscovery>, "meshPeerIds" | "meshLinkReady" | "meshInCall" | "onMeshCall"> & {
+    onOpenMeshCalls: () => void;
+    nexusChrome?: boolean;
+  },
+) {
+  const { onOpenMeshCalls, nexusChrome, ...rest } = props;
+  const { meshPeerIds, startMeshCall, linkConnected, linkJoined, inMeshCall } = useCommsP2PLayer();
+  const onMeshCall = useCallback(
+    (userId: string, _userName: string, type: "audio" | "video") => {
+      void startMeshCall(userId, type === "video");
+      onOpenMeshCalls();
+    },
+    [startMeshCall, onOpenMeshCalls],
+  );
+  return (
+    <UserDiscovery
+      {...rest}
+      nexusChrome={nexusChrome}
+      meshPeerIds={meshPeerIds}
+      meshLinkReady={linkConnected && linkJoined}
+      meshInCall={inMeshCall}
+      onMeshCall={onMeshCall}
+    />
   );
 }
 
 function CallHistoryPanel({
   myDeviceId,
+  displayName,
   allUsers,
   onlineUsers,
   onCall,
 }: {
   myDeviceId: string;
+  displayName: string;
   allUsers: { id: string; displayName: string; isOnline: boolean; lastSeen: string | null; status: string }[];
   onlineUsers: { id: string; displayName: string; deviceId: string; inCall: boolean }[];
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
@@ -1210,6 +1295,8 @@ function CallHistoryPanel({
 
   return (
     <div className="space-y-6">
+      <ConferenceQuickPanel displayName={displayName} />
+      <CommsP2PCallDock />
       <div>
         <h3
           className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/90"
@@ -1278,19 +1365,49 @@ function CallHistoryPanel({
         </h3>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "HD Voice", desc: "Crystal-clear audio", color: "emerald" },
-            { label: "HD Video", desc: "1080p video calls", color: "blue" },
-            { label: "Screen Share", desc: "Share your screen", color: "purple" },
-            { label: "Group Calls", desc: "Up to 20 participants", color: "amber" },
-            { label: "In-Call Chat", desc: "Message during calls", color: "cyan" },
-            { label: "E2E Encrypted", desc: "Secure communication", color: "red" },
+            {
+              label: "HD Voice",
+              desc: "Crystal-clear audio",
+              border: "border-emerald-500/25",
+              title: "text-emerald-400",
+            },
+            {
+              label: "HD Video",
+              desc: "1080p video calls",
+              border: "border-sky-500/25",
+              title: "text-sky-400",
+            },
+            {
+              label: "Screen Share",
+              desc: "Share your screen",
+              border: "border-violet-500/25",
+              title: "text-violet-400",
+            },
+            {
+              label: "Group Calls",
+              desc: "Up to 20 participants",
+              border: "border-cyan-500/25",
+              title: "text-cyan-400",
+            },
+            {
+              label: "In-Call Chat",
+              desc: "Message during calls",
+              border: "border-teal-500/25",
+              title: "text-teal-400",
+            },
+            {
+              label: "E2E Encrypted",
+              desc: "Secure communication",
+              border: "border-rose-500/25",
+              title: "text-rose-400",
+            },
           ].map((feature) => (
             <div
               key={feature.label}
-              className={`p-3 rounded-lg bg-gray-900/40 border border-${feature.color}-900/20`}
+              className={`rounded-lg border bg-black/25 p-3 backdrop-blur-sm ${feature.border}`}
             >
-              <p className={`text-sm font-medium text-${feature.color}-400`}>{feature.label}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{feature.desc}</p>
+              <p className={`text-sm font-medium ${feature.title}`}>{feature.label}</p>
+              <p className="mt-0.5 text-xs text-cyan-200/40">{feature.desc}</p>
             </div>
           ))}
         </div>

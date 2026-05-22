@@ -2,6 +2,11 @@ export { vectorKnowledgeBase, type VectorDocument, type SemanticSearchResult, ty
 export { emotionalCognition, type EmotionState, type SentimentAnalysis, type EmotionalContext, type CrisisIndicators } from './emotional-cognition.js';
 export { universalLanguage, type LanguageDetection, type TranslationResult, type MultilingualContext } from './universal-language.js';
 export { decentralizedIntelligence, type DistributedTask, type TaskResult, type WorkerNode, type ClusterStats } from './decentralized-intelligence.js';
+export {
+  iotNtnConnectivity,
+  type IotNtnConnectivityStatus,
+  type IotNtnVertical,
+} from './iot-ntn-connectivity.js';
 export { ethicalGovernance, type EthicalAssessment, type ContentModerationResult, type EthicalConcern } from './ethical-governance.js';
 export { selfEvolution, type EvolutionMetrics, type KnowledgeSynthesis, type MetaLearningInsight } from './self-evolution-enhanced.js';
 
@@ -34,6 +39,13 @@ export interface AdvancedUpgradesStatus {
     workers: number;
     tasksCompleted: number;
     throughput: number;
+  };
+  iotNtnConnectivity: {
+    active: boolean;
+    satelliteEndpoints: number;
+    verticalCount: number;
+    standard: string;
+    hostMcu: string;
   };
   ethicalGovernance: {
     active: boolean;
@@ -94,6 +106,7 @@ import { vectorKnowledgeBase } from './vector-knowledge-base.js';
 import { emotionalCognition } from './emotional-cognition.js';
 import { universalLanguage } from './universal-language.js';
 import { decentralizedIntelligence } from './decentralized-intelligence.js';
+import { iotNtnConnectivity } from './iot-ntn-connectivity.js';
 import { ethicalGovernance } from './ethical-governance.js';
 import { selfEvolution } from './self-evolution-enhanced.js';
 import { quantumNeuralNetworks } from './quantum-neural-networks.js';
@@ -108,6 +121,7 @@ export function getAdvancedUpgradesStatus(): AdvancedUpgradesStatus {
   const vkbStats = vectorKnowledgeBase.getStats();
   const emotionStats = emotionalCognition.getEmotionStats();
   const diStats = decentralizedIntelligence.getStats();
+  const iotNtnStatus = iotNtnConnectivity.getStatus();
   const ethicsStats = ethicalGovernance.getModerationStats();
   const qnnStatus = quantumNeuralNetworks.getStatus();
   const simStatus = aiSimulationsEngine.getStatus();
@@ -138,6 +152,13 @@ export function getAdvancedUpgradesStatus(): AdvancedUpgradesStatus {
       workers: diStats.totalWorkers,
       tasksCompleted: diStats.tasksCompleted,
       throughput: diStats.throughput
+    },
+    iotNtnConnectivity: {
+      active: true,
+      satelliteEndpoints: iotNtnStatus.satelliteEndpoints,
+      verticalCount: iotNtnStatus.activeVerticals.length,
+      standard: iotNtnStatus.standard,
+      hostMcu: iotNtnStatus.hostMcu,
     },
     ethicalGovernance: {
       active: true,
@@ -195,11 +216,12 @@ export function getAdvancedUpgradesStatus(): AdvancedUpgradesStatus {
   };
 }
 
-console.log('[Advanced Upgrades] All 13 upgrade modules initialized:');
+console.log('[Advanced Upgrades] All 14 upgrade modules initialized:');
 console.log('  - Vector Knowledge Base (Semantic Memory & RAG)');
 console.log('  - Emotional Cognition (Advanced Sentiment & Empathy)');
 console.log('  - Universal Language (229 Language Translation)');
 console.log('  - Decentralized Intelligence (Parallel Processing)');
+console.log('  - IoT–NTN Satellite Connectivity (3GPP NTN, global IoT overlay)');
 console.log('  - Ethical Governance (Safety & Moderation)');
 console.log('  - Self-Evolution Enhanced (Knowledge Synthesis & Meta-Learning)');
 console.log('  - Quantum Neural Networks (Quantum Circuit Simulation)');

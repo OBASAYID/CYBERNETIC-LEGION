@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
-import { readHandoff, saveHandoff } from "@shared/module-handoff";
+import { attachmentFromDataUrl, readHandoff, saveHandoff } from "@shared/module-handoff";
 import { useScan, useScanAnalyze } from "../hooks/useScan";
 import { useCameraCapture } from "../hooks/useCameraCapture";
 import { CyrusHumanoid } from "../components/CyrusHumanoid";
@@ -26,6 +26,7 @@ export function ScanPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [targetLang, setTargetLang] = useState("en");
   const [copied, setCopied] = useState(false);
+  const [copiedTranslation, setCopiedTranslation] = useState(false);
 
   const {
     lastResult,
@@ -86,6 +87,12 @@ export function ScanPage() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyTranslationToClipboard = (text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopiedTranslation(true);
+    setTimeout(() => setCopiedTranslation(false), 2000);
   };
 
   const languages = [
@@ -150,12 +157,38 @@ export function ScanPage() {
 
   const scanSequence: ("qr" | "ocr" | "vision")[] = ["vision", "ocr", "qr"];
 
+  const commandHandoffText = () => {
+    const pipe = pipelineText.trim();
+    if (pipe) return pipe;
+    const tr = lastTranslation?.translatedText?.trim();
+    if (tr) return tr;
+    if (fullReport) {
+      const ot = typeof fullReport.originalText === "string" ? fullReport.originalText.trim() : "";
+      const trans = typeof fullReport.translation === "string" ? fullReport.translation.trim() : "";
+      const interp = typeof fullReport.interpretation === "string" ? fullReport.interpretation.trim() : "";
+      const merged = [ot, trans, interp].filter(Boolean).join("\n\n---\n\n");
+      if (merged) return merged;
+    }
+    const lr = lastResult?.text?.trim();
+    if (lr) return lr;
+    return undefined;
+  };
+
+  const imageHandoffAttachments = useMemo(() => {
+    if (!imagePreview?.startsWith("data:")) return undefined;
+    const a = attachmentFromDataUrl(imagePreview, "vision-capture.jpg");
+    return a ? [a] : undefined;
+  }, [imagePreview]);
+
   return (
     <ModuleWorkspacePageShell
       kicker="Optical analysis"
       title="Vision & Optical"
       subtitle="Scenes, objects, and codes: capture with the camera, then Vision, OCR, or QR. Full CYRUS analysis can decode and report in your chosen output language."
       icon={Eye}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="vision-optical"
+      commandHandoffAttachments={() => imageHandoffAttachments}
       headerEnd={
         <>
           <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 md:flex">
@@ -214,9 +247,77 @@ export function ScanPage() {
                 Translate handoff
               </button>
             </div>
-            {lastTranslation && (
-              <p className="mt-2 text-xs text-emerald-300/90">Translation ready — copy or send forward below.</p>
+
+            {(translate.isPending || translate.isError || lastTranslation) && (
+              <div
+                className="mt-4 rounded-xl border border-emerald-500/35 bg-slate-950/70 p-4 shadow-inner shadow-black/20"
+                role="region"
+                aria-label="Translation result"
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                    <Globe className="h-4 w-4 text-emerald-300" aria-hidden />
+                    Translation output
+                  </h4>
+                  {lastTranslation ? (
+                    <span className="text-[10px] text-white/50">
+                      {lastTranslation.detectedLanguage} → {lastTranslation.targetLanguage}
+                      {typeof lastTranslation.confidence === "number"
+                        ? ` · ${Math.round(lastTranslation.confidence * 100)}% confidence`
+                        : null}
+                    </span>
+                  ) : null}
+                </div>
+                {translate.isPending ? (
+                  <p className="text-xs text-emerald-200/85">Translating…</p>
+                ) : null}
+                {translate.isError ? (
+                  <p className="text-xs text-amber-300">
+                    {translate.error instanceof Error ? translate.error.message : "Translation failed."}
+                  </p>
+                ) : null}
+                {lastTranslation ? (
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-mono uppercase tracking-wide text-white/45">Source</p>
+                      <div className="max-h-64 overflow-y-auto rounded-lg border border-white/10 bg-black/35 p-3 text-sm leading-relaxed text-white/85 whitespace-pre-wrap">
+                        {lastTranslation.originalText}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-mono uppercase tracking-wide text-emerald-300/90">
+                        Translated text
+                      </p>
+                      <div className="max-h-64 overflow-y-auto rounded-lg border border-emerald-500/30 bg-emerald-950/25 p-3 text-sm leading-relaxed text-emerald-50 whitespace-pre-wrap">
+                        {lastTranslation.translatedText}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => copyTranslationToClipboard(lastTranslation.translatedText)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:border-emerald-500/40 hover:bg-slate-800"
+                        >
+                          {copiedTranslation ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                          Copy translation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPipelineText(lastTranslation.translatedText)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-500/20"
+                        >
+                          Load translation into pipeline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             )}
+
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -226,12 +327,15 @@ export function ScanPage() {
                     (lastResult?.text ?? "") ||
                     (lastTranslation ? lastTranslation.translatedText : "") ||
                     (fullReport && typeof fullReport.translation === "string" ? String(fullReport.translation) : "");
-                  if (!t.trim()) return;
+                  if (!t.trim() && !imagePreview?.startsWith("data:")) return;
+                  const imgAtt =
+                    imagePreview?.startsWith("data:") ? attachmentFromDataUrl(imagePreview, "vision-capture.jpg") : null;
                   saveHandoff({
-                    text: t,
+                    text: t.trim() || (imgAtt ? "Vision capture (image attached for document / analysis pipeline)." : ""),
                     sourceModule: "vision",
                     title: "Vision → report",
                     note: "Build or edit long-form in Document intelligence",
+                    attachments: imgAtt ? [imgAtt] : undefined,
                   });
                   setLocation("/files?handoff=1");
                 }}
@@ -248,12 +352,15 @@ export function ScanPage() {
                     pipelineText ||
                     lastResult?.text ||
                     (lastTranslation ? lastTranslation.translatedText : "");
-                  if (!t.trim()) return;
+                  if (!t.trim() && !imagePreview?.startsWith("data:")) return;
+                  const imgAtt2 =
+                    imagePreview?.startsWith("data:") ? attachmentFromDataUrl(imagePreview, "vision-capture.jpg") : null;
                   saveHandoff({
-                    text: t,
+                    text: t.trim() || (imgAtt2 ? "Vision capture (image attached)." : ""),
                     sourceModule: "vision",
                     title: "Vision → Pshare",
                     note: "Share with your study or project group on Pshare",
+                    attachments: imgAtt2 ? [imgAtt2] : undefined,
                   });
                   setLocation("/comms?tab=pshare&handoff=1");
                 }}
@@ -555,6 +662,36 @@ export function ScanPage() {
                         </div>
                       </div>
                     )}
+
+                    {lastResult.translation && String(lastResult.translation).trim() && (
+                      <div className="mb-4 rounded-xl border border-violet-500/25 bg-violet-950/25 p-4">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-violet-300">Translation (from scan)</p>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(String(lastResult.translation))}
+                            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-700/50 hover:text-white"
+                            aria-label="Copy scan translation"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <p className="max-h-48 overflow-y-auto text-sm leading-relaxed text-violet-100 whitespace-pre-wrap">
+                          {lastResult.translation}
+                        </p>
+                      </div>
+                    )}
+
+                    {lastResult.interpretation &&
+                      String(lastResult.interpretation).trim() &&
+                      String(lastResult.interpretation).trim() !== String(lastResult.text || "").trim() && (
+                        <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-4">
+                          <p className="mb-1 text-xs font-medium text-cyan-300">Interpretation</p>
+                          <p className="max-h-48 overflow-y-auto text-sm leading-relaxed text-gray-200 whitespace-pre-wrap">
+                            {lastResult.interpretation}
+                          </p>
+                        </div>
+                      )}
 
                     <div className="space-y-2 text-sm">
                       {lastResult.detectedLanguage && (

@@ -2,10 +2,14 @@ import OpenAI from "openai";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+const openaiBaseTrimmed = typeof openaiBaseUrl === "string" ? openaiBaseUrl.trim() : "";
 
 const langClient =
   openaiApiKey
-    ? new OpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl })
+    ? new OpenAI({
+        apiKey: openaiApiKey,
+        ...(openaiBaseTrimmed ? { baseURL: openaiBaseTrimmed } : {}),
+      })
     : null;
 
 export interface LangDetectResult {
@@ -33,7 +37,7 @@ export async function detectLanguage(text: string): Promise<LangDetectResult> {
       response_format: { type: "json_object" },
       max_tokens: 50,
     });
-    const parsed = JSON.parse(resp.choices[0].message.content || "{}");
+    const parsed = JSON.parse(resp.choices?.[0]?.message?.content || "{}");
     return {
       language: parsed.language || "unknown",
       confidence: Number(parsed.confidence) || 0.5,

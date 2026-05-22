@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut, TerminalSquare } from "lucide-react";
+import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import {
   ModuleCommandConsole,
@@ -19,7 +19,7 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-
+import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -55,85 +55,97 @@ export default function DashboardFresh() {
   const headerOperator = !isAdmin || adminTab === "modules";
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-white">
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/18 via-slate-900/88 to-orange-950/22" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-5%,rgba(253,230,138,0.09),transparent_60%)]" />
+    <div className="relative min-h-screen overflow-x-hidden bg-transparent text-white">
+      {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-orange-400/50 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(90vw,520px)] w-[min(95vw,720px)] -translate-x-1/2 rounded-full bg-amber-300/[0.07] blur-3xl" />
-        <div className="absolute left-1/4 top-1/4 h-[min(100vw,500px)] w-[min(100vw,500px)] rounded-full bg-cyan-400/[0.1] blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[min(80vw,400px)] w-[min(80vw,400px)] rounded-full bg-orange-400/[0.11] blur-3xl" />
-        <div className="absolute bottom-0 left-1/2 h-[40vh] w-[min(80rem,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_80%_70%_at_50%_100%,rgba(16,185,129,0.05),rgba(14,165,233,0.04)_40%,transparent_70%)] blur-2xl" />
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(0.8px)" }}
+        />
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
+        />
+        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/45 to-transparent" />
+        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
+        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-amber-300/[0.1] blur-3xl" />
+        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(251,191,36,0.22),rgba(120,53,15,0.08)_56%,transparent_78%)] blur-2xl" />
+        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
+        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
       </div>
-      <div className="pointer-events-none fixed top-4 left-4 z-20 flex items-center gap-2 sm:top-5 sm:left-5">
-        <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
-        <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
-      </div>
-      <div className="pointer-events-none fixed right-4 top-4 z-20 sm:right-5 sm:top-5">
-        <FieldDateTimeHud />
-      </div>
-
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/12 bg-slate-950/82 px-4 py-4 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.7)] backdrop-blur-md sm:px-6">
-          <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-2">
-            <HeaderTitle variant={headerOperator ? "operator" : "default"} />
-            <div className="flex shrink-0 items-center gap-2">
-              {isAdmin && <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
-                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5">
+            {/* Status + field clock — own row so nothing stacks under fixed HUD */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
+                <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
+              </div>
+              <FieldDateTimeHud className="shrink-0" />
+            </div>
+
+            {/* Title row: admin toggles + branding | fused + logout */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2 sm:min-w-[12rem] sm:gap-3">
+                {isAdmin ? (
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab("modules")}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                        adminTab === "modules"
+                          ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
+                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                      }`}
+                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                      <span className="hidden sm:inline">Module workspace</span>
+                      <span className="sm:hidden">Modules</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminTab("console")}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                        adminTab === "console"
+                          ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
+                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
+                      }`}
+                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                    >
+                      <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
+                      <span className="hidden sm:inline">Mission console</span>
+                      <span className="sm:hidden">Console</span>
+                    </button>
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1 basis-[min(100%,16rem)] sm:basis-auto">
+                  <HeaderTitle variant={headerOperator ? "operator" : "default"} />
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-2.5">
+                {isAdmin && (
+                  <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />
+                )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
+                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                >
+                  <LogOut className="h-3.5 w-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Logout</span>
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-screen-2xl flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
-        {isAdmin && (
-          <div className="relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-r from-amber-500/[0.1] via-slate-900/55 to-cyan-500/[0.1] p-1 shadow-lg shadow-black/35">
-            <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.03)_50%,transparent_70%)]" />
-            <div className="relative flex flex-col gap-2 p-3 sm:p-4">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAdminTab("modules")}
-                  className={`rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
-                    adminTab === "modules"
-                      ? "border-cyan-400/50 bg-gradient-to-b from-cyan-600/35 to-cyan-900/40 text-cyan-50 shadow-lg shadow-cyan-500/20"
-                      : "border-white/12 bg-slate-950/40 text-white/70 hover:text-white/92"
-                  }`}
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  Module workspace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminTab("console")}
-                  className={`rounded-lg border px-4 py-2 text-xs font-semibold tracking-wide transition ${
-                    adminTab === "console"
-                      ? "border-amber-400/50 bg-gradient-to-b from-amber-600/30 to-amber-950/50 text-amber-50 shadow-lg shadow-amber-500/20"
-                      : "border-white/12 bg-slate-950/40 text-white/70 hover:text-white/92"
-                  }`}
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  Mission console
-                </button>
-              </div>
-              <p className="text-[11px] leading-relaxed text-white/65">
-                Operators use <span className="text-cyan-300/80">Module workspace</span>. Command surface,
-                engine health, and orchestrator data live under{" "}
-                <span className="text-amber-300/80">Mission console</span>.
-              </p>
-            </div>
-          </div>
-        )}
-
+        <main className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
         {!isAdmin && (
           <p className="max-w-2xl rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
             <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>

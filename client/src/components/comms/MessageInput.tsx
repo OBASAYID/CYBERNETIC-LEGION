@@ -22,6 +22,7 @@ interface MessageInputProps {
   onTypingStop?: () => void;
   disabled?: boolean;
   placeholder?: string;
+  holoSurface?: boolean;
 }
 
 export function MessageInput({
@@ -34,6 +35,7 @@ export function MessageInput({
   onTypingStop,
   disabled = false,
   placeholder = "Type a message...",
+  holoSurface = false,
 }: MessageInputProps) {
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -43,7 +45,15 @@ export function MessageInput({
   const [sentiment, setSentiment] = useState<{ score: number; label: string; confidence: number }>({ score: 0, label: "neutral", confidence: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const filePickerAccept =
-    "image/*,video/*,audio/*,application/pdf,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,.mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
+    "image/*,video/*,audio/*," +
+    "application/pdf,application/zip," +
+    "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+    "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+    "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+    "text/plain,text/html,text/csv,text/markdown,application/json,application/xml," +
+    ".pdf,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp," +
+    ".txt,.csv,.md,.json,.xml,.zip," +
+    ".mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -167,7 +177,13 @@ export function MessageInput({
 
   if (isRecording) {
     return (
-      <div className="flex items-center gap-3 border-t border-amber-500/25 bg-gradient-to-r from-slate-950/95 via-amber-950/20 to-cyan-950/30 px-4 py-3 backdrop-blur-md">
+      <div
+        className={
+          holoSurface
+            ? "flex items-center gap-3 border-t border-cyan-400/35 bg-gradient-to-r from-slate-950/95 via-cyan-950/25 to-violet-950/20 px-4 py-3 backdrop-blur-md"
+            : "flex items-center gap-3 border-t border-amber-500/25 bg-gradient-to-r from-slate-950/95 via-amber-950/20 to-cyan-950/30 px-4 py-3 backdrop-blur-md"
+        }
+      >
         <button
           onClick={cancelRecording}
           className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
@@ -192,7 +208,11 @@ export function MessageInput({
         </div>
         <button
           onClick={stopRecording}
-          className="rounded-full bg-gradient-to-br from-amber-500 to-cyan-500 p-2.5 shadow-[0_0_16px_rgba(251,146,60,0.4),0_0_12px_rgba(6,182,212,0.35)] transition hover:from-amber-400 hover:to-cyan-400"
+          className={
+            holoSurface
+              ? "rounded-full bg-gradient-to-br from-cyan-500 to-violet-600 p-2.5 shadow-[0_0_16px_rgba(0,229,255,0.35),0_0_12px_rgba(139,92,246,0.3)] transition hover:from-cyan-400 hover:to-violet-500"
+              : "rounded-full bg-gradient-to-br from-amber-500 to-cyan-500 p-2.5 shadow-[0_0_16px_rgba(251,146,60,0.4),0_0_12px_rgba(6,182,212,0.35)] transition hover:from-amber-400 hover:to-cyan-400"
+          }
         >
           <Send className="w-5 h-5 text-white" />
         </button>
@@ -201,7 +221,13 @@ export function MessageInput({
   }
 
   return (
-    <div className="relative border-t border-amber-500/25 bg-gradient-to-r from-slate-950/95 via-orange-950/12 to-cyan-950/35 backdrop-blur-md">
+    <div
+      className={
+        holoSurface
+          ? "relative border-t border-cyan-400/35 bg-gradient-to-r from-slate-950/95 via-cyan-950/18 to-violet-950/22 backdrop-blur-md"
+          : "relative border-t border-amber-500/25 bg-gradient-to-r from-slate-950/95 via-orange-950/12 to-cyan-950/35 backdrop-blur-md"
+      }
+    >
       {showEmoji && (
         <div className="absolute bottom-full left-2 mb-2 z-50">
           <EmojiPicker
@@ -223,7 +249,7 @@ export function MessageInput({
             ) : (
               <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/80 px-3 py-2">
                 {attachPreview.file.type.startsWith("audio/") ? (
-                  <FileAudio className="h-4 w-4 shrink-0 text-amber-400" />
+                  <FileAudio className={`h-4 w-4 shrink-0 ${holoSurface ? "text-cyan-400" : "text-amber-400"}`} />
                 ) : (
                   <ImageIcon className="h-4 w-4 shrink-0 text-cyan-400" />
                 )}
@@ -245,7 +271,13 @@ export function MessageInput({
             onClick={() => setShowEmoji(!showEmoji)}
             disabled={disabled}
             className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
-              showEmoji ? "bg-amber-500/20 text-amber-100" : "text-amber-200/50 hover:bg-amber-500/10 hover:text-cyan-200"
+              showEmoji
+                ? holoSurface
+                  ? "bg-cyan-500/25 text-cyan-50"
+                  : "bg-amber-500/20 text-amber-100"
+                : holoSurface
+                  ? "text-cyan-200/50 hover:bg-cyan-500/12 hover:text-cyan-100"
+                  : "text-amber-200/50 hover:bg-amber-500/10 hover:text-cyan-200"
             }`}
           >
             <Smile className="w-5 h-5" />
@@ -256,8 +288,12 @@ export function MessageInput({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                className="rounded-full p-2 text-amber-200/50 transition hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-40"
-                title="Share photos, videos, music, or files"
+                className={
+                  holoSurface
+                    ? "rounded-full p-2 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100 disabled:opacity-40"
+                    : "rounded-full p-2 text-amber-200/50 transition hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-40"
+                }
+                title="Share photos, videos, documents (PDF, Word, Excel, HTML…), or other files"
               >
                 <Paperclip className="h-5 w-5" />
               </button>
@@ -274,7 +310,11 @@ export function MessageInput({
             <button
               onClick={onSendLocation}
               disabled={disabled}
-              className="rounded-full p-2 text-amber-200/50 transition hover:bg-orange-500/12 hover:text-orange-200 disabled:opacity-40"
+              className={
+                holoSurface
+                  ? "rounded-full p-2 text-cyan-200/50 transition hover:bg-violet-500/15 hover:text-violet-100 disabled:opacity-40"
+                  : "rounded-full p-2 text-amber-200/50 transition hover:bg-orange-500/12 hover:text-orange-200 disabled:opacity-40"
+              }
             >
               <MapPin className="w-5 h-5" />
             </button>
@@ -289,7 +329,11 @@ export function MessageInput({
             placeholder={placeholder}
             disabled={disabled}
             rows={1}
-            className="w-full max-h-[120px] resize-none rounded-xl border border-amber-500/30 bg-slate-950/60 px-3.5 py-2.5 pr-8 text-sm text-white placeholder-amber-200/35 focus:border-cyan-400/50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-40"
+            className={`w-full max-h-[120px] resize-none rounded-xl border bg-slate-950/60 px-3.5 py-2.5 pr-8 text-sm text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 disabled:opacity-40 ${
+              holoSurface
+                ? "border-cyan-500/35 placeholder-cyan-200/30 focus:ring-cyan-500/25"
+                : "border-amber-500/30 placeholder-amber-200/35 focus:ring-amber-500/30"
+            }`}
             style={{ minHeight: "40px" }}
           />
           {text.trim().length >= 3 && (
@@ -317,7 +361,11 @@ export function MessageInput({
           <button
             onClick={handleSend}
             disabled={disabled}
-            className="rounded-full bg-gradient-to-br from-amber-500 via-cyan-500 to-orange-600 p-2.5 shadow-lg shadow-amber-500/25 transition-all hover:from-amber-400 hover:via-cyan-400 hover:to-orange-500 disabled:opacity-40"
+            className={
+              holoSurface
+                ? "rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-violet-600 p-2.5 shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-400 hover:via-sky-400 hover:to-violet-500 disabled:opacity-40"
+                : "rounded-full bg-gradient-to-br from-amber-500 via-cyan-500 to-orange-600 p-2.5 shadow-lg shadow-amber-500/25 transition-all hover:from-amber-400 hover:via-cyan-400 hover:to-orange-500 disabled:opacity-40"
+            }
           >
             <Send className="w-5 h-5 text-white" />
           </button>
@@ -325,7 +373,11 @@ export function MessageInput({
           <button
             onClick={startRecording}
             disabled={disabled}
-            className="rounded-full p-2.5 text-amber-200/50 transition hover:bg-amber-500/15 hover:text-cyan-200 disabled:opacity-40"
+            className={
+              holoSurface
+                ? "rounded-full p-2.5 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100 disabled:opacity-40"
+                : "rounded-full p-2.5 text-amber-200/50 transition hover:bg-amber-500/15 hover:text-cyan-200 disabled:opacity-40"
+            }
           >
             <Mic className="w-5 h-5" />
           </button>
@@ -333,7 +385,11 @@ export function MessageInput({
           <button
             onClick={handleSend}
             disabled={disabled || !text.trim()}
-            className="rounded-full bg-gradient-to-br from-amber-500 via-cyan-500 to-orange-600 p-2.5 shadow-lg shadow-amber-500/25 transition-all hover:from-amber-400 hover:via-cyan-400 hover:to-orange-500 disabled:opacity-40"
+            className={
+              holoSurface
+                ? "rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-violet-600 p-2.5 shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-400 hover:via-sky-400 hover:to-violet-500 disabled:opacity-40"
+                : "rounded-full bg-gradient-to-br from-amber-500 via-cyan-500 to-orange-600 p-2.5 shadow-lg shadow-amber-500/25 transition-all hover:from-amber-400 hover:via-cyan-400 hover:to-orange-500 disabled:opacity-40"
+            }
           >
             <Send className="w-5 h-5 text-white" />
           </button>

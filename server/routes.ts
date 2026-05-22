@@ -1,11 +1,13 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import multer, { type StorageEngine } from "multer";
+import { parseMaxAnalysisChunks, parseMaxUploadFileBytes } from "../shared/cyrus-document-limits.js";
 
 type MulterFile = Express.Multer.File;
 type HealthProvider = string;
 type ElevenLabsVoice = string;
 import path from "path";
+import fs from "node:fs/promises";
 import { randomUUID } from "crypto";
 import OpenAI, { AzureOpenAI } from "openai";
 import { z } from "zod";
@@ -40,6 +42,7 @@ let createAnalysisJob: any;
 let getAnalysisJob: any;
 let listAnalysisReports: any;
 let generateDocument: any;
+let exportGeneratedDocument: any;
 let createDocgenJob: any;
 let getDocgenJob: any;
 let listDocgenJobs: any;
@@ -47,6 +50,7 @@ let cancelDocgenJob: any;
 let resumeDocgenJob: any;
 let initSignalingServer: any;
 let initSocketSignaling: any;
+let initCyrusCommSocketSignaling: any;
 let enqueueMessage: any;
 let dequeueMessages: any;
 let addReminder: any;
@@ -80,112 +84,211 @@ let depsLoaded = false;
 async function loadDependencies() {
   if (depsLoaded) return;
 
-  const storageM = await import("./storage");
-  storage = storageM.storage;
-  const schemaM = await import("../shared/schema");
-  insertConversationSchema = schemaM.insertConversationSchema;
-  insertMemorySchema = schemaM.insertMemorySchema;
-  insertUploadedFileSchema = schemaM.insertUploadedFileSchema;
+  try {
+    const storageM = await import("./storage");
+    storage = storageM.storage;
+    const schemaM = await import("../shared/schema");
+    insertConversationSchema = schemaM.insertConversationSchema;
+    insertMemorySchema = schemaM.insertMemorySchema;
+    insertUploadedFileSchema = schemaM.insertUploadedFileSchema;
+  } catch (e) {
+    console.warn("[Routes] Failed to load storage/schema:", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const nfM = await import("./ai/neural-fusion");
-  neuralFusionEngine = nfM.neuralFusionEngine;
+  try {
+    const nfM = await import("./ai/neural-fusion");
+    neuralFusionEngine = nfM.neuralFusionEngine;
+  } catch (e) {
+    console.warn("[Routes] Failed to load neural-fusion (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const csM = await import("./ai/cyrus-soul");
-  cyrusSoul = csM.cyrusSoul;
+  try {
+    const csM = await import("./ai/cyrus-soul");
+    cyrusSoul = csM.cyrusSoul;
+  } catch (e) {
+    console.warn("[Routes] Failed to load cyrus-soul (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const qcM = await import("./ai/quantum-core");
-  quantumCore = qcM.quantumCore;
+  try {
+    const qcM = await import("./ai/quantum-core");
+    quantumCore = qcM.quantumCore;
+  } catch (e) {
+    console.warn("[Routes] Failed to load quantum-core (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const brM = await import("./ai/branches/index");
-  domainSummary = brM.domainSummary;
-  allBranches = brM.allBranches;
+  try {
+    const brM = await import("./ai/branches/index");
+    domainSummary = brM.domainSummary;
+    allBranches = brM.allBranches;
+  } catch (e) {
+    console.warn("[Routes] Failed to load branches (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const arM = await import("./replit_integrations/audio/routes");
-  registerAudioRoutes = arM.registerAudioRoutes;
-  const acM = await import("./replit_integrations/audio/client");
-  speechToText = acM.speechToText;
-  ensureCompatibleFormat = acM.ensureCompatibleFormat;
-  const elM = await import("./elevenlabs/client");
-  textToSpeechElevenLabs = elM.textToSpeechElevenLabs;
-  textToSpeechStreamElevenLabs = elM.textToSpeechStreamElevenLabs;
-  ELEVENLABS_VOICES = elM.ELEVENLABS_VOICES;
-  getEmotionVoiceSettings = elM.getEmotionVoiceSettings;
+  try {
+    const arM = await import("./replit_integrations/audio/routes");
+    registerAudioRoutes = arM.registerAudioRoutes;
+    const acM = await import("./replit_integrations/audio/client");
+    speechToText = acM.speechToText;
+    ensureCompatibleFormat = acM.ensureCompatibleFormat;
+  } catch (e) {
+    console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const elM = await import("./elevenlabs/client");
+    textToSpeechElevenLabs = elM.textToSpeechElevenLabs;
+    textToSpeechStreamElevenLabs = elM.textToSpeechStreamElevenLabs;
+    ELEVENLABS_VOICES = elM.ELEVENLABS_VOICES;
+    getEmotionVoiceSettings = elM.getEmotionVoiceSettings;
+  } catch (e) {
+    console.warn("[Routes] Failed to load ElevenLabs client (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const auM = await import("./autonomy/run");
-  runAutonomy = auM.runAutonomy;
-  const drM = await import("./device/routes");
-  registerDeviceRoutes = drM.registerDeviceRoutes;
-  const nvM = await import("./nav/routes");
-  registerNavRoutes = nvM.registerNavRoutes;
+  try {
+    const auM = await import("./autonomy/run");
+    runAutonomy = auM.runAutonomy;
+  } catch (e) {
+    console.warn("[Routes] Failed to load autonomy/run (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const drM = await import("./device/routes");
+    registerDeviceRoutes = drM.registerDeviceRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load device routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const nvM = await import("./nav/routes");
+    registerNavRoutes = nvM.registerNavRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load nav routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const dtM = await import("./ingestion/detect");
-  detectFile = dtM.detectFile;
-  const exM = await import("./ingestion/extract");
-  extractFile = exM.extractFile;
-  const anM = await import("./ingestion/analyze");
-  analyzeExtraction = anM.analyzeExtraction;
-  const rpM = await import("./ingestion/report");
-  buildReport = rpM.buildReport;
-  const jobsM = await import("./ingestion/jobs");
-  createAnalysisJob = jobsM.createAnalysisJob;
-  getAnalysisJob = jobsM.getAnalysisJob;
-  listAnalysisReports = jobsM.listAnalysisReports;
-  const dgM = await import("./docgen/generate");
-  generateDocument = dgM.generateDocument;
-  const dgJobsM = await import("./docgen/jobs");
-  createDocgenJob = dgJobsM.createDocgenJob;
-  getDocgenJob = dgJobsM.getDocgenJob;
-  listDocgenJobs = dgJobsM.listDocgenJobs;
-  cancelDocgenJob = dgJobsM.cancelDocgenJob;
-  resumeDocgenJob = dgJobsM.resumeDocgenJob;
+  try {
+    const dtM = await import("./ingestion/detect");
+    detectFile = dtM.detectFile;
+    const exM = await import("./ingestion/extract");
+    extractFile = exM.extractFile;
+    const anM = await import("./ingestion/analyze");
+    analyzeExtraction = anM.analyzeExtraction;
+    const rpM = await import("./ingestion/report");
+    buildReport = rpM.buildReport;
+    const jobsM = await import("./ingestion/jobs");
+    createAnalysisJob = jobsM.createAnalysisJob;
+    getAnalysisJob = jobsM.getAnalysisJob;
+    listAnalysisReports = jobsM.listAnalysisReports;
+  } catch (e) {
+    console.warn("[Routes] Failed to load ingestion modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const dgM = await import("./docgen/generate");
+    generateDocument = dgM.generateDocument;
+    const dgExportM = await import("./docgen/export");
+    exportGeneratedDocument = dgExportM.exportGeneratedDocument;
+    const dgJobsM = await import("./docgen/jobs");
+    createDocgenJob = dgJobsM.createDocgenJob;
+    getDocgenJob = dgJobsM.getDocgenJob;
+    listDocgenJobs = dgJobsM.listDocgenJobs;
+    cancelDocgenJob = dgJobsM.cancelDocgenJob;
+    resumeDocgenJob = dgJobsM.resumeDocgenJob;
+  } catch (e) {
+    console.warn("[Routes] Failed to load docgen modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const sgM = await import("./comms/signaling");
-  initSignalingServer = sgM.initSignalingServer;
-  const ssM = await import("./comms/socket-signaling");
-  initSocketSignaling = ssM.initSocketSignaling;
-  const stM = await import("./comms/store");
-  enqueueMessage = stM.enqueueMessage;
-  dequeueMessages = stM.dequeueMessages;
-  addReminder = stM.addReminder;
-  listReminders = stM.listReminders;
-  const crM = await import("./comms/comms-routes");
-  registerCommsRoutes = crM.registerCommsRoutes;
+  try {
+    // Auto-heal missing comms DB tables before loading comms routes
+    const dbInitM = await import("./comms/db-init");
+    await dbInitM.initCommsDatabase();
+  } catch (e) {
+    console.warn("[Routes] Comms DB init failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const sgM = await import("./comms/signaling");
+    initSignalingServer = sgM.initSignalingServer;
+    const ssM = await import("./comms/socket-signaling");
+    initSocketSignaling = ssM.initSocketSignaling;
+    try {
+      const ccSock = await import("./comms/cyrus-comm-socket");
+      initCyrusCommSocketSignaling = ccSock.initCyrusCommSocketSignaling;
+    } catch (cce) {
+      console.warn(
+        "[Routes] cyrus-comm-socket failed (non-fatal):",
+        cce instanceof Error ? cce.message : String(cce),
+      );
+    }
+    const stM = await import("./comms/store");
+    enqueueMessage = stM.enqueueMessage;
+    dequeueMessages = stM.dequeueMessages;
+    addReminder = stM.addReminder;
+    listReminders = stM.listReminders;
+    const crM = await import("./comms/comms-routes");
+    registerCommsRoutes = crM.registerCommsRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const scM = await import("./scan/analyze");
-  analyzeScan = scM.analyzeScan;
-  const qrM = await import("./scan/qr");
-  decodeQr = qrM.decodeQr;
-  const drnM = await import("./drone/routes");
-  registerDroneRoutes = drnM.registerDroneRoutes;
+  try {
+    const scM = await import("./scan/analyze");
+    analyzeScan = scM.analyzeScan;
+    const qrM = await import("./scan/qr");
+    decodeQr = qrM.decodeQr;
+    const drnM = await import("./drone/routes");
+    registerDroneRoutes = drnM.registerDroneRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load scan/drone modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const emM = await import("./ai/experience-memory");
-  experienceMemory = emM.experienceMemory;
+  try {
+    const emM = await import("./ai/experience-memory");
+    experienceMemory = emM.experienceMemory;
+  } catch (e) {
+    console.warn("[Routes] Failed to load experience-memory (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const alM = await import("./ai/adaptive-learning");
-  adaptiveLearning = alM.adaptiveLearning;
+  try {
+    const alM = await import("./ai/adaptive-learning");
+    adaptiveLearning = alM.adaptiveLearning;
+  } catch (e) {
+    console.warn("[Routes] Failed to load adaptive-learning (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const aurM = await import("./ai/upgrades/routes");
-  registerAdvancedUpgradeRoutes = aurM.registerAdvancedUpgradeRoutes;
+  try {
+    const aurM = await import("./ai/upgrades/routes");
+    registerAdvancedUpgradeRoutes = aurM.registerAdvancedUpgradeRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load upgrade routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const moM = await import("./ai/upgrades/module-orchestrator");
-  moduleOrchestrator = moM.moduleOrchestrator;
+  try {
+    const moM = await import("./ai/upgrades/module-orchestrator");
+    moduleOrchestrator = moM.moduleOrchestrator;
+  } catch (e) {
+    console.warn("[Routes] Failed to load module-orchestrator (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick(20);
 
-  const irM = await import("./ai/interactive/routes");
-  registerInteractiveRoutes = irM.registerInteractiveRoutes;
+  try {
+    const irM = await import("./ai/interactive/routes");
+    registerInteractiveRoutes = irM.registerInteractiveRoutes;
+  } catch (e) {
+    console.warn("[Routes] Failed to load interactive routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
   autonomyRoutes = null;
@@ -197,39 +300,68 @@ async function loadDependencies() {
   }
   await tick();
 
-  const dcM = await import("./data-collection/routes");
-  dataCollectionRoutes = dcM.default;
+  try {
+    const dcM = await import("./data-collection/routes");
+    dataCollectionRoutes = dcM.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load data-collection routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const qbM = await import("./ai/quantum-bridge-client");
-  quantumBridge = qbM.quantumBridge;
-  const qrfM = await import("./ai/quantum-response-formatter");
-  quantumResponseFormatter = qrfM.quantumResponseFormatter;
+  try {
+    const qbM = await import("./ai/quantum-bridge-client");
+    quantumBridge = qbM.quantumBridge;
+    const qrfM = await import("./ai/quantum-response-formatter");
+    quantumResponseFormatter = qrfM.quantumResponseFormatter;
+  } catch (e) {
+    console.warn("[Routes] Failed to load quantum bridge/formatter (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const hiM = await import("./health/integrations");
-  healthIntegrations = hiM.healthIntegrations;
-  validateState = hiM.validateState;
-  const imgRM = await import("./replit_integrations/image/routes");
-  registerImageRoutes = imgRM.registerImageRoutes;
-  const imgCM = await import("./replit_integrations/image/client");
-  generateImage = imgCM.generateImage;
+  try {
+    const hiM = await import("./health/integrations");
+    healthIntegrations = hiM.healthIntegrations;
+    validateState = hiM.validateState;
+  } catch (e) {
+    console.warn("[Routes] Failed to load health integrations (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const imgRM = await import("./replit_integrations/image/routes");
+    registerImageRoutes = imgRM.registerImageRoutes;
+    const imgCM = await import("./replit_integrations/image/client");
+    generateImage = imgCM.generateImage;
+  } catch (e) {
+    console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const srM = await import("./ai/system-refinement-engine");
-  systemRefinementEngine = srM.systemRefinementEngine;
+  try {
+    const srM = await import("./ai/system-refinement-engine");
+    systemRefinementEngine = srM.systemRefinementEngine;
+  } catch (e) {
+    console.warn("[Routes] Failed to load system-refinement-engine (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const efM = await import("./humanoid/emotion-fusion");
-  emotionFusion = efM.emotionFusion;
-  const vpM = await import("./humanoid/voice-prosody");
-  voiceProsody = vpM.voiceProsody;
-  const humanoidM = await import("./humanoid/routes");
-  humanoidRoutes = humanoidM.default;
+  try {
+    const efM = await import("./humanoid/emotion-fusion");
+    emotionFusion = efM.emotionFusion;
+    const vpM = await import("./humanoid/voice-prosody");
+    voiceProsody = vpM.voiceProsody;
+    const humanoidM = await import("./humanoid/routes");
+    humanoidRoutes = humanoidM.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load humanoid modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
-  const brainModule = await import("./ai/brain-routes");
-  brainRoutes = brainModule.default;
+  try {
+    const brainModule = await import("./ai/brain-routes");
+    brainRoutes = brainModule.default;
+  } catch (e) {
+    console.warn("[Routes] Failed to load brain-routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
   await tick();
 
   depsLoaded = true;
@@ -401,6 +533,86 @@ const getOpenAIClient = (): OpenAI | AzureOpenAI => {
   return openai;
 };
 
+function clampAnalysisChunks(maxChunksRaw: string | undefined): number | undefined {
+  const cap = parseMaxAnalysisChunks();
+  if (!maxChunksRaw) return undefined;
+  const n = parseInt(String(maxChunksRaw), 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(cap, Math.max(1, n));
+}
+
+/** Safe disk path for chat uploads served as `/uploads/<file>`. */
+function uploadsDiskPathFromPublicUrl(url: string): string | null {
+  const u = String(url || "").trim();
+  if (!u.startsWith("/uploads/")) return null;
+  const base = path.basename(u);
+  if (!base || base === "." || base === "..") return null;
+  return path.join(process.cwd(), "public", "uploads", base);
+}
+
+/**
+ * Inline video/document context for /api/cyrus/infer using the same extraction pipeline as file analysis
+ * (audio transcription + sampled frame OCR when available).
+ */
+async function enrichCyrusMessageWithUploads(message: string, context: unknown): Promise<string> {
+  if (!extractFile) return message;
+  const ctx = context as
+    | { uploadedFile?: { url?: string; type?: string; mimetype?: string; name?: string } }
+    | undefined;
+  const uf = ctx?.uploadedFile;
+  if (!uf || typeof uf.url !== "string" || !uf.url.trim()) return message;
+
+  const mimetype = typeof uf.mimetype === "string" ? uf.mimetype : "";
+  const fileType = typeof uf.type === "string" ? uf.type : "";
+  const isVideo =
+    fileType === "video" ||
+    mimetype.startsWith("video/") ||
+    /\.(mp4|webm|mov|m4v|mkv|ogv|avi)(\?.*)?$/i.test(uf.url);
+
+  if (!isVideo) {
+    if (fileType && fileType !== "image") {
+      return `${message}\n\n[FILE REFERENCE] ${uf.name || "upload"} (${mimetype || "unknown"}) — ${uf.url}`;
+    }
+    return message;
+  }
+
+  const absPath = uploadsDiskPathFromPublicUrl(uf.url);
+  if (!absPath) {
+    return `${message}\n\n[VIDEO] Could not resolve upload path for: ${uf.url}`;
+  }
+
+  try {
+    const buffer = await fs.readFile(absPath);
+    const ext = await extractFile(buffer, mimetype || undefined);
+    const parts: string[] = [message, "", "[VIDEO — extracted from uploaded file]"];
+    if (ext.transcript?.trim()) {
+      parts.push("Audio / speech (best effort):", ext.transcript.trim(), "");
+    }
+    const frameText =
+      Array.isArray(ext.frames)
+        ? ext.frames.map((f: { ocrText?: string }) => f?.ocrText).filter(Boolean).join("\n")
+        : "";
+    if (frameText.trim()) {
+      parts.push("Sampled frame / visual notes:", frameText.trim(), "");
+    }
+    if (ext.warnings?.length) {
+      parts.push(`Extraction notes: ${ext.warnings.join("; ")}`, "");
+    }
+    const hasContent = Boolean(ext.transcript?.trim() || frameText.trim() || ext.text?.trim());
+    if (!hasContent) {
+      parts.push(
+        "No speech or on-screen text was extracted. Describe what you need from the video, or use a common format (e.g. MP4 with AAC audio).",
+      );
+    } else if (ext.text?.trim()) {
+      parts.push("Additional text extraction:", ext.text.trim().slice(0, 12_000));
+    }
+    return parts.join("\n");
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return `${message}\n\n[VIDEO] Failed to process upload: ${detail}`;
+  }
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: path.join(process.cwd(), "public", "uploads"),
@@ -409,7 +621,7 @@ const upload = multer({
       cb(null, uniqueName);
     },
   }) as StorageEngine,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: parseMaxUploadFileBytes() },
 });
 
 export async function registerRoutes(
@@ -418,20 +630,146 @@ export async function registerRoutes(
 ): Promise<Server> {
   await loadDependencies();
 
-  initSignalingServer(httpServer);
-  initSocketSignaling(httpServer);
+  if (initSignalingServer) {
+    try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (initSocketSignaling) {
+    try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (initCyrusCommSocketSignaling) {
+    try {
+      initCyrusCommSocketSignaling(httpServer);
+    } catch (e) {
+      console.warn("[Routes] initCyrusCommSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  }
   console.log("[Socket.IO] Real-time communication server active");
-  registerCommsRoutes(app);
-  registerAdvancedUpgradeRoutes(app);
-  registerInteractiveRoutes(app);
+
+  // ===============================================
+  // LOGOUT ALL DEVICES ENDPOINT
+  // ===============================================
+  app.post("/api/logout-all", async (req: any, res) => {
+    // Resolve the authenticated user from session or token
+    const user = req.user || req.session?.user;
+    if (!user?.id) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const userId: string = user.id;
+
+    try {
+      // 1. Delete all PostgreSQL sessions for this user (connect-pg-simple stores
+      //    sessions in a `sessions` table; the sess column is JSONB so we can
+      //    filter by the embedded user id).
+      try {
+        const { pool: pgPool } = await import("./db.js");
+        await pgPool.query(
+          `DELETE FROM sessions WHERE sess->>'user' IS NOT NULL
+             AND (sess->'user'->>'id' = $1 OR sess->>'userId' = $1)`,
+          [userId],
+        );
+      } catch (dbErr) {
+        // Non-fatal: sessions table may not exist when using in-memory store
+        console.warn("[logout-all] Session DB cleanup skipped:", dbErr instanceof Error ? dbErr.message : String(dbErr));
+      }
+
+      // 2. Broadcast FORCE_LOGOUT over Socket.IO and disconnect all sockets for
+      //    this user so every open tab / device is kicked in real-time.
+      try {
+        const { broadcastForceLogout } = await import("./comms/socket-signaling.js");
+        broadcastForceLogout(userId);
+      } catch (wsErr) {
+        console.warn("[logout-all] Socket broadcast skipped:", wsErr instanceof Error ? wsErr.message : String(wsErr));
+      }
+
+      // 3. Destroy the current server-side session (if any) so this request's
+      //    cookie is also invalidated immediately.
+      if (req.session?.destroy) {
+        await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
+      }
+
+      console.log(`[logout-all] All sessions invalidated for user ${userId}`);
+      return res.json({ success: true, message: "Logged out from all devices" });
+    } catch (error) {
+      console.error("[logout-all] Error:", error);
+      return res.status(500).json({ error: "Failed to logout from all devices" });
+    }
+  });
+
+  app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
+    try {
+      const m = await import("./comms/cyrus-comm-config.js");
+      const link = typeof req.query?.link === "string" ? req.query.link : undefined;
+      res.json(m.getCyrusCommWebRtcConfigResponse({ link }));
+    } catch {
+      res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
+    }
+  });
+  if (registerCommsRoutes) {
+    try { registerCommsRoutes(app); } catch (e) { console.warn("[Routes] registerCommsRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerAdvancedUpgradeRoutes) {
+    try { registerAdvancedUpgradeRoutes(app); } catch (e) { console.warn("[Routes] registerAdvancedUpgradeRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
+  if (registerInteractiveRoutes) {
+    try { registerInteractiveRoutes(app); } catch (e) { console.warn("[Routes] registerInteractiveRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  }
 
   // Autonomy Agent System
   if (autonomyRoutes) {
     app.use('/api/autonomy', autonomyRoutes);
   }
 
-  // CYRUS Brain API
-  app.use('/api/brain', brainRoutes);
+  // CYRUS Brain API — provide a minimal fallback if brain-routes failed to load
+  if (brainRoutes) {
+    app.use('/api/brain', brainRoutes);
+  } else {
+    app.get('/api/brain/status', (_req, res) => res.json({ status: 'unavailable', reason: 'Brain module failed to load' }));
+  }
+
+  // ===============================================
+  // DB HEALTH CHECK ENDPOINT
+  // ===============================================
+
+  app.get("/api/health/db", async (_req, res) => {
+    try {
+      let commEngine: any = null;
+      try {
+        const ceM = await import("./comms/communication-engine.js");
+        commEngine = ceM.communicationEngine;
+      } catch (_e) {
+        // module not loaded yet — return basic status
+      }
+
+      if (commEngine) {
+        const status = commEngine.getDbStatus();
+        return res.json({
+          ok: status.dbConnected && !status.fallbackMode,
+          ...status,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback: probe the db-service directly
+      const { checkDbHealth, getDbHealthState } = await import("./comms/db-service.js");
+      const healthy = await checkDbHealth();
+      const state = getDbHealthState();
+      return res.json({
+        ok: healthy,
+        dbConnected: healthy,
+        fallbackMode: false,
+        circuitOpen: state.circuitOpen,
+        consecutiveFailures: state.consecutiveFailures,
+        lastError: state.lastError,
+        lastCheckedAt: state.lastCheckedAt?.toISOString() ?? null,
+        queue: { size: 0, oldestAgeMs: 0, totalEnqueued: 0, totalFlushed: 0, totalDropped: 0, successRate: 1 },
+        fallbackStoreSizes: { messages: 0, calls: 0, rooms: 0, users: 0, groups: 0 },
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: formatError(e), checkedAt: new Date().toISOString() });
+    }
+  });
 
   // Health Device Integration Routes
   app.get("/api/health/providers", async (req, res) => {
@@ -784,7 +1122,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -875,7 +1213,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -952,7 +1290,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
 
       const job = await createAnalysisJob({
         userId: null, // TODO: get from auth
@@ -1129,6 +1467,50 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Docgen generate failed:", err);
       res.status(500).json({ error: "Document generation failed", detail: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/docgen/export", async (req, res) => {
+    try {
+      if (!exportGeneratedDocument) {
+        return res.status(503).json({ error: "Document export service unavailable" });
+      }
+      const {
+        format,
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      } = req.body || {};
+      const normalizedFormat = String(format || "md").toLowerCase();
+      const allowed = new Set(["pdf", "docx", "html", "md", "txt", "json"]);
+      if (!allowed.has(normalizedFormat)) {
+        return res.status(400).json({ error: "Unsupported export format" });
+      }
+
+      const file = await exportGeneratedDocument(normalizedFormat, {
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        wordCount,
+        estimatedPages,
+      });
+
+      res.setHeader("Content-Type", file.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+      return res.send(file.data);
+    } catch (err: any) {
+      console.error("Docgen export failed:", err);
+      return res.status(500).json({ error: "Document export failed", detail: err?.message || String(err) });
     }
   });
 
@@ -2186,12 +2568,12 @@ Format your response in a clear, structured manner.`
       }
     };
 
-    const jsonOfflineNoKey = (userMessage: string, hasImage: boolean) => {
+    const jsonOfflineNoKey = (userMessage: string, requiresCloudMedia: boolean) => {
       const identity = cyrusSoul.getIdentity();
       const preview = String(userMessage).replace(/\s+/g, " ").trim().slice(0, 280);
       const ellip = preview.length >= 280 ? "…" : "";
-      const response = hasImage
-        ? "Image analysis requires an OpenAI-compatible API key on the server. I cannot inspect images in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
+      const response = requiresCloudMedia
+        ? "Image and video chat requires an OpenAI-compatible API key on the server. I cannot run vision or multimodal understanding in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
         : `I'm running in **offline mode** (no API key on the server), so I can't call the cloud model. I received: "${preview}${ellip}"\n\nSet **OPENAI_API_KEY** or **AI_INTEGRATIONS_OPENAI_API_KEY** in the environment and restart for full AI replies.`;
       cyrusSoul.processThought(userMessage, "offline_mode");
       return res.json({
@@ -2209,11 +2591,26 @@ Format your response in a clear, structured manner.`
         return res.status(400).json({ error: "Message is required" });
       }
 
+      const hasUploadContext = Boolean(
+        context &&
+          typeof context === "object" &&
+          (context as { uploadedFile?: unknown }).uploadedFile &&
+          typeof (context as { uploadedFile?: unknown }).uploadedFile === "object",
+      );
+      const uf = hasUploadContext
+        ? (context as { uploadedFile: { type?: string; mimetype?: string } }).uploadedFile
+        : null;
+      const hasVideoUpload = Boolean(
+        uf &&
+          (uf.type === "video" ||
+            (typeof uf.mimetype === "string" && uf.mimetype.startsWith("video/"))),
+      );
+
       // Track each inference so learning/evolution metrics reflect real usage.
       taskTrackingId = adaptiveLearning.generateTaskId();
       adaptiveLearning.startTaskTracking(taskTrackingId, "general_conversation", {
         message,
-        hasImage: Boolean(imageData),
+        hasImage: Boolean(imageData) || hasVideoUpload,
         hasConversationHistory: Array.isArray(conversationHistory) && conversationHistory.length > 0,
       });
 
@@ -2221,7 +2618,7 @@ Format your response in a clear, structured manner.`
       const requiresAgentExecution = isAgentCommand(message);
 
       // If it's an agent command, execute it autonomously
-      if (requiresAgentExecution && !imageData) {
+      if (requiresAgentExecution && !imageData && !hasUploadContext) {
         console.log("[CYRUS] Autonomous agent activated for command:", message);
         const { response, agentResult } = await executeAgentTask(message);
 
@@ -2251,18 +2648,19 @@ Format your response in a clear, structured manner.`
       }
 
       if (!openai) {
-        const hasImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const hasVisionImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const requiresCloudMedia = hasVisionImage || hasVideoUpload;
         await adaptiveLearning.learnFromConversation(String(message), "offline_mode_no_api_key", {
           moduleContext: "offline_mode",
         });
         await adaptiveLearning.endTaskTracking(
           taskTrackingId,
           true,
-          { offlineMode: true, hasImage },
+          { offlineMode: true, hasImage: requiresCloudMedia },
           "offline_fallback_response",
         );
         taskTrackingId = null;
-        return jsonOfflineNoKey(String(message), hasImage);
+        return jsonOfflineNoKey(String(message), requiresCloudMedia);
       }
 
       // Standard CYRUS response path
@@ -2311,13 +2709,15 @@ If you detect a command that requires physical device interaction, inform the op
         }
       }
 
-      // Build the user message content
+      const enrichedMessage = await enrichCyrusMessageWithUploads(String(message), context);
+
+      // Build the user message content (video/document text is inlined via enrichment)
       const fullMessage = contextInfo
-        ? `${message}\n\n[CONTEXT]${contextInfo}`
-        : message;
+        ? `${enrichedMessage}\n\n[CONTEXT]${contextInfo}`
+        : enrichedMessage;
 
       // Check if we have image data for vision analysis
-      if (imageData && typeof imageData === 'string' && imageData.startsWith('data:image')) {
+      if (imageData && typeof imageData === "string" && imageData.startsWith("data:image")) {
         // Use vision capability with image
         chatMessages.push({
           role: "user",

@@ -3,6 +3,7 @@ import { useDocumentsIntelligence, type IntelOptions } from "@/hooks/useDocument
 import { Button } from "@/components/ui/button";
 import {
   Brain,
+  ChevronDown,
   FileText,
   Gavel,
   Loader2,
@@ -14,7 +15,17 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { readHandoff } from "@shared/module-handoff";
+import {
+  encodeFileAsHandoffAttachment,
+  readCommandSearchShare,
+  readHandoff,
+  registerLargeHandoffFile,
+  resolveHandoffPayloadToFiles,
+  revokeHandoffPayloadBlobs,
+  type ModuleHandoffAttachment,
+  type ModuleHandoffLargeRef,
+} from "@shared/module-handoff";
+import { maxDocgenTargetPages, parseLargeUploadThresholdBytes, parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { useToast } from "@/hooks/use-toast";
 
@@ -41,8 +52,6 @@ const GEN_TYPES: { value: string; label: string }[] = [
   { value: "technical", label: "Technical document" },
 ];
 
-const BYTES_LARGE = 12 * 1024 * 1024;
-
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
   const a = document.createElement("a");
@@ -52,18 +61,37 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(a.href);
 }
 
+function downloadBlob(filename: string, blob: Blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const EXPORT_FORMATS: Array<{ value: "pdf" | "docx" | "html" | "md" | "txt" | "json"; label: string }> = [
+  { value: "pdf", label: "PDF (.pdf)" },
+  { value: "docx", label: "Word (.docx)" },
+  { value: "html", label: "HTML (.html)" },
+  { value: "md", label: "Markdown (.md)" },
+  { value: "txt", label: "Plain text (.txt)" },
+  { value: "json", label: "Structured JSON (.json)" },
+];
+
 export default function DocumentsIntelligence() {
   const { toast } = useToast();
   const {
     intel,
     setIntel,
     currentFile,
+    setHandoffStagedFile,
     syncReport,
     job,
     isSubmitting,
     runSyncFull,
     runAsync,
     generateDocument,
+    exportDocument,
     clearResults,
   } = useDocumentsIntelligence();
 
@@ -72,9 +100,13 @@ export default function DocumentsIntelligence() {
   const [genType, setGenType] = useState("legal");
   const [genAudience, setGenAudience] = useState("legal_counsel");
   const [genBody, setGenBody] = useState("");
-  const [targetPages, setTargetPages] = useState(48);
+  const [targetPages, setTargetPages] = useState(2000);
   const [genPurpose, setGenPurpose] = useState("");
+  const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
+  const [isExporting, setIsExporting] = useState(false);
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
+  const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
+  const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
 
   const docHintText =
     category === "auto"
@@ -92,7 +124,7 @@ export default function DocumentsIntelligence() {
   const runStagedAnalyse = () => {
     if (!stagedAnalyseFile) return;
     const override: Partial<IntelOptions> = { ...intel, docHint: docHintText };
-    if (stagedAnalyseFile.size > BYTES_LARGE) {
+    if (stagedAnalyseFile.size > parseLargeUploadThresholdBytes()) {
       void runAsync(stagedAnalyseFile, override);
     } else {
       void runSyncFull(stagedAnalyseFile, override);
@@ -101,6 +133,9 @@ export default function DocumentsIntelligence() {
 
   const handleClearResults = () => {
     setStagedAnalyseFile(null);
+    setHandoffStagedFile(null);
+    setHandoffEncoded(undefined);
+    setHandoffLargeRefs([]);
     clearResults();
   };
 
@@ -109,15 +144,36 @@ export default function DocumentsIntelligence() {
     const p = new URLSearchParams(window.location.search);
     if (p.get("handoff") !== "1") return;
     const h = readHandoff(true);
-    if (!h?.text) return;
-    setGenBody(h.text);
-    setGenPurpose(
-      `Cross-module pipeline from ${h.sourceModule}. ${h.note ?? "Research / group collaboration follow-up."}`,
-    );
-    setGenType("report");
-    setGenAudience("technical");
-    toast({ title: "Pipeline content ready", description: "Review and tap Generate — or run analysis on a file." });
-  }, [toast]);
+    if (!h) return;
+
+    void (async () => {
+      try {
+        if (h.text?.trim()) setGenBody(h.text);
+        const files = await resolveHandoffPayloadToFiles(h);
+        if (files[0]) {
+          setStagedAnalyseFile(files[0]);
+          setHandoffStagedFile(files[0]);
+        }
+      } finally {
+        await revokeHandoffPayloadBlobs(h);
+      }
+
+      if (h.text?.trim() || h.attachments?.length || h.largeAttachments?.length) {
+        setGenPurpose(
+          `Cross-module pipeline from ${h.sourceModule}. ${h.note ?? "Research / group collaboration follow-up."}`,
+        );
+        setGenType("report");
+        setGenAudience("technical");
+        toast({
+          title: "Pipeline content ready",
+          description:
+            h.largeAttachments?.length || h.attachments?.length
+              ? "Review text and staged file — run analysis or Generate."
+              : "Review and tap Generate — or run analysis on a file.",
+        });
+      }
+    })();
+  }, [toast, setHandoffStagedFile]);
 
   const genMut = useMutation({
     mutationFn: async () => {
@@ -125,11 +181,67 @@ export default function DocumentsIntelligence() {
         docType: genType,
         content: genBody,
         audience: genAudience,
-        targetPages: Math.max(1, Math.min(2000, targetPages)),
+        targetPages: Math.max(1, Math.min(maxDocgenTargetPages(), targetPages)),
         purpose: genPurpose || undefined,
       });
     },
   });
+
+  const fileForPipelineHandoff = stagedAnalyseFile ?? currentFile;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!fileForPipelineHandoff) {
+      setHandoffEncoded(undefined);
+      setHandoffLargeRefs([]);
+      return;
+    }
+    const INLINE_MAX = 900_000;
+    if (fileForPipelineHandoff.size <= INLINE_MAX) {
+      setHandoffLargeRefs([]);
+      void encodeFileAsHandoffAttachment(fileForPipelineHandoff).then((a) => {
+        if (!cancelled) setHandoffEncoded(a ? [a] : undefined);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setHandoffEncoded(undefined);
+    void registerLargeHandoffFile(fileForPipelineHandoff).then((ref) => {
+      if (cancelled) return;
+      setHandoffLargeRefs(ref ? [ref] : []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileForPipelineHandoff]);
+
+  const commandHandoffText = () => {
+    const rendered = genMut.data?.rendered?.trim();
+    if (rendered) return rendered;
+    const body = genBody.trim();
+    if (body) return body;
+    if (syncReport) {
+      const parts = [
+        syncReport.extractedSummary,
+        ...(syncReport.keyFindings || []),
+        syncReport.issues?.length ? `Issues: ${syncReport.issues.join("; ")}` : "",
+      ].filter(Boolean);
+      if (parts.length) return parts.join("\n\n");
+    }
+    if (job?.status === "completed" && job.result?.analysis) {
+      const a = job.result.analysis;
+      const parts = [
+        a.executiveBrief,
+        ...(a.keyFindings || []),
+        a.interpretation,
+      ].filter(Boolean);
+      if (parts.length) return parts.join("\n\n");
+    }
+    const cmd = intel.analysisCommand?.trim();
+    if (cmd) return `Document analysis command:\n${cmd}`;
+    return undefined;
+  };
 
   return (
     <ModuleWorkspacePageShell
@@ -137,12 +249,29 @@ export default function DocumentsIntelligence() {
       title="Document intelligence"
       subtitle="Analysis and long-form output"
       icon={Gavel}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="documents-intelligence"
+      commandHandoffAttachments={() => handoffEncoded}
+      commandHandoffLargeRefs={() => (handoffLargeRefs.length ? handoffLargeRefs : undefined)}
       headerEnd={
         <>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-mono text-emerald-200/85">
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
             Pipeline online
           </span>
+          <Button
+            type="button"
+            variant="outline"
+            className="text-xs border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/15"
+            onClick={() => {
+              const t = readCommandSearchShare()?.trim();
+              if (!t) return;
+              setGenBody((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${t}` : t));
+              toast({ title: "Command search loaded", description: "Merged into the generation body." });
+            }}
+          >
+            Last command search
+          </Button>
           <Button type="button" variant="ghost" className="text-sm text-white/75" onClick={handleClearResults}>
             Clear
           </Button>
@@ -218,12 +347,15 @@ export default function DocumentsIntelligence() {
                   <input
                     type="number"
                     min={1}
-                    max={120}
+                    max={parseMaxAnalysisChunks()}
                     value={intel.maxChunks}
                     onChange={(e) =>
-                      setIntel((s) => ({ ...s, maxChunks: Math.min(120, Math.max(1, +e.target.value)) }))
+                      setIntel((s) => ({
+                        ...s,
+                        maxChunks: Math.min(parseMaxAnalysisChunks(), Math.max(1, +e.target.value)),
+                      }))
                     }
-                    className="w-20 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-right text-sm"
+                    className="w-24 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-right text-sm"
                   />
                 </div>
               </div>
@@ -274,7 +406,7 @@ export default function DocumentsIntelligence() {
                     onClick={() => analyseFileInputRef.current?.click()}
                   >
                     <Upload className="mr-2 h-5 w-5" />
-                    Upload document
+                    Upload document (PDF, Word, text, image)
                   </Button>
                   {(stagedAnalyseFile || currentFile) && (
                     <p className="mt-2 text-sm text-white/75">
@@ -318,7 +450,11 @@ export default function DocumentsIntelligence() {
                 Generate long output
               </h2>
               <p className="mb-3 text-sm leading-relaxed text-white/60">
-                Long-form draft. Cap <code className="rounded bg-indigo-950/50 px-1.5 py-0.5 text-sm text-indigo-200/90">CYRUS_DOCGEN_MAX_PAGES</code> (default 2000).
+                Long-form draft — target pages up to{" "}
+                <code className="rounded bg-indigo-950/50 px-1.5 py-0.5 text-sm text-indigo-200/90">
+                  CYRUS_DOCGEN_MAX_PAGES
+                </code>{" "}
+                (cap {maxDocgenTargetPages()}).
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                 <div>
@@ -359,10 +495,21 @@ export default function DocumentsIntelligence() {
                   <span>{targetPages} pg</span>
                 </div>
                 <input
+                  type="number"
+                  min={1}
+                  max={maxDocgenTargetPages()}
+                  step={10}
+                  value={targetPages}
+                  onChange={(e) =>
+                    setTargetPages(Math.max(1, Math.min(maxDocgenTargetPages(), Number(e.target.value || 1))))
+                  }
+                  className="mb-2 w-full rounded-lg border border-white/12 bg-slate-900/85 px-3 py-2 text-base text-white"
+                />
+                <input
                   type="range"
-                  min={4}
-                  max={2000}
-                  step={4}
+                  min={1}
+                  max={maxDocgenTargetPages()}
+                  step={10}
                   value={targetPages}
                   onChange={(e) => setTargetPages(+e.target.value)}
                   className="h-2 w-full"
@@ -495,15 +642,44 @@ export default function DocumentsIntelligence() {
                     >
                       Generated document
                     </h3>
-                    <Button
-                      type="button"
-                      size="default"
-                      variant="outline"
-                      className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
-                      onClick={() => downloadText(`${genMut.data.title || "cyrus-doc"}.md`, genMut.data.rendered)}
-                    >
-                      Download .md
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <select
+                          value={exportFormat}
+                          onChange={(e) => setExportFormat(e.target.value as (typeof EXPORT_FORMATS)[number]["value"])}
+                          className="h-10 appearance-none rounded-md border border-indigo-400/30 bg-slate-900 pl-3 pr-8 text-sm text-indigo-100"
+                        >
+                          {EXPORT_FORMATS.map((fmt) => (
+                            <option key={fmt.value} value={fmt.value}>
+                              {fmt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-200/80" />
+                      </div>
+                      <Button
+                        type="button"
+                        size="default"
+                        variant="outline"
+                        disabled={isExporting}
+                        className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
+                        onClick={async () => {
+                          try {
+                            setIsExporting(true);
+                            const file = await exportDocument(exportFormat, genMut.data);
+                            downloadBlob(file.filename, file.blob);
+                            toast({ title: "Download ready", description: `Exported as ${exportFormat.toUpperCase()}` });
+                          } catch (e: unknown) {
+                            const msg = e instanceof Error ? e.message : "Export failed";
+                            toast({ title: "Export failed", description: msg, variant: "destructive" });
+                          } finally {
+                            setIsExporting(false);
+                          }
+                        }}
+                      >
+                        {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Download ${exportFormat.toUpperCase()}`}
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm text-white/70">{genMut.data.title}</p>
                   <div className="min-h-0 max-h-[min(28dvh,260px)] flex-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2.5 sm:p-3">

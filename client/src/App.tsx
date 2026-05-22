@@ -118,6 +118,7 @@ export default function App() {
 
   const localUsername = localStorage.getItem("cyrus-display-name") || "OPERATOR";
   const userRole = localStorage.getItem("cyrus-user-role") || "user";
+  console.log("[App] User role:", userRole);
 
   if (!isAuthenticated) {
     return <AccessGate onAuthenticated={handleAuthenticated} />;

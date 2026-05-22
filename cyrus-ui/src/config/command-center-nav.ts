@@ -95,9 +95,10 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/comms",
     dashboardLabel: "Comms",
-    dashboardDescription: "Secure Channels",
+    dashboardDescription: "NTN satellite IoT & secure channels",
     surfaceLabel: "Communications",
-    sublabel: "Chat, Pshare & secure channels",
+    sublabel:
+      "Unified Comms: chat + mesh WebRTC (/cyrus-comm-io) woven into People & Calls; NTN roadmap — satellite IoT, messaging, tracking, emergency, verticals; Cortex-M4F + PSRAM/flash + cellular/sat RF",
     Icon: Phone,
   },
   {
@@ -248,6 +249,11 @@ export function getModuleOrchestratorSurfaces(): {
   });
 }
 
+/** Single nav entry by primary route (e.g. Command Console pipeline handoff). */
+export function getCommandCenterNavByPath(path: string): CommandCenterNavEntry | undefined {
+  return COMMAND_CENTER_NAV.find((e) => e.path === path);
+}
+
 /** Dashboard top nav: all quick links including cyrus-ui pages. */
 export function getDashboardNavItems(): {
   href: string;
@@ -255,7 +261,9 @@ export function getDashboardNavItems(): {
   description?: string;
   Icon: LucideIcon;
 }[] {
-  return COMMAND_CENTER_NAV.map((e) => ({
+  return COMMAND_CENTER_NAV.filter(
+    (e) => e.path !== "/ai-assistant" && e.path !== "/file-analysis",
+  ).map((e) => ({
     href: e.path,
     label: e.dashboardLabel,
     description: e.dashboardDescription ?? e.sublabel,
