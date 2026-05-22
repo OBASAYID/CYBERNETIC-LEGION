@@ -9,6 +9,7 @@ import * as THREE from "three";
 
 import { ORBITAL_HUB_LABEL, type OrbitalForwardSlot } from "../../lib/comms-orbital-integration";
 import { CommsContactHubPopover } from "./CommsContactHubPopover";
+import { COMMS_NEXUS_KEYFRAMES } from "./comms-nexus-motion";
 
 export type ForwardOrbitSlot = OrbitalForwardSlot;
 
@@ -151,12 +152,16 @@ function HoloDataPanel({ inCall }: { inCall?: boolean }) {
         {bars.map((h, i) => (
           <span
             key={i}
-            className={`w-1 rounded-sm ${inCall ? "bg-fuchsia-400/80" : "bg-cyan-400/75"}`}
-            style={{ height: `${h * 100}%` }}
+            className={`w-1 origin-bottom rounded-sm ${inCall ? "bg-fuchsia-400/80" : "bg-cyan-400/75"}`}
+            style={{
+              height: `${h * 100}%`,
+              animation: `commsHoloBar ${1.1 + i * 0.15}s ease-in-out infinite`,
+              animationDelay: `${i * 0.12}s`,
+            }}
           />
         ))}
       </div>
-      <p className="mt-0.5 text-center font-mono text-[5px] uppercase tracking-wider text-emerald-400/80">
+      <p className="mt-0.5 text-center font-mono text-[6px] uppercase tracking-wider text-emerald-400/85 sm:text-[7px]">
         {inCall ? "In call" : "Online"}
       </p>
     </div>
@@ -205,17 +210,31 @@ function PortraitSeatCard({
   return (
     <div
       ref={cardRef}
-      className={`group relative flex flex-col overflow-visible border-2 shadow-[0_0_32px_rgba(0,229,255,0.35)] ${
-        isHub ? "sm:w-[118px]" : "sm:w-[102px]"
-      } ${hubOpen || isSelected ? "border-cyan-200 ring-2 ring-cyan-300/45" : "border-cyan-400/65"}`}
+      className={`group relative flex flex-col overflow-visible border-2 transition-shadow duration-300 ${
+        isHub ? "sm:w-[118px]" : "sm:w-[106px]"
+      } ${
+        hubOpen
+          ? "border-cyan-100 shadow-[0_0_40px_rgba(0,229,255,0.55)] ring-2 ring-cyan-200/50"
+          : isSelected
+            ? "border-cyan-200 ring-2 ring-cyan-300/45 shadow-[0_0_32px_rgba(0,229,255,0.35)]"
+            : "border-cyan-400/65 shadow-[0_0_24px_rgba(0,229,255,0.22)]"
+      } ${isHub ? "ring-violet-400/25" : ""}`}
       style={{
         width,
-        background: "linear-gradient(165deg, rgba(0,28,52,0.95) 0%, rgba(0,8,16,0.98) 100%)",
-        animation: "commsSeatPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+        background: isHub
+          ? "linear-gradient(165deg, rgba(20,12,48,0.96) 0%, rgba(0,8,16,0.98) 100%)"
+          : "linear-gradient(165deg, rgba(0,28,52,0.95) 0%, rgba(0,8,16,0.98) 100%)",
+        animation: hubOpen ? "commsHubPulse 2.4s ease-in-out infinite" : "commsSeatPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
       }}
     >
-      <div className="border-b border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 to-slate-950/80 px-2 py-0.5 text-center">
-        <span className="font-mono text-[6px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[7px]">
+      <div
+        className={`border-b px-2 py-0.5 text-center ${
+          isHub
+            ? "border-violet-500/35 bg-gradient-to-r from-violet-950/70 to-cyan-950/70"
+            : "border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 to-slate-950/80"
+        }`}
+      >
+        <span className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-cyan-50 sm:text-[8px]">
           {refLabel}
         </span>
       </div>
@@ -246,13 +265,18 @@ function PortraitSeatCard({
               ? onHubToggle
               : undefined
         }
-        className="relative aspect-[3/4] w-full cursor-pointer overflow-hidden hover:brightness-110"
+        className="relative aspect-[3/4] w-full cursor-pointer overflow-hidden transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70"
       >
         {avatarUrl ? (
           <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
         ) : (
           <HumanSilhouette initial={initial} />
         )}
+        {isHub && photoUploading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-300" />
+          </div>
+        ) : null}
         <span
           className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full shadow-[0_0_6px_currentColor] ${
             inCall ? "bg-fuchsia-400" : "animate-pulse bg-emerald-400"
@@ -262,7 +286,7 @@ function PortraitSeatCard({
       </button>
 
       <div className="border-t border-cyan-500/25 px-1.5 py-1">
-        <p className="truncate text-center text-[8px] font-semibold text-white sm:text-[9px]">{displayName}</p>
+        <p className="truncate text-center text-[9px] font-semibold text-white sm:text-[10px]">{displayName}</p>
         <HoloDataPanel inCall={inCall} />
       </div>
 
@@ -270,22 +294,26 @@ function PortraitSeatCard({
         <div className="flex justify-center gap-1 border-t border-cyan-500/20 px-1 py-1">
           <button
             type="button"
-            className="rounded border border-cyan-500/45 px-1.5 py-0.5 text-[6px] text-cyan-100"
+            className="rounded border border-cyan-500/45 px-2 py-0.5 text-[7px] text-cyan-100 transition hover:bg-cyan-500/15 focus-visible:outline focus-visible:outline-1 focus-visible:outline-cyan-400"
             onClick={onHubActivate}
           >
             Console
           </button>
           <button
             type="button"
-            className="rounded border border-violet-500/40 px-1.5 py-0.5 text-[6px] text-violet-100"
+            className="rounded border border-violet-500/40 px-2 py-0.5 text-[7px] text-violet-100 transition hover:bg-violet-500/15 focus-visible:outline focus-visible:outline-1 focus-visible:outline-violet-400"
             onClick={onPhotoClick}
           >
             Photo
           </button>
         </div>
       ) : (
-        <p className="border-t border-cyan-500/15 py-0.5 text-center font-mono text-[5px] uppercase tracking-wider text-cyan-400/55">
-          Tap for contact hub
+        <p
+          className={`border-t py-1 text-center font-mono text-[6px] uppercase tracking-wider sm:text-[7px] ${
+            hubOpen ? "text-cyan-200/90" : "text-cyan-400/55"
+          }`}
+        >
+          {hubOpen ? "Contact hub open" : "Tap · contact hub"}
         </p>
       )}
     </div>
@@ -388,11 +416,11 @@ function SceneInner(props: Props) {
       <ConferenceTable onlineCount={onlinePeers.length} />
       <Billboard follow position={[0, TABLE_Y + 0.55, 0]}>
         <Html center distanceFactor={10} style={{ pointerEvents: "none" }} zIndexRange={[90, 0]}>
-          <div className="whitespace-nowrap rounded-full border border-cyan-500/35 bg-[#021018]/85 px-3 py-1 text-center shadow-[0_0_20px_rgba(0,229,255,0.3)]">
-            <p className="font-mono text-[7px] uppercase tracking-[0.2em] text-cyan-300/75">
+          <div className="whitespace-nowrap rounded-full border border-cyan-500/40 bg-[#021018]/88 px-3 py-1 text-center shadow-[0_0_24px_rgba(0,229,255,0.35)] backdrop-blur-sm">
+            <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-cyan-300/80 sm:text-[8px]">
               {onlinePeers.length === 0
                 ? "NEXUS round table · awaiting peers"
-                : `${onlinePeers.length} online at the table`}
+                : `${onlinePeers.length} peer${onlinePeers.length === 1 ? "" : "s"} at the table · tap a portrait`}
             </p>
           </div>
         </Html>
@@ -434,16 +462,11 @@ export function CommsOrbitalScene3D(props: Props) {
   const dpr = typeof window !== "undefined" ? Math.min(2.25, window.devicePixelRatio || 1) : 1.5;
   return (
     <>
-      <style>{`
-        @keyframes commsSeatPop {
-          from { opacity: 0; transform: scale(0.55) translateY(18px); filter: blur(4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
-        }
-      `}</style>
+      <style>{COMMS_NEXUS_KEYFRAMES}</style>
       <Canvas
         dpr={[1, dpr]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        camera={{ position: [0, 3.8, 5.8], fov: 44, near: 0.08, far: 120 }}
+        camera={{ position: [0, 3.6, 5.6], fov: 42, near: 0.08, far: 120 }}
         style={{ width: "100%", height: "100%", display: "block" }}
         onCreated={({ gl, scene, camera }) => {
           gl.setClearColor(0x000000, 0);

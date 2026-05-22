@@ -7,10 +7,14 @@ import {
   MapPin,
   X,
   Image as ImageIcon,
+  Box,
   FileAudio,
 } from "lucide-react";
 import { EmojiPicker } from "./EmojiPicker";
 import { analyzeTextSentiment } from "../../hooks/useCommsIntelligence";
+import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
+import { isCommsCad3dFile } from "../../lib/comms-cad-formats";
 
 interface MessageInputProps {
   onSend: (content: string) => void;
@@ -44,16 +48,6 @@ export function MessageInput({
   const [showEmoji, setShowEmoji] = useState(false);
   const [sentiment, setSentiment] = useState<{ score: number; label: string; confidence: number }>({ score: 0, label: "neutral", confidence: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const filePickerAccept =
-    "image/*,video/*,audio/*," +
-    "application/pdf,application/zip," +
-    "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
-    "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
-    "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
-    "text/plain,text/html,text/csv,text/markdown,application/json,application/xml," +
-    ".pdf,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp," +
-    ".txt,.csv,.md,.json,.xml,.zip," +
-    ".mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -111,10 +105,19 @@ export function MessageInput({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setAttachPreview({ file, url });
+    queueAttachment(file);
     e.target.value = "";
   };
+
+  const queueAttachment = useCallback((file: File) => {
+    if (!onSendMedia) return;
+    setAttachPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { file, url: URL.createObjectURL(file) };
+    });
+  }, [onSendMedia]);
+
+  useCommsMediaPaste(queueAttachment, Boolean(onSendMedia) && !disabled);
 
   const clearAttachment = () => {
     if (attachPreview) {
@@ -246,6 +249,14 @@ export function MessageInput({
               <img src={attachPreview.url} alt="" className="h-16 rounded-lg border border-gray-700/50" />
             ) : attachPreview.file.type.startsWith("video/") ? (
               <video src={attachPreview.url} className="h-20 max-w-[200px] rounded-lg border border-gray-700/50" muted playsInline />
+            ) : isCommsCad3dFile(attachPreview.file.name, attachPreview.file.type) ? (
+              <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-cyan-500/35 bg-cyan-950/40 px-3 py-2">
+                <Box className={`h-4 w-4 shrink-0 ${holoSurface ? "text-cyan-300" : "text-amber-300"}`} />
+                <div className="min-w-0">
+                  <span className="block truncate text-xs text-gray-200">{attachPreview.file.name}</span>
+                  <span className="text-[10px] text-cyan-200/55">3D CAD model</span>
+                </div>
+              </div>
             ) : (
               <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/80 px-3 py-2">
                 {attachPreview.file.type.startsWith("audio/") ? (
@@ -293,7 +304,7 @@ export function MessageInput({
                     ? "rounded-full p-2 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100 disabled:opacity-40"
                     : "rounded-full p-2 text-amber-200/50 transition hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-40"
                 }
-                title="Share photos, videos, documents (PDF, Word, Excel, HTML…), or other files"
+                title="Share photos, videos, 3D CAD (STL, STEP, OBJ…), documents, or other files"
               >
                 <Paperclip className="h-5 w-5" />
               </button>
@@ -302,7 +313,7 @@ export function MessageInput({
                 type="file"
                 onChange={handleFileSelect}
                 className="hidden"
-                accept={filePickerAccept}
+                accept={COMMS_MEDIA_FILE_ACCEPT}
               />
             </>
           )}

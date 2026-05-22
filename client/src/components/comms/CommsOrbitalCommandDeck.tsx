@@ -273,10 +273,10 @@ export function CommsOrbitalCommandDeck({
                 type="button"
                 title={mod.label}
                 onClick={() => onSelectTab(mod.tab)}
-                className={`pointer-events-auto absolute flex w-[min(11vw,88px)] min-w-[48px] max-w-[96px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-lg border px-0.5 py-1 backdrop-blur-md transition sm:w-[92px] sm:rounded-xl sm:py-1.5 ${
+                className={`pointer-events-auto absolute flex w-[min(11vw,88px)] min-w-[48px] max-w-[96px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-lg border px-0.5 py-1 backdrop-blur-md transition-all duration-200 sm:w-[92px] sm:rounded-xl sm:py-1.5 ${
                   active
                     ? "z-[3] scale-105 border-cyan-300/75 bg-cyan-500/20 shadow-[0_0_28px_rgba(0,229,255,0.55)] ring-1 ring-cyan-300/50"
-                    : "z-[2] border-cyan-500/25 bg-[#021018]/75 hover:border-cyan-400/45 hover:bg-cyan-950/50"
+                    : "z-[2] border-cyan-500/25 bg-[#021018]/75 hover:scale-[1.03] hover:border-cyan-400/45 hover:bg-cyan-950/50"
                 }`}
                 style={{ left: `${leftPct}%`, top: `${topPct}%` }}
               >
@@ -336,7 +336,11 @@ export function CommsOrbitalCommandDeck({
       </div>
 
       {/* Bottom value pills — reference */}
-      <div className="relative z-[6] mt-2 flex shrink-0 flex-wrap items-center gap-2 px-1 sm:px-2">
+      <div className="relative z-[6] mt-2 shrink-0 space-y-2 px-1 sm:px-2">
+        <p className="hidden rounded-lg border border-cyan-500/20 bg-[#021018]/55 px-2.5 py-1.5 text-center font-mono text-[8px] uppercase tracking-[0.12em] text-cyan-300/65 backdrop-blur-sm sm:block sm:text-[9px]">
+          Tap any online portrait for voice · video · text · group · assurance modules on the arc switch sectors
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
         {VALUE_PILLS.map(({ id, label, tab }) => {
           const active = activePill === id || activeTab === tab;
           return (
@@ -357,9 +361,10 @@ export function CommsOrbitalCommandDeck({
             </button>
           );
         })}
-        <span className="ml-auto hidden truncate font-mono text-[8px] uppercase tracking-wider text-cyan-400/45 sm:inline">
+        <span className="ml-auto hidden truncate font-mono text-[8px] uppercase tracking-wider text-cyan-400/45 lg:inline">
           Round table · {displayName} · GSLC · TAC · GTAC · RSPC · GSPC
         </span>
+        </div>
       </div>
     </section>
   );

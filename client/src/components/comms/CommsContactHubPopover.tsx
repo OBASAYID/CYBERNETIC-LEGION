@@ -3,9 +3,8 @@
  */
 
 import { MessageSquare, Phone, Users, Video, X } from "lucide-react";
-import { useEffect, type RefObject } from "react";
-
-const CYAN = "#00e5ff";
+import { useEffect, useId, type RefObject } from "react";
+import { COMMS_CYAN } from "./comms-nexus-motion";
 
 type HubAction = {
   id: "voice" | "video" | "text" | "group";
@@ -14,6 +13,7 @@ type HubAction = {
   Icon: typeof Phone;
   accent: string;
   border: string;
+  hoverGlow: string;
   disabled?: boolean;
   onSelect: () => void;
 };
@@ -45,6 +45,9 @@ export function CommsContactHubPopover({
   onText,
   onGroup,
 }: Props) {
+  const uid = useId().replace(/:/g, "");
+  const arcGradId = `hub-arc-${uid}`;
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -74,7 +77,8 @@ export function CommsContactHubPopover({
       sub: "Audio call",
       Icon: Phone,
       accent: "text-emerald-300",
-      border: "border-emerald-400/50 hover:bg-emerald-500/15",
+      border: "border-emerald-400/55",
+      hoverGlow: "hover:bg-emerald-500/20 hover:shadow-[0_0_16px_rgba(52,211,153,0.35)]",
       disabled: inCall,
       onSelect: () => {
         onVoice();
@@ -87,7 +91,8 @@ export function CommsContactHubPopover({
       sub: "Face-to-face",
       Icon: Video,
       accent: "text-sky-300",
-      border: "border-sky-400/50 hover:bg-sky-500/15",
+      border: "border-sky-400/55",
+      hoverGlow: "hover:bg-sky-500/20 hover:shadow-[0_0_16px_rgba(56,189,248,0.35)]",
       disabled: inCall,
       onSelect: () => {
         onVideo();
@@ -100,7 +105,8 @@ export function CommsContactHubPopover({
       sub: "Open chat",
       Icon: MessageSquare,
       accent: "text-violet-300",
-      border: "border-violet-400/50 hover:bg-violet-500/15",
+      border: "border-violet-400/55",
+      hoverGlow: "hover:bg-violet-500/20 hover:shadow-[0_0_16px_rgba(167,139,250,0.35)]",
       onSelect: () => {
         onText();
         onClose();
@@ -112,7 +118,8 @@ export function CommsContactHubPopover({
       sub: "Round table",
       Icon: Users,
       accent: "text-amber-300",
-      border: "border-amber-400/50 hover:bg-amber-500/15",
+      border: "border-amber-400/55",
+      hoverGlow: "hover:bg-amber-500/20 hover:shadow-[0_0_16px_rgba(251,191,36,0.3)]",
       onSelect: () => {
         onGroup();
         onClose();
@@ -121,70 +128,70 @@ export function CommsContactHubPopover({
   ];
 
   const positions = [
-    { top: "4%", left: "50%", tx: "-50%", ty: "0" },
-    { top: "50%", left: "92%", tx: "-50%", ty: "-50%" },
-    { top: "88%", left: "50%", tx: "-50%", ty: "-100%" },
-    { top: "50%", left: "8%", tx: "-50%", ty: "-50%" },
+    { top: "2%", left: "50%", tx: "-50%", ty: "0" },
+    { top: "50%", left: "94%", tx: "-50%", ty: "-50%" },
+    { top: "90%", left: "50%", tx: "-50%", ty: "-100%" },
+    { top: "50%", left: "6%", tx: "-50%", ty: "-50%" },
   ];
 
   return (
     <div
-      className="absolute left-1/2 top-0 z-[200] -translate-x-1/2 -translate-y-[108%] animate-in fade-in zoom-in-95 duration-200"
+      className="absolute left-1/2 top-0 z-[200]"
+      style={{ animation: "commsHubEnter 0.22s cubic-bezier(0.22, 1, 0.36, 1) both" }}
       role="dialog"
+      aria-modal="true"
       aria-label={`Contact hub for ${displayName}`}
     >
       <div
-        className="relative w-[min(168px,42vw)] rounded-2xl border border-cyan-400/55 bg-[#020810]/96 p-2 shadow-[0_0_48px_rgba(0,229,255,0.35)] backdrop-blur-md"
+        className="relative w-[min(188px,46vw)] rounded-2xl border border-cyan-400/60 bg-[#020810]/97 p-2.5 shadow-[0_0_56px_rgba(0,229,255,0.4)] backdrop-blur-lg"
         style={{
           backgroundImage:
-            "radial-gradient(ellipse 80% 60% at 50% 35%, rgba(0,229,255,0.12) 0%, transparent 70%)",
+            "radial-gradient(ellipse 85% 65% at 50% 30%, rgba(0,229,255,0.14) 0%, transparent 72%)",
         }}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-1 top-1 z-10 rounded-md p-0.5 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100"
+          className="absolute right-1.5 top-1.5 z-10 rounded-md p-1 text-cyan-200/55 transition hover:bg-cyan-500/15 hover:text-cyan-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70"
           aria-label="Close contact hub"
         >
-          <X className="h-3 w-3" />
+          <X className="h-3.5 w-3.5" />
         </button>
 
-        <p className="mb-1 text-center font-mono text-[6px] font-bold uppercase tracking-[0.22em] text-cyan-300/80">
-          NEXUS contact hub
+        <p className="mb-1.5 text-center font-mono text-[7px] font-bold uppercase tracking-[0.24em] text-cyan-300/85 sm:text-[8px]">
+          NEXUS · contact hub
         </p>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[148px]">
-          {/* Headset arc frame */}
+        <div className="relative mx-auto aspect-square w-full max-w-[160px]">
           <svg
             viewBox="0 0 120 120"
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden
           >
             <defs>
-              <linearGradient id="hub-arc" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor={CYAN} stopOpacity="0.85" />
+              <linearGradient id={arcGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={COMMS_CYAN} stopOpacity="0.9" />
                 <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.45" />
               </linearGradient>
             </defs>
             <path
               d="M 18 62 A 42 42 0 1 1 102 62"
               fill="none"
-              stroke="url(#hub-arc)"
+              stroke={`url(#${arcGradId})`}
               strokeWidth="5"
               strokeLinecap="round"
-              opacity="0.75"
+              opacity="0.8"
             />
-            <rect x="8" y="52" width="12" height="22" rx="4" fill={CYAN} opacity="0.55" />
-            <rect x="100" y="52" width="12" height="22" rx="4" fill={CYAN} opacity="0.55" />
-            <circle cx="60" cy="60" r="34" fill="none" stroke={CYAN} strokeWidth="0.6" opacity="0.25" />
+            <rect x="8" y="52" width="12" height="22" rx="4" fill={COMMS_CYAN} opacity="0.6" />
+            <rect x="100" y="52" width="12" height="22" rx="4" fill={COMMS_CYAN} opacity="0.6" />
+            <circle cx="60" cy="60" r="34" fill="none" stroke={COMMS_CYAN} strokeWidth="0.75" opacity="0.28" />
           </svg>
 
-          {/* Center portrait */}
-          <div className="absolute left-1/2 top-1/2 z-[1] flex h-[38%] w-[38%] -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-hidden rounded-lg border border-cyan-400/45 bg-gradient-to-b from-[#0a2038] to-[#020810] shadow-[inset_0_0_20px_rgba(0,229,255,0.15)]">
+          <div className="absolute left-1/2 top-1/2 z-[1] flex h-[40%] w-[40%] -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-hidden rounded-lg border border-cyan-400/50 bg-gradient-to-b from-[#0a2038] to-[#020810] shadow-[inset_0_0_24px_rgba(0,229,255,0.18)]">
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="h-full w-full object-cover object-top" draggable={false} />
             ) : (
-              <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-cyan-100/90">
+              <span className="flex h-full w-full items-center justify-center text-xl font-semibold text-cyan-100/90">
                 {initial}
               </span>
             )}
@@ -199,26 +206,29 @@ export function CommsContactHubPopover({
                 disabled={action.disabled}
                 title={`${action.label} — ${action.sub}`}
                 onClick={action.onSelect}
-                className={`absolute z-[2] flex w-[min(52px,14vw)] flex-col items-center gap-0.5 rounded-xl border bg-[#021018]/90 px-1 py-1.5 backdrop-blur-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${action.border}`}
+                className={`absolute z-[2] flex w-[min(58px,15vw)] flex-col items-center gap-0.5 rounded-xl border bg-[#021018]/95 px-1.5 py-2 backdrop-blur-sm transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-40 ${action.border} ${action.hoverGlow}`}
                 style={{
                   top: pos.top,
                   left: pos.left,
                   transform: `translate(${pos.tx}, ${pos.ty})`,
                 }}
               >
-                <action.Icon className={`h-3.5 w-3.5 ${action.accent}`} strokeWidth={2} aria-hidden />
-                <span className={`text-[7px] font-semibold leading-none ${action.accent}`}>{action.label}</span>
+                <action.Icon className={`h-4 w-4 ${action.accent}`} strokeWidth={2} aria-hidden />
+                <span className={`text-[8px] font-semibold leading-none ${action.accent}`}>{action.label}</span>
+                <span className="hidden text-[6px] leading-none text-white/45 sm:block">{action.sub}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-1 border-t border-cyan-500/20 px-1 pt-1 text-center">
-          <p className="truncate text-[9px] font-semibold text-white">{displayName}</p>
-          <p className="font-mono text-[6px] uppercase tracking-[0.14em] text-cyan-400/70">{refLabel}</p>
+        <div className="mt-1.5 border-t border-cyan-500/25 px-1 pt-1.5 text-center">
+          <p className="truncate text-[10px] font-semibold text-white sm:text-[11px]">{displayName}</p>
+          <p className="font-mono text-[7px] uppercase tracking-[0.16em] text-cyan-400/75">{refLabel}</p>
           {inCall ? (
-            <p className="mt-0.5 text-[6px] text-fuchsia-300/90">In call — voice/video paused</p>
-          ) : null}
+            <p className="mt-0.5 text-[7px] text-fuchsia-300/90">In call — dial paused</p>
+          ) : (
+            <p className="mt-0.5 text-[6px] text-cyan-400/50">Choose a channel</p>
+          )}
         </div>
       </div>
     </div>

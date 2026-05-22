@@ -43,7 +43,7 @@ interface ActiveCall {
   screenSharingBy?: string;
 }
 
-type MessageType = "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
+type MessageType = "text" | "emoji" | "media" | "file" | "cad-3d" | "voice-note" | "location" | "system";
 
 interface EnhancedMessage {
   targetUserId?: string;
@@ -1017,10 +1017,21 @@ export function initSocketSignaling(server: HttpServer) {
       });
     });
 
-    socket.on("call-chat-message", async (data: { roomId: string; message: string; timestamp: string }) => {
+    socket.on("call-chat-message", async (data: {
+      roomId: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }) => {
       const userId = (socket as any).userId;
       const user = users.get(userId);
       if (!user) return;
+
+      const msgType = data.messageType || "text";
+      const mediaUrls = data.fileUrl ? [data.fileUrl] : [];
 
       try {
         await db.insert(callMessages).values({
@@ -1028,17 +1039,22 @@ export function initSocketSignaling(server: HttpServer) {
           userId,
           userName: user.displayName,
           content: data.message,
-          messageType: "text",
+          messageType: msgType,
+          mediaUrls,
           isPrivate: false,
         });
       } catch (err) {
         console.error("[Socket.IO] Failed to persist call message:", err);
       }
 
-      socket.to(data.roomId).emit("call-chat-message", {
+      io.to(data.roomId).emit("call-chat-message", {
         senderId: userId,
         senderName: user.displayName,
         message: data.message,
+        messageType: msgType,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName,
+        fileMimeType: data.fileMimeType,
         timestamp: data.timestamp,
         roomId: data.roomId,
       });

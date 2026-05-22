@@ -2,9 +2,12 @@
  * Unified Comms UI for the global mesh link (/cyrus-comm-io) — no separate tab.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useCommsP2PLayer } from "./CommsP2PLayerContext";
-import { Link2, MapPin, Radio, ChevronDown, ChevronUp } from "lucide-react";
+import { usePresence } from "../../contexts/PresenceContext";
+import { uploadAndBuildCommsMediaPayload } from "../../lib/comms-media-upload";
+import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import { Link2, MapPin, Radio, ChevronDown, ChevronUp, Paperclip } from "lucide-react";
 
 /** Single-line status for NEXUS header (presence string passed from parent). */
 export function CommsMeshLinkHeaderBadge({
@@ -30,6 +33,7 @@ export function CommsMeshLinkHeaderBadge({
 /** Strip between NTN banner and channel nav — mesh controls + off-grid DM. */
 export function CommsP2PUnifiedStrip() {
   const {
+    selfId,
     linkConnected,
     linkJoined,
     meshUsers,
@@ -43,6 +47,28 @@ export function CommsP2PUnifiedStrip() {
     meshLocationLines,
     linkLog,
   } = useCommsP2PLayer();
+  const { sendChatMessage, myUserId } = usePresence();
+  const meshMediaRef = useRef<HTMLInputElement>(null);
+  const [meshUploading, setMeshUploading] = useState(false);
+
+  const sendMeshMedia = useCallback(
+    async (file: File) => {
+      const peer = meshSelectedPeer;
+      if (!peer) return;
+      setMeshUploading(true);
+      try {
+        const uid = myUserId || selfId;
+        const payload = await uploadAndBuildCommsMediaPayload(file, "", uid);
+        if (payload) {
+          sendChatMessage(peer, payload);
+          sendMeshMessage(`📎 ${payload.fileName || file.name} (via encrypted comms)`);
+        }
+      } finally {
+        setMeshUploading(false);
+      }
+    },
+    [meshSelectedPeer, myUserId, selfId, sendChatMessage, sendMeshMessage],
+  );
 
   const [expandDm, setExpandDm] = useState(false);
   const [expandLog, setExpandLog] = useState(false);
@@ -98,7 +124,7 @@ export function CommsP2PUnifiedStrip() {
           onClick={() => setExpandDm(!expandDm)}
           className="flex w-full items-center justify-between text-left text-[11px] font-medium text-violet-200/90"
         >
-          Off-grid mesh messages (parallel to main chat)
+          Off-grid mesh messages — media & CAD fuse to encrypted presence when peer is online
           {expandDm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {expandDm && mesh ? (
@@ -135,6 +161,26 @@ export function CommsP2PUnifiedStrip() {
                     sendMeshMessage(t);
                   }}
                 >
+                  <input
+                    ref={meshMediaRef}
+                    type="file"
+                    accept={COMMS_MEDIA_FILE_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void sendMeshMedia(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={meshUploading}
+                    onClick={() => meshMediaRef.current?.click()}
+                    className="rounded-lg border border-violet-500/30 px-2 py-1 text-violet-100/80 hover:bg-violet-500/10 disabled:opacity-40"
+                    title="Share media or CAD via encrypted comms"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
                   <input
                     name="meshmsg"
                     placeholder="Mesh-only message…"

@@ -34,7 +34,7 @@ type Props = {
   setPendingConversationId: (id: string | null) => void;
   setSlotPinRevision: React.Dispatch<React.SetStateAction<number>>;
   callUser: (userId: string, userName: string, type: "audio" | "video") => void;
-  presenceSendChatMessage: (targetUserId: string, payload: ChatOutboundPayload) => void;
+  presenceSendChatMessage: (conversationId: string, payload: ChatOutboundPayload) => void;
   selectedPeerId?: string | null;
   onConferenceReady?: (conference: CommsConference) => void;
   onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;

@@ -111,13 +111,13 @@ export function ConferenceQuickPanel({
   }, [joinId, displayName, lastCreated]);
 
   return (
-    <div className="rounded-xl border border-violet-500/25 bg-violet-950/20 p-4">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-200/90">
+    <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/25 via-violet-950/20 to-[#021018]/80 p-4 shadow-[0_0_32px_-8px_rgba(0,229,255,0.25)]">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/95">
         <Users className="h-4 w-4" />
-        Conference (server room)
+        Conference bridge
       </h3>
-      <p className="mb-3 text-[11px] text-white/45">
-        Creates/joins the in-memory + DB-backed conference from the API. P2P mesh for multiple peers is not yet unified here.
+      <p className="mb-3 text-[11px] leading-relaxed text-white/50">
+        Server-backed rooms for round-table group calls. Create or join; room codes sync with the Calls tab after orbital group dial.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="flex-1 text-[11px] text-white/60">
@@ -132,7 +132,7 @@ export function ConferenceQuickPanel({
           type="button"
           disabled={busy}
           onClick={() => void onCreate()}
-          className="rounded-lg bg-violet-600/80 px-3 py-2 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50"
+          className="rounded-lg bg-cyan-600/85 px-3 py-2 text-xs font-medium text-white shadow-[0_0_16px_rgba(0,229,255,0.25)] hover:bg-cyan-500 disabled:opacity-50"
         >
           Create
         </button>
@@ -151,7 +151,7 @@ export function ConferenceQuickPanel({
           type="button"
           disabled={busy || !joinId.trim()}
           onClick={() => void onJoin()}
-          className="rounded-lg border border-violet-400/40 bg-transparent px-3 py-2 text-xs font-medium text-violet-200 hover:bg-violet-500/10 disabled:opacity-50"
+          className="rounded-lg border border-cyan-400/45 bg-transparent px-3 py-2 text-xs font-medium text-cyan-100 hover:bg-cyan-500/10 disabled:opacity-50"
         >
           Join
         </button>

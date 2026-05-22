@@ -34,7 +34,7 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
 /** Served with correct Content-Type so PDF/HTML open in-browser; ?download=1 forces attachment. */
@@ -62,6 +62,28 @@ const COMMS_SERVE_MIME: Record<string, string> = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".mp3": "audio/mpeg",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
+  ".step": "application/step",
+  ".stp": "application/step",
+  ".iges": "model/iges",
+  ".igs": "model/iges",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".ply": "application/ply",
+  ".3mf": "application/3mf",
+  ".fbx": "application/octet-stream",
+  ".dae": "model/vnd.collada+xml",
+  ".x_t": "application/octet-stream",
+  ".x_b": "application/octet-stream",
+  ".sldprt": "application/octet-stream",
+  ".sldasm": "application/octet-stream",
+  ".slddrw": "application/octet-stream",
+  ".jt": "application/octet-stream",
+  ".amf": "application/amf+xml",
+  ".off": "application/octet-stream",
+  ".wrl": "model/vrml",
+  ".vrml": "model/vrml",
 };
 
 const avatarUpload = multer({
@@ -1262,7 +1284,8 @@ router.get("/api/comms/media/:id", (req, res) => {
       mime.startsWith("text/csv") ||
       mime.startsWith("image/") ||
       mime.startsWith("video/") ||
-      mime.startsWith("audio/")
+      mime.startsWith("audio/") ||
+      mime.startsWith("model/")
     ) {
       res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(baseName)}"`);
     } else {
