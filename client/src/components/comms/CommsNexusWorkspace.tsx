@@ -29,6 +29,7 @@ export function CommsNexusWorkspace({
   sceneSubtitle,
   children,
   className = "",
+  showModuleCarousel = true,
 }: {
   darkMode: boolean;
   onToggleDarkMode: () => void;
@@ -47,6 +48,8 @@ export function CommsNexusWorkspace({
   children: ReactNode;
   /** Merge with root (e.g. flex-1 min-h-0 from page shell). */
   className?: string;
+  /** When false, hide the lower module carousel (reference deck fills viewport). */
+  showModuleCarousel?: boolean;
 }) {
   const isDark = darkMode;
 
@@ -235,7 +238,15 @@ export function CommsNexusWorkspace({
 
         {/* Orbital deck + optional integrated console (e.g. chat) or lower module carousel */}
         <div className="relative z-[3] mt-0 flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden sm:mt-1 sm:gap-2">
-          <div className="relative min-h-0 w-full shrink-0 overflow-x-hidden">{commandDeck}</div>
+          <div
+            className={`relative w-full overflow-x-hidden ${
+              !integratedConsole && !showModuleCarousel
+                ? "flex min-h-0 flex-1 flex-col"
+                : "min-h-0 shrink-0"
+            }`}
+          >
+            {commandDeck}
+          </div>
 
           {integratedConsole ? (
             <div
@@ -251,7 +262,7 @@ export function CommsNexusWorkspace({
           ) : null}
 
         {/* Curved glass carousel — modules other than integrated console */}
-        {!integratedConsole ? (
+        {!integratedConsole && showModuleCarousel ? (
         <div
           className="relative z-[3] flex min-h-0 flex-1 flex-col"
           style={{ perspective: "1400px" }}

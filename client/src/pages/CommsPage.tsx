@@ -32,8 +32,10 @@ import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbi
 import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
+import type { CommsConference } from "../lib/comms-conference-api";
 import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
-import { CommsOrbitalCommandDeck, type OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
+import { CommsOrbitalDeckConnected } from "../components/comms/CommsOrbitalDeckConnected";
+import type { OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
 import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
@@ -102,6 +104,9 @@ export function CommsPage() {
   const [newChatPicks, setNewChatPicks] = useState<string[]>([]);
   const [orbitalAssignSlot, setOrbitalAssignSlot] = useState<number | null>(null);
   const [slotPinRevision, setSlotPinRevision] = useState(0);
+  /** Reference deck fills viewport until user opens chat from hub or a peer pod. */
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [orbitalConference, setOrbitalConference] = useState<CommsConference | null>(null);
 
   const {
     messages,
@@ -778,41 +783,18 @@ export function CommsPage() {
     }
     setSelectedConvForMessage(userId);
     setActiveTab("chat");
+    setChatPanelOpen(true);
   }, [orbitalAssignSlot]);
-
-  const handleOrbitalPeerMessage = useCallback((userId: string, _userName: string, slotIndex: number) => {
-    writeOrbitalSlotPin(slotIndex, userId);
-    setSlotPinRevision((r) => r + 1);
-    setSelectedConvForMessage(userId);
-    setActiveTab("chat");
-  }, []);
 
   const handleEmptyOrbitalSlot = useCallback((slotIndex: number, _refLabel: string) => {
     setOrbitalAssignSlot(slotIndex);
     setActiveTab("people");
-  }, []);
-
-  const handleOrbitalHubActivate = useCallback(() => {
-    setActiveTab("chat");
+    setChatPanelOpen(false);
   }, []);
 
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
     callUser(userId, userName, type);
   }, [callUser]);
-
-  /** Orbital HUD: soft invite via chat + jump to channel (distinct from immediate video dial). */
-  const handleOrbitalVideoInvite = useCallback(
-    (userId: string, _userName: string) => {
-      setActiveTab("chat");
-      setSelectedConvForMessage(userId);
-      presenceSendChatMessage(userId, {
-        message: `📹 ${displayName} invites you to a video session — open Calls when you're ready to connect.`,
-        messageType: "text",
-        timestamp: new Date().toISOString(),
-      });
-    },
-    [displayName, presenceSendChatMessage]
-  );
 
   const handleEmojiSelect = useCallback((emoji: string) => {
     setShowEmojiPicker(false);
@@ -1016,6 +998,7 @@ export function CommsPage() {
         displayName={displayName}
         isConnected={isConnected}
         onlineUsersLength={onlineUsers.length}
+        showModuleCarousel={activeTab !== "chat" || chatPanelOpen}
         sceneTitle="Key Event Assurance Service"
         sceneSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
         handoff={
@@ -1058,7 +1041,7 @@ export function CommsPage() {
           ) : null
         }
         commandDeck={
-          <CommsOrbitalCommandDeck
+          <CommsOrbitalDeckConnected
             darkMode={darkMode}
             displayName={displayName}
             isConnected={isConnected}
@@ -1066,18 +1049,26 @@ export function CommsPage() {
             onMainUserPhotoUpload={handleChatAvatarUpload}
             photoUploading={avatarUploading}
             forwardSlots={forwardSlots}
+            myId={myId}
             selectedPeerId={selectedOrbitalPeerId}
             activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            onPeerCall={handleUserCall}
-            onPeerMessage={handleOrbitalPeerMessage}
-            onPeerVideoInvite={handleOrbitalVideoInvite}
+            onSelectTab={(t) => {
+              setActiveTab(t);
+              setChatPanelOpen(t === "chat");
+            }}
+            setChatPanelOpen={setChatPanelOpen}
+            setPendingConversationId={setPendingConversationId}
+            setSlotPinRevision={setSlotPinRevision}
+            callUser={callUser}
+            presenceSendChatMessage={presenceSendChatMessage}
+            onConferenceReady={setOrbitalConference}
             onEmptySlotClick={handleEmptyOrbitalSlot}
-            onHubActivate={handleOrbitalHubActivate}
+            serviceTitle="Key Event Assurance Service"
+            serviceSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
           />
         }
         integratedConsole={
-          activeTab === "chat" ? (
+          chatPanelOpen && activeTab === "chat" ? (
             <div className="flex h-full min-h-0 flex-col">
               {anomalyBanner}
               <div
@@ -1103,6 +1094,17 @@ export function CommsPage() {
                     {MODULE_SECTOR_SUBTITLE.chat}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setChatPanelOpen(false)}
+                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-medium transition ${
+                    darkMode
+                      ? "border-cyan-500/35 bg-cyan-950/40 text-cyan-100 hover:bg-cyan-900/50"
+                      : "border-sky-300 bg-white text-slate-700 hover:border-sky-400"
+                  }`}
+                >
+                  Back to arc
+                </button>
               </div>
               <div className={modulePanelShell}>
                 <NexusModuleSurface variant="flush">
@@ -1226,6 +1228,7 @@ export function CommsPage() {
                         allUsers={allUsers}
                         onlineUsers={onlineUsers}
                         onCall={handleUserCall}
+                        seedConference={orbitalConference}
                       />
                     </div>
                   </NexusModuleSurface>
@@ -1284,18 +1287,28 @@ function CallHistoryPanel({
   allUsers,
   onlineUsers,
   onCall,
+  seedConference,
 }: {
   myDeviceId: string;
   displayName: string;
   allUsers: { id: string; displayName: string; isOnline: boolean; lastSeen: string | null; status: string }[];
   onlineUsers: { id: string; displayName: string; deviceId: string; inCall: boolean }[];
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
+  seedConference?: import("../lib/comms-conference-api").CommsConference | null;
 }) {
   const onlineOthers = onlineUsers.filter(u => u.id !== myDeviceId && u.id !== "cyrus-001");
 
   return (
     <div className="space-y-6">
-      <ConferenceQuickPanel displayName={displayName} />
+      {seedConference ? (
+        <div className="rounded-xl border border-cyan-500/35 bg-cyan-950/30 px-3 py-2.5 text-xs text-cyan-100/90">
+          <p className="font-semibold text-cyan-50">Round-table group call linked</p>
+          <p className="mt-0.5 text-[11px] text-cyan-200/75">
+            Room <span className="font-mono text-cyan-100">{seedConference.roomCode}</span> — you are joined on the server. Share the code with table peers (invites sent via chat).
+          </p>
+        </div>
+      ) : null}
+      <ConferenceQuickPanel displayName={displayName} seedConference={seedConference} />
       <CommsP2PCallDock />
       <div>
         <h3
