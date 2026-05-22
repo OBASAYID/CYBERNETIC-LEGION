@@ -260,7 +260,7 @@ export function getAudioConstraints(): MediaTrackConstraints {
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-  };
+  } as MediaTrackConstraints;
 }
 
 /** Operator / UX toggles for constrained networks (localStorage `cyrus-comms-network-mode`). */

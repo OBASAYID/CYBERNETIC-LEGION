@@ -109,11 +109,11 @@ export function CommsNexusWorkspace({
         aria-hidden
       />
 
-      {/* Your uploaded reference images — environment echo (very low weight; procedural scene stays primary). */}
+      {/* Reference environment echoes — use shipped assets only */}
       <div
-        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.09] mix-blend-screen sm:opacity-[0.1]"
+        className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.08] mix-blend-screen sm:opacity-[0.1]"
         style={{
-          backgroundImage: "url(/comms/ref-global-service-center.png)",
+          backgroundImage: "url(/comms/ref-keas-global-service.png)",
           maskImage: "radial-gradient(ellipse 78% 68% at 50% 32%, black 0%, transparent 74%)",
         }}
         aria-hidden
@@ -121,7 +121,7 @@ export function CommsNexusWorkspace({
       <div
         className="pointer-events-none absolute inset-0 z-0 bg-cover bg-top bg-no-repeat opacity-[0.06] mix-blend-soft-light sm:opacity-[0.08]"
         style={{
-          backgroundImage: "url(/comms/ref-vr-hud.png)",
+          backgroundImage: "url(/comms/ref-smart-city-platform.png)",
           maskImage: "radial-gradient(ellipse 82% 62% at 50% 22%, black 0%, transparent 72%)",
         }}
         aria-hidden
@@ -129,16 +129,8 @@ export function CommsNexusWorkspace({
       <div
         className="pointer-events-none absolute inset-0 z-0 bg-contain bg-top bg-no-repeat opacity-[0.07] mix-blend-screen sm:opacity-[0.09]"
         style={{
-          backgroundImage: "url(/comms/ref-key-event-assurance.png)",
+          backgroundImage: "url(/comms/ref-round-table.png)",
           maskImage: "radial-gradient(ellipse 88% 70% at 50% 28%, black 0%, transparent 76%)",
-        }}
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-0 bg-[length:min(100%,920px)] bg-top bg-no-repeat opacity-[0.09] mix-blend-screen sm:opacity-[0.11]"
-        style={{
-          backgroundImage: "url(/comms/ref-assurance-exact.png)",
-          maskImage: "radial-gradient(ellipse 90% 72% at 50% 26%, black 0%, transparent 78%)",
         }}
         aria-hidden
       />

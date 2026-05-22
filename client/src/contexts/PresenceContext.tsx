@@ -2,15 +2,19 @@ import { createContext, useContext, useEffect, useState, useRef, useCallback, Re
 import { io, Socket } from "socket.io-client";
 import { getCommsDeviceId } from "../lib/comms-device-id";
 import {
-  getAudioConstraints,
   getCallQualityMetrics,
   AdaptiveBitrateController,
-  applyBandwidthConstraints,
   isRelayOnlyTestMode,
   getCyrusCommsNetworkMode,
-  getVideoConstraintsForCommsCall,
   applyPreferredCodecsToPeerConnection,
 } from "../lib/webrtc-config";
+import {
+  acquireCommsUserMedia,
+  getInitialQualityPreset,
+  presetToCallQualityLabel,
+  tuneCommsPeerConnection,
+} from "../lib/comms-call-media";
+import { AudioProcessor } from "../lib/webrtc-config";
 import type { CallSessionStatus } from "@shared/calls/call-session-types";
 import { isIcePathLive } from "@shared/calls/call-session-types";
 import { fetchCyrusCommRtcConfiguration } from "../realtime/fetch-rtc-config";
@@ -27,6 +31,7 @@ import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinat
 import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
 import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
+import { buildPresenceSendMessagePayload } from "../lib/comms-outbound";
 
 export type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
 
@@ -71,7 +76,7 @@ export interface MediaCallControls {
 
 export type ChatOutboundPayload = {
   message: string;
-  messageType?: "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
+  messageType?: "text" | "emoji" | "media" | "file" | "cad-3d" | "voice-note" | "location" | "system";
   fileUrl?: string;
   fileName?: string;
   fileMimeType?: string;
@@ -102,7 +107,8 @@ interface PresenceContextType {
   toggleMute: () => void;
   toggleVideo: () => void;
   sendMessage: (targetUserId: string, message: string) => void;
-  sendChatMessage: (targetUserId: string, payload: ChatOutboundPayload) => void;
+  /** `conversationId` is a peer user id or `group_*` group thread id. */
+  sendChatMessage: (conversationId: string, payload: ChatOutboundPayload) => void;
   clearNotification: (id: string) => void;
   wsRef: React.MutableRefObject<Socket | null>;
   callDiagnostics: CallDiagnosticsSnapshot | null;
@@ -110,6 +116,12 @@ interface PresenceContextType {
   reportRemoteMediaPlayback: (autoplayBlocked: boolean) => void;
   /** User or tooling: retry AudioContext + remote stream reattach (silent audio / blocked autoplay). */
   recoverCallMedia: () => Promise<void>;
+  isScreenSharing: boolean;
+  screenShareStream: MediaStream | null;
+  remoteScreenSharerName: string | null;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => Promise<void>;
+  sendCallChatMessage: (payload: ChatOutboundPayload) => void;
 }
 
 const PresenceContext = createContext<PresenceContextType | null>(null);
@@ -155,6 +167,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
   const negotiationBusyRef = useRef(false);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
+  const audioProcessorRef = useRef<AudioProcessor | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const savedCameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenShareStream, setScreenShareStream] = useState<MediaStream | null>(null);
+  const [remoteScreenSharerName, setRemoteScreenSharerName] = useState<string | null>(null);
   const iceRestartAttemptsRef = useRef(0);
   const iceRestartVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Ignore spurious ICE "disconnected" before we have ever reached a live path. */
@@ -202,6 +220,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
     }
+    if (audioProcessorRef.current) {
+      audioProcessorRef.current.destroy();
+      audioProcessorRef.current = null;
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+    setScreenShareStream(null);
+    setRemoteScreenSharerName(null);
+    savedCameraTrackRef.current = null;
+    setIsScreenSharing(false);
     webrtcDiagSessionRef.current?.dispose();
     webrtcDiagSessionRef.current = null;
     recoveryManagerRef.current.reset();
@@ -274,22 +304,26 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           return { ...prev, status: "connected" as CallSessionStatus };
         });
         startCallTimer();
-        if (callType === "video") {
-          const pcNow = peerConnectionRef.current;
-          if (!pcNow || abrControllerRef.current) return;
-          const ctl = new AdaptiveBitrateController(pcNow);
-          abrControllerRef.current = ctl;
-          const net = getCyrusCommsNetworkMode();
-          const initialPreset =
-            net === "low_bandwidth" || net === "degraded" || net === "emergency"
-              ? "low"
-              : net === "audio_priority"
-                ? "low"
-                : "medium";
-          void applyBandwidthConstraints(pcNow, initialPreset, getCyrusCommsNetworkMode()).then(() => {
-            if (abrControllerRef.current === ctl && alive()) ctl.start();
+        const pcNow = peerConnectionRef.current;
+        if (!pcNow || abrControllerRef.current) return;
+        void tuneCommsPeerConnection(pcNow, callType, (preset) => {
+          if (!alive() || !socket.connected) return;
+          socket.emit("update-call-quality", {
+            roomId,
+            quality: presetToCallQualityLabel(preset),
           });
-        }
+        }).then((ctl) => {
+          if (!alive() || peerConnectionRef.current !== pcNow) {
+            ctl.stop();
+            return;
+          }
+          abrControllerRef.current = ctl;
+          ctl.start();
+          socket.emit("update-call-quality", {
+            roomId,
+            quality: presetToCallQualityLabel(getInitialQualityPreset(callType, getCyrusCommsNetworkMode())),
+          });
+        });
       };
 
       const flushIce = async () => {
@@ -395,9 +429,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         if (!alive()) return;
 
         const networkMode = getCyrusCommsNetworkMode();
-        const videoConstraints = getVideoConstraintsForCommsCall(callType, networkMode);
-        const audioConstraints = getAudioConstraints();
-
         try {
           const devs = await navigator.mediaDevices.enumerateDevices();
           if (!devs.some((d) => d.kind === "audioinput")) {
@@ -407,13 +438,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           /* ignore */
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-        if (!alive()) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
+        let stream: MediaStream;
+        try {
+          const acquired = await acquireCommsUserMedia(callType, networkMode);
+          if (!alive()) {
+            acquired.stream.getTracks().forEach((t) => t.stop());
+            acquired.audioProcessor?.destroy();
+            return;
+          }
+          audioProcessorRef.current = acquired.audioProcessor;
+          stream = acquired.stream;
+        } catch (mediaErr) {
+          console.error("[WebRTC-Presence] getUserMedia failed:", mediaErr);
+          addNotification("error", "Microphone/camera access denied or unavailable.");
+          throw mediaErr;
         }
 
         localStreamRef.current = stream;
@@ -838,6 +876,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       addNotification("error", `Call failed: ${data.reason}`);
     });
 
+    socket.on(
+      "screen-share-started",
+      (data: { roomId: string; userId: string; displayName?: string }) => {
+        if (activeCallRef.current?.roomId !== data.roomId) return;
+        if (data.userId === currentUserIdRef.current) return;
+        setRemoteScreenSharerName(data.displayName || "Participant");
+      },
+    );
+
+    socket.on("screen-share-stopped", (data: { roomId: string; userId: string }) => {
+      if (activeCallRef.current?.roomId !== data.roomId) return;
+      if (data.userId === currentUserIdRef.current) return;
+      setRemoteScreenSharerName(null);
+    });
+
     socket.on('new-message', (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
       console.log("[Presence] Message from:", data.senderName);
       addNotification("info", `Message from ${data.senderName}: ${data.message}`);
@@ -986,33 +1039,23 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const sendChatMessage = useCallback((targetUserId: string, payload: ChatOutboundPayload) => {
+  const sendChatMessage = useCallback((conversationId: string, payload: ChatOutboundPayload) => {
     if (!socketRef.current?.connected) {
       console.error("[Presence] Socket not connected - cannot send message");
       addNotification("error", "Not connected");
       return;
     }
-    const ts = payload.timestamp || new Date().toISOString();
-    socketRef.current.emit("send-message", {
-      targetUserId,
-      message: payload.message,
-      messageType: payload.messageType || "text",
-      fileUrl: payload.fileUrl,
-      fileName: payload.fileName,
-      fileMimeType: payload.fileMimeType,
-      fileSizeBytes: payload.fileSizeBytes,
-      voiceDurationSeconds: payload.voiceDurationSeconds,
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      timestamp: ts,
-    });
+    socketRef.current.emit(
+      "send-message",
+      buildPresenceSendMessagePayload(conversationId, payload),
+    );
   }, [addNotification]);
 
   const sendMessage = useCallback(
     (targetUserId: string, message: string) => {
       sendChatMessage(targetUserId, { message, messageType: "text" });
     },
-    [sendChatMessage]
+    [sendChatMessage],
   );
 
   const reportRemoteMediaPlayback = useCallback((autoplayBlocked: boolean) => {
@@ -1044,6 +1087,87 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         : "Remote stream reattached — use in-call controls or tap the video if audio is still silent."
     );
   }, [addNotification]);
+
+  const sendCallChatMessage = useCallback((payload: ChatOutboundPayload) => {
+    const call = activeCallRef.current;
+    const uid = currentUserIdRef.current;
+    if (!call || !uid || !socketRef.current?.connected) return;
+    socketRef.current.emit("call-chat-message", {
+      roomId: call.roomId,
+      message: payload.message,
+      messageType: payload.messageType || "text",
+      fileUrl: payload.fileUrl,
+      fileName: payload.fileName,
+      fileMimeType: payload.fileMimeType,
+      timestamp: payload.timestamp || new Date().toISOString(),
+    });
+  }, []);
+
+  const stopScreenShare = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const call = activeCallRef.current;
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+    setScreenShareStream(null);
+    const videoSender = pc?.getSenders().find((s) => s.track?.kind === "video");
+    if (videoSender && savedCameraTrackRef.current) {
+      try {
+        await videoSender.replaceTrack(savedCameraTrackRef.current);
+      } catch (e) {
+        console.warn("[Presence] restore camera track failed:", e);
+      }
+    }
+    savedCameraTrackRef.current = null;
+    setIsScreenSharing(false);
+    if (call && socketRef.current?.connected) {
+      socketRef.current.emit("screen-share-stop", { roomId: call.roomId });
+    }
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const call = activeCallRef.current;
+    if (!pc || !call || !socketRef.current?.connected) {
+      addNotification("error", "Connect a call before sharing your screen.");
+      return;
+    }
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 24, max: 30 },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+        },
+        audio: false,
+      });
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (!screenTrack) {
+        screenStream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const videoSender = pc.getSenders().find((s) => s.track?.kind === "video");
+      if (videoSender?.track) {
+        savedCameraTrackRef.current = videoSender.track;
+        await videoSender.replaceTrack(screenTrack);
+      } else {
+        pc.addTrack(screenTrack, screenStream);
+      }
+      screenTrack.onended = () => {
+        void stopScreenShare();
+      };
+      screenStreamRef.current = screenStream;
+      setScreenShareStream(screenStream);
+      setIsScreenSharing(true);
+      setMediaControls((prev) => ({ ...prev, isVideoEnabled: true }));
+      socketRef.current.emit("screen-share-start", { roomId: call.roomId });
+      addNotification("success", "Screen sharing started");
+    } catch (err) {
+      console.warn("[Presence] screen share failed:", err);
+      addNotification("warning", "Screen share cancelled or blocked by the browser.");
+    }
+  }, [addNotification, stopScreenShare]);
 
   useEffect(() => {
     return () => {
@@ -1213,6 +1337,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         callDiagnostics,
         reportRemoteMediaPlayback,
         recoverCallMedia,
+        isScreenSharing,
+        screenShareStream,
+        remoteScreenSharerName,
+        startScreenShare,
+        stopScreenShare,
+        sendCallChatMessage,
       }}
     >
       {children}

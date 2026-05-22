@@ -28,6 +28,9 @@ import {
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
+import { uploadAndBuildCommsMediaPayload } from "../lib/comms-media-upload";
+import { buildTypingPayload, isGroupConversationId } from "../lib/comms-outbound";
+import { presetToCallQualityLabel } from "../lib/comms-call-media";
 import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbital-integration";
 import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
@@ -41,7 +44,7 @@ import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
 
 const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
-  chat: "Encrypted messaging, voice notes, and media",
+  chat: "Encrypted messaging, voice notes, media & 3D CAD",
   pshare: "Timeline, handoffs, and field posts",
   calls: "Mesh calls, quick dial, and conference bridge",
   people: "Presence, roster, and discovery",
@@ -58,9 +61,11 @@ function conversationPreviewLine(msg: {
   const mt = (msg.messageType || "").toLowerCase();
   if (mt === "voice-note") return "🎤 Voice message";
   if (mt === "location") return "📍 Location";
+  if (mt === "cad-3d") return "🧊 3D model";
   if (mt === "emoji") return msg.content || "Emoji";
-  if (mt === "media" || msg.fileUrl) {
+  if (mt === "media" || mt === "file" || mt === "cad-3d" || msg.fileUrl) {
     const m = msg.fileMimeType || "";
+    if (mt === "cad-3d") return "🧊 3D model";
     if (m.startsWith("image/")) return "📷 Photo";
     if (m.startsWith("video/")) return "🎬 Video";
     if (m.startsWith("audio/")) return "🎵 Audio";
@@ -84,8 +89,19 @@ export function CommsPage() {
   const [emojiTarget, setEmojiTarget] = useState<string>("");
   const [displayName, setDisplayName] = useState("");
   const [callChatMessages, setCallChatMessages] = useState<
-    { senderId: string; senderName: string; message: string; timestamp: string }[]
+    {
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }[]
   >([]);
+  const [chatGroups, setChatGroups] = useState<Array<{ id: string; name: string; members: string[] }>>([]);
+  const pendingGroupBootstrapRef = useRef<{ message: string } | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [selectedConvForMessage, setSelectedConvForMessage] = useState<string | null>(null);
   const [callReactions, setCallReactions] = useState<Reaction[]>([]);
@@ -141,14 +157,48 @@ export function CommsPage() {
     callDiagnostics,
     reportRemoteMediaPlayback,
     recoverCallMedia,
+    isScreenSharing,
+    screenShareStream,
+    remoteScreenSharerName,
+    startScreenShare,
+    stopScreenShare,
+    sendCallChatMessage,
   } = usePresence();
 
   const myUserIdRef = useRef(myUserId);
   const myDeviceIdRef = useRef(myDeviceId);
   const displayNameRef = useRef(displayName);
+  const presenceSendChatMessageRef = useRef(presenceSendChatMessage);
   useEffect(() => { myUserIdRef.current = myUserId; }, [myUserId]);
   useEffect(() => { myDeviceIdRef.current = myDeviceId; }, [myDeviceId]);
   useEffect(() => { displayNameRef.current = displayName; }, [displayName]);
+  useEffect(() => { presenceSendChatMessageRef.current = presenceSendChatMessage; }, [presenceSendChatMessage]);
+
+  useEffect(() => {
+    if (!activeCall) setCallChatMessages([]);
+  }, [activeCall?.roomId, activeCall]);
+
+  useEffect(() => {
+    const preset = callDiagnostics?.abrPreset;
+    if (preset) {
+      setCallQuality(presetToCallQualityLabel(preset));
+    }
+  }, [callDiagnostics?.abrPreset]);
+
+  useEffect(() => {
+    const uid = myUserId || myDeviceId;
+    if (!uid) return;
+    void systemFetch("/api/comms/groups", {
+      headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: Array<{ id: string; name: string; members?: string[] }>) => {
+        if (Array.isArray(rows)) {
+          setChatGroups(rows.map((g) => ({ id: g.id, name: g.name, members: g.members || [] })));
+        }
+      })
+      .catch(() => {});
+  }, [myUserId, myDeviceId]);
 
   useEffect(() => {
     const savedName = localStorage.getItem("cyrus-display-name") || "CYRUS User";
@@ -243,6 +293,7 @@ export function CommsPage() {
       message: string;
       messageType?: string;
       timestamp: string;
+      groupId?: string;
       fileUrl?: string;
       fileName?: string;
       fileMimeType?: string;
@@ -259,6 +310,7 @@ export function CommsPage() {
           senderName: data.senderName,
           message: data.message,
           messageType: data.messageType,
+          groupId: data.groupId,
           timestamp: data.timestamp || new Date().toISOString(),
           fileUrl: data.fileUrl,
           fileName: data.fileName,
@@ -280,6 +332,7 @@ export function CommsPage() {
     const handleMessageSent = (data: {
       id: string;
       recipientId: string;
+      groupId?: string;
       message: string;
       messageType?: string;
       timestamp: string;
@@ -295,7 +348,8 @@ export function CommsPage() {
       const sentMsg: CommsMessage = fromSocketMessageSent(
         {
           id: data.id || `sent_${Date.now()}`,
-          recipientId: data.recipientId,
+          recipientId: data.groupId || data.recipientId,
+          groupId: data.groupId,
           message: data.message,
           messageType: data.messageType,
           timestamp: data.timestamp || new Date().toISOString(),
@@ -317,8 +371,23 @@ export function CommsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
-    const handleCallChatMessage = (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
-      setCallChatMessages(prev => [...prev, data]);
+    const handleCallChatMessage = (data: {
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }) => {
+      setCallChatMessages((prev) => {
+        const sig = `${data.senderId}|${data.timestamp}|${data.fileUrl ?? ""}|${data.message}`;
+        if (prev.some((m) => `${m.senderId}|${m.timestamp}|${m.fileUrl ?? ""}|${m.message}` === sig)) {
+          return prev;
+        }
+        return [...prev, data];
+      });
     };
 
     const handleReactionReceived = (data: { emoji: string; x: number; y: number; userId: string }) => {
@@ -376,11 +445,33 @@ export function CommsPage() {
       ));
     };
 
+    const handleGroupCreated = (data: {
+      groupId: string;
+      name: string;
+      members: string[];
+    }) => {
+      setChatGroups((prev) => {
+        if (prev.some((g) => g.id === data.groupId)) return prev;
+        return [...prev, { id: data.groupId, name: data.name, members: data.members || [] }];
+      });
+      setPendingConversationId(data.groupId);
+      setActiveTab("chat");
+      setChatPanelOpen(true);
+      setNewChatMode(false);
+      setNewChatPicks([]);
+      const bootstrap = pendingGroupBootstrapRef.current;
+      if (bootstrap?.message.trim()) {
+        presenceSendChatMessageRef.current(data.groupId, { message: bootstrap.message, messageType: "text" });
+        pendingGroupBootstrapRef.current = null;
+      }
+    };
+
     socket.on("new-message", handleNewMessage);
     socket.on("message-sent", handleMessageSent);
     socket.on("typing-started", handleTypingStart);
     socket.on("typing-stopped", handleTypingStop);
     socket.on("call-chat-message", handleCallChatMessage);
+    socket.on("group-created", handleGroupCreated);
     socket.on("reaction-received", handleReactionReceived);
     socket.on("call-quality-updated", handleCallQualityUpdated);
     socket.on("live-stream-started", handleLiveStreamStarted);
@@ -394,6 +485,7 @@ export function CommsPage() {
       socket.off("typing-started", handleTypingStart);
       socket.off("typing-stopped", handleTypingStop);
       socket.off("call-chat-message", handleCallChatMessage);
+      socket.off("group-created", handleGroupCreated);
       socket.off("reaction-received", handleReactionReceived);
       socket.off("call-quality-updated", handleCallQualityUpdated);
       socket.off("live-stream-started", handleLiveStreamStarted);
@@ -465,6 +557,14 @@ export function CommsPage() {
   }, [myId, onlineUsers, allUsers, contacts, getAvatarForUser, slotPinRevision]);
 
   const selectedOrbitalPeerId = pendingConversationId;
+
+  const activeChatPeerName = useMemo(() => {
+    if (!pendingConversationId) return null;
+    if (isGroupConversationId(pendingConversationId)) {
+      return chatGroups.find((g) => g.id === pendingConversationId)?.name || "Group discussion";
+    }
+    return getUserDisplayNameForChat(pendingConversationId);
+  }, [pendingConversationId, getUserDisplayNameForChat, chatGroups]);
 
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
@@ -538,18 +638,42 @@ export function CommsPage() {
     });
 
     for (const msg of dedupedMsgs) {
-      const partnerId = msg.senderId === myId ? msg.recipientId : msg.senderId;
-      if (partnerId === "broadcast" || !partnerId) continue;
-      const existing = convMap.get(partnerId);
-      const partnerUser = allUsers.find(u => u.id === partnerId);
-      const partnerOnline = onlineUsers.find(u => u.id === partnerId);
-      const name = partnerUser?.displayName || partnerOnline?.displayName || partnerId.substring(0, 12) + "...";
+      const threadId = isGroupConversationId(msg.recipientId)
+        ? msg.recipientId
+        : msg.senderId === myId
+          ? msg.recipientId
+          : msg.senderId;
+      if (!threadId || threadId === "broadcast") continue;
+
+      if (isGroupConversationId(threadId)) {
+        const group = chatGroups.find((g) => g.id === threadId);
+        const existing = convMap.get(threadId);
+        if (!existing || new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
+          const unread = (existing?.unreadCount || 0) + (msg.senderId !== myId && !msg.read ? 1 : 0);
+          convMap.set(threadId, {
+            id: threadId,
+            name: group?.name || "Group discussion",
+            isGroup: true,
+            participants: group?.members,
+            lastMessage: conversationPreviewLine(msg),
+            lastMessageTime: msg.timestamp,
+            unreadCount: unread,
+          });
+        }
+        continue;
+      }
+
+      const existing = convMap.get(threadId);
+      const partnerUser = allUsers.find((u) => u.id === threadId);
+      const partnerOnline = onlineUsers.find((u) => u.id === threadId);
+      const name =
+        partnerUser?.displayName || partnerOnline?.displayName || threadId.substring(0, 12) + "...";
       const isOnline = partnerUser?.isOnline || !!partnerOnline;
 
       if (!existing || new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
         const unread = (existing?.unreadCount || 0) + (msg.senderId !== myId && !msg.read ? 1 : 0);
-        convMap.set(partnerId, {
-          id: partnerId,
+        convMap.set(threadId, {
+          id: threadId,
           name,
           isGroup: false,
           lastMessage: conversationPreviewLine(msg),
@@ -560,25 +684,55 @@ export function CommsPage() {
       }
     }
 
+    for (const g of chatGroups) {
+      if (!convMap.has(g.id)) {
+        convMap.set(g.id, {
+          id: g.id,
+          name: g.name,
+          isGroup: true,
+          participants: g.members,
+          lastMessage: "Group thread — share media & CAD",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+        });
+      }
+    }
+
     if (pendingConversationId && !convMap.has(pendingConversationId)) {
-      const partnerUser = allUsers.find(u => u.id === pendingConversationId);
-      const partnerOnline = onlineUsers.find(u => u.id === pendingConversationId);
-      const name = partnerUser?.displayName || partnerOnline?.displayName || pendingConversationId.substring(0, 12) + "...";
-      convMap.set(pendingConversationId, {
-        id: pendingConversationId,
-        name,
-        isGroup: false,
-        lastMessage: "Start a conversation...",
-        lastMessageTime: new Date().toISOString(),
-        unreadCount: 0,
-        isOnline: !!partnerOnline || partnerUser?.isOnline,
-      });
+      if (isGroupConversationId(pendingConversationId)) {
+        const g = chatGroups.find((x) => x.id === pendingConversationId);
+        convMap.set(pendingConversationId, {
+          id: pendingConversationId,
+          name: g?.name || "Group discussion",
+          isGroup: true,
+          participants: g?.members,
+          lastMessage: "Start the group thread…",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+        });
+      } else {
+        const partnerUser = allUsers.find((u) => u.id === pendingConversationId);
+        const partnerOnline = onlineUsers.find((u) => u.id === pendingConversationId);
+        const name =
+          partnerUser?.displayName ||
+          partnerOnline?.displayName ||
+          pendingConversationId.substring(0, 12) + "...";
+        convMap.set(pendingConversationId, {
+          id: pendingConversationId,
+          name,
+          isGroup: false,
+          lastMessage: "Start a conversation...",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+          isOnline: !!partnerOnline || partnerUser?.isOnline,
+        });
+      }
     }
 
     return Array.from(convMap.values()).sort(
       (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
     );
-  }, [messages, localMessages, myId, allUsers, onlineUsers, pendingConversationId]);
+  }, [messages, localMessages, myId, allUsers, onlineUsers, pendingConversationId, chatGroups]);
 
   const getSenderName = useCallback(
     (senderId: string) => {
@@ -643,43 +797,35 @@ export function CommsPage() {
     (content: string) => {
       const t = content.trim();
       if (!t || newChatPicks.length === 0) return;
+      const members = newChatPicks.filter((id) => id !== myId);
+      if (members.length >= 2 || (members.length >= 1 && newChatPicks.length >= 2)) {
+        const label =
+          newChatPicks
+            .slice(0, 3)
+            .map((id) => getUserDisplayNameForChat(id))
+            .join(", ") + (newChatPicks.length > 3 ? "…" : "");
+        pendingGroupBootstrapRef.current = { message: t };
+        wsRef.current?.emit("create-group", {
+          name: label || "Group discussion",
+          members,
+        });
+        return;
+      }
       const target = newChatPicks[0];
       setPendingConversationId(target);
       presenceSendChatMessage(target, { message: t, messageType: "text" });
       setNewChatMode(false);
       setNewChatPicks([]);
     },
-    [newChatPicks, presenceSendChatMessage]
+    [newChatPicks, myId, presenceSendChatMessage, getUserDisplayNameForChat, wsRef],
   );
 
   const handleSendMedia = useCallback(
     async (conversationId: string, file: File, caption: string) => {
-      const formData = new FormData();
-      formData.append("file", file);
       const uid = myUserId || myDeviceId;
-      try {
-        const res = await systemFetch("/api/comms/upload", {
-          method: "POST",
-          body: formData,
-          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { fileUrl: string; fileName: string; mimeType?: string };
-          const mime = data.mimeType || file.type || "";
-          const isRichMedia =
-            mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
-          presenceSendChatMessage(conversationId, {
-            message: caption || " ",
-            messageType: isRichMedia ? "media" : "file",
-            fileUrl: data.fileUrl,
-            fileName: data.fileName || file.name,
-            fileMimeType: mime || undefined,
-            fileSizeBytes: file.size,
-          });
-        }
-      } catch (err) {
-        console.error("Upload failed:", err);
-      }
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid);
+      if (!payload) return;
+      presenceSendChatMessage(conversationId, payload);
     },
     [myUserId, myDeviceId, presenceSendChatMessage]
   );
@@ -734,13 +880,19 @@ export function CommsPage() {
     [presenceSendChatMessage]
   );
 
-  const handleTypingStart = useCallback((conversationId: string) => {
-    wsRef.current?.emit("typing-start", { targetUserId: conversationId, conversationId });
-  }, [wsRef]);
+  const handleTypingStart = useCallback(
+    (conversationId: string) => {
+      wsRef.current?.emit("typing-start", buildTypingPayload(conversationId));
+    },
+    [wsRef],
+  );
 
-  const handleTypingStop = useCallback((conversationId: string) => {
-    wsRef.current?.emit("typing-stop", { targetUserId: conversationId, conversationId });
-  }, [wsRef]);
+  const handleTypingStop = useCallback(
+    (conversationId: string) => {
+      wsRef.current?.emit("typing-stop", buildTypingPayload(conversationId));
+    },
+    [wsRef],
+  );
 
   const handleReact = useCallback((messageId: string, emoji: string) => {
     wsRef.current?.emit("message-reaction", { messageId, emoji });
@@ -757,14 +909,38 @@ export function CommsPage() {
   }, [callUser]);
 
   const handleCreateGroup = useCallback(() => {
-    // TODO: Group creation modal
-  }, []);
+    const tablePeerIds = forwardSlots
+      .map((s) => s.peer)
+      .filter((p): p is NonNullable<typeof p> => !!p?.isOnline && p.id !== myId)
+      .map((p) => p.id);
+    if (tablePeerIds.length >= 2) {
+      const label =
+        forwardSlots
+          .map((s) => s.peer?.displayName)
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(", ") || "Round table";
+      wsRef.current?.emit("create-group", {
+        name: `${label} discussion`,
+        members: tablePeerIds,
+      });
+      setActiveTab("chat");
+      setChatPanelOpen(true);
+      return;
+    }
+    setNewChatMode(true);
+    setNewChatCascadeKey((k) => k + 1);
+    setNewChatPicks(tablePeerIds);
+    setActiveTab("chat");
+    setChatPanelOpen(true);
+  }, [forwardSlots, myId, wsRef]);
 
   const handleNewChat = useCallback(() => {
     setNewChatMode(true);
     setNewChatCascadeKey((k) => k + 1);
     setNewChatPicks([]);
     setActiveTab("chat");
+    setChatPanelOpen(true);
   }, []);
 
   const handleAddContact = useCallback((contact: { contactId: string; contactName: string }) => {
@@ -860,37 +1036,28 @@ export function CommsPage() {
   }, [wsRef]);
 
   const handleScreenShareStart = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      wsRef.current?.emit("screen-share-start", {
-        roomId: activeCall?.roomId,
-      });
-      stream.getVideoTracks()[0].onended = () => {
-        wsRef.current?.emit("screen-share-stop", { roomId: activeCall?.roomId });
-      };
-    } catch (err) {
-      console.error("Screen share failed:", err);
-    }
-  }, [wsRef, activeCall]);
+    await startScreenShare();
+  }, [startScreenShare]);
 
-  const handleScreenShareStop = useCallback(() => {
-    wsRef.current?.emit("screen-share-stop", { roomId: activeCall?.roomId });
-  }, [wsRef, activeCall]);
+  const handleScreenShareStop = useCallback(async () => {
+    await stopScreenShare();
+  }, [stopScreenShare]);
 
   const handleCallChatSend = useCallback((message: string) => {
     if (!activeCall?.roomId || !myUserId) return;
-    wsRef.current?.emit("call-chat-message", {
-      roomId: activeCall.roomId,
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    setCallChatMessages(prev => [...prev, {
-      senderId: myUserId,
-      senderName: displayName,
-      message,
-      timestamp: new Date().toISOString(),
-    }]);
-  }, [wsRef, activeCall, myUserId, displayName]);
+    sendCallChatMessage({ message, messageType: "text" });
+  }, [activeCall?.roomId, myUserId, sendCallChatMessage]);
+
+  const handleCallChatMedia = useCallback(
+    async (file: File, caption: string) => {
+      if (!activeCall?.roomId || !myUserId) return;
+      const uid = myUserId || myDeviceId;
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid);
+      if (!payload) return;
+      sendCallChatMessage(payload);
+    },
+    [activeCall?.roomId, myUserId, myDeviceId, sendCallChatMessage],
+  );
 
   const callParticipants: CallParticipant[] = activeCall
     ? [
@@ -900,10 +1067,26 @@ export function CommsPage() {
           stream: remoteStream || undefined,
           isMuted: false,
           isVideoEnabled: activeCall.callType === "video",
-          connectionQuality: "good" as const,
+          connectionQuality:
+            callDiagnostics?.qualityScores?.label === "Critical" ||
+            callDiagnostics?.qualityScores?.label === "Poor"
+              ? "poor"
+              : callDiagnostics?.qualityScores?.label === "Good"
+                ? "fair"
+                : "good",
         },
       ]
     : [];
+
+  const activeScreenShareStream =
+    isScreenSharing && screenShareStream
+      ? screenShareStream
+      : remoteScreenSharerName && remoteStream
+        ? remoteStream
+        : undefined;
+  const activeScreenSharerName = isScreenSharing
+    ? displayName
+    : remoteScreenSharerName || undefined;
 
   const tabConfig = [
     { id: "chat" as MainTab, icon: MessageSquare, label: "Chat" },
@@ -967,12 +1150,16 @@ export function CommsPage() {
           callDuration={callDuration}
           callQuality={callQuality}
           mediaEstablishing={activeCall.status !== "connected"}
+          isScreenSharing={isScreenSharing || Boolean(remoteScreenSharerName)}
+          screenShareStream={activeScreenShareStream}
+          screenSharerName={activeScreenSharerName}
           onToggleMute={toggleMute}
           onToggleVideo={toggleVideo}
           onEndCall={endCall}
           onStartScreenShare={handleScreenShareStart}
           onStopScreenShare={handleScreenShareStop}
           onSendChatMessage={handleCallChatSend}
+          onSendCallMedia={handleCallChatMedia}
           onSendReaction={handleSendReaction}
           onShareLocation={handleCallLocationShare}
           chatMessages={callChatMessages}
@@ -1088,10 +1275,12 @@ export function CommsPage() {
                     className={`truncate text-sm font-semibold sm:text-base ${darkMode ? "text-white" : "text-slate-900"}`}
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
-                    Chat
+                    {activeChatPeerName ? `Chat · ${activeChatPeerName}` : "Chat"}
                   </p>
                   <p className={`truncate text-[10px] sm:text-[11px] ${darkMode ? "text-white/45" : "text-slate-600"}`}>
-                    {MODULE_SECTOR_SUBTITLE.chat}
+                    {activeChatPeerName
+                      ? "Encrypted thread · voice notes, media & CAD"
+                      : MODULE_SECTOR_SUBTITLE.chat}
                   </p>
                 </div>
                 <button

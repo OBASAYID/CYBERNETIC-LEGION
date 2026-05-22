@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import {
   Phone,
   Video,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { MessageBubble, CommsMessage } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
+import { CommsMediaDropZone } from "./CommsMediaDropZone";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -61,6 +62,13 @@ export function ChatView({
   holoSurface = false,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleDropMedia = useCallback(
+    (file: File) => {
+      onSendMedia?.(file, "");
+    },
+    [onSendMedia],
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -223,6 +231,12 @@ export function ChatView({
         </div>
       </div>
 
+      <CommsMediaDropZone
+        enabled={Boolean(onSendMedia) && !composerSuppressed}
+        holoSurface={holoSurface}
+        onFile={handleDropMedia}
+        className="flex min-h-0 flex-1 flex-col"
+      >
       <div
         ref={scrollRef}
         className={
@@ -244,7 +258,7 @@ export function ChatView({
             </div>
             <p className={`text-sm ${holoSurface ? "text-cyan-100/85" : "text-amber-100/85"}`}>No messages yet</p>
             <p className={`mt-1 text-xs ${holoSurface ? "text-cyan-200/38" : "text-amber-200/40"}`}>
-              Open the line — first transmission wins
+              Open the line — attach, paste, or drop files to share
             </p>
           </div>
         ) : (
@@ -310,6 +324,7 @@ export function ChatView({
           disabled={!conversationId}
         />
       )}
+      </CommsMediaDropZone>
     </div>
   );
 }

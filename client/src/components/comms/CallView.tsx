@@ -17,7 +17,9 @@ import {
   MapPin,
   Smile,
   Signal,
+  Paperclip,
 } from "lucide-react";
+import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
 import { InCallChat } from "./InCallChat";
 import { ScreenShareView } from "./ScreenShareView";
 import { FloatingReactions, Reaction } from "./FloatingReactions";
@@ -54,6 +56,7 @@ interface CallViewProps {
   onStartScreenShare?: () => void;
   onStopScreenShare?: () => void;
   onSendChatMessage?: (message: string) => void;
+  onSendCallMedia?: (file: File, caption: string) => Promise<void>;
   onSendReaction?: (emoji: string, x: number, y: number) => void;
   onShareLocation?: () => void;
   chatMessages?: { senderId: string; senderName: string; message: string; timestamp: string }[];
@@ -146,6 +149,22 @@ export function IncomingCallOverlay({
   );
 }
 
+function RemoteAudioSink({ stream }: { stream: MediaStream | null | undefined }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !stream) return;
+    el.srcObject = stream;
+    void el.play().catch(() => {
+      /* autoplay policy — recover via CallView tap */
+    });
+  }, [stream]);
+
+  if (!stream?.getAudioTracks().length) return null;
+  return <audio ref={audioRef} autoPlay playsInline className="sr-only" />;
+}
+
 function ParticipantVideo({
   participant,
   isSelf,
@@ -205,7 +224,7 @@ function ParticipantVideo({
           autoPlay
           playsInline
           muted={isSelf}
-          className="w-full h-full object-cover"
+          className="h-full w-full object-cover [transform:translateZ(0)]"
         />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
@@ -290,6 +309,7 @@ export function CallView({
   onStartScreenShare,
   onStopScreenShare,
   onSendChatMessage,
+  onSendCallMedia,
   onSendReaction,
   onShareLocation,
   chatMessages = [],
@@ -300,16 +320,34 @@ export function CallView({
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [pipPosition, setPipPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const callMediaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
+
+  const handleCallMediaPick = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !onSendCallMedia) return;
+      setShowChat(true);
+      setMediaUploading(true);
+      try {
+        await onSendCallMedia(file, "");
+      } finally {
+        setMediaUploading(false);
+      }
+    },
+    [onSendCallMedia],
+  );
 
   const handlePipMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -357,8 +395,12 @@ export function CallView({
 
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
+  const remoteParticipant = participants.find((p) => p.id !== currentUserId);
+  const remoteAudioStream = remoteParticipant?.stream ?? null;
+
   return (
-    <div className="fixed inset-0 z-[90] bg-gray-950 flex flex-col">
+    <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
+      <RemoteAudioSink stream={remoteAudioStream} />
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -545,6 +587,7 @@ export function CallView({
             currentUserName={currentUserName}
             messages={chatMessages}
             onSendMessage={onSendChatMessage}
+            onSendMedia={onSendCallMedia}
             onClose={() => setShowChat(false)}
             socketRef={socketRef}
           />
@@ -594,6 +637,29 @@ export function CallView({
             <Monitor className="w-5 h-5 text-white" />
           </button>
         )}
+
+        {onSendCallMedia ? (
+          <>
+            <input
+              ref={callMediaInputRef}
+              type="file"
+              accept={COMMS_MEDIA_FILE_ACCEPT}
+              className="hidden"
+              onChange={(e) => void handleCallMediaPick(e)}
+            />
+            <button
+              type="button"
+              disabled={mediaUploading}
+              onClick={() => callMediaInputRef.current?.click()}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                mediaUploading ? "bg-cyan-600/80" : "bg-gray-700/80 hover:bg-gray-600/80"
+              } disabled:opacity-50`}
+              title="Share photo or file"
+            >
+              <Paperclip className="w-5 h-5 text-white" />
+            </button>
+          </>
+        ) : null}
 
         <button
           onClick={() => setShowChat((p) => !p)}

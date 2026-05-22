@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { systemApiUrl } from "@shared/cyrus-api-client";
+import { CommsCad3dAttachment } from "./CommsCad3dAttachment";
 
 function resolveChatMediaUrl(pathOrUrl: string | undefined): string {
   if (!pathOrUrl) return "";
@@ -23,7 +24,7 @@ function withDownloadParam(resolvedUrl: string): string {
   return resolvedUrl.includes("?") ? `${resolvedUrl}&download=1` : `${resolvedUrl}?download=1`;
 }
 
-export type MessageType = "text" | "emoji" | "media" | "voice-note" | "location" | "system";
+export type MessageType = "text" | "emoji" | "media" | "cad-3d" | "voice-note" | "location" | "system";
 
 export interface Reaction {
   emoji: string;
@@ -93,6 +94,22 @@ export function MessageBubble({
             <span>{message.content}</span>
           </div>
         );
+
+      case "cad-3d": {
+        const raw = message.mediaUrl || "";
+        const url = resolveChatMediaUrl(raw);
+        const downloadUrl = raw ? withDownloadParam(url) : "";
+        return (
+          <CommsCad3dAttachment
+            url={url}
+            downloadUrl={downloadUrl}
+            fileName={message.fileName}
+            mimeType={message.mediaMimeType}
+            caption={message.content}
+            holoSurface={holoSurface}
+          />
+        );
+      }
 
       case "media": {
         const raw = message.mediaUrl || "";
