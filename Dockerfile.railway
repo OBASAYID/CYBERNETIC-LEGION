@@ -1,8 +1,8 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
-# Install root dependencies with Bun.
-COPY package.json package-lock.json ./
+# Install root dependencies with Bun (package.json only — npm lockfile migration fails on merged deps).
+COPY package.json ./
 RUN bun install --no-progress
 
 # Install cyrus-ui dependencies so Vite can resolve all imports at build time.
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gfortran \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 RUN bun install --production --no-progress
 
 # Copy compiled server and UI build
