@@ -7,6 +7,11 @@ import { useCommsP2PLayer } from "./CommsP2PLayerContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { uploadAndBuildCommsMediaPayload } from "../../lib/comms-media-upload";
 import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import {
+  attachMediaStreamToAudio,
+  attachMediaStreamToVideo,
+  extractAudioOnlyStream,
+} from "../../lib/comms-video-playback";
 import { Link2, MapPin, Radio, ChevronDown, ChevronUp, Paperclip } from "lucide-react";
 
 /** Single-line status for NEXUS header (presence string passed from parent). */
@@ -222,12 +227,18 @@ export function CommsP2PCallDock() {
   const { inMeshCall, remoteMeshName, localMeshStream, remoteMeshStream, endMeshCall } = useCommsP2PLayer();
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (localRef.current) localRef.current.srcObject = localMeshStream;
+    void attachMediaStreamToVideo(localRef.current, localMeshStream, { muted: true });
   }, [localMeshStream]);
   useEffect(() => {
-    if (remoteRef.current) remoteRef.current.srcObject = remoteMeshStream;
+    void attachMediaStreamToVideo(remoteRef.current, remoteMeshStream, { muted: true });
+    void attachMediaStreamToAudio(
+      remoteAudioRef.current,
+      extractAudioOnlyStream(remoteMeshStream),
+      { volume: 1 },
+    );
   }, [remoteMeshStream]);
 
   if (!inMeshCall) {
@@ -248,11 +259,12 @@ export function CommsP2PCallDock() {
       </h3>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-          <video ref={localRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+          <video ref={localRef} className="h-full w-full object-cover [transform:translateZ(0)]" autoPlay playsInline muted />
           <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px]">You (mesh)</span>
         </div>
         <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-          <video ref={remoteRef} className="h-full w-full object-cover" autoPlay playsInline />
+          <video ref={remoteRef} className="h-full w-full object-cover [transform:translateZ(0)]" autoPlay playsInline muted />
+          <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" />
           <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px]">{remoteMeshName}</span>
         </div>
       </div>

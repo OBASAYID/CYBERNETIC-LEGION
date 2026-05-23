@@ -12,7 +12,12 @@ interface CommsPlatformProps {
   typingUsers?: Record<string, string[]>;
   initialConversationId?: string | null;
   onSendMessage: (conversationId: string, content: string) => void;
-  onSendMedia?: (conversationId: string, file: File, caption: string) => void;
+  onSendMedia?: (
+    conversationId: string,
+    file: File,
+    caption: string,
+    onProgress?: (progress: import("../../lib/comms-media-upload").CommsUploadProgress) => void,
+  ) => Promise<void> | void;
   onSendVoice?: (conversationId: string, blob: Blob, duration: number) => void;
   onSendLocation?: (conversationId: string) => void;
   onToggleEmoji?: () => void;
@@ -196,7 +201,8 @@ export function CommsPlatform({
           }
           onSendMedia={
             onSendMedia && selectedConversation
-              ? (file, caption) => onSendMedia(selectedConversation.id, file, caption)
+              ? (file, caption, onProgress) =>
+                  onSendMedia(selectedConversation.id, file, caption, onProgress)
               : undefined
           }
           onSendVoice={
@@ -233,6 +239,8 @@ export function CommsPlatform({
           }
           onBack={handleBack}
           composerSuppressed={newChatMode}
+          participantIds={selectedConversation?.participants}
+          getUserDisplayName={getUserDisplayName}
         />
       </div>
 
@@ -314,7 +322,7 @@ export function CommsPlatform({
             onSend={(content) => onNewChatSend(content)}
             onSendMedia={
               firstPick
-                ? (file, caption) => onSendMedia?.(firstPick, file, caption)
+                ? (file, caption, onProgress) => onSendMedia?.(firstPick, file, caption, onProgress)
                 : undefined
             }
             onSendVoice={

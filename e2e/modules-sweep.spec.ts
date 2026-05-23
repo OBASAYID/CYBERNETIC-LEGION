@@ -20,24 +20,13 @@ async function gotoWithDevRetry(
 }
 
 /**
- * All primary routes from `cyrus-ui/src/app-routes.tsx` + `command-center-routes.tsx`.
- * Visiting each after gate login catches lazy-load / runtime surface faults (error boundary, uncaught throws).
+ * Operational routes from `cyrus-ui/src/app-routes.tsx` + `command-center-routes.tsx`.
+ * Removed/demo paths redirect via `removed-routes.ts` — not swept here.
  */
-const APP_ROUTES = [
-  "/",
-  "/dashboard-legacy",
-  "/drone-control",
-  "/ai-dashboard",
-  "/ai-assistant",
-  "/trading",
-  "/design",
-  "/device-control",
-  "/navigation",
-  "/file-analysis",
-  "/document-builder",
-] as const;
+const APP_ROUTES = ["/", "/document-builder"] as const;
 
 const COMMAND_MODULE_ROUTES = [
+  "/intelligence",
   "/algorithms",
   "/modules",
   "/scan",
@@ -45,12 +34,10 @@ const COMMAND_MODULE_ROUTES = [
   "/nav",
   "/comms",
   "/device",
-  "/drone",
   "/medical",
   "/quantum",
   "/security",
   "/biology",
-  "/blood",
   "/ops",
 ] as const;
 
@@ -63,11 +50,6 @@ function accessCode(): string {
   return "170392";
 }
 
-/**
- * Same-origin `page.request` shares the browser cookie jar, so `POST /api/login` is visible to
- * `fetch` in the app. We seed localStorage to match a successful gate and reload so the
- * UI mounts past `PasswordGate` (avoids brittle UI typing when Vite is still warming).
- */
 async function passPasswordGate(
   page: import("@playwright/test").Page,
   baseURL: string | undefined,
@@ -82,7 +64,6 @@ async function passPasswordGate(
     const text = await res.text().catch(() => "");
     throw new Error(`POST /api/login ${res.status()} — ${text.slice(0, 200)}`);
   }
-  // Avoid `evaluate` while Vite is still hot-reloading / navigating the shell.
   await page.waitForLoadState("load").catch(() => {});
   const ts = String(Date.now());
   await page.evaluate(

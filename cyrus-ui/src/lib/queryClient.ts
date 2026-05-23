@@ -76,12 +76,16 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      refetchOnWindowFocus: true,
+      staleTime: 60_000,
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        if (error instanceof Error && /503|initializing|network/i.test(error.message)) return true;
+        return failureCount < 2;
+      },
     },
     mutations: {
-      retry: false,
+      retry: 1,
     },
   },
 });

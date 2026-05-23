@@ -18,11 +18,24 @@ import {
   Smile,
   Signal,
   Paperclip,
+  Sparkles,
+  Circle,
 } from "lucide-react";
 import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import {
+  attachMediaStreamToAudio,
+  attachMediaStreamToVideo,
+  extractAudioOnlyStream,
+} from "../../lib/comms-video-playback";
 import { InCallChat } from "./InCallChat";
 import { ScreenShareView } from "./ScreenShareView";
 import { FloatingReactions, Reaction } from "./FloatingReactions";
+import {
+  cycleCommsMediaFilterMode,
+  getCommsMediaFilterLabel,
+  getCommsMediaFilterMode,
+  type CommsMediaFilterMode,
+} from "../../lib/comms-media-filters";
 
 export interface CallParticipant {
   id: string;
@@ -64,6 +77,12 @@ interface CallViewProps {
   socketRef?: React.MutableRefObject<any>;
   /** Fires when remote media `play()` is blocked (autoplay policy). */
   onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
+  isRecording?: boolean;
+  isRecordingUploading?: boolean;
+  recordingDurationSec?: number;
+  remoteRecordingActive?: boolean;
+  remoteRecordingBy?: string;
+  onToggleRecording?: () => void;
 }
 
 interface IncomingCallOverlayProps {
@@ -153,11 +172,8 @@ function RemoteAudioSink({ stream }: { stream: MediaStream | null | undefined })
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    const el = audioRef.current;
-    if (!el || !stream) return;
-    el.srcObject = stream;
-    void el.play().catch(() => {
-      /* autoplay policy — recover via CallView tap */
+    void attachMediaStreamToAudio(audioRef.current, extractAudioOnlyStream(stream ?? null), {
+      volume: 1,
     });
   }, [stream]);
 
@@ -179,23 +195,16 @@ function ParticipantVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && participant.stream) {
-      videoRef.current.srcObject = participant.stream;
-      videoRef.current.muted = !!isSelf;
-      videoRef.current.volume = 1;
-      void videoRef.current.play().then(
-        () => {
-          if (!isSelf) {
-            onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
-          }
-        },
-        () => {
-          if (!isSelf) {
-            onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
-          }
-        }
-      );
-    }
+    void attachMediaStreamToVideo(videoRef.current, participant.stream ?? null, {
+      muted: !!isSelf,
+      volume: 1,
+      onPlaybackStarted: () => {
+        if (!isSelf) onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
+      },
+      onPlaybackBlocked: () => {
+        if (!isSelf) onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
+      },
+    });
   }, [participant.stream, isSelf, onRemotePlaybackDiagnostics]);
 
   const qualityColor =
@@ -223,7 +232,7 @@ function ParticipantVideo({
           ref={videoRef}
           autoPlay
           playsInline
-          muted={isSelf}
+          muted
           className="h-full w-full object-cover [transform:translateZ(0)]"
         />
       ) : (
@@ -316,11 +325,18 @@ export function CallView({
   reactions = [],
   socketRef,
   onRemotePlaybackDiagnostics,
+  isRecording = false,
+  isRecordingUploading = false,
+  recordingDurationSec = 0,
+  remoteRecordingActive = false,
+  remoteRecordingBy,
+  onToggleRecording,
 }: CallViewProps) {
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaFilterMode, setMediaFilterMode] = useState<CommsMediaFilterMode>(getCommsMediaFilterMode);
   const [pipPosition, setPipPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -332,6 +348,12 @@ export function CallView({
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
+
+  useEffect(() => {
+    const syncMode = () => setMediaFilterMode(getCommsMediaFilterMode());
+    window.addEventListener("cyrus-media-filters-changed", syncMode);
+    return () => window.removeEventListener("cyrus-media-filters-changed", syncMode);
+  }, []);
 
   const handleCallMediaPick = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -418,6 +440,30 @@ export function CallView({
             }`}>
               <Signal className="w-3 h-3 inline mr-1" />
               {callQuality}
+            </span>
+          )}
+          {mediaFilterMode !== "off" && (
+            <span
+              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                mediaFilterMode === "studio"
+                  ? "bg-violet-500/20 text-violet-300 border-violet-500/30"
+                  : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+              }`}
+            >
+              <Sparkles className="w-3 h-3 inline mr-1" />
+              {getCommsMediaFilterLabel(mediaFilterMode)}
+            </span>
+          )}
+          {(isRecording || isRecordingUploading) && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/40 bg-rose-500/15 text-rose-200 animate-pulse">
+              <Circle className="w-3 h-3 inline mr-1 fill-rose-400 text-rose-400" />
+              {isRecordingUploading ? "Saving…" : `REC ${formatCallDuration(recordingDurationSec)}`}
+            </span>
+          )}
+          {!isRecording && !isRecordingUploading && remoteRecordingActive && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200/90">
+              <Circle className="w-3 h-3 inline mr-1 fill-rose-400/80 text-rose-400/80" />
+              {remoteRecordingBy ? `${remoteRecordingBy} recording` : "Recording active"}
             </span>
           )}
           {mediaEstablishing && (
@@ -674,6 +720,47 @@ export function CallView({
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showReactions ? "bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/20" : "bg-gray-700/80 hover:bg-gray-600/80"}`}
           >
             <Smile className="w-5 h-5 text-white" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setMediaFilterMode(cycleCommsMediaFilterMode())}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+            mediaFilterMode === "off"
+              ? "bg-gray-700/80 hover:bg-gray-600/80"
+              : mediaFilterMode === "studio"
+                ? "bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-600/20"
+                : "bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
+          }`}
+          title={`${getCommsMediaFilterLabel(mediaFilterMode)} — tap to cycle (applies on next call)`}
+        >
+          <Sparkles className="w-5 h-5 text-white" />
+        </button>
+
+        {onToggleRecording && (
+          <button
+            type="button"
+            disabled={isRecordingUploading}
+            onClick={onToggleRecording}
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+              isRecording
+                ? "bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 animate-pulse"
+                : isRecordingUploading
+                  ? "bg-rose-600/60"
+                  : "bg-gray-700/80 hover:bg-gray-600/80"
+            } disabled:opacity-50`}
+            title={
+              isRecordingUploading
+                ? "Saving recording…"
+                : isRecording
+                  ? "Stop recording"
+                  : "Record call"
+            }
+          >
+            <Circle
+              className={`w-5 h-5 ${isRecording ? "fill-white text-white" : "text-white"}`}
+            />
           </button>
         )}
 

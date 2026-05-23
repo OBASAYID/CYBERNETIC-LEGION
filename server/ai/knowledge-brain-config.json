@@ -1,4 +1,14 @@
 {
+  "knowledgeGraph": {
+    "type": "networkx"
+  },
+  "relevanceFilter": {
+    "minRelevanceScore": 0,
+    "domains": ["*"]
+  },
+  "learning": {
+    "embeddingModel": "all-MiniLM-L6-v2"
+  },
   "vectorDb": {
     "type": "memory",
     "enabled": false

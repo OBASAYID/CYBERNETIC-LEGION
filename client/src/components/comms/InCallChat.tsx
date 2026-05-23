@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ChangeEvent } from "react";
 import { Image as ImageIcon, Paperclip, Send, X, FileAudio } from "lucide-react";
 import { commsAssetUrl } from "@shared/cyrus-api-client";
-import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import { COMMS_MEDIA_FILE_ACCEPT, type CommsUploadProgress } from "../../lib/comms-media-upload";
 import { isCommsCad3dFile } from "../../lib/comms-cad-formats";
 import { CommsMediaDropZone } from "./CommsMediaDropZone";
 import { CommsCad3dAttachment } from "./CommsCad3dAttachment";
+import { CommsUploadProgressBar } from "./CommsUploadProgress";
 import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
+import { formatCommsFileSize } from "@shared/comms/media-formats";
 
 export interface InCallChatMessage {
   senderId: string;
@@ -24,7 +26,11 @@ interface InCallChatProps {
   currentUserName: string;
   messages: InCallChatMessage[];
   onSendMessage?: (message: string) => void;
-  onSendMedia?: (file: File, caption: string) => Promise<void>;
+  onSendMedia?: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: CommsUploadProgress) => void,
+  ) => Promise<void>;
   onClose: () => void;
   socketRef?: React.MutableRefObject<any>;
 }
@@ -41,6 +47,8 @@ export function InCallChat({
 }: InCallChatProps) {
   const [text, setText] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [attachPreview, setAttachPreview] = useState<{ file: File; url: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -75,12 +83,17 @@ export function InCallChat({
     const trimmed = text.trim();
     if (attachPreview && onSendMedia) {
       setUploading(true);
+      setUploadError(null);
+      setUploadProgress({ loaded: 0, total: attachPreview.file.size, percent: 0, phase: "init" });
       try {
-        await onSendMedia(attachPreview.file, trimmed);
+        await onSendMedia(attachPreview.file, trimmed, setUploadProgress);
         clearAttachment();
         setText("");
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed");
       } finally {
         setUploading(false);
+        setUploadProgress(null);
       }
       return;
     }
@@ -261,6 +274,12 @@ export function InCallChat({
           </div>
         </div>
       ) : null}
+
+      <CommsUploadProgressBar
+        fileName={attachPreview?.file.name}
+        progress={uploadProgress}
+        error={uploadError}
+      />
 
       <div className="flex items-center gap-2 border-t border-cyan-500/20 px-3 py-2.5">
         <input

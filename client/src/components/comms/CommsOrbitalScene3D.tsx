@@ -18,7 +18,7 @@ import {
   RoundTable,
   StudioEnvironment,
   StylizedAvatarFigure,
-  peerSeatAngles,
+  seatIndexToAngle,
   seatXZ,
 } from "./CommsRoundTableModels";
 
@@ -304,14 +304,16 @@ function SceneInner(props: Props) {
   } = props;
 
   const onlinePeers = forwardSlots.filter((s) => s.peer?.isOnline);
-  const angles = peerSeatAngles(onlinePeers.length);
   const knownRef = useRef<Map<string, PeerSnapshot>>(new Map());
   const [departing, setDeparting] = useState<Map<string, PeerSnapshot>>(() => new Map());
 
   useEffect(() => {
     const nextKnown = new Map<string, PeerSnapshot>();
-    onlinePeers.forEach((slot, i) => {
-      nextKnown.set(slot.peer!.id, { slot, angle: angles[i] ?? 0 });
+    onlinePeers.forEach((slot) => {
+      nextKnown.set(slot.peer!.id, {
+        slot,
+        angle: seatIndexToAngle(slot.seatIndex),
+      });
     });
 
     setDeparting((prev) => {
@@ -326,7 +328,7 @@ function SceneInner(props: Props) {
     });
 
     knownRef.current = nextKnown;
-  }, [onlinePeers, angles]);
+  }, [onlinePeers]);
 
   const toggleHub = (peerId: string) => {
     if (!onHubPeerChange) return;
@@ -393,10 +395,10 @@ function SceneInner(props: Props) {
         onHubActivate={onHubActivate}
       />
 
-      {onlinePeers.map((slot, i) => (
+      {onlinePeers.map((slot) => (
         <AnimatedPeerSeat
           key={slot.peer!.id}
-          snapshot={{ slot, angle: angles[i] ?? 0 }}
+          snapshot={{ slot, angle: seatIndexToAngle(slot.seatIndex) }}
           mode={resolveEnterMode(slot.peer!.id)}
             selectedPeerId={selectedPeerId}
             openHubPeerId={openHubPeerId}

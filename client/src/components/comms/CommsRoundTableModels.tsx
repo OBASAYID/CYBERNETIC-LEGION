@@ -21,11 +21,19 @@ export function seatXZ(angle: number): { x: number; z: number } {
   return { x: Math.sin(angle) * SEAT_RADIUS, z: Math.cos(angle) * SEAT_RADIUS };
 }
 
-/** Evenly distribute peer seats around the table; operator stays at angle 0. */
+export const MAX_PEER_SEAT_SLOTS = 9;
+
+/** Stable seat angle from slot index — does not shift when other peers join or leave. */
+export function seatIndexToAngle(seatIndex: number, totalPeerSlots = MAX_PEER_SEAT_SLOTS): number {
+  const clamped = Math.min(Math.max(seatIndex, 0), totalPeerSlots - 1);
+  const step = (Math.PI * 2) / (totalPeerSlots + 1);
+  return step * (clamped + 1);
+}
+
+/** @deprecated Prefer {@link seatIndexToAngle} for stable round-table placement. */
 export function peerSeatAngles(peerCount: number): number[] {
   if (peerCount <= 0) return [];
-  const step = (Math.PI * 2) / (peerCount + 1);
-  return Array.from({ length: peerCount }, (_, i) => step * (i + 1));
+  return Array.from({ length: peerCount }, (_, i) => seatIndexToAngle(i, peerCount));
 }
 
 /** World position along seat ray — t=0 at seat, t=1 toward room exit. */

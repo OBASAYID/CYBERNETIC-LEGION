@@ -13,7 +13,6 @@ import {
   HeaderTitle,
   HealthRail,
   HeroSection,
-  LegacyBanner,
   MetricsSection,
   ModuleWorkspaceSection,
 } from "@/components/dashboard-fresh/sections";
@@ -228,7 +227,6 @@ export default function DashboardFresh() {
               />
 
               <BottomPanels hints={stackSummary?.stack?.hints ?? ["Waiting for stack hints..."]} />
-              <LegacyBanner />
             </div>
           </section>
           </div>

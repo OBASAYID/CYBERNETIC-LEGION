@@ -28,6 +28,7 @@ import {
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
+import { normalizeAvatarUploadFile } from "../lib/comms-avatar-upload";
 import { uploadAndBuildCommsMediaPayload } from "../lib/comms-media-upload";
 import { buildTypingPayload, isGroupConversationId } from "../lib/comms-outbound";
 import { presetToCallQualityLabel } from "../lib/comms-call-media";
@@ -35,6 +36,10 @@ import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbi
 import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
+import { GroupCallPanel } from "../components/comms/GroupCallPanel";
+import { useCyrusGroupCall } from "../hooks/useCyrusGroupCall";
+import { useCommsSessionRecording } from "../hooks/useCommsSessionRecording";
+import { SessionRecordingsPanel } from "../components/comms/SessionRecordingsPanel";
 import type { CommsConference } from "../lib/comms-conference-api";
 import { CommsPremiumShell } from "../components/comms/CommsPremiumShell";
 import { CommsOrbitalDeckConnected } from "../components/comms/CommsOrbitalDeckConnected";
@@ -103,6 +108,9 @@ export function CommsPage() {
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [selectedConvForMessage, setSelectedConvForMessage] = useState<string | null>(null);
   const [callReactions, setCallReactions] = useState<Reaction[]>([]);
+  const [remoteRecording, setRemoteRecording] = useState<{ active: boolean; by?: string }>({
+    active: false,
+  });
   const [callQuality, setCallQuality] = useState<"HD" | "SD" | "Low">("HD");
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [localMessages, setLocalMessages] = useState<CommsMessage[]>([]);
@@ -162,6 +170,90 @@ export function CommsPage() {
     stopScreenShare,
     sendCallChatMessage,
   } = usePresence();
+
+  const myId = myUserId || myDeviceId;
+
+  const {
+    sfuStatus,
+    incomingGroupCall,
+    activeGroupCall,
+    localStream: groupLocalStream,
+    isMuted: groupMuted,
+    isVideoEnabled: groupVideoEnabled,
+    createGroupCall,
+    joinGroupCall,
+    acceptIncomingGroupCall,
+    declineIncomingGroupCall,
+    endGroupCall,
+    toggleMute: toggleGroupMute,
+    toggleVideo: toggleGroupVideo,
+  } = useCyrusGroupCall({
+    socketRef: wsRef,
+    selfId: myId,
+    displayName,
+    isConnected,
+  });
+
+  const activeSessionRoomId = activeCall?.roomId ?? activeGroupCall?.roomId ?? null;
+  const activeSessionCallType = activeCall?.callType ?? activeGroupCall?.callType ?? "audio";
+  const activeSessionLocalStream = activeCall ? localStream : groupLocalStream;
+  const activeSessionRemoteStreams = useMemo(() => {
+    if (activeCall && remoteStream) return [remoteStream];
+    if (activeGroupCall) {
+      return activeGroupCall.participants
+        .map((p) => p.stream)
+        .filter((s): s is MediaStream => Boolean(s));
+    }
+    return [];
+  }, [activeCall, remoteStream, activeGroupCall]);
+
+  const sessionRecording = useCommsSessionRecording({
+    roomId: activeSessionRoomId,
+    callType: activeSessionCallType,
+    localStream: activeSessionLocalStream,
+    remoteStreams: activeSessionRemoteStreams,
+    screenShareStream:
+      isScreenSharing && screenShareStream ? screenShareStream : undefined,
+    recordedBy: myId,
+    displayName,
+    socketRef: wsRef,
+  });
+
+  useEffect(() => {
+    if (!activeSessionRoomId) {
+      setRemoteRecording({ active: false });
+    }
+  }, [activeSessionRoomId]);
+
+  useEffect(() => {
+    const sock = wsRef.current;
+    if (!sock) return;
+    const handler = (data: {
+      roomId: string;
+      isRecording: boolean;
+      userId?: string;
+      displayName?: string;
+    }) => {
+      if (!activeSessionRoomId || data.roomId !== activeSessionRoomId) return;
+      if (data.userId && data.userId === myId) return;
+      setRemoteRecording({
+        active: Boolean(data.isRecording),
+        by: data.displayName,
+      });
+    };
+    sock.on("session-recording-state", handler);
+    return () => {
+      sock.off("session-recording-state", handler);
+    };
+  }, [activeSessionRoomId, myId, wsRef]);
+
+  const handleToggleRecording = useCallback(async () => {
+    if (sessionRecording.isRecording) {
+      await sessionRecording.stopRecording();
+    } else {
+      sessionRecording.startRecording();
+    }
+  }, [sessionRecording]);
 
   const myUserIdRef = useRef(myUserId);
   const myDeviceIdRef = useRef(myDeviceId);
@@ -492,8 +584,6 @@ export function CommsPage() {
     };
   }, [queryClient, isConnected, myUserId]);
 
-  const myId = myUserId || myDeviceId;
-
   const newChatPickCandidates = useMemo(
     () => (allUsers || []).filter((u) => u.id && u.id !== myId).map((u) => ({ id: u.id, displayName: u.displayName })),
     [allUsers, myId]
@@ -558,10 +648,11 @@ export function CommsPage() {
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
       if (!myId) return;
+      const normalized = normalizeAvatarUploadFile(file);
       setAvatarUploading(true);
       try {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", normalized, normalized.name);
         const res = await systemFetch("/api/comms/user/avatar", {
           method: "POST",
           body: fd,
@@ -575,15 +666,19 @@ export function CommsPage() {
           await queryClient.invalidateQueries({ queryKey: ["/api/comms/users/all"] });
         } else {
           console.error("Avatar upload failed:", data.error || res.status);
-          window.alert(data.error || `Photo upload failed (${res.status}). Try a smaller JPG or PNG.`);
+          window.alert(
+            data.error ||
+              `Photo upload failed (${res.status}). Try JPG, PNG, WebP, HEIC, or another image under 16 MB.`,
+          );
         }
       } catch (e) {
         console.error("Avatar upload failed:", e);
+        window.alert("Photo upload failed. Check your connection and try again.");
       } finally {
         setAvatarUploading(false);
       }
     },
-    [myId, queryClient]
+    [myId, queryClient],
   );
 
   useEffect(() => {
@@ -810,13 +905,18 @@ export function CommsPage() {
   );
 
   const handleSendMedia = useCallback(
-    async (conversationId: string, file: File, caption: string) => {
+    async (
+      conversationId: string,
+      file: File,
+      caption: string,
+      onProgress?: (progress: import("../lib/comms-media-upload").CommsUploadProgress) => void,
+    ) => {
       const uid = myUserId || myDeviceId;
-      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid);
-      if (!payload) return;
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid, undefined, onProgress);
+      if (!payload) throw new Error("Upload failed — file may be too large or unsupported");
       presenceSendChatMessage(conversationId, payload);
     },
-    [myUserId, myDeviceId, presenceSendChatMessage]
+    [myUserId, myDeviceId, presenceSendChatMessage],
   );
 
   const handleSendVoice = useCallback(
@@ -1033,11 +1133,15 @@ export function CommsPage() {
   }, [activeCall?.roomId, myUserId, sendCallChatMessage]);
 
   const handleCallChatMedia = useCallback(
-    async (file: File, caption: string) => {
+    async (
+      file: File,
+      caption: string,
+      onProgress?: (progress: import("../lib/comms-media-upload").CommsUploadProgress) => void,
+    ) => {
       if (!activeCall?.roomId || !myUserId) return;
       const uid = myUserId || myDeviceId;
-      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid);
-      if (!payload) return;
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid, undefined, onProgress);
+      if (!payload) throw new Error("Upload failed");
       sendCallChatMessage(payload);
     },
     [activeCall?.roomId, myUserId, myDeviceId, sendCallChatMessage],
@@ -1061,6 +1165,33 @@ export function CommsPage() {
         },
       ]
     : [];
+
+  const groupCallParticipants: CallParticipant[] = activeGroupCall
+    ? activeGroupCall.participants.map((p) => ({
+        id: p.peerId,
+        displayName: p.displayName,
+        stream: p.stream || undefined,
+        isVideoEnabled: activeGroupCall.callType === "video",
+      }))
+    : [];
+
+  const handleConferenceMedia = useCallback(
+    (conference: CommsConference, action: "create" | "join") => {
+      if (action === "create") {
+        createGroupCall([], "video", conference.title, conference.conferenceId);
+      } else {
+        joinGroupCall(conference.conferenceId);
+      }
+    },
+    [createGroupCall, joinGroupCall],
+  );
+
+  const handleStartGroupCall = useCallback(
+    (peerIds: string[], callType: "audio" | "video") => {
+      createGroupCall(peerIds, callType, "Group call");
+    },
+    [createGroupCall],
+  );
 
   const activeScreenShareStream =
     isScreenSharing && screenShareStream
@@ -1148,6 +1279,39 @@ export function CommsPage() {
           reactions={callReactions}
           socketRef={wsRef}
           onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
+          isRecording={sessionRecording.isRecording}
+          isRecordingUploading={sessionRecording.isUploading}
+          recordingDurationSec={sessionRecording.recordingDurationSec}
+          remoteRecordingActive={remoteRecording.active}
+          remoteRecordingBy={remoteRecording.by}
+          onToggleRecording={() => void handleToggleRecording()}
+        />
+      )}
+
+      {activeGroupCall && !activeCall && (
+        <CallView
+          roomId={activeGroupCall.roomId}
+          callType={activeGroupCall.callType}
+          participants={groupCallParticipants}
+          localStream={groupLocalStream}
+          currentUserId={myId}
+          currentUserName={displayName}
+          isMuted={groupMuted}
+          isVideoEnabled={groupVideoEnabled}
+          callDuration={0}
+          callQuality={callQuality}
+          onToggleMute={toggleGroupMute}
+          onToggleVideo={toggleGroupVideo}
+          onEndCall={endGroupCall}
+          onSendReaction={handleSendReaction}
+          reactions={callReactions}
+          socketRef={wsRef}
+          isRecording={sessionRecording.isRecording}
+          isRecordingUploading={sessionRecording.isUploading}
+          recordingDurationSec={sessionRecording.recordingDurationSec}
+          remoteRecordingActive={remoteRecording.active}
+          remoteRecordingBy={remoteRecording.by}
+          onToggleRecording={() => void handleToggleRecording()}
         />
       )}
 
@@ -1157,6 +1321,17 @@ export function CommsPage() {
           callType={incomingCall.callType}
           onAccept={acceptCall}
           onDecline={declineCall}
+        />
+      )}
+
+      {incomingGroupCall && !incomingCall && (
+        <IncomingCallOverlay
+          callerName={incomingGroupCall.callerName}
+          callType={incomingGroupCall.callType}
+          onAccept={acceptIncomingGroupCall}
+          onDecline={declineIncomingGroupCall}
+          isGroup
+          groupName={incomingGroupCall.groupName}
         />
       )}
 
@@ -1266,6 +1441,7 @@ export function CommsPage() {
                   holoBlend
                   myUserId={myId}
                   allUsers={allUsers}
+                  getAvatarForUser={getAvatarForUser}
                   highlightPostId={psharePostHighlight}
                   onClearHighlight={() => setPsharePostHighlight(null)}
                   initialPostBody={commsHandoffText}
@@ -1294,7 +1470,7 @@ export function CommsPage() {
                   </span>
                 </button>
                 {networkMapExpanded ? (
-                  <div className="max-h-[min(42vh,480px)] overflow-hidden border-t border-inherit">
+                  <div className="min-h-[min(52vh,560px)] max-h-[min(72vh,680px)] overflow-hidden border-t border-inherit">
                     <CommsOrbitalDeckConnected
                       darkMode={darkMode}
                       displayName={displayName}
@@ -1369,11 +1545,16 @@ export function CommsPage() {
               <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
                 <CallHistoryPanel
                   myDeviceId={myDeviceId}
+                  myUserId={myId}
                   displayName={displayName}
                   allUsers={allUsers}
                   onlineUsers={onlineUsers}
                   onCall={handleUserCall}
                   seedConference={orbitalConference}
+                  sfuMode={sfuStatus}
+                  onStartGroupCall={handleStartGroupCall}
+                  onJoinGroupMedia={joinGroupCall}
+                  onConferenceMedia={handleConferenceMedia}
                 />
               </div>
             </NexusModuleSurface>
@@ -1427,18 +1608,31 @@ function UserDiscoveryWithMesh(
 
 function CallHistoryPanel({
   myDeviceId,
+  myUserId,
   displayName,
   allUsers,
   onlineUsers,
   onCall,
   seedConference,
+  sfuMode,
+  onStartGroupCall,
+  onJoinGroupMedia,
+  onConferenceMedia,
 }: {
   myDeviceId: string;
+  myUserId: string;
   displayName: string;
   allUsers: { id: string; displayName: string; isOnline: boolean; lastSeen: string | null; status: string }[];
   onlineUsers: { id: string; displayName: string; deviceId: string; inCall: boolean }[];
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
   seedConference?: import("../lib/comms-conference-api").CommsConference | null;
+  sfuMode: import("@shared/comms/sfu-types").CyrusSfuMode;
+  onStartGroupCall: (peerIds: string[], callType: "audio" | "video") => void;
+  onJoinGroupMedia: (roomId: string) => void;
+  onConferenceMedia?: (
+    conference: import("../lib/comms-conference-api").CommsConference,
+    action: "create" | "join",
+  ) => void;
 }) {
   const onlineOthers = onlineUsers.filter(u => u.id !== myDeviceId && u.id !== "cyrus-001");
 
@@ -1452,8 +1646,25 @@ function CallHistoryPanel({
           </p>
         </div>
       ) : null}
-      <ConferenceQuickPanel displayName={displayName} seedConference={seedConference} />
+      <ConferenceQuickPanel
+        displayName={displayName}
+        seedConference={seedConference}
+        onConferenceMedia={onConferenceMedia}
+      />
+      <GroupCallPanel
+        myUserId={myUserId}
+        displayName={displayName}
+        sfuMode={sfuMode}
+        onlinePeers={onlineUsers.map((u) => ({
+          id: u.id,
+          displayName: u.displayName,
+          inCall: u.inCall,
+        }))}
+        onStartGroupCall={onStartGroupCall}
+        onJoinByRoomId={onJoinGroupMedia}
+      />
       <CommsP2PCallDock />
+      <SessionRecordingsPanel />
       <div>
         <h3
           className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/90"
@@ -1551,6 +1762,18 @@ function CallHistoryPanel({
               desc: "Message during calls",
               border: "border-teal-500/25",
               title: "text-teal-400",
+            },
+            {
+              label: "Session Recording",
+              desc: "Record & replay calls",
+              border: "border-rose-500/25",
+              title: "text-rose-400",
+            },
+            {
+              label: "Heavy media",
+              desc: "Chunked uploads up to 2 GB",
+              border: "border-fuchsia-500/25",
+              title: "text-fuchsia-400",
             },
             {
               label: "E2E Encrypted",

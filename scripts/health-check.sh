@@ -55,4 +55,11 @@ if ! grep -q '"response"' "$INFER_BODY"; then
   exit 1
 fi
 
-echo "CYRUS health check passed for $BASE_URL"
+mcp_code="$(curl -sS -o "$TMP_DIR/cyrus_mcp_health.json" -w "%{http_code}" "$BASE_URL/api/mcp/health" || true)"
+if [[ "$mcp_code" != "200" ]]; then
+  echo "Health check failed: /api/mcp/health returned $mcp_code (MCP servers not operational)"
+  cat "$TMP_DIR/cyrus_mcp_health.json" 2>/dev/null || true
+  exit 1
+fi
+
+echo "CYRUS health check passed for $BASE_URL (MCP operational)"

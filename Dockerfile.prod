@@ -15,6 +15,7 @@ ENV CYRUS_UI_ROOT=cyrus-ui
 # `npm ci` fails with EUSAGE — set the service root to the repository root for this Dockerfile.
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
+RUN node scripts/install-mediasoup-worker.mjs || true
 
 COPY . .
 ENV NODE_OPTIONS=--max-old-space-size=3072
@@ -36,10 +37,13 @@ ENV PORT=5000
 ENV CYRUS_ENABLE_PYTHON=0
 # Do not set CYRUS_LIVE_PORT here — PaaS often injects PORT; `syncFusedStackPortEnv` mirrors it.
 ENV PYTHONUNBUFFERED=1
+ENV CYRUS_SFU_RTC_MIN_PORT=40000
+ENV CYRUS_SFU_RTC_MAX_PORT=49999
 
 RUN chmod +x /app/scripts/entrypoint.prod.sh
 
 EXPOSE 5000
+EXPOSE 40000-40100/udp
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${PORT:-5000}/health/ready" >/dev/null || exit 1

@@ -24,9 +24,12 @@ function readStoredConferenceId(): string {
 export function ConferenceQuickPanel({
   displayName,
   seedConference,
+  onConferenceMedia,
 }: {
   displayName: string;
   seedConference?: CommsConference | null;
+  /** After REST create/join, start WebRTC media on the conference room ID. */
+  onConferenceMedia?: (conference: CommsConference, action: "create" | "join") => void;
 }) {
   const [title, setTitle] = useState("CYRUS room");
   const [joinId, setJoinId] = useState(readStoredConferenceId);
@@ -78,8 +81,9 @@ export function ConferenceQuickPanel({
     });
     setLastCreated(conference);
     setJoinId(conference.conferenceId);
-    setMessage(`Created "${conference.title}". Join uses the conference ID (below); room code is for humans to read aloud.`);
-  }, [title, displayName]);
+    setMessage(`Created "${conference.title}". Starting group media…`);
+    onConferenceMedia?.(conference, "create");
+  }, [title, displayName, onConferenceMedia]);
 
   const onJoin = useCallback(async () => {
     const id = joinId.trim();
@@ -107,8 +111,14 @@ export function ConferenceQuickPanel({
       if (prev?.conferenceId === id) next = prev;
     }
     persistStoredConference(next);
-    setMessage("Joined conference on server. Add SFU-backed media when available.");
-  }, [joinId, displayName, lastCreated]);
+    setMessage("Joined conference — connecting media…");
+    onConferenceMedia?.(
+      lastCreated?.conferenceId === id
+        ? lastCreated
+        : { conferenceId: id, title: next.title || "Conference", roomCode: next.roomCode || "—" },
+      "join",
+    );
+  }, [joinId, displayName, lastCreated, onConferenceMedia]);
 
   return (
     <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/25 via-violet-950/20 to-[#021018]/80 p-4 shadow-[0_0_32px_-8px_rgba(0,229,255,0.25)]">
@@ -117,7 +127,7 @@ export function ConferenceQuickPanel({
         Conference bridge
       </h3>
       <p className="mb-3 text-[11px] leading-relaxed text-white/50">
-        Server-backed rooms for round-table group calls. Create or join; room codes sync with the Calls tab after orbital group dial.
+        Server-backed rooms for round-table group calls. Create or join — media connects via SFU or star relay automatically.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="flex-1 text-[11px] text-white/60">

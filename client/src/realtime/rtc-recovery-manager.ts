@@ -18,7 +18,8 @@ const RELAY_ESCALATION_KEY = "cyrus-auto-relay-escalation";
 export type RecoveryTickResult =
   | { action: "none" }
   | { action: "ice_restart"; reason: string }
-  | { action: "escalate_relay_preference"; reason: string };
+  | { action: "escalate_relay_preference"; reason: string }
+  | { action: "force_relay_restart"; reason: string };
 
 export class RtcRecoveryManager {
   private lastAutoRestartAt = 0;
@@ -122,19 +123,20 @@ export class RtcRecoveryManager {
 
     if (
       !this.relayEscalated &&
-      this.autoRestartCount >= CYRUS_RESTARTS_BEFORE_RELAY_ESCALATION &&
-      typeof localStorage !== "undefined"
+      this.autoRestartCount >= CYRUS_RESTARTS_BEFORE_RELAY_ESCALATION
     ) {
-      try {
-        localStorage.setItem(RELAY_ESCALATION_KEY, String(now));
-        localStorage.setItem("cyrus-force-relay", "true");
-      } catch {
-        /* ignore */
-      }
       this.relayEscalated = true;
+      if (typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem(RELAY_ESCALATION_KEY, String(now));
+          localStorage.setItem("cyrus-force-relay", "true");
+        } catch {
+          /* ignore */
+        }
+      }
       return {
-        action: "escalate_relay_preference",
-        reason: "repeated_recovery_without_stable_path",
+        action: "force_relay_restart",
+        reason: "repeated_recovery_switch_to_relay",
       };
     }
 

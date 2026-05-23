@@ -51,6 +51,16 @@ export type GeneratedDocument = {
   wordCount: number;
   estimatedPages: number;
   sections: { title: string; content: string }[];
+  attachments?: Array<{
+    id: string;
+    kind: "image";
+    style: "realistic_3d" | "graphical" | "schematic";
+    sectionTitle?: string;
+    caption: string;
+    prompt: string;
+    url?: string;
+    dataUrl?: string;
+  }>;
 };
 
 export type IntelOptions = {
@@ -170,6 +180,8 @@ export function useDocumentsIntelligence() {
       audience: string;
       targetPages: number;
       purpose?: string;
+      includeImages?: boolean;
+      imageStyle?: "realistic_3d" | "graphical" | "schematic";
     }) => {
       const res = await systemFetch("/api/docgen/generate", {
         method: "POST",
@@ -180,6 +192,8 @@ export function useDocumentsIntelligence() {
           rawText: input.content,
           targetPages: input.targetPages,
           purpose: input.purpose,
+          includeImages: input.includeImages ?? false,
+          imageStyle: input.imageStyle ?? "schematic",
         }),
       });
       if (!res.ok) {
@@ -204,6 +218,7 @@ export function useDocumentsIntelligence() {
         audience: doc.audience,
         confidence: doc.confidence,
         sections: doc.sections,
+        attachments: doc.attachments,
         wordCount: doc.wordCount,
         estimatedPages: doc.estimatedPages,
       }),

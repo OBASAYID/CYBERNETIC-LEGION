@@ -1,0 +1,18 @@
+{
+  "content": "Machine learning (ML) is a field of study in artificial intelligence concerned with the development and study of statistical algorithms that can learn from data and generalize to unseen data, and thus perform tasks without being explicitly programmed. Advances in the field of deep learning have allowed neural networks, a class of statistical algorithms, to surpass many previous machine learning approaches in performance.",
+  "metadata": {
+    "title": "Machine learning",
+    "url": "https://en.wikipedia.org/wiki/Machine_learning",
+    "domain": "science"
+  },
+  "source": "https://en.wikipedia.org/wiki/Machine_learning",
+  "category": "ai",
+  "tags": [
+    "ml",
+    "learning",
+    "wikipedia",
+    "ai"
+  ],
+  "id": "2fee9f2d-3ad9-4800-9699-8512384b8aac",
+  "timestamp": "2026-05-23T18:04:16.029Z"
+}

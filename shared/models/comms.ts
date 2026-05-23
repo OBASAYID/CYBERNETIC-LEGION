@@ -349,3 +349,52 @@ export type PshareComment = typeof pshareComments.$inferSelect;
 export type PshareLike = typeof pshareLikes.$inferSelect;
 export type Call = typeof calls.$inferSelect;
 export type CallLog = typeof callLogs.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Group Work Assessment (GWA) — timed team scenarios with AI grading
+// ---------------------------------------------------------------------------
+
+export const gwaSessions = pgTable("gwa_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull(),
+  title: varchar("title").notNull(),
+  scenarioBrief: text("scenario_brief"),
+  /** scheduled | active | completed | cancelled */
+  status: varchar("status").notNull().default("scheduled"),
+  currentPhase: varchar("current_phase").notNull().default("individual_preparation"),
+  phaseStartedAt: timestamp("phase_started_at"),
+  sessionStartedAt: timestamp("session_started_at"),
+  sessionEndedAt: timestamp("session_ended_at"),
+  totalDurationMinutes: integer("total_duration_minutes").default(120),
+  phaseDurations: jsonb("phase_durations").default({}),
+  participantIds: jsonb("participant_ids").notNull().default([]),
+  assessorIds: jsonb("assessor_ids").default([]),
+  createdBy: varchar("created_by").notNull(),
+  liveMetrics: jsonb("live_metrics").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const gwaObservations = pgTable("gwa_observations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  userId: varchar("user_id"),
+  phase: varchar("phase"),
+  eventType: varchar("event_type").notNull(),
+  payload: jsonb("payload").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const gwaReports = pgTable("gwa_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().unique(),
+  groupId: varchar("group_id").notNull(),
+  teamScore: varchar("team_score"),
+  reportJson: jsonb("report_json").notNull().default({}),
+  htmlReport: text("html_report"),
+  syncedToIntelligence: boolean("synced_to_intelligence").default(false),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
+export type GwaSession = typeof gwaSessions.$inferSelect;
+export type GwaObservation = typeof gwaObservations.$inferSelect;
+export type GwaReport = typeof gwaReports.$inferSelect;

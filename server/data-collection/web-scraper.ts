@@ -101,6 +101,15 @@ export class WebScraper {
         hash: crypto.createHash('sha256').update(content).digest('hex')
       };
 
+      if (process.env.CYRUS_INGEST_SCRAPED_ASSETS !== "false" && data.images.length) {
+        try {
+          const { ingestUrls } = await import("../assets/asset-miner.js");
+          await ingestUrls(data.images.slice(0, 8));
+        } catch (err) {
+          console.warn("[WebScraper] Asset ingest skipped:", err instanceof Error ? err.message : err);
+        }
+      }
+
       return {
         success: true,
         data,

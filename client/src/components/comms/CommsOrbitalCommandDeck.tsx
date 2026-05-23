@@ -16,6 +16,7 @@ import {
   Cable,
 } from "lucide-react";
 import { CommsOrbitalScene3D, type ForwardOrbitSlot } from "./CommsOrbitalScene3D";
+import { COMMS_AVATAR_FILE_ACCEPT } from "@shared/comms/avatar-image-formats";
 
 export type { ForwardOrbitSlot };
 
@@ -154,7 +155,7 @@ export function CommsOrbitalCommandDeck({
       <input
         ref={fileRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept={COMMS_AVATAR_FILE_ACCEPT}
         className="sr-only"
         onChange={onFileChange}
       />

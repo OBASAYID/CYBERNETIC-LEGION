@@ -4,6 +4,8 @@
  * Imported by cyrus-ui, client Command Center, and re-exported from cyrus-ui `system-api` / `api-url`.
  */
 
+import { resilientFetch } from "./cyrus-resilience.js";
+
 export function getCyrusApiBase(): string {
   if (typeof import.meta === "undefined") return "";
   const env = (import.meta as ImportMeta & { env?: { VITE_CYRUS_API_BASE?: string } }).env;
@@ -104,14 +106,18 @@ export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Resp
           if (!headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
         }
       }
+      if (parsed.pathname.startsWith("/api/comms") && !headers.has("X-Device-Id")) {
+        const deviceId = localStorage.getItem("cyrus_device_id") || localStorage.getItem("cyrus-device-id");
+        if (deviceId) headers.set("X-Device-Id", deviceId);
+      }
     } catch {
       // Keep fetch resilient even if URL parsing fails.
     }
   }
 
-  return fetch(url, {
+  return resilientFetch(url, {
     ...init,
     headers,
-    credentials: "include", // ALWAYS include credentials
+    credentials: "include",
   });
 }

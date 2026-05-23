@@ -1193,14 +1193,14 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   </div>
                 </div>
 
-                <Link href="/drone">
+                <Link href="/intelligence">
                   <button className="w-full bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 rounded-xl p-3 flex items-center gap-3 hover:border-cyan-400/50 transition-all group">
                     <div className="w-8 h-8 bg-cyan-600/30 rounded-lg flex items-center justify-center">
                       <Plane className="w-4 h-4 text-cyan-400" />
                     </div>
                     <div className="text-left">
-                      <p className="text-[11px] font-semibold text-cyan-400">Drone Operations</p>
-                      <p className="text-[9px] text-[rgba(235,235,245,0.4)]">NAV-guided flight control</p>
+                      <p className="text-[11px] font-semibold text-cyan-400">Intelligence Hub</p>
+                      <p className="text-[9px] text-[rgba(235,235,245,0.4)]">Missions, assets & automation</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-cyan-400/50 ml-auto group-hover:text-cyan-400 transition-colors" />
                   </button>

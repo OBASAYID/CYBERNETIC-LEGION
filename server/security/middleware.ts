@@ -15,16 +15,29 @@ const PUBLIC_API_PATHS = new Set([
   "/api/stack/ports",
   "/api/stack/summary",
   "/api/algorithms/catalog",
+  "/api/mcp/catalog",
+  "/api/mcp/status",
+  "/api/mcp/health",
 ]);
 
 function getFullApiPath(req: Parameters<RequestHandler>[0]): string {
   return `${req.baseUrl || ""}${req.path || ""}`;
 }
 
+/** `<img>` / `<video>` cannot send `x-cyrus-session-token`; comms media uses opaque filenames. */
+function isPublicCommsMediaGet(req: Parameters<RequestHandler>[0]): boolean {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  const apiPath = getFullApiPath(req);
+  if (apiPath.startsWith("/api/comms/media/")) return true;
+  if (apiPath.startsWith("/api/assets/file/")) return true;
+  if (/\/api\/comms\/gwa\/sessions\/[^/]+\/report\/html$/.test(apiPath)) return true;
+  return false;
+}
+
 export function createApiAuthMiddleware(isAuthenticated: RequestHandler): RequestHandler {
   return (req, res, next) => {
     const apiPath = getFullApiPath(req);
-    if (PUBLIC_API_PATHS.has(apiPath)) {
+    if (PUBLIC_API_PATHS.has(apiPath) || isPublicCommsMediaGet(req)) {
       return next();
     }
     return isAuthenticated(req, res, next);

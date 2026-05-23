@@ -538,8 +538,15 @@ async function bootstrapServer(): Promise<void> {
   }
 
   httpServer.listen(listenOptions, () => {
+    let publicUrl = BASE_URL;
+    try {
+      const { getPublicBaseUrl } = require("./config/deployment.js") as { getPublicBaseUrl: () => string };
+      publicUrl = getPublicBaseUrl();
+    } catch {
+      /* deployment module optional at boot */
+    }
     const loopbackUrl = `http://127.0.0.1:${port}/`;
-    console.log(`Server running at ${loopbackUrl} (bind ${serverHost}:${port})`);
+    console.log(`Server running — public ${publicUrl} (bind ${serverHost}:${port}, local ${loopbackUrl})`);
     for (const line of formatStackStartupBanner()) {
       console.log(line);
     }
@@ -577,15 +584,13 @@ async function initializeSystem() {
     console.error("[Init] Auth setup failed:", e);
   }
 
-  // Optional fusion demo routes (non-fatal)
-  if (process.env.CYRUS_DISABLE_FUSION_STUBS !== "true") {
-    try {
-      const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
-      app.use("/api", completeFusionApi);
-      log("[Fusion] Public demo routes from complete-fusion-api (before /api auth)");
-    } catch (e) {
-      console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
-    }
+  // Fusion bootstrap (honest capability map for gate UI)
+  try {
+    const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
+    app.use("/api", completeFusionApi);
+    log("[Fusion] Bootstrap routes registered (honest capability map)");
+  } catch (e) {
+    console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
   }
 
   // Security middleware — non-fatal so the server still starts without it
@@ -660,6 +665,15 @@ async function initializeSystem() {
     console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
 
+  try {
+    const { mcpRouter } = await import("./mcp/mcp-routes.js");
+    app.use("/api", mcpRouter);
+    const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
+    await initializeMcpOnBoot();
+  } catch (e) {
+    console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
   await tick();
 
   try {
@@ -702,6 +716,13 @@ async function initializeSystem() {
 
   systemReady = true;
   log("All systems initialized - accepting API traffic");
+
+  try {
+    const { startIntelligenceAutomationScheduler } = await import("./ai/intelligence-automation-core.js");
+    startIntelligenceAutomationScheduler();
+  } catch (e) {
+    console.warn("[Init] Intelligence automation scheduler not loaded (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
 
   const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
   /** Lightweight Comms ML only (ml_service.py); does not start the heavy quantum bridge. */
