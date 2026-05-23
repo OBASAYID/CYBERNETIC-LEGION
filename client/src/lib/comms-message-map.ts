@@ -154,6 +154,7 @@ export function mapServerMessageToComms(
       mediaUrl: row.fileUrl,
       mediaMimeType: fileMime || undefined,
       fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
     };
   }
 
@@ -172,6 +173,7 @@ export function mapServerMessageToComms(
         mediaUrl: row.fileUrl,
         mediaMimeType: fileMime || guessCommsCadMime(row.fileName) || undefined,
         fileName: row.fileName || undefined,
+        fileSizeBytes: row.fileSizeBytes ?? undefined,
       };
     }
     return {
@@ -186,6 +188,7 @@ export function mapServerMessageToComms(
       mediaUrl: row.fileUrl,
       mediaMimeType: fileMime || undefined,
       fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
     };
   }
 
@@ -204,6 +207,7 @@ export function mapServerMessageToComms(
       mediaUrl: row.fileUrl,
       mediaMimeType: fileMime || undefined,
       fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
     };
   }
 

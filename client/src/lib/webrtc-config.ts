@@ -189,12 +189,13 @@ export const MEDIA_CONSTRAINTS = {
     },
   },
   audio: {
-    echoCancellation: { ideal: true },
+    echoCancellation: { ideal: true, exact: true },
     noiseSuppression: { ideal: true },
     autoGainControl: { ideal: true },
-    channelCount: { ideal: 1 },
+    channelCount: { ideal: 1, max: 1 },
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },
+    latency: { ideal: 0.01, max: 0.05 },
   },
 };
 
@@ -212,20 +213,134 @@ export function mergeIceServerLists(a: RTCIceServer[], b: RTCIceServer[]): RTCIc
   return out.length > 0 ? out : getRuntimeIceServers();
 }
 
-export function getIceTransportPolicy(): RTCIceTransportPolicy {
-  if (import.meta.env.VITE_RTC_ICE_TRANSPORT_POLICY === "relay") return "relay";
-  if (isRelayOnlyTestMode()) return "relay";
-  return shouldPreferRelayTransport() ? "relay" : "all";
+/** Delta-based outbound bitrate tracker (fixes cumulative bytesSent misread). */
+const outboundBitrateTracker = new WeakMap<
+  RTCPeerConnection,
+  { t: number; bytesSent: number; audioBytesSent: number }
+>();
+
+function measureOutboundBitrateKbps(
+  pc: RTCPeerConnection,
+  report: RTCStatsReport,
+): { videoKbps: number; audioKbps: number } {
+  let videoBytes = 0;
+  let audioBytes = 0;
+  report.forEach((r) => {
+    if (r.type !== "outbound-rtp") return;
+    const kind = (r as { kind?: string }).kind;
+    const sent = (r as { bytesSent?: number }).bytesSent;
+    if (typeof sent !== "number") return;
+    if (kind === "video") videoBytes = sent;
+    if (kind === "audio") audioBytes = sent;
+  });
+
+  const now = Date.now();
+  const prev = outboundBitrateTracker.get(pc);
+  outboundBitrateTracker.set(pc, { t: now, bytesSent: videoBytes, audioBytesSent: audioBytes });
+
+  if (!prev || now <= prev.t) return { videoKbps: 0, audioKbps: 0 };
+  const dtSec = (now - prev.t) / 1000;
+  if (dtSec <= 0) return { videoKbps: 0, audioKbps: 0 };
+
+  return {
+    videoKbps: Math.max(0, ((videoBytes - prev.bytesSent) * 8) / 1000 / dtSec),
+    audioKbps: Math.max(0, ((audioBytes - prev.audioBytesSent) * 8) / 1000 / dtSec),
+  };
 }
 
-/** Build final RTCConfiguration; prefer server-provided TURN (via fetch) merged with client defaults. */
-export function buildRtcConfiguration(iceServers: RTCIceServer[]): RTCConfiguration {
+export function resetOutboundBitrateTracker(pc: RTCPeerConnection): void {
+  outboundBitrateTracker.delete(pc);
+}
+
+/** WebAudio post-processing doubles AEC — studio mode / explicit opt-in only. */
+export function isAudioProcessingEnabled(): boolean {
+  if (import.meta.env.VITE_RTC_AUDIO_PROCESSING === "true") return true;
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.localStorage.getItem("cyrus-media-filters") === "studio") return true;
+    return window.localStorage.getItem("cyrus-audio-processing") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function hasTurnRelayInIceServers(servers: RTCIceServer[]): boolean {
+  return servers.some((s) => {
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    return urls.some((u) => String(u).startsWith("turn:") || String(u).startsWith("turns:"));
+  });
+}
+
+export function getIceTransportPolicy(options?: {
+  iceServers?: RTCIceServer[];
+  forceRelay?: boolean;
+}): RTCIceTransportPolicy {
+  if (options?.forceRelay) return "relay";
+  if (import.meta.env.VITE_RTC_ICE_TRANSPORT_POLICY === "relay") return "relay";
+  if (isRelayOnlyTestMode()) return "relay";
+  if (shouldPreferRelayTransport()) return "relay";
+
+  try {
+    if (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-force-relay") === "true") {
+      return "relay";
+    }
+    if (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-auto-relay-escalation")) {
+      return "relay";
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const servers = options?.iceServers ?? getRuntimeIceServers();
+  if (hasTurnRelayInIceServers(servers) && isLikelyCrossNetworkPath()) {
+    return "relay";
+  }
+
+  return "all";
+}
+
+/** Cross-carrier / mobile backhaul — direct P2P UDP often fails or stutters. */
+export function isLikelyCrossNetworkPath(): boolean {
+  if (shouldPreferRelayTransport()) return true;
+  const connection = (navigator as Navigator & { connection?: { type?: string; effectiveType?: string } })
+    .connection;
+  if (!connection) return false;
+  const type = String(connection.type || "").toLowerCase();
+  const effective = String(connection.effectiveType || "").toLowerCase();
+  return (
+    type === "cellular" ||
+    effective === "2g" ||
+    effective === "3g" ||
+    effective === "slow-2g"
+  );
+}
+
+export const SDP_NEGOTIATION_OPTIONS = {
+  offer: {
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
+    voiceActivityDetection: false,
+  } as RTCOfferOptions,
+  answer: {
+    voiceActivityDetection: false,
+  } as RTCAnswerOptions,
+  iceRestart: {
+    iceRestart: true,
+    voiceActivityDetection: false,
+  } as RTCOfferOptions,
+};
+
+/** Build final RTCConfiguration; prefer server-provided TURN merged with client defaults. */
+export function buildRtcConfiguration(
+  iceServers: RTCIceServer[],
+  options?: { forceRelay?: boolean },
+): RTCConfiguration {
   return {
     iceServers,
-    iceTransportPolicy: getIceTransportPolicy(),
+    iceTransportPolicy: getIceTransportPolicy({ iceServers, forceRelay: options?.forceRelay }),
     bundlePolicy: "max-bundle",
     rtcpMuxPolicy: "require",
-    iceCandidatePoolSize: 20,
+    iceCandidatePoolSize: 24,
   };
 }
 
@@ -255,12 +370,19 @@ export function getOptimalVideoConstraints(): MediaTrackConstraints {
 }
 
 export function getAudioConstraints(): MediaTrackConstraints {
-  return {
+  const base: MediaTrackConstraints = {
     ...MEDIA_CONSTRAINTS.audio,
     echoCancellation: true,
     noiseSuppression: true,
     autoGainControl: true,
-  } as MediaTrackConstraints;
+  };
+  if (typeof navigator !== "undefined" && navigator.mediaDevices?.getSupportedConstraints) {
+    const caps = navigator.mediaDevices.getSupportedConstraints();
+    if ("voiceIsolation" in caps && caps.voiceIsolation) {
+      (base as MediaTrackConstraints & { voiceIsolation?: boolean }).voiceIsolation = true;
+    }
+  }
+  return base;
 }
 
 /** Operator / UX toggles for constrained networks (localStorage `cyrus-comms-network-mode`). */
@@ -334,6 +456,59 @@ export function applyPreferredCodecsToPeerConnection(pc: RTCPeerConnection): voi
   }
 }
 
+/** Sender-side tuning: prioritize voice clarity and smooth video under loss. */
+export async function applyCommsSenderTuning(
+  peerConnection: RTCPeerConnection,
+  callType: "audio" | "video",
+): Promise<void> {
+  for (const sender of peerConnection.getSenders()) {
+    const track = sender.track;
+    if (!track) continue;
+
+    try {
+      if (track.kind === "audio") {
+        track.contentHint = "speech";
+      } else if (track.kind === "video") {
+        track.contentHint = "motion";
+      }
+    } catch {
+      /* unsupported */
+    }
+
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+
+    if (track.kind === "audio") {
+      params.encodings[0].maxBitrate = 128_000;
+      params.encodings[0].priority = "high";
+      params.encodings[0].networkPriority = "high";
+    } else if (track.kind === "video" && callType === "video") {
+      params.degradationPreference = "maintain-framerate";
+      params.encodings[0].maxBitrate = params.encodings[0].maxBitrate ?? 2_500_000;
+      params.encodings[0].maxFramerate = params.encodings[0].maxFramerate ?? 30;
+      params.encodings[0].priority = "medium";
+      params.encodings[0].networkPriority = "medium";
+    }
+
+    await sender.setParameters(params);
+  }
+}
+
+/** Drop video temporarily to preserve audio on very poor paths. */
+export async function prioritizeAudioOverVideo(peerConnection: RTCPeerConnection): Promise<void> {
+  for (const sender of peerConnection.getSenders()) {
+    if (sender.track?.kind !== "video") continue;
+    const params = sender.getParameters();
+    if (!params.encodings?.length) params.encodings = [{}];
+    params.encodings[0].maxBitrate = 120_000;
+    params.encodings[0].maxFramerate = 8;
+    params.encodings[0].scaleResolutionDownBy = 4;
+    await sender.setParameters(params);
+  }
+}
+
 /** Bandwidth ceiling hint for future SFU / publisher caps (kbps). */
 export function getCyrusPublisherBitrateCapKbps(networkMode: CyrusCommsNetworkMode): number {
   if (networkMode === "emergency" || networkMode === "audio_priority") return 0;
@@ -345,9 +520,10 @@ export async function getCallQualityMetrics(
   peerConnection: RTCPeerConnection
 ): Promise<CallQualityMetrics> {
   const stats = await peerConnection.getStats();
-  
+  const { videoKbps, audioKbps } = measureOutboundBitrateKbps(peerConnection, stats);
+
   let metrics: CallQualityMetrics = {
-    bitrate: 0,
+    bitrate: videoKbps,
     packetsLost: 0,
     packetLossRate: 0,
     jitter: 0,
@@ -360,12 +536,13 @@ export async function getCallQualityMetrics(
     iceConnectionState: peerConnection.iceConnectionState,
   };
 
-  let totalPacketsSent = 0;
+  let totalPacketsReceived = 0;
   let totalPacketsLost = 0;
+  let inboundAudioJitter = 0;
+  let inboundAudioLevel = 0;
 
   stats.forEach((report) => {
     if (report.type === "outbound-rtp" && report.kind === "video") {
-      metrics.bitrate = report.bytesSent ? (report.bytesSent * 8) / 1000 : 0;
       metrics.frameRate = report.framesPerSecond || 0;
       if (report.frameWidth && report.frameHeight) {
         metrics.resolution = {
@@ -376,30 +553,39 @@ export async function getCallQualityMetrics(
     }
 
     if (report.type === "inbound-rtp") {
-      metrics.jitter = report.jitter || 0;
-      totalPacketsLost += report.packetsLost || 0;
-      totalPacketsSent += report.packetsReceived || 0;
+      const lost = report.packetsLost || 0;
+      const received = report.packetsReceived || 0;
+      totalPacketsLost += lost;
+      totalPacketsReceived += received + lost;
+      if (report.kind === "audio") {
+        inboundAudioJitter = Math.max(inboundAudioJitter, report.jitter || 0);
+      }
     }
 
-    if (report.type === "candidate-pair" && report.state === "succeeded") {
-      metrics.roundTripTime = report.currentRoundTripTime || 0;
+    if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated) {
+      metrics.roundTripTime = report.currentRoundTripTime || metrics.roundTripTime;
     }
 
     if (report.type === "track" && report.kind === "audio") {
-      metrics.audioLevel = report.audioLevel || 0;
+      inboundAudioLevel = Math.max(inboundAudioLevel, report.audioLevel || 0);
     }
   });
 
+  metrics.jitter = inboundAudioJitter;
+  metrics.audioLevel = inboundAudioLevel;
   metrics.packetsLost = totalPacketsLost;
-  if (totalPacketsSent > 0) {
-    metrics.packetLossRate = (totalPacketsLost / totalPacketsSent) * 100;
+  if (totalPacketsReceived > 0) {
+    metrics.packetLossRate = (totalPacketsLost / totalPacketsReceived) * 100;
   }
 
-  if (metrics.packetLossRate < 1 && metrics.roundTripTime < 0.1) {
+  const rttMs = metrics.roundTripTime * 1000;
+  const loss = metrics.packetLossRate;
+
+  if (loss < 0.8 && rttMs < 120 && videoKbps > 400) {
     metrics.qualityScore = "excellent";
-  } else if (metrics.packetLossRate < 3 && metrics.roundTripTime < 0.2) {
+  } else if (loss < 2.5 && rttMs < 220 && (videoKbps > 180 || audioKbps > 24)) {
     metrics.qualityScore = "good";
-  } else if (metrics.packetLossRate < 5 && metrics.roundTripTime < 0.4) {
+  } else if (loss < 6 && rttMs < 450) {
     metrics.qualityScore = "fair";
   } else {
     metrics.qualityScore = "poor";
@@ -461,7 +647,7 @@ export class AdaptiveBitrateController {
   start(): void {
     this.monitoringInterval = setInterval(async () => {
       await this.adjustQuality();
-    }, 3000);
+    }, 1500);
   }
 
   stop(): void {
@@ -481,10 +667,21 @@ export class AdaptiveBitrateController {
       if (currentIndex < presetOrder.length - 1) {
         newPreset = presetOrder[currentIndex + 1] as keyof typeof QUALITY_PRESETS;
       }
-    } else if (metrics.qualityScore === "poor" && this.currentPreset !== "low") {
+    } else if (metrics.qualityScore === "poor") {
+      if (metrics.packetLossRate > 8 || metrics.roundTripTime > 0.35) {
+        await prioritizeAudioOverVideo(this.peerConnection);
+      }
+      if (this.currentPreset !== "low") {
+        const presetOrder = ["low", "medium", "high", "ultra"];
+        const currentIndex = presetOrder.indexOf(this.currentPreset);
+        if (currentIndex > 0) {
+          newPreset = presetOrder[currentIndex - 1] as keyof typeof QUALITY_PRESETS;
+        }
+      }
+    } else if (metrics.qualityScore === "fair" && this.currentPreset !== "low") {
       const presetOrder = ["low", "medium", "high", "ultra"];
       const currentIndex = presetOrder.indexOf(this.currentPreset);
-      if (currentIndex > 0) {
+      if (currentIndex > 0 && metrics.packetLossRate > 4) {
         newPreset = presetOrder[currentIndex - 1] as keyof typeof QUALITY_PRESETS;
       }
     }

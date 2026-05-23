@@ -1,12 +1,17 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
-import { getCommsDeviceId } from "../lib/comms-device-id";
+import { getCommsDeviceId } from "../lib/cyrus-identity";
+import { resolveCyrusIdentity } from "../lib/cyrus-identity";
 import {
   getCallQualityMetrics,
   AdaptiveBitrateController,
   isRelayOnlyTestMode,
   getCyrusCommsNetworkMode,
   applyPreferredCodecsToPeerConnection,
+  applyCommsSenderTuning,
+  resetOutboundBitrateTracker,
+  SDP_NEGOTIATION_OPTIONS,
+  isLikelyCrossNetworkPath,
 } from "../lib/webrtc-config";
 import {
   acquireCommsUserMedia,
@@ -32,6 +37,10 @@ import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
 import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
 import { buildPresenceSendMessagePayload } from "../lib/comms-outbound";
+import {
+  enqueueOutboundMessage,
+  flushOutboundQueue,
+} from "../lib/comms-offline-queue";
 
 export type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
 
@@ -168,6 +177,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const negotiationBusyRef = useRef(false);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
+  const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const savedCameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -220,10 +230,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
     }
-    if (audioProcessorRef.current) {
-      audioProcessorRef.current.destroy();
-      audioProcessorRef.current = null;
-    }
+    mediaPipelineDisposeRef.current?.();
+    mediaPipelineDisposeRef.current = null;
+    audioProcessorRef.current = null;
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
@@ -404,7 +413,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   await flushIce();
                   negotiationBusyRef.current = true;
                   try {
-                    const answer = await p.createAnswer();
+                    const answer = await p.createAnswer(SDP_NEGOTIATION_OPTIONS.answer);
                     diag?.logSdpFlow("createAnswer", true);
                     await p.setLocalDescription(answer);
                     diag?.logSdpFlow("setLocalAnswer", true);
@@ -425,7 +434,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        const rtcConfig = await fetchCyrusCommRtcConfiguration();
+        const rtcConfig = await fetchCyrusCommRtcConfiguration({
+          forceRelay: isLikelyCrossNetworkPath(),
+        });
         if (!alive()) return;
 
         const networkMode = getCyrusCommsNetworkMode();
@@ -443,9 +454,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           const acquired = await acquireCommsUserMedia(callType, networkMode);
           if (!alive()) {
             acquired.stream.getTracks().forEach((t) => t.stop());
-            acquired.audioProcessor?.destroy();
+            acquired.disposeMediaPipeline();
             return;
           }
+          mediaPipelineDisposeRef.current = acquired.disposeMediaPipeline;
           audioProcessorRef.current = acquired.audioProcessor;
           stream = acquired.stream;
         } catch (mediaErr) {
@@ -459,6 +471,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         const pc = new RTCPeerConnection(rtcConfig);
         peerConnectionRef.current = pc;
+        resetOutboundBitrateTracker(pc);
 
         const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
         diagSession.attach();
@@ -470,6 +483,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           diagSession.logAddTrack(track);
         });
         applyPreferredCodecsToPeerConnection(pc);
+        void applyCommsSenderTuning(pc, callType);
 
         pc.onnegotiationneeded = () => {
           webrtcDiagSessionRef.current?.logNegotiationNeeded();
@@ -494,7 +508,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               await flushIce();
               negotiationBusyRef.current = true;
               try {
-                const answer = await p.createAnswer();
+                const answer = await p.createAnswer(SDP_NEGOTIATION_OPTIONS.answer);
                 diag?.logSdpFlow("createAnswer", true, { buffered: true });
                 await p.setLocalDescription(answer);
                 diag?.logSdpFlow("setLocalAnswer", true, { buffered: true });
@@ -666,7 +680,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               await negotiationCoordinatorRef.current.runExclusive(async () => {
                 let offer: RTCSessionDescriptionInit | undefined;
                 try {
-                  offer = await pc.createOffer();
+                  offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
                   webrtcDiagSessionRef.current?.logSdpFlow("createOffer", true);
                 } catch (e) {
                   webrtcDiagSessionRef.current?.logSdpFlow("createOffer", false, { error: String(e) });
@@ -717,26 +731,27 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
     }
 
-    const deviceId = getCommsDeviceId();
-    const userId = deviceId;
-    currentUserIdRef.current = userId;
+    void (async () => {
+      const identity = await resolveCyrusIdentity();
+      const { deviceId, commsUserId: userId } = identity;
+      currentUserIdRef.current = userId;
 
     console.log(`[Presence] Creating Socket.IO connection to ${window.location.origin}`);
     
     const socketUrl = window.location.origin;
-    console.log(`[Presence] Connecting Socket.IO to: ${socketUrl} (polling transport)`);
+    console.log(`[Presence] Connecting Socket.IO to: ${socketUrl} (account=${identity.accountUserId ?? "anon"}, device=${deviceId})`);
     
+    const preferWebSocket = import.meta.env.VITE_RTC_SIGNALING_WS !== "false";
     const socket = io(socketUrl, {
       path: "/cyrus-io",
-      // Match server: polling-only (Railway / Bun often fail Engine.IO WS upgrade).
-      transports: ["polling"],
+      transports: preferWebSocket ? ["websocket", "polling"] : ["polling"],
       reconnection: true,
       reconnectionAttempts: 20,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
       timeout: 60_000,
-      upgrade: false,
+      upgrade: preferWebSocket,
       forceNew: true,
       withCredentials: true,
       autoConnect: true,
@@ -761,6 +776,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       console.log("[Presence] Registered successfully:", data);
       setMyUserId(data.userId);
       setIsConnected(true);
+      const { sent, remaining } = flushOutboundQueue((conversationId, body) => {
+        socket.emit("send-message", body);
+      });
+      if (sent > 0) {
+        addNotification("success", `Delivered ${sent} queued message${sent === 1 ? "" : "s"}`);
+      }
+      if (remaining > 0) {
+        addNotification("warning", `${remaining} message(s) still queued`);
+      }
       addNotification("success", `Connected as ${displayName}`);
     });
 
@@ -921,6 +945,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       window.location.href = "/";
     });
 
+    })();
   }, [addNotification, setupWebRTCMedia, cleanupMedia]);
 
   const disconnectPresence = useCallback(() => {
@@ -1041,8 +1066,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const sendChatMessage = useCallback((conversationId: string, payload: ChatOutboundPayload) => {
     if (!socketRef.current?.connected) {
-      console.error("[Presence] Socket not connected - cannot send message");
-      addNotification("error", "Not connected");
+      enqueueOutboundMessage(conversationId, payload);
+      addNotification("warning", "Reconnecting — message queued for delivery");
       return;
     }
     socketRef.current.emit(
@@ -1233,12 +1258,26 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 activeCallRef.current = null;
               }
             }, CYRUS_ICE_RESTART_VERIFY_MS);
-          } else if (res.action === "escalate_relay_preference") {
+          } else if (res.action === "force_relay_restart" || res.action === "escalate_relay_preference") {
             session.recordRecoveryAction("relay_escalation", { reason: res.reason });
-            addNotification(
-              "info",
-              "CYRUS saved relay preference for this browser (auto-escalation). New calls use more aggressive TURN."
-            );
+            addNotification("info", "Switching to relay path for clearer audio…");
+            try {
+              localStorage.setItem("cyrus-force-relay", "true");
+            } catch {
+              /* ignore */
+            }
+            if (iceRestartAttemptsRef.current >= maxA) return;
+            iceRestartAttemptsRef.current += 1;
+            try {
+              await pc.restartIce();
+              const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
+              await pc.setLocalDescription(offer);
+              if (socketRef.current?.connected && call?.roomId) {
+                socketRef.current.emit("webrtc-offer", { roomId: call.roomId, offer });
+              }
+            } catch (e) {
+              console.warn("[WebRTC-Presence] relay restart failed:", e);
+            }
           }
           return;
         }

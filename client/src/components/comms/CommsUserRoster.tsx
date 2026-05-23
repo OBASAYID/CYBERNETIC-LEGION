@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { User } from "lucide-react";
 import { commsAssetUrl } from "@shared/cyrus-api-client";
+import { COMMS_AVATAR_FILE_ACCEPT } from "@shared/comms/avatar-image-formats";
 
 export interface RosterUser {
   id: string;
@@ -69,7 +70,7 @@ export function CommsUserRoster({
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+          accept={COMMS_AVATAR_FILE_ACCEPT}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

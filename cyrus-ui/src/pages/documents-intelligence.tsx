@@ -102,6 +102,8 @@ export default function DocumentsIntelligence() {
   const [genBody, setGenBody] = useState("");
   const [targetPages, setTargetPages] = useState(2000);
   const [genPurpose, setGenPurpose] = useState("");
+  const [includeImages, setIncludeImages] = useState(false);
+  const [imageStyle, setImageStyle] = useState<"realistic_3d" | "graphical" | "schematic">("schematic");
   const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
@@ -183,6 +185,8 @@ export default function DocumentsIntelligence() {
         audience: genAudience,
         targetPages: Math.max(1, Math.min(maxDocgenTargetPages(), targetPages)),
         purpose: genPurpose || undefined,
+        includeImages,
+        imageStyle,
       });
     },
   });
@@ -514,6 +518,28 @@ export default function DocumentsIntelligence() {
                   onChange={(e) => setTargetPages(+e.target.value)}
                   className="h-2 w-full"
                 />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={includeImages}
+                    onChange={(e) => setIncludeImages(e.target.checked)}
+                    className="rounded border-white/20"
+                  />
+                  Include reference images (DALL-E / local)
+                </label>
+                {includeImages ? (
+                  <select
+                    value={imageStyle}
+                    onChange={(e) => setImageStyle(e.target.value as typeof imageStyle)}
+                    className="rounded-lg border border-white/12 bg-slate-900/85 px-2 py-1.5 text-sm"
+                  >
+                    <option value="schematic">Schematic / anatomy</option>
+                    <option value="graphical">Graphical infographic</option>
+                    <option value="realistic_3d">Realistic 3D</option>
+                  </select>
+                ) : null}
               </div>
               <textarea
                 value={genBody}

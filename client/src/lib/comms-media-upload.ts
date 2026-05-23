@@ -1,23 +1,23 @@
-import { systemFetch } from "@shared/cyrus-api-client";
-import { getCommsDeviceId } from "./comms-device-id";
 import {
-  COMMS_CAD_FILE_ACCEPT,
-  guessCommsCadMime,
+  buildCommsMediaFileAccept,
+  formatCommsFileSize,
+  getCommsMediaCategoryLabel,
+  inferCommsMediaCategory,
+  isStreamableCommsMedia,
+} from "@shared/comms/media-formats";
+import {
   isCommsCad3dFile,
+  guessCommsCadMime,
 } from "./comms-cad-formats";
+import {
+  uploadCommsFileSmart,
+  type CommsUploadProgress,
+} from "./comms-chunk-upload";
 
 /** Shared accept string for chat + in-call media pickers */
-export const COMMS_MEDIA_FILE_ACCEPT =
-  "image/*,video/*,audio/*," +
-  "application/pdf,application/zip," +
-  "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
-  "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
-  "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
-  "text/plain,text/html,text/csv,text/markdown,application/json,application/xml," +
-  ".pdf,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp," +
-  ".txt,.csv,.md,.json,.xml,.zip," +
-  ".mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv," +
-  COMMS_CAD_FILE_ACCEPT;
+export const COMMS_MEDIA_FILE_ACCEPT = buildCommsMediaFileAccept();
+
+export type { CommsUploadProgress };
 
 export function isRichCommsMediaMime(mime: string): boolean {
   return mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
@@ -27,6 +27,7 @@ export type CommsUploadedMedia = {
   fileUrl: string;
   fileName: string;
   mimeType: string;
+  fileSize: number;
 };
 
 export type CommsMediaMessagePayload = {
@@ -38,29 +39,49 @@ export type CommsMediaMessagePayload = {
   fileSizeBytes?: number;
 };
 
+export type CommsMediaUploadOptions = {
+  userId: string;
+  fileName?: string;
+  onProgress?: (progress: CommsUploadProgress) => void;
+};
+
+export function validateCommsMediaFile(file: File | Blob, fileName?: string): string | null {
+  const name = fileName || (file instanceof File ? file.name : "");
+  if (file.size <= 0) return "File is empty";
+  const maxLabel = formatCommsFileSize(2 * 1024 * 1024 * 1024);
+  if (file.size > 2 * 1024 * 1024 * 1024) {
+    return `File exceeds maximum size (${maxLabel})`;
+  }
+  if (!name.trim()) return null;
+  return null;
+}
+
 export async function uploadCommsMediaFile(
   file: File | Blob,
-  options: { userId: string; fileName?: string },
+  options: CommsMediaUploadOptions,
 ): Promise<CommsUploadedMedia | null> {
-  const formData = new FormData();
   const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
-  formData.append("file", file, name);
+  const validationError = validateCommsMediaFile(file, name);
+  if (validationError) {
+    console.error("[comms] media validation:", validationError);
+    return null;
+  }
+
   try {
-    const res = await systemFetch("/api/comms/upload", {
-      method: "POST",
-      body: formData,
-      headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": options.userId },
+    const uploaded = await uploadCommsFileSmart(file, {
+      userId: options.userId,
+      fileName: name,
+      onProgress: options.onProgress,
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { fileUrl: string; fileName: string; mimeType?: string };
     return {
-      fileUrl: data.fileUrl,
-      fileName: data.fileName || name,
+      fileUrl: uploaded.fileUrl,
+      fileName: uploaded.fileName || name,
       mimeType:
-        data.mimeType ||
+        uploaded.mimeType ||
         (file instanceof File ? file.type : "") ||
-        guessCommsCadMime(data.fileName || name) ||
+        guessCommsCadMime(uploaded.fileName || name) ||
         "",
+      fileSize: uploaded.fileSize || file.size,
     };
   } catch (err) {
     console.error("[comms] media upload failed:", err);
@@ -74,24 +95,34 @@ export function buildCommsMediaMessagePayload(
   uploaded: CommsUploadedMedia,
 ): CommsMediaMessagePayload {
   const mime = uploaded.mimeType || guessCommsCadMime(uploaded.fileName) || "";
+  const category = inferCommsMediaCategory(uploaded.fileName, mime);
+  const sizeLabel = formatCommsFileSize(uploaded.fileSize || file.size);
+
   if (isCommsCad3dFile(uploaded.fileName, mime)) {
     return {
-      message: caption.trim() || `🧊 ${uploaded.fileName}`,
+      message: caption.trim() || `🧊 ${uploaded.fileName}${sizeLabel ? ` · ${sizeLabel}` : ""}`,
       messageType: "cad-3d",
       fileUrl: uploaded.fileUrl,
       fileName: uploaded.fileName,
       fileMimeType: mime || undefined,
-      fileSizeBytes: file.size,
+      fileSizeBytes: uploaded.fileSize || file.size,
     };
   }
-  const isRichMedia = isRichCommsMediaMime(mime);
+
+  const isRichMedia = isStreamableCommsMedia(uploaded.fileName, mime) || isRichCommsMediaMime(mime);
+  const label = getCommsMediaCategoryLabel(category);
+
   return {
-    message: caption.trim() || (isRichMedia ? " " : `📎 ${uploaded.fileName}`),
+    message:
+      caption.trim() ||
+      (isRichMedia
+        ? " "
+        : `📎 ${label}: ${uploaded.fileName}${sizeLabel ? ` · ${sizeLabel}` : ""}`),
     messageType: isRichMedia ? "media" : "file",
     fileUrl: uploaded.fileUrl,
     fileName: uploaded.fileName,
     fileMimeType: mime || undefined,
-    fileSizeBytes: file.size,
+    fileSizeBytes: uploaded.fileSize || file.size,
   };
 }
 
@@ -100,8 +131,9 @@ export async function uploadAndBuildCommsMediaPayload(
   caption: string,
   userId: string,
   fileName?: string,
+  onProgress?: (progress: CommsUploadProgress) => void,
 ): Promise<CommsMediaMessagePayload | null> {
-  const uploaded = await uploadCommsMediaFile(file, { userId, fileName });
+  const uploaded = await uploadCommsMediaFile(file, { userId, fileName, onProgress });
   if (!uploaded) return null;
   return buildCommsMediaMessagePayload(file, caption, uploaded);
 }

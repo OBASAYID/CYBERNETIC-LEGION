@@ -1,1 +1,0 @@
-// Placeholder CyrusHumanoid.tsx. Restore full content from original-cyrus-ui-extracted/client/src/components/CyrusHumanoid.tsx if missing.

@@ -58,12 +58,13 @@ export function HeroSection() {
             Open Ops Console
           </button>
         </Link>
-        <Link href="/dashboard-legacy">
+        <Link href="/intelligence">
           <button
             type="button"
-            className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/88 transition hover:bg-white/14"
+            className="rounded-full border border-cyan-400/40 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-500/25"
+            style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
-            Legacy Dashboard
+            Intelligence Hub
           </button>
         </Link>
       </div>
@@ -388,27 +389,6 @@ export function BottomPanels({ hints }: { hints: string[] }) {
           </li>
         </ul>
       </div>
-    </section>
-  );
-}
-
-export function LegacyBanner() {
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-amber-950/30 to-orange-950/40 p-4 text-xs text-amber-100/90 shadow-[0_0_30px_-10px_rgba(251,191,36,0.4)]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent_40%,rgba(255,255,255,0.04)_50%,transparent_60%)]" />
-      <div className="relative mb-1 flex items-center gap-2 font-medium" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
-        <Activity className="h-3.5 w-3.5 text-amber-300" />
-        Legacy access
-      </div>
-      <p className="relative text-amber-100/75">
-        Open the previous dashboard at{" "}
-        <Link href="/dashboard-legacy">
-          <span className="cursor-pointer font-mono text-cyan-200 underline decoration-cyan-500/50 underline-offset-2">
-            /dashboard-legacy
-          </span>
-        </Link>{" "}
-        while iterating on this structure.
-      </p>
     </section>
   );
 }

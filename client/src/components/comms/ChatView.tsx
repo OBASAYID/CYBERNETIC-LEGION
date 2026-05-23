@@ -10,6 +10,7 @@ import {
 import { MessageBubble, CommsMessage } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { CommsMediaDropZone } from "./CommsMediaDropZone";
+import { GroupWorkAssessmentPanel } from "./GroupWorkAssessmentPanel";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -21,7 +22,11 @@ interface ChatViewProps {
   currentUserId: string;
   typingUsers?: string[];
   onSendMessage: (content: string) => void;
-  onSendMedia?: (file: File, caption: string) => void;
+  onSendMedia?: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: import("../../lib/comms-media-upload").CommsUploadProgress) => void,
+  ) => Promise<void> | void;
   onSendVoice?: (blob: Blob, duration: number) => void;
   onSendLocation?: () => void;
   onToggleEmoji?: () => void;
@@ -35,6 +40,8 @@ interface ChatViewProps {
   /** When true, bottom message input is hidden (e.g. floating new-chat composer is shown). */
   composerSuppressed?: boolean;
   holoSurface?: boolean;
+  participantIds?: string[];
+  getUserDisplayName?: (userId: string) => string;
 }
 
 export function ChatView({
@@ -60,6 +67,8 @@ export function ChatView({
   getAvatarForUser,
   composerSuppressed = false,
   holoSurface = false,
+  participantIds,
+  getUserDisplayName,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -244,6 +253,17 @@ export function ChatView({
           </button>
         </div>
       </div>
+
+      {isGroup && conversationId ? (
+        <GroupWorkAssessmentPanel
+          groupId={conversationId}
+          groupName={conversationName}
+          myUserId={currentUserId}
+          participantIds={participantIds}
+          getUserDisplayName={getUserDisplayName}
+          holoSurface={holoSurface}
+        />
+      ) : null}
 
       <CommsMediaDropZone
         enabled={Boolean(onSendMedia) && !composerSuppressed}

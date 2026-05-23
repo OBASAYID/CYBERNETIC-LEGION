@@ -1,19 +1,26 @@
 /**
- * Comms call media — capture fallbacks, voice processing, sender tuning.
+ * Comms call media — capture fallbacks, voice/video filters, sender tuning.
  */
 import {
   AdaptiveBitrateController,
   applyBandwidthConstraints,
+  applyCommsSenderTuning,
   applyPreferredCodecsToPeerConnection,
   AudioProcessor,
   detectNetworkType,
   getAudioConstraints,
   getCyrusCommsNetworkMode,
   getVideoConstraintsForCommsCall,
+  isAudioProcessingEnabled,
   MEDIA_CONSTRAINTS,
   QUALITY_PRESETS,
   type CyrusCommsNetworkMode,
 } from "./webrtc-config";
+import {
+  applyCommsMediaFilters,
+  enhanceLocalVideoTrackHints,
+  type CommsMediaFilterMode,
+} from "./comms-media-filters";
 
 export type CommsCallQualityLabel = "HD" | "SD" | "Low";
 
@@ -38,19 +45,20 @@ export function presetToCallQualityLabel(preset: string): CommsCallQualityLabel 
 }
 
 export function enhanceLocalVideoTracks(stream: MediaStream): void {
-  for (const track of stream.getVideoTracks()) {
-    try {
-      track.contentHint = "motion";
-    } catch {
-      /* unsupported */
-    }
-  }
+  enhanceLocalVideoTrackHints(stream);
 }
+
+export type CommsAcquiredMedia = {
+  stream: MediaStream;
+  audioProcessor: AudioProcessor | null;
+  filterMode: CommsMediaFilterMode;
+  disposeMediaPipeline: () => void;
+};
 
 export async function acquireCommsUserMedia(
   callType: "audio" | "video",
   networkMode?: CyrusCommsNetworkMode,
-): Promise<{ stream: MediaStream; audioProcessor: AudioProcessor | null }> {
+): Promise<CommsAcquiredMedia> {
   const mode = networkMode ?? getCyrusCommsNetworkMode();
   const primaryVideo = getVideoConstraintsForCommsCall(callType, mode);
   const audioConstraints = getAudioConstraints();
@@ -70,15 +78,26 @@ export async function acquireCommsUserMedia(
   for (const constraints of attempts) {
     try {
       let stream = await navigator.mediaDevices.getUserMedia(constraints);
-      if (callType === "video" && stream.getVideoTracks().length > 0) {
-        enhanceLocalVideoTracks(stream);
-      }
+      const filtered = await applyCommsMediaFilters(stream, callType);
+      stream = filtered.stream;
+
       let audioProcessor: AudioProcessor | null = null;
-      if (stream.getAudioTracks().length > 0) {
+      if (stream.getAudioTracks().length > 0 && isAudioProcessingEnabled()) {
         audioProcessor = new AudioProcessor();
         stream = await audioProcessor.processStream(stream);
       }
-      return { stream, audioProcessor };
+
+      const disposeMediaPipeline = () => {
+        filtered.disposeVideoEnhancer?.();
+        audioProcessor?.destroy();
+      };
+
+      return {
+        stream,
+        audioProcessor,
+        filterMode: filtered.mode,
+        disposeMediaPipeline,
+      };
     } catch (err) {
       lastError = err;
     }
@@ -92,6 +111,7 @@ export async function tuneCommsPeerConnection(
   onPresetChange?: (preset: string) => void,
 ): Promise<AdaptiveBitrateController> {
   applyPreferredCodecsToPeerConnection(pc);
+  await applyCommsSenderTuning(pc, callType);
   const networkMode = getCyrusCommsNetworkMode();
   const initial = getInitialQualityPreset(callType, networkMode);
   await applyBandwidthConstraints(pc, initial, networkMode);
