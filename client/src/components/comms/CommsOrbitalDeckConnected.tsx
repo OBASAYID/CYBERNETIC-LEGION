@@ -40,6 +40,7 @@ type Props = {
   onEmptySlotClick?: (slotIndex: number, refLabel: string) => void;
   serviceTitle?: string;
   serviceSubtitle?: string;
+  sceneMode?: "round-table" | "keas";
   className?: string;
 };
 
@@ -74,6 +75,7 @@ export function CommsOrbitalDeckConnected({
   onConferenceReady,
   onEmptySlotClick,
   selectedPeerId,
+  sceneMode,
   ...deckProps
 }: Props) {
   const { meshPeerIds, startMeshCall, linkConnected, linkJoined, inMeshCall } = useCommsP2PLayer();
@@ -235,6 +237,7 @@ export function CommsOrbitalDeckConnected({
       onPeerVideoInvite={handleOrbitalVideoInvite}
       onEmptySlotClick={handleEmptySlot}
       onHubActivate={handleOrbitalHubActivate}
+      sceneMode={sceneMode}
     />
   );
 }

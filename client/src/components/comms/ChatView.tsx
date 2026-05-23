@@ -108,11 +108,25 @@ export function ChatView({
           }
           style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
         >
-          Select a channel
+          {holoSurface ? "Your secure comms hub" : "Select a channel"}
         </h3>
-        <p className={`relative text-sm ${holoSurface ? "text-cyan-200/40" : "text-amber-200/45"}`}>
-          Pick a thread from the list to open the line
+        <p className={`relative max-w-sm px-6 text-center text-sm ${holoSurface ? "text-cyan-200/50" : "text-amber-200/45"}`}>
+          {holoSurface
+            ? "Choose a conversation to send encrypted messages, voice notes, media, and 3D CAD models."
+            : "Pick a thread from the list to open the line"}
         </p>
+        {holoSurface ? (
+          <ul className="relative mt-5 flex flex-wrap justify-center gap-2 px-4">
+            {["Encrypted chat", "Voice notes", "Media & CAD", "HD calls"].map((label) => (
+              <li
+                key={label}
+                className="rounded-full border border-cyan-500/25 bg-cyan-950/40 px-2.5 py-1 text-[10px] font-medium text-cyan-100/75"
+              >
+                {label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     );
   }

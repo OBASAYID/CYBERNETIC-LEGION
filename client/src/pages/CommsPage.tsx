@@ -5,7 +5,7 @@ import { systemFetch, commsAssetUrl } from "@shared/cyrus-api-client";
 import { useComms } from "../hooks/useComms";
 import { usePresence } from "../contexts/PresenceContext";
 import { useLocation } from "wouter";
-import { MessageSquare, Phone, Users, Activity, Smile, X, Radio, Share2 } from "lucide-react";
+import { MessageSquare, Phone, Users, Activity, X, Radio, Share2 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
 import { Conversation } from "../components/comms/ConversationList";
@@ -36,9 +36,8 @@ import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
 import type { CommsConference } from "../lib/comms-conference-api";
-import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
+import { CommsPremiumShell } from "../components/comms/CommsPremiumShell";
 import { CommsOrbitalDeckConnected } from "../components/comms/CommsOrbitalDeckConnected";
-import type { OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
 import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
@@ -86,7 +85,6 @@ export function CommsPage() {
     return localStorage.getItem("cyrus-theme") !== "light";
   });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiTarget, setEmojiTarget] = useState<string>("");
   const [displayName, setDisplayName] = useState("");
   const [callChatMessages, setCallChatMessages] = useState<
     {
@@ -120,9 +118,9 @@ export function CommsPage() {
   const [newChatPicks, setNewChatPicks] = useState<string[]>([]);
   const [orbitalAssignSlot, setOrbitalAssignSlot] = useState<number | null>(null);
   const [slotPinRevision, setSlotPinRevision] = useState(0);
-  /** Reference deck fills viewport until user opens chat from hub or a peer pod. */
-  const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [networkMapExpanded, setNetworkMapExpanded] = useState(true);
   const [orbitalConference, setOrbitalConference] = useState<CommsConference | null>(null);
+  const noopSetChatPanel = useCallback((_open: boolean) => {}, []);
 
   const {
     messages,
@@ -456,7 +454,6 @@ export function CommsPage() {
       });
       setPendingConversationId(data.groupId);
       setActiveTab("chat");
-      setChatPanelOpen(true);
       setNewChatMode(false);
       setNewChatPicks([]);
       const bootstrap = pendingGroupBootstrapRef.current;
@@ -557,14 +554,6 @@ export function CommsPage() {
   }, [myId, onlineUsers, allUsers, contacts, getAvatarForUser, slotPinRevision]);
 
   const selectedOrbitalPeerId = pendingConversationId;
-
-  const activeChatPeerName = useMemo(() => {
-    if (!pendingConversationId) return null;
-    if (isGroupConversationId(pendingConversationId)) {
-      return chatGroups.find((g) => g.id === pendingConversationId)?.name || "Group discussion";
-    }
-    return getUserDisplayNameForChat(pendingConversationId);
-  }, [pendingConversationId, getUserDisplayNameForChat, chatGroups]);
 
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
@@ -925,14 +914,12 @@ export function CommsPage() {
         members: tablePeerIds,
       });
       setActiveTab("chat");
-      setChatPanelOpen(true);
       return;
     }
     setNewChatMode(true);
     setNewChatCascadeKey((k) => k + 1);
     setNewChatPicks(tablePeerIds);
     setActiveTab("chat");
-    setChatPanelOpen(true);
   }, [forwardSlots, myId, wsRef]);
 
   const handleNewChat = useCallback(() => {
@@ -940,7 +927,6 @@ export function CommsPage() {
     setNewChatCascadeKey((k) => k + 1);
     setNewChatPicks([]);
     setActiveTab("chat");
-    setChatPanelOpen(true);
   }, []);
 
   const handleAddContact = useCallback((contact: { contactId: string; contactName: string }) => {
@@ -959,13 +945,11 @@ export function CommsPage() {
     }
     setSelectedConvForMessage(userId);
     setActiveTab("chat");
-    setChatPanelOpen(true);
   }, [orbitalAssignSlot]);
 
   const handleEmptyOrbitalSlot = useCallback((slotIndex: number, _refLabel: string) => {
     setOrbitalAssignSlot(slotIndex);
     setActiveTab("people");
-    setChatPanelOpen(false);
   }, []);
 
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
@@ -1097,8 +1081,6 @@ export function CommsPage() {
     { id: "monitor" as MainTab, icon: Activity, label: "Monitor" },
   ];
 
-  const socialChannelTab = activeTab === "chat" || activeTab === "pshare";
-
   const themeClass = darkMode ? "" : "light-theme";
 
   const anomalyBanner =
@@ -1178,16 +1160,16 @@ export function CommsPage() {
         />
       )}
 
-      <CommsNexusWorkspace
+      <CommsPremiumShell
         className="min-h-0 flex-1"
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         displayName={displayName}
         isConnected={isConnected}
         onlineUsersLength={onlineUsers.length}
-        showModuleCarousel={activeTab !== "chat" || chatPanelOpen}
-        sceneTitle="Key Event Assurance Service"
-        sceneSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        tabs={tabConfig.map((t) => ({ ...t, subtitle: MODULE_SECTOR_SUBTITLE[t.id] }))}
         handoff={
           commsHandoffText ? (
             <div
@@ -1225,206 +1207,179 @@ export function CommsPage() {
                 </button>
               </div>
             </div>
-          ) : null
-        }
-        commandDeck={
-          <CommsOrbitalDeckConnected
-            darkMode={darkMode}
-            displayName={displayName}
-            isConnected={isConnected}
-            mainUserPhotoUrl={localChatAvatar}
-            onMainUserPhotoUpload={handleChatAvatarUpload}
-            photoUploading={avatarUploading}
-            forwardSlots={forwardSlots}
-            myId={myId}
-            selectedPeerId={selectedOrbitalPeerId}
-            activeTab={activeTab}
-            onSelectTab={(t) => {
-              setActiveTab(t);
-              setChatPanelOpen(t === "chat");
-            }}
-            setChatPanelOpen={setChatPanelOpen}
-            setPendingConversationId={setPendingConversationId}
-            setSlotPinRevision={setSlotPinRevision}
-            callUser={callUser}
-            presenceSendChatMessage={presenceSendChatMessage}
-            onConferenceReady={setOrbitalConference}
-            onEmptySlotClick={handleEmptyOrbitalSlot}
-            serviceTitle="Key Event Assurance Service"
-            serviceSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
-          />
-        }
-        integratedConsole={
-          chatPanelOpen && activeTab === "chat" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              {anomalyBanner}
-              <div
-                className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-5 sm:py-2.5 ${
-                  darkMode ? "border-cyan-500/25 bg-black/25" : "border-sky-200/60 bg-white/40"
-                }`}
-              >
-                <div className="min-w-0">
-                  <p
-                    className={`font-mono text-[8px] uppercase tracking-[0.42em] sm:text-[9px] ${
-                      darkMode ? "text-cyan-400/65" : "text-sky-600/80"
-                    }`}
-                  >
-                    NEXUS console · messaging band
-                  </p>
-                  <p
-                    className={`truncate text-sm font-semibold sm:text-base ${darkMode ? "text-white" : "text-slate-900"}`}
-                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                  >
-                    {activeChatPeerName ? `Chat · ${activeChatPeerName}` : "Chat"}
-                  </p>
-                  <p className={`truncate text-[10px] sm:text-[11px] ${darkMode ? "text-white/45" : "text-slate-600"}`}>
-                    {activeChatPeerName
-                      ? "Encrypted thread · voice notes, media & CAD"
-                      : MODULE_SECTOR_SUBTITLE.chat}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setChatPanelOpen(false)}
-                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-medium transition ${
-                    darkMode
-                      ? "border-cyan-500/35 bg-cyan-950/40 text-cyan-100 hover:bg-cyan-900/50"
-                      : "border-sky-300 bg-white text-slate-700 hover:border-sky-400"
-                  }`}
-                >
-                  Back to arc
-                </button>
-              </div>
-              <div className={modulePanelShell}>
-                <NexusModuleSurface variant="flush">
-                  <CommsPlatform
-                    holoSurface
-                    conversations={conversations}
-                    messages={commsMessages}
-                    currentUserId={myId}
-                    typingUsers={typingUsers}
-                    initialConversationId={pendingConversationId}
-                    onSendMessage={handleSendMessage}
-                    onSendMedia={handleSendMedia}
-                    onSendVoice={handleSendVoice}
-                    onSendLocation={handleSendLocation}
-                    onTypingStart={handleTypingStart}
-                    onTypingStop={handleTypingStop}
-                    onReact={handleReact}
-                    onAudioCall={handleAudioCall}
-                    onVideoCall={handleVideoCall}
-                    onCreateGroup={handleCreateGroup}
-                    onNewChat={handleNewChat}
-                    getAvatarForUser={getAvatarForUser}
-                    newChatMode={newChatMode}
-                    newChatCascadeKey={newChatCascadeKey}
-                    newChatPicks={newChatPicks}
-                    onToggleNewChatPick={handleToggleNewChatPick}
-                    onNewChatSend={handleNewChatSend}
-                    onDismissNewChat={handleDismissNewChat}
-                    getUserDisplayName={getUserDisplayNameForChat}
-                    newChatPickCandidates={newChatPickCandidates}
-                    roster={
-                      <CommsUserRoster
-                        holoSurface
-                        users={rosterUsers}
-                        myUserId={myId}
-                        onUploadAvatar={handleChatAvatarUpload}
-                        isUploading={avatarUploading}
-                        pickMode={newChatMode}
-                        pickedUserIds={newChatPicks}
-                        onTogglePick={handleToggleNewChatPick}
-                      />
-                    }
-                  />
-                </NexusModuleSurface>
-              </div>
-            </div>
           ) : undefined
         }
-        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
-        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
-        socialChannelTab={socialChannelTab}
       >
-        {activeTab !== "chat" ? (
-        <div className={modulePanelShell}>
+        <div className={`flex h-full min-h-0 flex-col ${modulePanelShell}`}>
           {anomalyBanner}
 
-                {activeTab === "pshare" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 p-1 sm:p-2">
-                      <PsharePanel
-                        holoBlend
-                        myUserId={myId}
-                        allUsers={allUsers}
-                        highlightPostId={psharePostHighlight}
-                        onClearHighlight={() => setPsharePostHighlight(null)}
-                        initialPostBody={commsHandoffText}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "chat" && (
+            <NexusModuleSurface variant="flush">
+              <CommsPlatform
+                holoSurface
+                conversations={conversations}
+                messages={commsMessages}
+                currentUserId={myId}
+                typingUsers={typingUsers}
+                initialConversationId={pendingConversationId}
+                onSendMessage={handleSendMessage}
+                onSendMedia={handleSendMedia}
+                onSendVoice={handleSendVoice}
+                onSendLocation={handleSendLocation}
+                onToggleEmoji={() => setShowEmojiPicker(true)}
+                onTypingStart={handleTypingStart}
+                onTypingStop={handleTypingStop}
+                onReact={handleReact}
+                onAudioCall={handleAudioCall}
+                onVideoCall={handleVideoCall}
+                onCreateGroup={handleCreateGroup}
+                onNewChat={handleNewChat}
+                getAvatarForUser={getAvatarForUser}
+                newChatMode={newChatMode}
+                newChatCascadeKey={newChatCascadeKey}
+                newChatPicks={newChatPicks}
+                onToggleNewChatPick={handleToggleNewChatPick}
+                onNewChatSend={handleNewChatSend}
+                onDismissNewChat={handleDismissNewChat}
+                getUserDisplayName={getUserDisplayNameForChat}
+                newChatPickCandidates={newChatPickCandidates}
+                roster={
+                  <CommsUserRoster
+                    holoSurface
+                    users={rosterUsers}
+                    myUserId={myId}
+                    onUploadAvatar={handleChatAvatarUpload}
+                    isUploading={avatarUploading}
+                    pickMode={newChatMode}
+                    pickedUserIds={newChatPicks}
+                    onTogglePick={handleToggleNewChatPick}
+                  />
+                }
+              />
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "people" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                      <UserDiscoveryWithMesh
-                        nexusChrome
-                        onlineUsers={onlineUsers}
-                        allUsers={allUsers}
-                        contacts={contacts}
-                        myDeviceId={myDeviceId}
-                        onMessage={handleUserMessage}
-                        onCall={handleUserCall}
-                        onAddContact={handleAddContact}
-                        onRemoveContact={handleRemoveContact}
-                        onOpenMeshCalls={() => setActiveTab("calls")}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "pshare" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 p-1 sm:p-2">
+                <PsharePanel
+                  holoBlend
+                  myUserId={myId}
+                  allUsers={allUsers}
+                  highlightPostId={psharePostHighlight}
+                  onClearHighlight={() => setPsharePostHighlight(null)}
+                  initialPostBody={commsHandoffText}
+                />
+              </div>
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "streams" && (
-                  <NexusModuleSurface>
-                    <LiveStreamPanel
-                      holoBlend
-                      streams={liveStreams}
-                      currentUserId={myUserId || myDeviceId}
-                      onStartStream={handleStartStream}
-                      onEndStream={handleEndStream}
-                      onJoinStream={handleJoinStream}
-                      onLeaveStream={handleLeaveStream}
-                      onRefreshList={refreshLiveStreams}
+          {activeTab === "people" && (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div
+                className={`shrink-0 border-b ${
+                  darkMode ? "border-cyan-500/20 bg-black/25" : "border-sky-200/60 bg-white/40"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setNetworkMapExpanded((v) => !v)}
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-xs font-medium transition hover:bg-white/5 ${
+                    darkMode ? "text-cyan-100/90" : "text-slate-700"
+                  }`}
+                >
+                  <span>Network command map · round-table hub</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider opacity-60">
+                    {networkMapExpanded ? "Collapse" : "Expand"}
+                  </span>
+                </button>
+                {networkMapExpanded ? (
+                  <div className="max-h-[min(42vh,480px)] overflow-hidden border-t border-inherit">
+                    <CommsOrbitalDeckConnected
+                      darkMode={darkMode}
+                      displayName={displayName}
+                      isConnected={isConnected}
+                      mainUserPhotoUrl={localChatAvatar}
+                      onMainUserPhotoUpload={handleChatAvatarUpload}
+                      photoUploading={avatarUploading}
+                      forwardSlots={forwardSlots}
+                      myId={myId}
+                      selectedPeerId={selectedOrbitalPeerId}
+                      activeTab={activeTab}
+                      onSelectTab={setActiveTab}
+                      setChatPanelOpen={noopSetChatPanel}
+                      setPendingConversationId={setPendingConversationId}
+                      setSlotPinRevision={setSlotPinRevision}
+                      callUser={callUser}
+                      presenceSendChatMessage={presenceSendChatMessage}
+                      onConferenceReady={setOrbitalConference}
+                      onEmptySlotClick={handleEmptyOrbitalSlot}
+                      serviceTitle="Key Event Assurance Service"
+                      serviceSubtitle="Delivering network resilience · tap a peer for voice, video, or chat"
+                      sceneMode="round-table"
                     />
-                  </NexusModuleSurface>
-                )}
+                  </div>
+                ) : null}
+              </div>
+              <NexusModuleSurface>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                  <UserDiscoveryWithMesh
+                    nexusChrome
+                    onlineUsers={onlineUsers}
+                    allUsers={allUsers}
+                    contacts={contacts}
+                    myDeviceId={myDeviceId}
+                    onMessage={handleUserMessage}
+                    onCall={handleUserCall}
+                    onAddContact={handleAddContact}
+                    onRemoveContact={handleRemoveContact}
+                    onOpenMeshCalls={() => setActiveTab("calls")}
+                  />
+                </div>
+              </NexusModuleSurface>
+            </div>
+          )}
 
-                {activeTab === "monitor" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
-                      <CommsIntelligence userId={myId} />
-                      <AdminDashboard />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "streams" && (
+            <NexusModuleSurface>
+              <LiveStreamPanel
+                holoBlend
+                streams={liveStreams}
+                currentUserId={myUserId || myDeviceId}
+                onStartStream={handleStartStream}
+                onEndStream={handleEndStream}
+                onJoinStream={handleJoinStream}
+                onLeaveStream={handleLeaveStream}
+                onRefreshList={refreshLiveStreams}
+              />
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "calls" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                      <CallHistoryPanel
-                        myDeviceId={myDeviceId}
-                        displayName={displayName}
-                        allUsers={allUsers}
-                        onlineUsers={onlineUsers}
-                        onCall={handleUserCall}
-                        seedConference={orbitalConference}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "monitor" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
+                <CommsIntelligence userId={myId} />
+                <AdminDashboard />
+              </div>
+            </NexusModuleSurface>
+          )}
+
+          {activeTab === "calls" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                <CallHistoryPanel
+                  myDeviceId={myDeviceId}
+                  displayName={displayName}
+                  allUsers={allUsers}
+                  onlineUsers={onlineUsers}
+                  onCall={handleUserCall}
+                  seedConference={orbitalConference}
+                />
+              </div>
+            </NexusModuleSurface>
+          )}
         </div>
-        ) : null}
-      </CommsNexusWorkspace>
+      </CommsPremiumShell>
 
       {showEmojiPicker && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4">

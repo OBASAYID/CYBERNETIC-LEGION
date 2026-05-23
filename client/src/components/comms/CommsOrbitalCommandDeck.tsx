@@ -90,6 +90,7 @@ export function CommsOrbitalCommandDeck({
   className = "",
   serviceTitle = "Key Event Assurance Service",
   serviceSubtitle = "— Delivering Network Resilience to Maintain Customer Satisfaction",
+  sceneMode = "round-table",
 }: {
   darkMode: boolean;
   displayName: string;
@@ -112,6 +113,8 @@ export function CommsOrbitalCommandDeck({
   className?: string;
   serviceTitle?: string;
   serviceSubtitle?: string;
+  /** round-table = functional presence deck; keas = full assurance arc overlay */
+  sceneMode?: "round-table" | "keas";
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const orbitPhaseRef = useRef(0);
@@ -140,6 +143,7 @@ export function CommsOrbitalCommandDeck({
     [],
   );
 
+  const isRoundTable = sceneMode === "round-table";
   const textTitle = darkMode ? "text-white" : "text-slate-900";
 
   return (
@@ -155,7 +159,7 @@ export function CommsOrbitalCommandDeck({
         onChange={onFileChange}
       />
 
-      {/* Top-left title — reference */}
+      {/* Top header */}
       <div className="relative z-[6] mb-1 flex shrink-0 flex-wrap items-start justify-between gap-2 px-1 sm:px-2">
         <div className="min-w-0 max-w-[min(100%,42rem)]">
           <h2
@@ -165,10 +169,12 @@ export function CommsOrbitalCommandDeck({
               textShadow: darkMode ? "0 0 32px rgba(0,229,255,0.3)" : undefined,
             }}
           >
-            {serviceTitle}
+            {isRoundTable ? "Presence round table" : serviceTitle}
           </h2>
           <p className={`mt-1 text-[10px] font-light sm:text-xs ${darkMode ? "text-white/80" : "text-slate-600"}`}>
-            {serviceSubtitle}
+            {isRoundTable
+              ? "You are always seated. When a user comes online, their avatar pops into an open seat — tap for voice, video, or chat."
+              : serviceSubtitle}
           </p>
         </div>
         <span
@@ -188,21 +194,25 @@ export function CommsOrbitalCommandDeck({
         style={{ minHeight: "min(52dvh, 580px)" }}
       >
         <div
-          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.14] mix-blend-screen sm:opacity-[0.18]"
-          style={{ backgroundImage: "url(/comms/ref-round-table.png)" }}
+          className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.06] mix-blend-multiply sm:opacity-[0.08]"
+          style={{ backgroundImage: "url(/comms/round-table-reference.png)" }}
           aria-hidden
         />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            background: darkMode
-              ? `radial-gradient(ellipse 80% 50% at 50% 42%, rgba(0,229,255,0.12), transparent 55%),
-                 linear-gradient(180deg, rgba(2,8,22,0.5) 0%, rgba(0,6,14,0.92) 100%)`
-              : "linear-gradient(180deg, #e0f2fe 0%, #f8fafc 100%)",
+            background: isRoundTable
+              ? "linear-gradient(180deg, rgba(244,246,248,0.15) 0%, rgba(232,236,240,0.55) 100%)"
+              : darkMode
+                ? `radial-gradient(ellipse 80% 50% at 50% 42%, rgba(0,229,255,0.12), transparent 55%),
+                   linear-gradient(180deg, rgba(2,8,22,0.5) 0%, rgba(0,6,14,0.92) 100%)`
+                : "linear-gradient(180deg, #e0f2fe 0%, #f8fafc 100%)",
           }}
           aria-hidden
         />
 
+        {!isRoundTable ? (
+        <>
         {/* Assurance arc + modules (SVG) */}
         <svg
           className="pointer-events-none absolute inset-0 z-[4] h-full w-full"
@@ -297,9 +307,11 @@ export function CommsOrbitalCommandDeck({
             );
           })}
         </div>
+        </>
+        ) : null}
 
-        {/* 3D globe + satellites */}
-        <div className="absolute inset-0 z-[2] pt-[18%] sm:pt-[16%]">
+        {/* 3D round table */}
+        <div className={`absolute inset-0 z-[2] ${isRoundTable ? "pt-[4%]" : "pt-[18%] sm:pt-[16%]"}`}>
           <CommsOrbitalScene3D
             orbitPhaseRef={orbitPhaseRef}
             darkMode={darkMode}
@@ -317,9 +329,12 @@ export function CommsOrbitalCommandDeck({
             onPeerVideoInvite={onPeerVideoInvite}
             onEmptySlotClick={onEmptySlotClick}
             onHubActivate={onHubActivate}
+            environment={isRoundTable ? "studio" : "nexus"}
           />
         </div>
 
+        {!isRoundTable ? (
+        <>
         {/* Perspective grid echo (CSS) */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[38%] opacity-[0.12]"
@@ -333,13 +348,18 @@ export function CommsOrbitalCommandDeck({
           }}
           aria-hidden
         />
+        </>
+        ) : null}
       </div>
 
-      {/* Bottom value pills — reference */}
+      {/* Bottom actions */}
       <div className="relative z-[6] mt-2 shrink-0 space-y-2 px-1 sm:px-2">
-        <p className="hidden rounded-lg border border-cyan-500/20 bg-[#021018]/55 px-2.5 py-1.5 text-center font-mono text-[8px] uppercase tracking-[0.12em] text-cyan-300/65 backdrop-blur-sm sm:block sm:text-[9px]">
-          Tap any online portrait for voice · video · text · group · assurance modules on the arc switch sectors
+        <p className="rounded-lg border border-cyan-500/20 bg-[#021018]/55 px-2.5 py-1.5 text-center font-mono text-[8px] uppercase tracking-[0.12em] text-cyan-300/65 backdrop-blur-sm sm:text-[9px]">
+          {isRoundTable
+            ? "Walk-in when online · stand up & exit when offline · laptop screens show live status · tap seat label for contact hub"
+            : "Tap any online portrait for voice · video · text · group · assurance modules on the arc switch sectors"}
         </p>
+        {!isRoundTable ? (
         <div className="flex flex-wrap items-center gap-2">
         {VALUE_PILLS.map(({ id, label, tab }) => {
           const active = activePill === id || activeTab === tab;
@@ -365,6 +385,7 @@ export function CommsOrbitalCommandDeck({
           Round table · {displayName} · GSLC · TAC · GTAC · RSPC · GSPC
         </span>
         </div>
+        ) : null}
       </div>
     </section>
   );
