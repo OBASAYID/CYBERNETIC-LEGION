@@ -249,7 +249,7 @@ function TrendChip({ label, color, rank }: { label: string; color: string; rank:
 /* ══════════════════════════════════════════════════════════════════════
    PSHARE CARD
 ══════════════════════════════════════════════════════════════════════ */
-function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) => void }) {
+function PshareCard({ post, onLike, compact = false }: { post: PsharePost; onLike: (id: string) => void; compact?: boolean }) {
   const kindMeta: Record<string, { color: string; label: string; icon: typeof Share2 }> = {
     announcement: { color: "#e11d48", label: "Announcement", icon: Radio },
     research:     { color: "#7c3aed", label: "Research",     icon: Zap    },
@@ -260,6 +260,57 @@ function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) =
   const KindIcon = meta.icon;
   const aColor = categoryColor(post.authorName ?? "");
 
+  /* ── Compact card for the dock ── */
+  if (compact) {
+    return (
+      <div
+        className="shrink-0 relative overflow-hidden rounded-xl p-2.5 flex flex-col gap-1.5 cursor-pointer hover:brightness-110 transition-all"
+        style={{
+          width: 200,
+          background: `${meta.color}07`,
+          border: `1px solid ${meta.color}18`,
+          height: "calc(100% - 4px)",
+        }}
+      >
+        <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: meta.color }} />
+        <div className="pl-2.5 flex flex-col gap-1.5 h-full">
+          {/* Author row */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[7px] font-black text-white"
+              style={{ background: `${aColor}25`, border: `1px solid ${aColor}35` }}
+            >
+              {initials(post.authorName ?? post.authorId)}
+            </div>
+            <p className="text-[8px] font-bold text-white/70 truncate flex-1">{post.authorName ?? post.authorId}</p>
+            <div
+              className="flex items-center gap-0.5 rounded-full px-1 py-0.5 shrink-0"
+              style={{ background: `${meta.color}15`, border: `1px solid ${meta.color}22` }}
+            >
+              <KindIcon className="h-2 w-2" style={{ color: meta.color }} strokeWidth={2} />
+              <p className="text-[6px] font-mono uppercase" style={{ color: meta.color }}>{meta.label}</p>
+            </div>
+          </div>
+          {/* Body */}
+          <p className="text-[8px] text-white/55 leading-snug line-clamp-4 flex-1">{post.body}</p>
+          {/* Footer */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button type="button" onClick={() => onLike(post.id)} className="flex items-center gap-1 transition-all hover:scale-110">
+              <Heart className="h-2.5 w-2.5" style={{ color: post.isLiked ? "#e11d48" : "rgba(255,255,255,0.2)" }} fill={post.isLiked ? "#e11d48" : "none"} strokeWidth={2} />
+              <span className="text-[7px] font-mono text-white/25">{post.likeCount ?? 0}</span>
+            </button>
+            <button type="button" className="flex items-center gap-1">
+              <MessageCircle className="h-2.5 w-2.5 text-white/20" strokeWidth={2} />
+              <span className="text-[7px] font-mono text-white/25">{post.commentCount ?? 0}</span>
+            </button>
+            <p className="text-[6px] font-mono text-white/15 ml-auto">{timeAgo(post.createdAt)}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Full card ── */
   return (
     <div
       className="relative overflow-hidden rounded-2xl p-4 transition-all duration-200 hover:brightness-105"
@@ -269,14 +320,8 @@ function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) =
         boxShadow: "0 2px 16px rgba(0,0,0,0.35)",
       }}
     >
-      {/* Left accent bar */}
-      <div
-        className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full"
-        style={{ background: meta.color }}
-      />
-
+      <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: meta.color }} />
       <div className="pl-3">
-        {/* Author row */}
         <div className="flex items-center gap-2.5 mb-2.5">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white"
@@ -302,11 +347,7 @@ function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) =
           </div>
           <Building2 className="h-4 w-4 text-white/15 shrink-0" />
         </div>
-
-        {/* Body */}
         <p className="text-sm text-white/70 leading-relaxed mb-3">{post.body}</p>
-
-        {/* Link preview */}
         {post.linkUrl && (
           <a
             href={post.linkUrl}
@@ -320,32 +361,15 @@ function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) =
             <ExternalLink className="h-2.5 w-2.5 text-cyan-400/40 ml-auto shrink-0" />
           </a>
         )}
-
-        {/* Actions row */}
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => onLike(post.id)}
-            className="flex items-center gap-1.5 transition-all hover:scale-110 group/like"
-          >
-            <Heart
-              className="h-3.5 w-3.5 transition-colors"
-              style={{ color: post.isLiked ? "#e11d48" : "rgba(255,255,255,0.2)" }}
-              fill={post.isLiked ? "#e11d48" : "none"}
-              strokeWidth={2}
-            />
-            <span className="text-[9px] font-mono text-white/30 group-hover/like:text-white/60 transition-colors">
-              {post.likeCount ?? 0}
-            </span>
+          <button type="button" onClick={() => onLike(post.id)} className="flex items-center gap-1.5 transition-all hover:scale-110 group/like">
+            <Heart className="h-3.5 w-3.5 transition-colors" style={{ color: post.isLiked ? "#e11d48" : "rgba(255,255,255,0.2)" }} fill={post.isLiked ? "#e11d48" : "none"} strokeWidth={2} />
+            <span className="text-[9px] font-mono text-white/30 group-hover/like:text-white/60 transition-colors">{post.likeCount ?? 0}</span>
           </button>
-
           <button type="button" className="flex items-center gap-1.5 group/comment">
             <MessageCircle className="h-3.5 w-3.5 text-white/20 group-hover/comment:text-white/50 transition-colors" strokeWidth={2} />
-            <span className="text-[9px] font-mono text-white/30 group-hover/comment:text-white/60 transition-colors">
-              {post.commentCount ?? 0}
-            </span>
+            <span className="text-[9px] font-mono text-white/30 group-hover/comment:text-white/60 transition-colors">{post.commentCount ?? 0}</span>
           </button>
-
           <button type="button" className="flex items-center gap-1 ml-auto group/share">
             <Share2 className="h-3 w-3 text-white/15 group-hover/share:text-white/45 transition-colors" strokeWidth={2} />
             <span className="text-[9px] font-mono text-white/20 group-hover/share:text-white/50 transition-colors">pshare</span>
@@ -357,15 +381,15 @@ function PshareCard({ post, onLike }: { post: PsharePost; onLike: (id: string) =
 }
 
 /* ── Compose box ─────────────────────────────────────────────────────── */
-function PshareCompose({ onPost }: { onPost: (body: string, kind: string) => void }) {
+function PshareCompose({ onPost, compact = false }: { onPost: (body: string, kind: string) => void; compact?: boolean }) {
   const [body, setBody] = useState("");
   const [kind, setKind] = useState("general");
   const [loading, setLoading] = useState(false);
 
   const kinds = [
-    { value: "general",      label: "Post",          color: "#06b6d4" },
-    { value: "announcement", label: "Announcement",  color: "#e11d48" },
-    { value: "research",     label: "Research",      color: "#7c3aed" },
+    { value: "general",      label: "Post",         color: "#06b6d4" },
+    { value: "announcement", label: "Announce",     color: "#e11d48" },
+    { value: "research",     label: "Research",     color: "#7c3aed" },
   ];
 
   const submit = async () => {
@@ -380,12 +404,66 @@ function PshareCompose({ onPost }: { onPost: (body: string, kind: string) => voi
     }
   };
 
+  /* ── Compact version for dock tile ── */
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-1.5 flex-1">
+        {/* Kind pills */}
+        <div className="flex flex-wrap gap-1">
+          {kinds.map((k) => (
+            <button
+              key={k.value}
+              type="button"
+              onClick={() => setKind(k.value)}
+              className="rounded-full px-1.5 py-0.5 text-[6px] font-mono uppercase transition-all"
+              style={{
+                background: kind === k.value ? `${k.color}20` : "transparent",
+                border: `1px solid ${kind === k.value ? k.color + "40" : "rgba(255,255,255,0.08)"}`,
+                color: kind === k.value ? k.color : "rgba(255,255,255,0.3)",
+              }}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Share with the network…"
+          rows={3}
+          className="w-full resize-none rounded-lg px-2 py-1.5 text-[8px] text-white/70 placeholder:text-white/20 focus:outline-none flex-1"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            fontFamily: "inherit",
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!body.trim() || loading}
+          className="flex items-center justify-center gap-1 rounded-lg py-1 text-[7px] font-black transition-all hover:scale-105 disabled:opacity-40"
+          style={{
+            background: "linear-gradient(90deg, rgba(225,29,72,0.3), rgba(124,58,237,0.25))",
+            border: "1px solid rgba(225,29,72,0.3)",
+            color: "#fff",
+            fontFamily: "'Orbitron', system-ui",
+          }}
+        >
+          {loading ? <RefreshCw className="h-2.5 w-2.5 animate-spin" /> : <Send className="h-2.5 w-2.5" />}
+          {loading ? "POSTING…" : "PSHARE"}
+        </button>
+      </div>
+    );
+  }
+
+  /* ── Full compose ── */
   return (
     <div
       className="rounded-2xl p-4"
       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
     >
-      {/* Kind selector */}
       <div className="flex items-center gap-1.5 mb-3">
         <Share2 className="h-3.5 w-3.5 text-white/25" strokeWidth={1.8} />
         <p className="text-[9px] font-mono text-white/30 uppercase tracking-widest mr-2">pshare post</p>
@@ -405,7 +483,6 @@ function PshareCompose({ onPost }: { onPost: (body: string, kind: string) => voi
           </button>
         ))}
       </div>
-
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -417,11 +494,8 @@ function PshareCompose({ onPost }: { onPost: (body: string, kind: string) => voi
           border: "1px solid rgba(255,255,255,0.07)",
           fontFamily: "inherit",
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-        }}
+        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
       />
-
       <div className="flex items-center justify-between mt-2.5">
         <div className="flex items-center gap-3">
           <button type="button" className="flex items-center gap-1 text-white/25 hover:text-white/50 transition-colors">
@@ -455,8 +529,9 @@ function PshareCompose({ onPost }: { onPost: (body: string, kind: string) => voi
 
 /* ══════════════════════════════════════════════════════════════════════
    MAIN EXPORT — NewsTrendFeed
+   compact=true → dock layout (horizontal scroll, no outer padding)
 ══════════════════════════════════════════════════════════════════════ */
-export function NewsTrendFeed() {
+export function NewsTrendFeed({ compact = false }: { compact?: boolean }) {
   const [tab, setTab] = useState<"news" | "pshare">("news");
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
@@ -531,6 +606,150 @@ export function NewsTrendFeed() {
     { label: "Real-Time Edge Computing", color: "#0891b2" },
   ];
 
+  /* ── Compact dock layout ─────────────────────────────────────────── */
+  if (compact) {
+    return (
+      <div className="flex h-full">
+        {/* Tab switcher — vertical left strip */}
+        <div
+          className="flex flex-col gap-1 p-2 shrink-0"
+          style={{ borderRight: "1px solid rgba(255,255,255,0.05)", width: 90 }}
+        >
+          {([
+            { id: "news"   as const, label: "NEWS",   icon: Newspaper, color: "#06b6d4" },
+            { id: "pshare" as const, label: "PSHARE", icon: Share2,    color: "#e11d48" },
+          ]).map(({ id, label, icon: Icon, color }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className="flex flex-col items-center gap-1 rounded-xl py-2 px-1 text-[7px] font-black tracking-[0.2em] transition-all duration-200"
+              style={{
+                background: tab === id ? `${color}15` : "transparent",
+                border: `1px solid ${tab === id ? color + "30" : "transparent"}`,
+                color: tab === id ? "#fff" : "rgba(255,255,255,0.3)",
+                fontFamily: "'Orbitron', system-ui",
+              }}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: tab === id ? color : undefined }} strokeWidth={1.8} />
+              {label}
+            </button>
+          ))}
+
+          {/* Network stats mini */}
+          <div className="mt-auto pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            {[
+              { label: "OPS",    value: "2.8k", color: "#22c55e" },
+              { label: "POSTS",  value: "1.2k", color: "#06b6d4" },
+              { label: "SCANS",  value: "9.3k", color: "#7c3aed" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="flex flex-col items-center py-1">
+                <p className="text-[9px] font-black tabular-nums" style={{ color, fontFamily: "'Orbitron', system-ui" }}>{value}</p>
+                <p className="text-[6px] font-mono text-white/20 tracking-widest">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content — horizontal scrolling cards */}
+        <div
+          className="flex-1 overflow-x-auto overflow-y-hidden"
+          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.07) transparent" }}
+        >
+          {tab === "news" && (
+            <div className="flex gap-2 p-2 h-full items-start">
+              {/* Trending strip */}
+              <div
+                className="shrink-0 rounded-xl p-2.5 h-full flex flex-col gap-1.5 overflow-y-auto"
+                style={{ width: 160, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", scrollbarWidth: "none" }}
+              >
+                <p className="text-[7px] font-mono tracking-[0.35em] text-white/25 uppercase mb-0.5 shrink-0">TRENDING</p>
+                {TRENDS.map((t, i) => (
+                  <div key={t.label} className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[7px] font-black tabular-nums w-3 text-right" style={{ color: t.color, fontFamily: "'Orbitron', system-ui" }}>#{i + 1}</span>
+                    <span className="text-[8px] text-white/45 truncate leading-tight">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* News cards horizontal */}
+              {rawNews.slice(0, 10).map((item) => (
+                <div
+                  key={item.id}
+                  className="shrink-0 rounded-xl p-2.5 flex flex-col gap-1.5 cursor-pointer hover:brightness-110 transition-all"
+                  style={{
+                    width: 200,
+                    background: `${item.color ?? "#06b6d4"}08`,
+                    border: `1px solid ${item.color ?? "#06b6d4"}18`,
+                    height: "calc(100% - 4px)",
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[6px] font-black tracking-wide"
+                      style={{ background: `${item.color ?? "#06b6d4"}18`, color: item.color ?? "#06b6d4", fontFamily: "'Orbitron', system-ui" }}
+                    >
+                      {item.category?.toUpperCase() ?? "NEWS"}
+                    </span>
+                    {newsLoading && <RefreshCw className="h-2 w-2 text-white/20 animate-spin ml-auto" />}
+                  </div>
+                  <p className="text-[9px] font-bold text-white/80 leading-snug line-clamp-3 flex-1">{item.title}</p>
+                  <p className="text-[8px] text-white/35 leading-snug line-clamp-2 shrink-0">{item.summary}</p>
+                  <p className="text-[7px] font-mono text-white/20 shrink-0">{item.source} · {item.publishedAt}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === "pshare" && (
+            <div className="flex gap-2 p-2 h-full items-start">
+              {/* Compose tile */}
+              <div
+                className="shrink-0 rounded-xl p-2.5 flex flex-col gap-2"
+                style={{ width: 220, background: "rgba(225,29,72,0.06)", border: "1px solid rgba(225,29,72,0.18)", height: "calc(100% - 4px)" }}
+              >
+                <p className="text-[7px] font-mono tracking-[0.35em] text-[#e11d48]/50 uppercase shrink-0">POST TO PSHARE</p>
+                <PshareCompose onPost={handlePost} compact />
+                {/* Featured orgs compact */}
+                <div className="mt-auto pt-2 shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                  <p className="text-[6px] font-mono tracking-widest text-white/20 uppercase mb-1.5">FEATURED ORGS</p>
+                  {[
+                    { name: "CYRUS Systems",       color: "#e11d48" },
+                    { name: "Delta AI Labs",        color: "#7c3aed" },
+                    { name: "AfricaTech Institute", color: "#22c55e" },
+                    { name: "QuantumEdge Finance",  color: "#06b6d4" },
+                  ].map(({ name, color }) => (
+                    <div key={name} className="flex items-center gap-1.5 py-0.5 cursor-pointer group">
+                      <div
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[6px] font-black text-white"
+                        style={{ background: `${color}20`, border: `1px solid ${color}28` }}
+                      >
+                        {name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                      </div>
+                      <span className="text-[8px] text-white/45 group-hover:text-white/70 transition-colors truncate">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Post cards horizontal */}
+              {postsLoading ? (
+                <div className="flex items-center justify-center w-40 h-full gap-2">
+                  <RefreshCw className="h-4 w-4 text-white/30 animate-spin" />
+                </div>
+              ) : (
+                posts.slice(0, 10).map((post) => (
+                  <PshareCard key={post.id} post={post} onLike={handleLike} compact />
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Full (non-compact) layout ────────────────────────────────────── */
   return (
     <div className="px-5 py-5 space-y-5">
 
@@ -605,8 +824,6 @@ export function NewsTrendFeed() {
                 border: "1px solid rgba(225,29,72,0.15)",
               }}
             >
-              <div className="pointer-events-none absolute top-0 left-0 right-0 h-px rounded-t-2xl"
-                style={{ background: "linear-gradient(90deg, transparent, rgba(225,29,72,0.4), transparent)" }} />
               <p className="text-[8px] font-mono tracking-widest text-[#e11d48]/50 uppercase mb-3">CYRUS NETWORK</p>
               {[
                 { label: "Active Operators",   value: "2,847",  color: "#22c55e" },
@@ -630,10 +847,7 @@ export function NewsTrendFeed() {
 
           {/* Feed column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Compose box */}
             <PshareCompose onPost={handlePost} />
-
-            {/* Posts */}
             <div className="space-y-3">
               {postsLoading ? (
                 <div className="flex items-center justify-center h-24 gap-2">
@@ -648,7 +862,7 @@ export function NewsTrendFeed() {
             </div>
           </div>
 
-          {/* Sidebar — organisations + info */}
+          {/* Sidebar */}
           <div className="space-y-4">
             <div
               className="rounded-2xl p-4"
@@ -658,11 +872,11 @@ export function NewsTrendFeed() {
                 Featured Organisations
               </p>
               {[
-                { name: "CYRUS Systems",        cat: "AI Platform",        color: "#e11d48" },
-                { name: "Delta AI Labs",         cat: "Research",           color: "#7c3aed" },
-                { name: "Sentinel Security",     cat: "Cybersecurity",      color: "#f59e0b" },
-                { name: "AfricaTech Institute",  cat: "Education",          color: "#22c55e" },
-                { name: "QuantumEdge Finance",   cat: "FinTech",            color: "#06b6d4" },
+                { name: "CYRUS Systems",        cat: "AI Platform",   color: "#e11d48" },
+                { name: "Delta AI Labs",         cat: "Research",      color: "#7c3aed" },
+                { name: "Sentinel Security",     cat: "Cybersecurity", color: "#f59e0b" },
+                { name: "AfricaTech Institute",  cat: "Education",     color: "#22c55e" },
+                { name: "QuantumEdge Finance",   cat: "FinTech",       color: "#06b6d4" },
               ].map(({ name, cat, color }) => (
                 <div key={name} className="flex items-center gap-2.5 py-2.5 border-b border-white/[0.04] last:border-0 group cursor-pointer">
                   <div
@@ -680,7 +894,6 @@ export function NewsTrendFeed() {
               ))}
             </div>
 
-            {/* About pshare */}
             <div
               className="rounded-2xl p-4"
               style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.12)" }}
