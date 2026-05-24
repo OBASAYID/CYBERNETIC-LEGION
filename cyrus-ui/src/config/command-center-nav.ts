@@ -16,6 +16,7 @@ import {
   Monitor,
   Phone,
   Scan,
+  Settings,
   Shield,
   Zap,
 } from "lucide-react";
@@ -154,6 +155,14 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
     surfaceLabel: "Operations",
     sublabel: "Growth, automation, asset resume",
     Icon: Cpu,
+  },
+  {
+    path: "/settings",
+    dashboardLabel: "Settings",
+    dashboardDescription: "System configuration",
+    surfaceLabel: "Settings",
+    sublabel: "Access codes, API keys, admin controls",
+    Icon: Settings,
   },
 ];
 

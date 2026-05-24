@@ -27,18 +27,15 @@ const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
   const missing: string[] = [];
-  const warnings: string[] = [];
-
-  // Optional but recommended
-  if (!process.env.OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
-    warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
-  }
-
-  if (warnings.length > 0) {
-    warnings.forEach(w => console.warn(`[Environment] ${w}`));
-  }
-
+  // OPENAI_API_KEY check is deferred — key normalization runs at module top-level
+  // before this function is called, so the check happens after integration keys are resolved.
   return missing;
+}
+
+function warnOptionalEnv(): void {
+  if (!process.env.OPENAI_API_KEY && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
+    console.warn('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+  }
 }
 
 // Keep both OpenAI key env names aligned to avoid stale-key mismatches across modules.
@@ -524,6 +521,7 @@ async function bootstrapServer(): Promise<void> {
     console.error("[Environment] Critical environment variables missing:", envErrors);
     process.exit(1);
   }
+  warnOptionalEnv();
 
   try {
     await initializeSystem();

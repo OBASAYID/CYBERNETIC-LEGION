@@ -173,15 +173,27 @@ function buildSessionStore() {
 }
 
 export async function setupAuth(app: Express): Promise<void> {
-  const { adminCode, userCode } = resolveAccessConfig();
-
   // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
-  app.post("/api/login", (req: any, res) => {
+  app.post("/api/login", async (req: any, res) => {
     console.log("[Auth] /api/login token-first handler invoked");
     const username = String((req.body || {}).username ?? "").trim();
     const code = String((req.body || {}).code ?? "").trim();
     if (!username || !code) {
       return res.status(400).json({ message: "Username and access code required" });
+    }
+
+    // Resolve live codes — DB overrides take precedence over env/default values.
+    let adminCode: string;
+    let userCode: string;
+    try {
+      const { getAccessCodes } = await import("../server/auth/access-code-store.js");
+      const codes = await getAccessCodes();
+      adminCode = codes.adminCode;
+      userCode = codes.userCode;
+    } catch {
+      const fallback = resolveAccessConfig();
+      adminCode = fallback.adminCode;
+      userCode = fallback.userCode;
     }
 
     let role: "admin" | "user";

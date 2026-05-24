@@ -45,6 +45,9 @@ const IntelligenceHubPage = lazy(() =>
 const DocumentBuilder = lazy(() =>
   import("./pages/document-builder").then((m) => ({ default: m.default })),
 );
+const SettingsPage = lazy(() =>
+  import("./pages/settings-page").then((m) => ({ default: m.default })),
+);
 
 function SuspenseRoute({ path, C }: { path: string; C: React.LazyExoticComponent<ComponentType<unknown>> }) {
   return (
@@ -107,6 +110,7 @@ export function CommandCenterRoutes() {
       <SuspenseRoute path="/biology" C={BiologyPage} />
       <SuspenseRoute path="/quantum" C={QuantumPage} />
       <SuspenseRoute path="/ops" C={OperationsPage} />
+      <SuspenseRoute path="/settings" C={SettingsPage} />
     </>
   );
 }
