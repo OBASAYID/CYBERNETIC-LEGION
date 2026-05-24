@@ -1,5 +1,6 @@
 import { Switch, Route } from "wouter";
 import { PresenceProvider } from "../../client/src/contexts/PresenceContext";
+import { CommsPresenceBootstrap } from "../../client/src/hooks/usePresenceBootstrap";
 import { CommandCenterRoutes } from "./command-center-routes";
 import NotFound from "@/pages/not-found";
 import DashboardFresh from "@/pages/dashboard-fresh";
@@ -13,6 +14,7 @@ interface AppRoutesProps {
 export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRoutesProps) {
   return (
     <PresenceProvider>
+      <CommsPresenceBootstrap />
       {onOpenApiKeyModal && (
         <div className="fixed bottom-4 right-4 z-[90]">
           <ApiKeyTriggerButton onClick={onOpenApiKeyModal} isConfigured={apiKeyConfigured} />

@@ -54,8 +54,19 @@ export async function resolveAccountUserId(force = false): Promise<string | null
       cachedAccountUserId = null;
       return null;
     }
-    const data = (await res.json()) as { id?: string; sub?: string; user?: { id?: string } };
-    const id = data.id || data.sub || data.user?.id || null;
+    const data = (await res.json()) as {
+      id?: string;
+      sub?: string;
+      username?: string;
+      user?: { id?: string };
+      claims?: { sub?: string };
+    };
+    const id =
+      data.id ||
+      data.sub ||
+      data.user?.id ||
+      data.claims?.sub ||
+      null;
     cachedAccountUserId = typeof id === "string" && id.trim() ? id.trim() : null;
     if (cachedAccountUserId) {
       localStorage.setItem(CYRUS_COMM_USER_LEGACY_KEY, cachedAccountUserId);

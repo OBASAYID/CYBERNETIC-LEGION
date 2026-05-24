@@ -36,6 +36,8 @@ export function PshareComposer({
   others,
   holoBlend,
   initialBody,
+  defaultExpanded = false,
+  alwaysExpanded = false,
   onPosted,
   onError,
 }: {
@@ -43,10 +45,16 @@ export function PshareComposer({
   others: PshareUser[];
   holoBlend?: boolean;
   initialBody?: string | null;
+  /** Start with the full composer open (Upload tab). */
+  defaultExpanded?: boolean;
+  /** Hide collapse — used on the dedicated Upload tab. */
+  alwaysExpanded?: boolean;
   onPosted: (post: unknown) => void;
   onError: (msg: string | null) => void;
 }) {
-  const [expanded, setExpanded] = useState(Boolean(initialBody?.trim()));
+  const [expanded, setExpanded] = useState(
+    alwaysExpanded || defaultExpanded || Boolean(initialBody?.trim()),
+  );
   const [body, setBody] = useState(initialBody?.trim() || "");
   const [linkInput, setLinkInput] = useState("");
   const [visibility, setVisibility] = useState<"all" | "selected">("all");
@@ -63,6 +71,10 @@ export function PshareComposer({
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const handoffApplied = useRef(false);
+
+  useEffect(() => {
+    if (alwaysExpanded || defaultExpanded) setExpanded(true);
+  }, [alwaysExpanded, defaultExpanded]);
 
   useEffect(() => {
     if (handoffApplied.current || !initialBody?.trim()) return;
@@ -171,7 +183,7 @@ export function PshareComposer({
       setListingCurrency("");
       setVisibility("all");
       setSelectedUserIds([]);
-      setExpanded(false);
+      if (!alwaysExpanded) setExpanded(false);
       onPosted(data.post);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Post failed");
@@ -196,7 +208,7 @@ export function PshareComposer({
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      {!expanded ? (
+      {!expanded && !alwaysExpanded ? (
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -211,13 +223,15 @@ export function PshareComposer({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Create post</p>
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="rounded-lg p-1 text-white/40 hover:bg-white/10 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {!alwaysExpanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="rounded-lg p-1 text-white/40 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">

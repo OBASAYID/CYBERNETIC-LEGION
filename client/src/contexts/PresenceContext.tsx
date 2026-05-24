@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
-import { getCommsDeviceId } from "../lib/cyrus-identity";
-import { resolveCyrusIdentity } from "../lib/cyrus-identity";
+import { getCommsDeviceId, resolveCyrusIdentity } from "../lib/cyrus-identity";
+import {
+  resolveCyrusSocketIoOrigin,
+  appendCommSignalingTokenToSearchParams,
+} from "@shared/cyrus-api-client";
 import {
   getCallQualityMetrics,
   AdaptiveBitrateController,
@@ -190,6 +193,31 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const webrtcDiagSessionRef = useRef<WebRtcDiagnosticsSession | null>(null);
   const recoveryManagerRef = useRef(new RtcRecoveryManager());
   const negotiationCoordinatorRef = useRef(new RtcNegotiationCoordinator());
+  const displayNameRef = useRef("User");
+  const identityRef = useRef<Awaited<ReturnType<typeof resolveCyrusIdentity>> | null>(null);
+  const presenceRegisteredOnceRef = useRef(false);
+
+  const emitPresenceRegister = useCallback((socket: Socket) => {
+    const identity = identityRef.current;
+    if (!identity) return;
+    const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
+    socket.emit("register", {
+      userId: identity.commsUserId,
+      displayName: displayNameRef.current,
+      deviceId: identity.deviceId,
+      profileImageUrl: profileImageUrl || null,
+    });
+  }, []);
+
+  const refreshIdentityAndRegister = useCallback(
+    async (socket: Socket, forceAccount = true) => {
+      const identity = await resolveCyrusIdentity(forceAccount);
+      identityRef.current = identity;
+      currentUserIdRef.current = identity.commsUserId;
+      emitPresenceRegister(socket);
+    },
+    [emitPresenceRegister],
+  );
 
   useEffect(() => {
     incomingCallRef.current = incomingCall;
@@ -720,73 +748,81 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const connectPresence = useCallback((displayName: string = "User") => {
     console.log("[Presence] connectPresence called, displayName:", displayName);
-    
+    displayNameRef.current = displayName;
+
     if (socketRef.current?.connected) {
-      console.log("[Presence] Already connected, skipping");
+      console.log("[Presence] Already connected — refreshing identity + re-register");
+      void refreshIdentityAndRegister(socketRef.current, true);
       return;
     }
-    
+
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
 
     void (async () => {
-      const identity = await resolveCyrusIdentity();
+      const identity = await resolveCyrusIdentity(true);
+      identityRef.current = identity;
       const { deviceId, commsUserId: userId } = identity;
       currentUserIdRef.current = userId;
 
-    console.log(`[Presence] Creating Socket.IO connection to ${window.location.origin}`);
-    
-    const socketUrl = window.location.origin;
-    console.log(`[Presence] Connecting Socket.IO to: ${socketUrl} (account=${identity.accountUserId ?? "anon"}, device=${deviceId})`);
-    
-    const preferWebSocket = import.meta.env.VITE_RTC_SIGNALING_WS !== "false";
-    const socket = io(socketUrl, {
-      path: "/cyrus-io",
-      transports: preferWebSocket ? ["websocket", "polling"] : ["polling"],
-      reconnection: true,
-      reconnectionAttempts: 20,
-      reconnectionDelay: 2000,
-      reconnectionDelayMax: 10000,
-      randomizationFactor: 0.5,
-      timeout: 60_000,
-      upgrade: preferWebSocket,
-      forceNew: true,
-      withCredentials: true,
-      autoConnect: true,
-    });
+      const socketUrl = resolveCyrusSocketIoOrigin();
+      console.log(
+        `[Presence] Connecting Socket.IO to: ${socketUrl} (account=${identity.accountUserId ?? "anon"}, device=${deviceId})`,
+      );
 
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log("[Presence] CONNECTED - Socket ID:", socket.id);
-      // Show live status as soon as the transport is up; `registered` still confirms server-side presence.
-      setIsConnected(true);
-      const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
-      socket.emit("register", {
-        userId,
-        displayName,
-        deviceId,
-        profileImageUrl: profileImageUrl || null,
+      const preferWebSocket = import.meta.env.VITE_RTC_SIGNALING_WS !== "false";
+      const socketQuery: Record<string, string> = {};
+      const q = new URLSearchParams();
+      appendCommSignalingTokenToSearchParams(q);
+      q.forEach((value, key) => {
+        socketQuery[key] = value;
       });
-    });
 
-    socket.on('registered', (data: { userId: string; totalOnline: number }) => {
-      console.log("[Presence] Registered successfully:", data);
-      setMyUserId(data.userId);
-      setIsConnected(true);
-      const { sent, remaining } = flushOutboundQueue((conversationId, body) => {
-        socket.emit("send-message", body);
+      const socket = io(socketUrl, {
+        path: "/cyrus-io",
+        transports: preferWebSocket ? ["websocket", "polling"] : ["polling"],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 10000,
+        randomizationFactor: 0.5,
+        timeout: 60_000,
+        upgrade: preferWebSocket,
+        forceNew: true,
+        withCredentials: true,
+        autoConnect: true,
+        query: Object.keys(socketQuery).length ? socketQuery : undefined,
       });
-      if (sent > 0) {
-        addNotification("success", `Delivered ${sent} queued message${sent === 1 ? "" : "s"}`);
-      }
-      if (remaining > 0) {
-        addNotification("warning", `${remaining} message(s) still queued`);
-      }
-      addNotification("success", `Connected as ${displayName}`);
-    });
+
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        console.log("[Presence] CONNECTED - Socket ID:", socket.id);
+        setIsConnected(true);
+        emitPresenceRegister(socket);
+      });
+
+      socket.on("registered", (data: { userId: string; totalOnline: number }) => {
+        console.log("[Presence] Registered successfully:", data);
+        setMyUserId(data.userId);
+        currentUserIdRef.current = data.userId;
+        setIsConnected(true);
+        const { sent, remaining } = flushOutboundQueue((_conversationId, body) => {
+          socket.emit("send-message", body);
+        });
+        if (sent > 0) {
+          addNotification("success", `Delivered ${sent} queued message${sent === 1 ? "" : "s"}`);
+        }
+        if (remaining > 0) {
+          addNotification("warning", `${remaining} message(s) still queued`);
+        }
+        if (!presenceRegisteredOnceRef.current) {
+          presenceRegisteredOnceRef.current = true;
+          addNotification("success", `Connected as ${displayNameRef.current}`);
+        }
+      });
 
     socket.on('presence-update', (data: { users: OnlineUser[]; total: number }) => {
       const currentId = currentUserIdRef.current;
@@ -927,8 +963,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('reconnect', () => {
       console.log("[Presence] Reconnected");
-      const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
-      socket.emit("register", { userId, displayName, deviceId, profileImageUrl: profileImageUrl || null });
+      setIsConnected(true);
+      void refreshIdentityAndRegister(socket, true);
     });
 
     socket.on('connect_error', (error) => {
@@ -946,7 +982,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     });
 
     })();
-  }, [addNotification, setupWebRTCMedia, cleanupMedia]);
+  }, [addNotification, setupWebRTCMedia, cleanupMedia, emitPresenceRegister, refreshIdentityAndRegister]);
 
   const disconnectPresence = useCallback(() => {
     cleanupMedia();
@@ -962,6 +998,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     currentUserIdRef.current = null;
     incomingCallRef.current = null;
     activeCallRef.current = null;
+    identityRef.current = null;
+    presenceRegisteredOnceRef.current = false;
   }, [cleanupMedia]);
 
   const callUser = useCallback((targetUserId: string, targetName: string, type: "audio" | "video") => {
