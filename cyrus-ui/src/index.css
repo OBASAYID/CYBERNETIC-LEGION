@@ -137,40 +137,41 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 210 6% 8%;
-  --foreground: 210 6% 95%;
-  --border: 210 6% 18%;
-  --card: 210 6% 10%;
-  --card-foreground: 210 6% 95%;
-  --card-border: 210 6% 13%;
-  --sidebar: 210 6% 12%;
-  --sidebar-foreground: 210 6% 95%;
-  --sidebar-border: 210 6% 16%;
-  --sidebar-primary: 217 91% 52%;
-  --sidebar-primary-foreground: 217 91% 98%;
-  --sidebar-accent: 210 12% 16%;
-  --sidebar-accent-foreground: 210 12% 88%;
-  --sidebar-ring: 217 91% 52%;
-  --popover: 210 6% 14%;
-  --popover-foreground: 210 6% 95%;
-  --popover-border: 210 6% 18%;
-  --primary: 217 91% 48%;
-  --primary-foreground: 217 91% 98%;
+  /* CYRUS OMEGA Gaming Palette */
+  --background: 240 28% 5%;          /* #080810 deep navy-black */
+  --foreground: 220 20% 94%;         /* near-white */
+  --border: 240 20% 14%;             /* subtle dark border */
+  --card: 240 25% 8%;                /* #0d0d1e dark card */
+  --card-foreground: 220 20% 94%;
+  --card-border: 240 20% 12%;
+  --sidebar: 240 28% 6%;             /* #0a0a17 sidebar dark */
+  --sidebar-foreground: 220 20% 90%;
+  --sidebar-border: 348 83% 47%;     /* crimson */
+  --sidebar-primary: 348 83% 47%;    /* crimson red */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 20% 12%;
+  --sidebar-accent-foreground: 220 20% 85%;
+  --sidebar-ring: 348 83% 47%;
+  --popover: 240 25% 9%;
+  --popover-foreground: 220 20% 94%;
+  --popover-border: 240 20% 14%;
+  --primary: 348 83% 47%;            /* #e11d48 crimson red */
+  --primary-foreground: 0 0% 100%;
   --destructive: 0 84% 42%;
-  --destructive-foreground: 0 84% 98%;
-  --secondary: 210 8% 18%;
-  --secondary-foreground: 210 8% 95%;
-  --muted: 210 10% 17%;
-  --muted-foreground: 210 10% 68%;
-  --accent: 210 12% 16%;
-  --accent-foreground: 210 12% 88%;
-  --input: 210 6% 35%;
-  --ring: 217 91% 52%;
-  --chart-1: 217 91% 65%;
-  --chart-2: 200 88% 68%;
-  --chart-3: 190 85% 70%;
-  --chart-4: 170 80% 72%;
-  --chart-5: 150 75% 75%;
+  --destructive-foreground: 0 0% 98%;
+  --secondary: 240 20% 14%;
+  --secondary-foreground: 220 20% 88%;
+  --muted: 240 18% 13%;
+  --muted-foreground: 220 12% 58%;
+  --accent: 186 100% 40%;            /* #00c8d4 cyan accent */
+  --accent-foreground: 186 100% 10%;
+  --input: 240 18% 22%;
+  --ring: 348 83% 47%;               /* crimson ring */
+  --chart-1: 348 83% 60%;            /* crimson */
+  --chart-2: 186 100% 52%;           /* cyan */
+  --chart-3: 262 83% 68%;            /* purple */
+  --chart-4: 142 76% 56%;            /* green */
+  --chart-5: 38 92% 60%;             /* amber */
   --shadow-2xs: 0px 2px 0px 0px hsl(210 6% 2% / 0.30);
   --shadow-xs: 0px 2px 0px 0px hsl(210 6% 2% / 0.35);
   --shadow-sm: 0px 2px 0px 0px hsl(210 6% 2% / 0.35), 0px 1px 2px -1px hsl(210 6% 2% / 0.40);
@@ -216,11 +217,28 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background: #080810;
   }
 
   /* Keep compositing stable: backdrop-filter + video/canvas under one subtree can flicker on Safari. */
   #root {
     isolation: isolate;
+  }
+
+  /* Hide scrollbars globally for gaming cleanliness */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.02);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(225,29,72,0.3);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(225,29,72,0.6);
   }
 }
 
@@ -963,4 +981,19 @@
   filter: blur(2px);
   animation: comms-cascade-up 5s ease-out forwards;
   box-shadow: 0 -20px 60px -10px rgba(0, 229, 255, 0.35);
+}
+
+/* === CYRUS OMEGA Gaming Glow Keyframes === */
+@keyframes cyrus-glow-pulse-a {
+  0%, 100% { opacity: 0.18; transform: scale(1); }
+  50% { opacity: 0.28; transform: scale(1.08); }
+}
+@keyframes cyrus-glow-pulse-b {
+  0%, 100% { opacity: 0.10; transform: scale(1) translate(0%, 0%); }
+  40% { opacity: 0.16; transform: scale(1.05) translate(-3%, 2%); }
+  70% { opacity: 0.08; transform: scale(0.96) translate(2%, -3%); }
+}
+@keyframes cyrus-glow-pulse-c {
+  0%, 100% { opacity: 0.12; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.20; transform: scale(1.1) rotate(5deg); }
 }
