@@ -4339,5 +4339,24 @@ Return ONLY valid JSON.`
   // Use humanoid routes
   app.use("/api/humanoid", humanoidRoutes);
 
+  // ── PShare broadcast posts (in-memory, real-time for all active users) ──
+  const pSharePosts: Array<{
+    id: string; user: string; content: string; ts: string; avatar?: string;
+  }> = [];
+
+  app.get("/api/pshare/posts", (_req, res) => {
+    res.json(pSharePosts.slice(-60).reverse());
+  });
+
+  app.post("/api/pshare/posts", (req: any, res) => {
+    const user    = req.session?.user?.username ?? req.body?.user ?? "OPERATOR";
+    const content = (req.body?.content ?? "").trim().slice(0, 500);
+    if (!content) return res.status(400).json({ error: "empty" });
+    const post = { id: Date.now().toString(), user, content, ts: new Date().toISOString() };
+    pSharePosts.push(post);
+    if (pSharePosts.length > 200) pSharePosts.splice(0, pSharePosts.length - 200);
+    res.json(post);
+  });
+
   return httpServer;
 }

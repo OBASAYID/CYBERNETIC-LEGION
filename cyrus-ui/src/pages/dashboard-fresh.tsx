@@ -22,7 +22,7 @@ import {
   MetricsSection,
 } from "@/components/dashboard-fresh/sections";
 import {
-  ActivityFeedPanel,
+  PSharePanel,
   CommsBentoGrid,
 } from "@/components/dashboard-fresh/comms-hub";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
@@ -114,7 +114,28 @@ export default function DashboardFresh() {
 
   return (
     /* Root: fills the whole viewport, NO page scroll */
-    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#0c0c14" }}>
+    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#0c0c14", position: "relative" }}>
+
+      {/* ══ GABORONE SATELLITE MAP BACKGROUND ═══════════════════════════ */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <img
+          src="/gaborone-map.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            filter: "saturate(1.8) contrast(1.5) brightness(0.5) hue-rotate(5deg)",
+            opacity: 0.9,
+          }}
+        />
+        {/* Blood-red pulse overlay — city-core aggression */}
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 48% 52%, rgba(225,29,72,0.22) 0%, rgba(80,0,0,0.3) 40%, transparent 75%)" }} />
+        {/* Dark vignette to keep UI readable */}
+        <div className="absolute inset-0" style={{ background: "rgba(6,6,12,0.62)" }} />
+        {/* Red HUD scanlines */}
+        <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(225,29,72,0.025) 3px, rgba(225,29,72,0.025) 4px)" }} />
+        {/* Teal route-glow echo */}
+        <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,220,130,0.012) 3px, rgba(0,220,130,0.012) 4px)" }} />
+      </div>
 
       {/* ══ HEADER — 52px fixed row ════════════════════════════════════ */}
       <header
@@ -192,7 +213,7 @@ export default function DashboardFresh() {
       </header>
 
       {/* ══ BODY — fills remaining height, no overflow ═════════════════ */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
 
         {/* ── CENTER — hub or admin console ────────────────────────────── */}
         {showHub ? (
@@ -251,13 +272,14 @@ export default function DashboardFresh() {
         <aside
           className="hidden xl:flex flex-col shrink-0 overflow-y-auto"
           style={{
-            width: 260,
-            borderLeft: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(14,14,20,0.99)",
+            width: 280,
+            borderLeft: "1px solid rgba(225,29,72,0.18)",
+            background: "rgba(8,8,14,0.88)",
+            backdropFilter: "blur(20px)",
             scrollbarWidth: "none",
           }}
         >
-          <ActivityFeedPanel stackSummary={stackSummary} />
+          <PSharePanel />
         </aside>
       </div>
     </div>

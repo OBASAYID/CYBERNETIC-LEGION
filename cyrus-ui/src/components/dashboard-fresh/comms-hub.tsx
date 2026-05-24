@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Brain,
@@ -8,9 +8,7 @@ import {
   MessageSquare,
   Mic,
   Phone,
-  Users,
   Video,
-  ChevronRight,
   Clock,
   Activity,
   Zap,
@@ -19,16 +17,17 @@ import {
   Plus,
   Share2,
   Eye,
-  BookOpen,
-  Layers,
   ArrowUpRight,
   Scan,
   Globe,
   Shield,
-  Radio,
   TrendingUp,
   Crosshair,
   Cpu,
+  Send,
+  Radio,
+  Play,
+  ChevronRight,
 } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { useConversations } from "@/hooks/use-conversations";
@@ -526,16 +525,212 @@ const GAMING_CSS = `
 @keyframes gm-glow { 0%,100%{opacity:.5} 50%{opacity:1} }
 `;
 
-const FEATURED_MODULES = [
-  { label: "Intelligence Hub", Icon: Brain,        href: "/intelligence", c1: "#7c3aed", c2: "#3b0764", tag: "AI" },
-  { label: "Comms Suite",      Icon: MessageSquare, href: "/comms",        c1: "#e11d48", c2: "#7f1d1d", tag: "LIVE" },
-  { label: "Vision Core",      Icon: Camera,        href: "/scan",         c1: "#059669", c2: "#064e3b", tag: "8K" },
-  { label: "Trading Matrix",   Icon: TrendingUp,    href: "/trading",      c1: "#f97316", c2: "#7c2d12", tag: "BETA" },
-  { label: "Global Nav",       Icon: Globe,         href: "/nav",          c1: "#2563eb", c2: "#1e3a8a", tag: "GPS" },
-  { label: "Security Core",    Icon: Shield,        href: "/security",     c1: "#6d28d9", c2: "#2e1065", tag: "ACTIVE" },
-  { label: "Drone Control",    Icon: Crosshair,     href: "/drone",        c1: "#0891b2", c2: "#0c4a6e", tag: "UAV" },
-  { label: "System Ops",       Icon: Cpu,           href: "/ops",          c1: "#dc2626", c2: "#7f1d1d", tag: "CORE" },
+/* ══════════════════════════════════════════════════════════════════════
+   APPLE TV-STYLE NEWS FEED — cinematic auto-advancing channel cards
+══════════════════════════════════════════════════════════════════════ */
+
+const CYRUS_CHANNELS = [
+  {
+    id: "intelligence",
+    title: "QUANTUM INTELLIGENCE",
+    category: "RESEARCH  ·  OMEGA-TIER",
+    desc: "Advanced neural fusion processing — access the full knowledge synthesis engine powered by GPT-4o.",
+    href: "/intelligence",
+    c1: "#7c3aed", c2: "#1e1b4b",
+    accent: "#a78bfa",
+    badge: "NEW RELEASE",
+    Icon: Brain,
+    tag: "AI · LIVE",
+  },
+  {
+    id: "comms",
+    title: "SQUAWK COMM SUITE",
+    category: "COMMUNICATIONS  ·  SECURE",
+    desc: "Mission-grade HD voice, video, and encrypted messaging — enterprise comms stack online.",
+    href: "/comms",
+    c1: "#e11d48", c2: "#4c0519",
+    accent: "#fb7185",
+    badge: "NOW STREAMING",
+    Icon: Radio,
+    tag: "LIVE · SECURE",
+  },
+  {
+    id: "scan",
+    title: "VISION CORE",
+    category: "PERCEPTION  ·  MULTIMODAL",
+    desc: "Real-time object detection, OCR, and 8K image analysis — TensorFlow neural eye system.",
+    href: "/scan",
+    c1: "#059669", c2: "#022c22",
+    accent: "#34d399",
+    badge: "HOT",
+    Icon: Camera,
+    tag: "8K · READY",
+  },
+  {
+    id: "trading",
+    title: "TRADING MATRIX",
+    category: "FINANCE  ·  QUANTUM",
+    desc: "Expert Forex, Crypto, and technical analysis — real-time market intelligence via Alpaca.",
+    href: "/trading",
+    c1: "#f97316", c2: "#431407",
+    accent: "#fb923c",
+    badge: "MARKET OPEN",
+    Icon: TrendingUp,
+    tag: "BETA · ACTIVE",
+  },
+  {
+    id: "security",
+    title: "SECURITY CORE",
+    category: "DEFENSE  ·  ENCRYPTED",
+    desc: "AES-256-GCM encryption, biometric auth, and real-time threat monitoring across all channels.",
+    href: "/security",
+    c1: "#0891b2", c2: "#0c4a6e",
+    accent: "#22d3ee",
+    badge: "CLASSIFIED",
+    Icon: Shield,
+    tag: "ACTIVE · SHIELD",
+  },
 ];
+
+function AppleTVNewsFeed() {
+  const [active, setActive]     = useState(0);
+  const [fading, setFading]     = useState(false);
+  const [progress, setProgress] = useState(0);
+  const intervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef             = useRef<ReturnType<typeof setInterval> | null>(null);
+  const DURATION                = 6000;
+
+  const advance = (next: number) => {
+    setFading(true);
+    setTimeout(() => { setActive(next); setFading(false); setProgress(0); }, 350);
+  };
+
+  useEffect(() => {
+    intervalRef.current  = setInterval(() => advance((active + 1) % CYRUS_CHANNELS.length), DURATION);
+    progressRef.current  = setInterval(() => setProgress((p) => Math.min(p + (100 / (DURATION / 80)), 100)), 80);
+    return () => {
+      clearInterval(intervalRef.current!);
+      clearInterval(progressRef.current!);
+    };
+  }, [active]);
+
+  const ch = CYRUS_CHANNELS[active];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
+          <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>LIVE BROADCAST</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {CYRUS_CHANNELS.map((_, i) => (
+            <button key={i} type="button" onClick={() => advance(i)}
+              className="transition-all duration-300"
+              style={{
+                width: i === active ? 20 : 6, height: 4, borderRadius: 2,
+                background: i === active ? "#e11d48" : "rgba(255,255,255,0.2)",
+                border: "none", cursor: "pointer",
+              }} />
+          ))}
+        </div>
+      </div>
+
+      {/* Main cinematic card */}
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          background: `linear-gradient(135deg, ${ch.c1}33 0%, ${ch.c2}cc 100%)`,
+          border: `1px solid ${ch.c1}55`,
+          boxShadow: `0 8px 40px ${ch.c1}35`,
+          minHeight: 132,
+          opacity: fading ? 0 : 1,
+          transition: "opacity 0.35s ease",
+        }}
+      >
+        {/* Background gradient wash */}
+        <div className="absolute inset-0"
+          style={{ background: `radial-gradient(ellipse at 80% 40%, ${ch.c1}28 0%, transparent 65%)` }} />
+        {/* Subtle scan line */}
+        <div className="absolute inset-0 opacity-[0.035]"
+          style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 4px)" }} />
+
+        <div className="relative z-10 flex gap-4 p-4">
+          {/* Icon column */}
+          <div className="shrink-0 flex flex-col items-center gap-2 pt-1">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
+              style={{
+                background: `${ch.c1}30`,
+                border: `1px solid ${ch.c1}55`,
+                boxShadow: `0 0 24px ${ch.c1}40`,
+              }}>
+              <ch.Icon className="h-7 w-7" style={{ color: ch.accent }} strokeWidth={1.3} />
+            </div>
+            <span className="text-[7px] font-black tracking-widest px-1.5 py-0.5 rounded"
+              style={{ background: `${ch.c1}40`, color: ch.accent, border: `1px solid ${ch.c1}50` }}>
+              {ch.tag}
+            </span>
+          </div>
+
+          {/* Content column */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[8px] font-black tracking-[0.3em] px-2 py-0.5 rounded-md"
+                style={{ background: "#e11d4833", color: "#fb7185", border: "1px solid #e11d4855" }}>
+                {ch.badge}
+              </span>
+              <span className="text-[8px] text-white/30 font-mono tracking-wider">{ch.category}</span>
+            </div>
+            <h3 className="text-base font-black text-white leading-tight mb-1.5"
+              style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${ch.c1}80` }}>
+              {ch.title}
+            </h3>
+            <p className="text-[10px] text-white/50 leading-relaxed mb-3 line-clamp-2">{ch.desc}</p>
+            <div className="flex items-center gap-2">
+              <Link href={ch.href}>
+                <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 cursor-pointer transition-all hover:scale-105"
+                  style={{ background: `${ch.c1}`, boxShadow: `0 4px 16px ${ch.c1}50` }}>
+                  <Play className="h-3 w-3 text-white" strokeWidth={2.5} fill="white" />
+                  <span className="text-[9px] font-black text-white tracking-wide">ACCESS NOW</span>
+                </div>
+              </Link>
+              <Link href="/intelligence">
+                <div className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 cursor-pointer transition-all hover:bg-white/10"
+                  style={{ border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span className="text-[9px] font-medium text-white/45">More</span>
+                  <ChevronRight className="h-2.5 w-2.5 text-white/30" />
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: "rgba(255,255,255,0.08)" }}>
+          <div className="h-full transition-none" style={{ width: `${progress}%`, background: ch.accent }} />
+        </div>
+      </div>
+
+      {/* Thumbnail strip */}
+      <div className="flex gap-2 mt-2">
+        {CYRUS_CHANNELS.map((c, i) => (
+          <button key={c.id} type="button" onClick={() => advance(i)}
+            className="flex-1 flex flex-col items-center gap-1 rounded-xl py-2 px-1 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
+            style={{
+              background: i === active ? `${c.c1}25` : "rgba(255,255,255,0.04)",
+              border: i === active ? `1px solid ${c.c1}55` : "1px solid rgba(255,255,255,0.07)",
+            }}>
+            <c.Icon className="h-3.5 w-3.5" style={{ color: i === active ? c.accent : "rgba(255,255,255,0.3)" }} strokeWidth={1.5} />
+            <span className="text-[7px] font-bold text-center leading-tight"
+              style={{ color: i === active ? c.accent : "rgba(255,255,255,0.3)" }}>
+              {c.id.toUpperCase()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function CommsBentoGrid({ displayName }: { displayName?: string }) {
   const { data: conversations = [] } = useConversations(undefined, 100);
@@ -687,62 +882,9 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
       </div>
 
       {/* ═══════════════════════════════════════════════════════
-          FEATURED MODULES  (Game Prime "Featured Games" row)
+          LIVE BROADCAST — Apple TV-style auto-advancing feed
       ═══════════════════════════════════════════════════════ */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
-            <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>FEATURED MODULES</p>
-          </div>
-          <Link href="/intelligence">
-            <div className="flex items-center gap-1 cursor-pointer group">
-              <p className="text-[10px] font-semibold text-white/35 group-hover:text-white/65 transition-colors">Explore</p>
-              <ArrowUpRight className="h-3 w-3 text-white/25 group-hover:text-white/55 transition-colors" />
-            </div>
-          </Link>
-        </div>
-
-        <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          {FEATURED_MODULES.map(({ label, Icon, href, c1, c2, tag }) => (
-            <Link key={href + label} href={href}>
-              <div className="relative overflow-hidden rounded-2xl shrink-0 cursor-pointer transition-all duration-300 hover:scale-[1.06] hover:-translate-y-2"
-                style={{
-                  width: 128, height: 152,
-                  background: `linear-gradient(165deg, ${c1} 0%, ${c2} 100%)`,
-                  boxShadow: `0 12px 36px ${c1}45, 0 0 0 1px ${c1}25`,
-                }}>
-                {/* Grid texture */}
-                <div className="absolute inset-0 opacity-[0.065]" style={{
-                  backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent 9px,rgba(255,255,255,0.25) 9px,rgba(255,255,255,0.25) 10px),
-                                    repeating-linear-gradient(90deg,transparent,transparent 9px,rgba(255,255,255,0.25) 9px,rgba(255,255,255,0.25) 10px)`,
-                }} />
-                {/* Radial glow center */}
-                <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 45%, ${c1}40 0%, transparent 65%)` }} />
-                {/* Top tag badge */}
-                <div className="absolute top-2.5 right-2.5 z-10">
-                  <span className="px-1.5 py-0.5 rounded-md text-[7px] font-black tracking-widest"
-                    style={{ background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                    {tag}
-                  </span>
-                </div>
-                {/* Center icon in frosted circle */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
-                    style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.22)", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
-                    <Icon className="h-7 w-7 text-white" strokeWidth={1.2} />
-                  </div>
-                </div>
-                {/* Bottom label gradient */}
-                <div className="absolute bottom-0 left-0 right-0 px-3 py-3"
-                  style={{ background: "linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%)" }}>
-                  <p className="text-[10px] font-black text-white leading-tight tracking-wide">{label}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
+      <AppleTVNewsFeed />
 
       {/* ═══════════════════════════════════════════════════════
           MISSION STATS  (Game Prime stat cards row)
@@ -845,187 +987,154 @@ export function ResearchSnapshot({ conversations }: { conversations: any[] }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   ACTIVITY FEED PANEL — right panel, like reference image
+   PSHARE PANEL — broadcast posts visible to all active users in real-time
 ══════════════════════════════════════════════════════════════════════ */
-export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
-  const { data: conversations = [] } = useConversations(undefined, 30);
-  const { data: onlineUsers = [] }   = useQuery<OnlineUser[]>({
-    queryKey: ["/api/comms/users/all"],
+interface PSharePost {
+  id: string;
+  user: string;
+  content: string;
+  ts: string;
+}
+
+export function PSharePanel() {
+  const qc                        = useQueryClient();
+  const [draft, setDraft]         = useState("");
+  const displayName               = (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "OPERATOR";
+
+  const { data: posts = [] } = useQuery<PSharePost[]>({
+    queryKey: ["/api/pshare/posts"],
     queryFn: async () => {
-      const r = await systemFetch("/api/comms/users/all?includeSelf=1");
+      const r = await systemFetch("/api/pshare/posts");
       return r.ok ? r.json() : [];
     },
-    refetchInterval: 15000,
+    refetchInterval: 3500,
   });
 
-  const activities = conversations.slice(0, 14).map((c: any) => ({
-    id: c.id,
-    role: c.role as "user" | "cyrus",
-    name: c.role === "cyrus" ? "CYRUS AI" : "You",
-    preview: (c.content ?? "").slice(0, 88),
-    ts: c.createdAt ?? "",
-    hasImage: c.hasImage,
-    tag: c.hasImage ? "vision" : c.role === "cyrus" ? "ai" : "query",
-  }));
+  const { mutate: sendPost, isPending } = useMutation({
+    mutationFn: async (content: string) => {
+      const r = await systemFetch("/api/pshare/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, user: displayName }),
+      });
+      return r.json();
+    },
+    onSuccess: () => {
+      setDraft("");
+      qc.invalidateQueries({ queryKey: ["/api/pshare/posts"] });
+    },
+  });
 
-  const aiOk       = stackSummary?.cyrusAiReachable;
-  const onlineCount = onlineUsers.filter((u) => u.isOnline || u.status === "online").length;
+  const submit = () => {
+    const text = draft.trim();
+    if (!text || isPending) return;
+    sendPost(text);
+  };
 
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── Header (matches reference "Activity" header) ── */}
-      <div
-        className="px-4 py-4 flex items-center justify-between"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
-      >
-        <p className="text-sm font-bold text-white">Activity</p>
-        <div
-          className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-          style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.22)" }}
-        >
-          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" />
-          <span className="text-[8px] font-medium text-[#22c55e]/80">live</span>
+      {/* ── Header ── */}
+      <div className="px-4 py-4 flex items-center justify-between shrink-0"
+        style={{ borderBottom: "1px solid rgba(225,29,72,0.18)" }}>
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-[5px] w-[5px] rounded-full bg-red-500 animate-pulse" />
+            <p className="text-sm font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>PSHARE</p>
+          </div>
+          <p className="text-[8px] text-white/30 tracking-widest mt-0.5">BROADCAST TO ALL USERS</p>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
+          style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.28)" }}>
+          <Radio className="h-2.5 w-2.5 text-red-400" strokeWidth={2} />
+          <span className="text-[8px] font-bold text-red-400">LIVE</span>
         </div>
       </div>
 
-      {/* ── System status ── */}
-      <div className="px-4 py-2.5 space-y-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-        {[
-          { label: "AI Service",  val: aiOk ? "Online" : "Standby", color: aiOk ? "#22c55e" : "#f59e0b" },
-          { label: "Contacts",    val: `${onlineCount} online`,        color: "#06b6d4" },
-          { label: "Vision",      val: "Ready",                        color: "#34d399" },
-          { label: "Documents",   val: "Live",                         color: "#4ade80" },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <div className="h-[4px] w-[4px] rounded-full" style={{ background: color }} />
-              <p className="text-[9px] text-white/40">{label}</p>
-            </div>
-            <p className="text-[9px] font-medium" style={{ color }}>{val}</p>
-          </div>
-        ))}
+      {/* ── Compose box ── */}
+      <div className="px-3 py-3 shrink-0"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="relative">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
+            placeholder="Broadcast a message to all active users…"
+            rows={3}
+            className="w-full resize-none rounded-xl px-3 py-2.5 pr-10 text-[11px] text-white placeholder-white/25 outline-none transition-all"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              lineHeight: 1.5,
+            }}
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!draft.trim() || isPending}
+            className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-lg transition-all hover:scale-110 disabled:opacity-30"
+            style={{
+              background: draft.trim() ? "linear-gradient(135deg, #e11d48, #9f1239)" : "rgba(255,255,255,0.08)",
+              boxShadow: draft.trim() ? "0 4px 14px rgba(225,29,72,0.5)" : "none",
+            }}
+          >
+            <Send className="h-3 w-3 text-white" strokeWidth={2} />
+          </button>
+        </div>
+        <p className="text-[8px] text-white/20 mt-1.5 px-1">⌘ + Enter to send · visible to all active operators</p>
       </div>
 
-      {/* ── Activity list (matches reference style exactly) ── */}
-      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-        {activities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-3 px-4">
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-2xl"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}
-            >
-              <MessageSquare className="h-6 w-6 text-white/15" />
+      {/* ── Posts feed ── */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" style={{ scrollbarWidth: "none" }}>
+        {posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(225,29,72,0.08)", border: "1px solid rgba(225,29,72,0.2)" }}>
+              <Share2 className="h-5 w-5 text-red-500/40" strokeWidth={1.5} />
             </div>
-            <p className="text-[10px] text-white/25 text-center leading-relaxed">
-              No activity yet.<br />Start a conversation below.
-            </p>
+            <div className="text-center">
+              <p className="text-[11px] text-white/30 font-medium">No broadcasts yet</p>
+              <p className="text-[9px] text-white/18 mt-0.5">Be the first to send a message</p>
+            </div>
           </div>
         ) : (
-          <div className="px-3 py-2 space-y-1.5">
-            {activities.map((item) => {
-              const isCyrus = item.role === "cyrus";
-              const avatarColor = isCyrus ? "#7c3aed" : "#e11d48";
-              return (
-                <Link key={item.id} href="/">
-                  <div
-                    className="group rounded-2xl p-3 cursor-pointer transition-all duration-200 hover:brightness-115"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  >
-                    {/* Top row: avatar + name + time */}
-                    <div className="flex items-start gap-2.5 mb-2">
-                      <div className="relative shrink-0">
-                        <div
-                          className="flex h-8 w-8 items-center justify-center rounded-full font-black text-[10px] text-white"
-                          style={{ background: `${avatarColor}25`, border: `1.5px solid ${avatarColor}40` }}
-                        >
-                          {isCyrus ? "C" : "U"}
-                        </div>
-                        {item.hasImage && (
-                          <div
-                            className="absolute -bottom-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full"
-                            style={{ background: "#06b6d4", border: "1.5px solid #08080e" }}
-                          >
-                            <Camera className="h-2 w-2 text-white" strokeWidth={2.5} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-white/80 leading-none mb-0.5">{item.name}</p>
-                        <p className="text-[10px] text-white/45 leading-snug line-clamp-2">{item.preview || "…"}</p>
-                      </div>
-                      <p className="text-[9px] font-mono text-white/25 shrink-0 mt-0.5">
-                        {item.ts ? timeAgo(item.ts) : ""}
-                      </p>
-                    </div>
-                    {/* Reply row */}
-                    <div className="flex items-center gap-3 pl-10">
-                      <button
-                        type="button"
-                        className="text-[9px] font-semibold text-white/40 hover:text-white/80 transition-colors"
-                      >
-                        Reply
-                      </button>
-                      {item.hasImage && (
-                        <>
-                          <span className="text-white/15">·</span>
-                          <Link href="/scan">
-                            <button
-                              type="button"
-                              className="text-[9px] font-semibold text-cyan-400/50 hover:text-cyan-400 transition-colors flex items-center gap-1"
-                            >
-                              <Eye className="h-2.5 w-2.5" />
-                              View scan
-                            </button>
-                          </Link>
-                        </>
-                      )}
-                      {isCyrus && (
-                        <>
-                          <span className="text-white/15">·</span>
-                          <Link href="/document-builder">
-                            <button
-                              type="button"
-                              className="text-[9px] font-semibold text-green-400/50 hover:text-green-400 transition-colors flex items-center gap-1"
-                            >
-                              <FileText className="h-2.5 w-2.5" />
-                              Save to doc
-                            </button>
-                          </Link>
-                        </>
-                      )}
-                    </div>
+          posts.map((post) => {
+            const color = colorForName(post.user);
+            return (
+              <div key={post.id}
+                className="rounded-xl p-3 transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                }}>
+                <div className="flex items-start gap-2.5">
+                  {/* Avatar */}
+                  <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full font-black text-[10px] text-white"
+                    style={{ background: `${color}25`, border: `1.5px solid ${color}45` }}>
+                    {initials(post.user)}
                   </div>
-                </Link>
-              );
-            })}
-          </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-[10px] font-bold truncate" style={{ color }}>
+                        {post.user}
+                      </p>
+                      <p className="text-[8px] font-mono text-white/25 shrink-0">{timeAgo(post.ts)}</p>
+                    </div>
+                    <p className="text-[11px] text-white/70 leading-relaxed break-words">{post.content}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* ── Fusion shortcuts at bottom ── */}
-      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-        <p className="text-[8px] font-semibold tracking-widest text-white/25 uppercase mb-2">FUSE INTO CHAT</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { href: "/scan",             icon: Scan,     label: "Vision",    color: "#06b6d4" },
-            { href: "/document-builder", icon: FileText, label: "Docs",      color: "#4ade80" },
-            { href: "/intelligence",     icon: Brain,    label: "Research",  color: "#a78bfa" },
-            { href: "/comms",            icon: Share2,   label: "Share",     color: "#fb923c" },
-          ].map(({ href, icon: Icon, label, color }) => (
-            <Link key={href + label} href={href}>
-              <div
-                className="group flex items-center gap-2 rounded-xl px-2.5 py-2 cursor-pointer transition-all hover:bg-white/[0.07]"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
-              >
-                <Icon className="h-3 w-3 shrink-0" style={{ color }} strokeWidth={1.8} />
-                <p className="text-[9px] font-medium text-white/45 group-hover:text-white/75 transition-colors">{label}</p>
-              </div>
-            </Link>
-          ))}
+      {/* ── Footer status ── */}
+      <div className="px-4 py-3 shrink-0"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex items-center justify-between">
+          <p className="text-[8px] text-white/25 font-mono">{posts.length} BROADCAST{posts.length !== 1 ? "S" : ""}</p>
+          <p className="text-[8px] text-white/20">↻ live every 3.5s</p>
         </div>
       </div>
     </div>
