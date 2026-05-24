@@ -165,7 +165,8 @@ export function useComms() {
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
-    refetchInterval: false,
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: true,
   });
 
   const remindersQuery = useQuery<Reminder[]>({

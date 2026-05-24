@@ -52,12 +52,17 @@ export function clearAuthSessionStorage(): void {
   }
 }
 
+export const CYRUS_AUTH_SESSION_CHANGED = "cyrus-auth-session-changed";
+
 export function persistAuthSession(sessionToken: string, profile: GateProfile): void {
   localStorage.setItem(AUTH_KEY, "valid");
   localStorage.setItem(AUTH_TIMESTAMP_KEY, Date.now().toString());
   if (sessionToken) localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
   localStorage.setItem("cyrus-display-name", profile.displayName);
   localStorage.setItem("cyrus-user-role", profile.role);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CYRUS_AUTH_SESSION_CHANGED));
+  }
 }
 
 export function checkAuthValidity(): boolean {

@@ -40,6 +40,60 @@ export function formatPshareRelativeTime(iso: string | null): string {
 
 export type PshareFeedFilter = "all" | "media" | "listing" | "links";
 
+export type PshareAuthorFilter = "all" | "mine" | string;
+
+export type PshareAuthorTab = {
+  id: PshareAuthorFilter;
+  label: string;
+  postCount: number;
+  isMe?: boolean;
+};
+
+export function buildPshareAuthorTabs(
+  posts: { authorId: string; authorName?: string }[],
+  myUserId: string,
+  myDisplayName?: string,
+): PshareAuthorTab[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const p of posts) {
+    const cur = counts.get(p.authorId);
+    if (cur) cur.count += 1;
+    else counts.set(p.authorId, { name: p.authorName || p.authorId.slice(0, 8), count: 1 });
+  }
+
+  const tabs: PshareAuthorTab[] = [{ id: "all", label: "Everyone", postCount: posts.length }];
+
+  const mine = counts.get(myUserId);
+  if (mine && mine.count > 0) {
+    tabs.push({
+      id: "mine",
+      label: myDisplayName?.trim() || "You",
+      postCount: mine.count,
+      isMe: true,
+    });
+  }
+
+  const others = [...counts.entries()]
+    .filter(([id]) => id !== myUserId)
+    .sort((a, b) => b[1].count - a[1].count || a[1].name.localeCompare(b[1].name));
+
+  for (const [id, { name, count }] of others) {
+    tabs.push({ id, label: name, postCount: count });
+  }
+
+  return tabs;
+}
+
+export function filterPshareByAuthor<T extends { authorId: string }>(
+  posts: T[],
+  authorFilter: PshareAuthorFilter,
+  myUserId: string,
+): T[] {
+  if (authorFilter === "all") return posts;
+  if (authorFilter === "mine") return posts.filter((p) => p.authorId === myUserId);
+  return posts.filter((p) => p.authorId === authorFilter);
+}
+
 export function matchesPshareFilter(
   post: {
     postKind?: string;

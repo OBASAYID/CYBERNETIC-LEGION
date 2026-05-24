@@ -62,6 +62,28 @@ export function appendCommSignalingTokenToSearchParams(q: URLSearchParams): void
   if (t) q.set("token", t);
 }
 
+/**
+ * HTTP(S) origin for Socket.IO (`io(origin, { path: "/cyrus-io" })`).
+ * Matches {@link systemFetch} host when `VITE_CYRUS_API_BASE` is set.
+ */
+export function resolveCyrusSocketIoOrigin(): string {
+  const base = getCyrusApiBase();
+  if (typeof window === "undefined") {
+    return base || "";
+  }
+  if (!base) return window.location.origin;
+  try {
+    const normalized =
+      base.startsWith("http://") || base.startsWith("https://")
+        ? base
+        : `https://${base.replace(/^\/\//, "")}`;
+    const u = new URL(normalized);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 export function resolveCyrusWebSocketUrl(pathAndQuery: string): string {
   const path = pathAndQuery.trim().startsWith("/") ? pathAndQuery.trim() : `/${pathAndQuery.trim()}`;
   const base = getCyrusApiBase();

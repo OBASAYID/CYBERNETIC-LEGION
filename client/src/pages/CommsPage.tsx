@@ -612,7 +612,7 @@ export function CommsPage() {
       id: u.id,
       displayName: u.displayName,
       profileImageUrl: commsAssetUrl(liveProfile.get(u.id) ?? u.profileImageUrl) ?? null,
-      isOnline: on.has(u.id),
+      isOnline: on.has(u.id) || Boolean(u.isOnline),
     }));
   }, [allUsers, onlineUsers]);
 
@@ -1440,6 +1440,7 @@ export function CommsPage() {
                 <PsharePanel
                   holoBlend
                   myUserId={myId}
+                  myDisplayName={displayName}
                   allUsers={allUsers}
                   getAvatarForUser={getAvatarForUser}
                   highlightPostId={psharePostHighlight}

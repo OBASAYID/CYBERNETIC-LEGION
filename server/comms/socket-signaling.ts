@@ -105,7 +105,12 @@ function getSocketUser(socket: Socket): User | undefined {
 
 function emitPresenceUpdate() {
   if (!ioInstance) return;
-  const userList = Array.from(users.values()).map((u) => ({
+  // One row per comms user id (multi-device may register several sockets under the same account).
+  const byCommsId = new Map<string, User>();
+  for (const u of users.values()) {
+    byCommsId.set(u.id, u);
+  }
+  const userList = Array.from(byCommsId.values()).map((u) => ({
     id: u.id,
     displayName: u.displayName,
     deviceId: u.deviceId,
