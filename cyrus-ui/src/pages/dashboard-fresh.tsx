@@ -1,9 +1,5 @@
 import { useState } from "react";
 import { LayoutGrid, TerminalSquare } from "lucide-react";
-import {
-  ModuleCommandConsole,
-  ModuleCommandConsoleDock,
-} from "@/components/command-center/module-command-console";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
 import {
   BottomPanels,
@@ -22,6 +18,7 @@ import {
   ResearchSnapshot,
   SocialLeftPanel,
 } from "@/components/dashboard-fresh/comms-hub";
+import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
 import { useConversations } from "@/hooks/use-conversations";
@@ -165,7 +162,7 @@ export default function DashboardFresh() {
           </aside>
 
           {/* ── CENTER: communication-first content ───────────────────── */}
-          <main className="flex-1 min-w-0 pb-[30rem]">
+          <main className="flex-1 min-w-0 pb-12">
 
             {/* Bento comms grid */}
             <CommsBentoGrid displayName={displayName} />
@@ -218,6 +215,11 @@ export default function DashboardFresh() {
                 ) : null;
               })()}
             </div>
+
+            {/* ── NEWS & PSHARE FEED ────────────────────────────────────── */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+              <NewsTrendFeed />
+            </div>
           </main>
 
           {/* ── RIGHT: activity feed ──────────────────────────────────── */}
@@ -238,7 +240,7 @@ export default function DashboardFresh() {
 
       {/* ══ Admin console view ══════════════════════════════════════════ */}
       {adminConsole && (
-        <div className="mx-auto w-full max-w-[1400px] px-5 py-6 pb-[30rem] space-y-5 lg:px-8">
+        <div className="mx-auto w-full max-w-[1400px] px-5 py-6 pb-12 space-y-5 lg:px-8">
           <section
             className="relative overflow-hidden rounded-2xl p-5"
             style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
@@ -277,10 +279,6 @@ export default function DashboardFresh() {
         </div>
       )}
 
-      {/* ══ Command console dock ════════════════════════════════════════ */}
-      <ModuleCommandConsoleDock>
-        <ModuleCommandConsole pageContext="Command Center — home / collaboration hub" />
-      </ModuleCommandConsoleDock>
     </div>
   );
 }
