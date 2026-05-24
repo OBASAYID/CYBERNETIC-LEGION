@@ -556,7 +556,12 @@ function newsCategoryTheme(cat?: string): { c1: string; c2: string; accent: stri
     science:    { c1: "#0891b2", c2: "#0c4a6e", accent: "#22d3ee" },
     health:     { c1: "#e11d48", c2: "#4c0519", accent: "#fb7185" },
     politics:   { c1: "#b45309", c2: "#2d1800", accent: "#f59e0b" },
+    sport:      { c1: "#16a34a", c2: "#052e16", accent: "#4ade80" },
     crypto:     { c1: "#f97316", c2: "#431407", accent: "#fb923c" },
+    nasa:       { c1: "#1e40af", c2: "#030d2a", accent: "#93c5fd" },
+    space:      { c1: "#4c1d95", c2: "#0d0720", accent: "#c4b5fd" },
+    military:   { c1: "#374151", c2: "#111218", accent: "#9ca3af" },
+    defense:    { c1: "#374151", c2: "#111218", accent: "#9ca3af" },
   };
   return map[(cat ?? "").toLowerCase()] ?? { c1: "#374151", c2: "#111827", accent: "#9ca3af" };
 }
@@ -820,7 +825,7 @@ function AppleTVNewsFeed() {
               : `linear-gradient(135deg, ${theme.c1}33 0%, ${theme.c2}cc 100%)`,
             border: `1px solid ${theme.c1}50`,
             boxShadow: `0 8px 40px ${theme.c1}30`,
-            minHeight: 148,
+            minHeight: 200,
             opacity: fading ? 0 : 1,
             transition: "opacity 0.35s ease",
           }}
