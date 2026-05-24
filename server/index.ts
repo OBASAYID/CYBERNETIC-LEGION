@@ -566,20 +566,14 @@ async function initializeSystem() {
   let isAuthenticatedMiddleware: any = null;
 
   // Auth setup — critical; failure here means API auth middleware is absent
+  // Always use standalone (access-code) auth — the frontend's PasswordGate posts
+  // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    if (process.env.REPL_ID) {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("./replit_integrations/auth");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Hosted environment auth initialized (Replit)");
-    } else {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Standalone Auth initialized");
-    }
+    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
+    await setupAuth(app);
+    registerAuthRoutes(app);
+    isAuthenticatedMiddleware = isAuthenticated;
+    log("Standalone Auth initialized");
   } catch (e) {
     console.error("[Init] Auth setup failed:", e);
   }
