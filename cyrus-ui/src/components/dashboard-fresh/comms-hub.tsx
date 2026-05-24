@@ -426,9 +426,9 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
   );
 }
 
-/* ── Bento stat card (matches reference image colored cards) ─────── */
+/* ── Bento stat card — bold solid-color background (reference style) ── */
 function BentoCard({
-  icon: Icon, label, value, sub, href, gradient, accent, textColor,
+  icon: Icon, label, value, sub, href, gradient, accent, textColor: _textColor,
 }: {
   icon: typeof Brain; label: string; value: string | number; sub?: string;
   href: string; gradient: string; accent: string; textColor: string;
@@ -436,40 +436,36 @@ function BentoCard({
   return (
     <Link href={href}>
       <div
-        className="group relative overflow-hidden rounded-2xl p-4 cursor-pointer h-full transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.98]"
+        className="group relative overflow-hidden rounded-2xl p-4 cursor-pointer h-full transition-all duration-300 hover:scale-[1.04] hover:-translate-y-1 active:scale-[0.97]"
         style={{
           background: gradient,
-          border: `1px solid rgba(255,255,255,0.08)`,
-          boxShadow: `0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)`,
+          boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.12)`,
         }}
       >
-        {/* Top-right shine */}
+        {/* Soft white radial highlight at top-right */}
         <div
-          className="pointer-events-none absolute top-0 right-0 w-24 h-24 rounded-full opacity-20 group-hover:opacity-35 transition-opacity"
-          style={{ background: `radial-gradient(circle, ${accent}, transparent 65%)`, filter: "blur(16px)", transform: "translate(30%, -30%)" }}
+          className="pointer-events-none absolute -top-6 -right-6 w-28 h-28 rounded-full opacity-15 group-hover:opacity-25 transition-opacity"
+          style={{ background: "radial-gradient(circle, rgba(255,255,255,0.9), transparent 65%)", filter: "blur(18px)" }}
         />
-        {/* Top shimmer line */}
-        <div
-          className="pointer-events-none absolute top-0 left-0 right-0 h-px opacity-30"
-          style={{ background: `linear-gradient(90deg, transparent, ${accent}88, transparent)` }}
-        />
+        {/* Subtle top shimmer */}
+        <div className="pointer-events-none absolute top-0 left-0 right-0 h-px opacity-40" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)" }} />
         <div className="relative">
           <div className="flex items-start justify-between mb-3">
-            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/50">{label}</p>
-            <ArrowUpRight className="h-3.5 w-3.5 text-white/20 group-hover:text-white/50 transition-colors" />
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/70">{label}</p>
+            <ArrowUpRight className="h-3.5 w-3.5 text-white/40 group-hover:text-white/80 transition-colors" />
           </div>
           <p
-            className="text-3xl font-black leading-none mb-2 tabular-nums"
-            style={{ color: textColor, fontFamily: "'Orbitron', system-ui", textShadow: `0 0 30px ${accent}50` }}
+            className="text-3xl font-black leading-none mb-1.5 tabular-nums text-white"
+            style={{ fontFamily: "'Orbitron', system-ui" }}
           >
             {value}
           </p>
-          {sub && <p className="text-[10px] text-white/45 leading-snug">{sub}</p>}
+          {sub && <p className="text-[10px] text-white/65 leading-snug">{sub}</p>}
           <div
-            className="mt-3 flex items-center justify-center rounded-lg p-1.5 w-fit"
-            style={{ background: `${accent}20`, border: `1px solid ${accent}30` }}
+            className="mt-3 flex items-center justify-center rounded-xl p-2 w-fit"
+            style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.25)" }}
           >
-            <Icon className="h-3.5 w-3.5" style={{ color: accent }} strokeWidth={1.8} />
+            <Icon className="h-4 w-4 text-white" strokeWidth={1.8} />
           </div>
         </div>
       </div>
@@ -482,27 +478,27 @@ function FusionCapabilityStrip() {
   const items = [
     {
       href: "/scan", icon: Camera, label: "Vision Scan", desc: "Scan & share in chat",
-      color: "#06b6d4", bg: "linear-gradient(135deg, #0c3040, #07202e)",
+      color: "#06b6d4", bg: "linear-gradient(135deg, #0891b2, #0e7490)",
     },
     {
       href: "/document-builder", icon: FileText, label: "Build Docs", desc: "Create & collaborate",
-      color: "#4ade80", bg: "linear-gradient(135deg, #0d2a18, #081810)",
+      color: "#4ade80", bg: "linear-gradient(135deg, #16a34a, #15803d)",
     },
     {
       href: "/comms", icon: Video, label: "Video Call", desc: "HD group sessions",
-      color: "#a78bfa", bg: "linear-gradient(135deg, #1e1044, #100824)",
+      color: "#a78bfa", bg: "linear-gradient(135deg, #7c3aed, #5b21b6)",
     },
     {
       href: "/intelligence", icon: Globe, label: "Research", desc: "Knowledge queries",
-      color: "#fb923c", bg: "linear-gradient(135deg, #2a1200, #1a0c00)",
+      color: "#fb923c", bg: "linear-gradient(135deg, #f97316, #c2410c)",
     },
     {
       href: "/comms", icon: Mic, label: "Voice", desc: "Realtime audio",
-      color: "#34d399", bg: "linear-gradient(135deg, #042218, #02100c)",
+      color: "#34d399", bg: "linear-gradient(135deg, #059669, #047857)",
     },
     {
       href: "/nav", icon: MapPin, label: "Location", desc: "Share position",
-      color: "#60a5fa", bg: "linear-gradient(135deg, #0d1e3a, #060e20)",
+      color: "#60a5fa", bg: "linear-gradient(135deg, #2563eb, #1d4ed8)",
     },
   ];
 
@@ -511,22 +507,22 @@ function FusionCapabilityStrip() {
       {items.map(({ href, icon: Icon, label, desc, color, bg }) => (
         <Link key={href + label} href={href}>
           <div
-            className="group flex flex-col items-center gap-2 rounded-2xl py-4 px-2 cursor-pointer transition-all duration-300 hover:scale-[1.05] hover:-translate-y-1"
+            className="group flex flex-col items-center gap-2 rounded-2xl py-4 px-2 cursor-pointer transition-all duration-300 hover:scale-[1.06] hover:-translate-y-1"
             style={{
               background: bg,
-              border: "1px solid rgba(255,255,255,0.06)",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
             }}
           >
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl transition-all group-hover:scale-110"
-              style={{ background: `${color}18`, border: `1px solid ${color}30`, boxShadow: `0 0 14px ${color}20` }}
+              style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.25)" }}
             >
-              <Icon className="h-4 w-4" style={{ color, filter: `drop-shadow(0 0 6px ${color}60)` }} strokeWidth={1.7} />
+              <Icon className="h-4 w-4 text-white" strokeWidth={1.7} />
             </div>
             <div className="text-center">
-              <p className="text-[9px] font-bold text-white/70 leading-tight" style={{ fontFamily: "'Orbitron', system-ui" }}>{label}</p>
-              <p className="text-[8px] text-white/30 mt-0.5 leading-tight">{desc}</p>
+              <p className="text-[9px] font-bold text-white/90 leading-tight" style={{ fontFamily: "'Orbitron', system-ui" }}>{label}</p>
+              <p className="text-[8px] text-white/55 mt-0.5 leading-tight">{desc}</p>
             </div>
           </div>
         </Link>
@@ -570,35 +566,35 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
       {/* ── Hero card ── */}
       <HeroCommsCard onlineUsers={onlineUsers} />
 
-      {/* ── 4-card bento stat row (like the colored cards in reference) ── */}
+      {/* ── 4-card bento stat row — bold solid-color backgrounds (reference style) ── */}
       <div className="grid grid-cols-4 gap-3">
         <BentoCard
           icon={MessageSquare} label="MESSAGES" value={total}
           sub={`${userMsgs} sent · ${cyrusMsgs} replies`}
           href="/"
-          gradient="linear-gradient(145deg, #2d1b69 0%, #1e1044 100%)"
-          accent="#a78bfa" textColor="#c4b5fd"
+          gradient="linear-gradient(145deg, #7c3aed 0%, #5b21b6 100%)"
+          accent="#a78bfa" textColor="#ffffff"
         />
         <BentoCard
           icon={Clock} label="SESSION" value="Active"
           sub="real-time intelligence"
           href="/comms"
-          gradient="linear-gradient(145deg, #431407 0%, #2a0d04 100%)"
-          accent="#fb923c" textColor="#fed7aa"
+          gradient="linear-gradient(145deg, #f97316 0%, #c2410c 100%)"
+          accent="#fb923c" textColor="#ffffff"
         />
         <BentoCard
           icon={Brain} label="RESEARCH" value={cyrusMsgs}
           sub="AI responses generated"
           href="/intelligence"
-          gradient="linear-gradient(145deg, #1e3a5f 0%, #0f2040 100%)"
-          accent="#60a5fa" textColor="#bfdbfe"
+          gradient="linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%)"
+          accent="#60a5fa" textColor="#ffffff"
         />
         <BentoCard
           icon={Camera} label="VISION" value={visionScans}
           sub="scans & image analyses"
           href="/scan"
-          gradient="linear-gradient(145deg, #065756 0%, #02302e 100%)"
-          accent="#34d399" textColor="#6ee7b7"
+          gradient="linear-gradient(145deg, #059669 0%, #047857 100%)"
+          accent="#34d399" textColor="#ffffff"
         />
       </div>
 
@@ -635,32 +631,25 @@ export function ResearchSnapshot({ conversations }: { conversations: any[] }) {
       {stats.map(({ label, value, color, icon: Icon }) => (
         <div
           key={label}
-          className="relative overflow-hidden rounded-2xl p-3"
-          style={{
-            background: `${color}0a`,
-            border: `1px solid ${color}1e`,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
-          }}
+          className="group relative overflow-hidden rounded-2xl cursor-default transition-all duration-300 hover:scale-[1.03] hover:-translate-y-0.5"
+          style={{ boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }}
         >
-          <div
-            className="pointer-events-none absolute -top-3 -right-3 h-12 w-12 rounded-full opacity-20"
-            style={{ background: `radial-gradient(circle, ${color}, transparent 70%)`, filter: "blur(10px)" }}
-          />
-          <div className="flex items-center gap-2 mb-2">
-            <div
-              className="flex h-6 w-6 items-center justify-center rounded-lg"
-              style={{ background: `${color}18`, border: `1px solid ${color}28` }}
-            >
-              <Icon className="h-3 w-3" style={{ color }} strokeWidth={1.8} />
+          {/* Colored header strip */}
+          <div className="px-3 py-2 flex items-center gap-2" style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)` }}>
+            <div className="flex h-5 w-5 items-center justify-center rounded-md" style={{ background: "rgba(255,255,255,0.2)" }}>
+              <Icon className="h-2.5 w-2.5 text-white" strokeWidth={2} />
             </div>
-            <p className="text-[8px] font-mono tracking-widest text-white/30 uppercase">{label}</p>
+            <p className="text-[8px] font-mono tracking-widest text-white/80 uppercase">{label}</p>
           </div>
-          <p
-            className="text-xl font-black tabular-nums"
-            style={{ color, fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${color}40` }}
-          >
-            {value}
-          </p>
+          {/* Dark body */}
+          <div className="px-3 py-2.5" style={{ background: "rgba(10,10,22,0.97)", border: `1px solid ${color}22`, borderTop: "none" }}>
+            <p
+              className="text-xl font-black tabular-nums text-white"
+              style={{ fontFamily: "'Orbitron', system-ui" }}
+            >
+              {value}
+            </p>
+          </div>
         </div>
       ))}
     </div>
@@ -754,10 +743,10 @@ export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
               return (
                 <Link key={item.id} href="/">
                   <div
-                    className="group rounded-2xl p-3 cursor-pointer transition-all duration-200 hover:brightness-110"
+                    className="group rounded-2xl p-3 cursor-pointer transition-all duration-200 hover:brightness-115"
                     style={{
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.05)",
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
                     {/* Top row: avatar + name + time */}

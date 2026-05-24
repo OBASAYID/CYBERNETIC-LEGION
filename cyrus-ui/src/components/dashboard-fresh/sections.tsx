@@ -91,10 +91,10 @@ function GameTile({ href, label }: { href: string; label: string }) {
         style={{
           width: "172px",
           height: "148px",
-          background: `linear-gradient(145deg, ${accent.from}22 0%, rgba(10,10,22,0.97) 65%)`,
+          background: `linear-gradient(145deg, ${accent.from}38 0%, rgba(10,10,22,0.97) 60%)`,
           border: `1px solid ${accent.border}`,
           borderRadius: "14px",
-          boxShadow: `0 6px 24px rgba(0,0,0,0.5)`,
+          boxShadow: `0 6px 28px rgba(0,0,0,0.55), 0 0 0 1px ${accent.from}18`,
           flexShrink: 0,
         }}
       >
@@ -178,7 +178,7 @@ export function FeaturedSpotlight({
 
   const [idx, setIdx] = useState(0);
   const [opacity, setOpacity] = useState(1);
-  const switchRef = useRef<ReturnType<typeof setTimeout>>();
+  const switchRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (featured.length <= 1) return;
@@ -719,21 +719,24 @@ export function StatCard({
 }) {
   return (
     <div
-      className="group relative overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:scale-[1.02]"
-      style={{ background: "rgba(13,13,30,0.85)", border: `1px solid ${color}28`, boxShadow: `0 0 30px ${color}10` }}
+      className="group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
+      style={{ boxShadow: `0 8px 32px rgba(0,0,0,0.4)` }}
     >
+      {/* Colored header band */}
       <div
-        className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-40 group-hover:opacity-70 transition-opacity"
-        style={{ background: `radial-gradient(circle, ${color}, transparent 70%)`, filter: "blur(20px)" }}
-      />
-      <div className="relative">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
-            <Icon className="h-3.5 w-3.5" style={{ color }} />
-          </div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40">{label}</p>
+        className="px-4 py-3 flex items-center gap-2.5"
+        style={{ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)` }}
+      >
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.25)" }}>
+          <Icon className="h-3.5 w-3.5 text-white" />
         </div>
-        <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+        <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/85">{label}</p>
+      </div>
+      {/* Dark body */}
+      <div className="p-4" style={{ background: "rgba(13,13,30,0.95)", border: `1px solid ${color}25`, borderTop: "none" }}>
+        <div className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-25 group-hover:opacity-50 transition-opacity"
+          style={{ background: `radial-gradient(circle, ${color}, transparent 70%)`, filter: "blur(20px)" }} />
+        <p className="text-2xl font-black text-white tracking-tight" style={{ fontFamily: "'Orbitron', system-ui" }}>{value}</p>
         <p className="mt-1 text-[11px] text-white/40">{helper}</p>
       </div>
     </div>
@@ -774,33 +777,36 @@ export function ModuleWorkspaceSection({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {modules.map((item) => (
-          <Link key={item.href} href={item.href} className="block">
-            <div
-              className="group relative flex h-full cursor-pointer flex-col gap-3 overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.99]"
-              style={{
-                background: `linear-gradient(135deg, ${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).from}14 0%, rgba(13,13,30,0.95) 60%)`,
-                border: `1px solid ${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).border}`,
-              }}
-            >
+        {modules.map((item) => {
+          const acc = MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!;
+          return (
+            <Link key={item.href} href={item.href} className="block">
               <div
-                className="pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full opacity-20 group-hover:opacity-40 transition-opacity duration-300"
-                style={{ background: `radial-gradient(circle, ${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).from}, transparent 70%)`, filter: "blur(20px)" }}
-              />
-              <div className="relative flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: `${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).from}18`, border: `1px solid ${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).border}` }}>
-                <item.Icon className="h-6 w-6" style={{ color: (MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).icon }} strokeWidth={1.75} />
+                className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.04] hover:-translate-y-1 active:scale-[0.99]"
+                style={{ boxShadow: `0 6px 24px rgba(0,0,0,0.45)` }}
+              >
+                {/* Colored top strip */}
+                <div
+                  className="flex items-center gap-2.5 px-4 py-3"
+                  style={{ background: `linear-gradient(135deg, ${acc.from} 0%, ${acc.via} 100%)` }}
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.25)" }}>
+                    <item.Icon className="h-4 w-4 text-white" strokeWidth={1.75} />
+                  </div>
+                  <p className="text-[10px] font-bold tracking-wide text-white leading-tight truncate" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>{item.label}</p>
+                </div>
+                {/* Dark body */}
+                <div className="flex-1 px-4 py-3" style={{ background: `linear-gradient(135deg, ${acc.from}12 0%, rgba(10,10,22,0.97) 70%)`, border: `1px solid ${acc.border}`, borderTop: "none" }}>
+                  {item.description && <p className="text-[10px] leading-snug text-white/45 line-clamp-2 mb-2">{item.description}</p>}
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-[5px] w-[5px] rounded-full animate-pulse" style={{ background: acc.from, boxShadow: `0 0 5px ${acc.glow}` }} />
+                    <span className="text-[8px] font-mono tracking-widest uppercase" style={{ color: `${acc.from}90` }}>Launch</span>
+                  </div>
+                </div>
               </div>
-              <div className="relative">
-                <p className="text-sm font-bold tracking-wide text-white leading-tight" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>{item.label}</p>
-                {item.description && <p className="mt-1 text-[11px] leading-snug text-white/45 line-clamp-2">{item.description}</p>}
-              </div>
-              <div className="mt-auto flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: (MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).from }} />
-                <span className="text-[9px] font-mono tracking-widest uppercase" style={{ color: `${(MODULE_ACCENTS[item.href] ?? MODULE_ACCENTS["/settings"]!).from}80` }}>Launch</span>
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
