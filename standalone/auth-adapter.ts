@@ -173,6 +173,15 @@ function buildSessionStore() {
 }
 
 export async function setupAuth(app: Express): Promise<void> {
+  // Lazy-load activity helpers — non-fatal if the module isn't ready yet.
+  async function tryActivity() {
+    try {
+      return await import("../server/auth/auth-activity.js");
+    } catch {
+      return null;
+    }
+  }
+
   // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
   app.post("/api/login", async (req: any, res) => {
     console.log("[Auth] /api/login token-first handler invoked");
@@ -180,6 +189,18 @@ export async function setupAuth(app: Express): Promise<void> {
     const code = String((req.body || {}).code ?? "").trim();
     if (!username || !code) {
       return res.status(400).json({ message: "Username and access code required" });
+    }
+
+    const activity = await tryActivity();
+    const ip = activity?.getIp(req) ?? null;
+
+    // Check if user is blocked before doing anything else.
+    if (activity) {
+      const blocked = await activity.isUserBlocked(username).catch(() => false);
+      if (blocked) {
+        void activity.logActivity({ username, eventType: "login_blocked", ipAddress: ip });
+        return res.status(403).json({ message: "ACCESS DENIED", hint: "Account restricted" });
+      }
     }
 
     // Resolve live codes — DB overrides take precedence over env/default values.
@@ -202,6 +223,7 @@ export async function setupAuth(app: Express): Promise<void> {
     } else if (code === userCode) {
       role = "user";
     } else {
+      void activity?.logActivity({ username, eventType: "login_failed", details: "Invalid access code", ipAddress: ip });
       return res.status(401).json({ message: "Invalid access code" });
     }
 
@@ -213,45 +235,71 @@ export async function setupAuth(app: Express): Promise<void> {
       claims: { sub: userId },
     };
     const sessionToken = issueSessionToken(user);
+
+    // Record session and log success (non-blocking).
+    if (activity) {
+      void activity.recordSession({ token: sessionToken, username, role, ipAddress: ip });
+      void activity.logActivity({ username, eventType: "login_success", details: role, ipAddress: ip });
+    }
+
     console.log(`[Auth] /api/login token-first success for ${username} (${role})`);
     res.json({ success: true, user: { id: userId, username, role, isAdmin: role === "admin" }, sessionToken });
   });
 
-  app.get("/api/auth/user", (req: any, res, next) => {
+  app.get("/api/auth/user", async (req: any, res, next) => {
     console.log("[Auth] /api/auth/user token-first handler invoked");
     const token = readSessionTokenFromRequest(req);
     if (token) {
       const tokenUser = verifySessionToken(token);
-      if (tokenUser) return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
+      if (tokenUser) {
+        // Check if token was revoked by an admin action.
+        const activity = await tryActivity();
+        if (activity) {
+          const revoked = await activity.isTokenRevoked(token).catch(() => false);
+          if (revoked) {
+            return res.status(401).json({ message: "Session revoked" });
+          }
+          void activity.touchSession(token);
+        }
+        return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
+      }
     }
     return next();
   });
 
-  app.post("/api/logout", (_req: any, res) => {
+  app.post("/api/logout", async (req: any, res) => {
+    const token = readSessionTokenFromRequest(req);
+    if (token) {
+      const activity = await tryActivity();
+      if (activity) {
+        const tokenUser = verifySessionToken(token);
+        void activity.revokeSessionByHash(
+          require("crypto").createHash("sha256").update(token).digest("hex").slice(0, 64)
+        );
+        void activity.logActivity({ username: tokenUser?.username, eventType: "logout" });
+      }
+    }
     res.json({ success: true });
   });
 
-  app.post("/api/logout-all", (req: any, res) => {
+  app.post("/api/logout-all", async (req: any, res) => {
     const token = readSessionTokenFromRequest(req);
     let user: SessionUser | null = null;
-    if (token) {
-      user = verifySessionToken(token);
+    if (token) user = verifySessionToken(token);
+    if (!user) user = req.session?.user ?? null;
+    if (!user?.id) return res.status(401).json({ error: "Not authenticated" });
+    if (user.role !== "admin") return res.status(403).json({ error: "Admin access required" });
+
+    const activity = await tryActivity();
+    let revoked = 0;
+    if (activity) {
+      const sessions = await activity.getActiveSessions().catch(() => []);
+      await Promise.all(sessions.map((s) => activity.revokeSessionByHash(s.tokenHash).catch(() => {})));
+      revoked = sessions.length;
+      void activity.logActivity({ username: user.username, eventType: "session_revoked", details: `All sessions (${revoked})` });
     }
-    if (!user) {
-      user = req.session?.user ?? null;
-    }
-    if (!user?.id) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
-    if (user.role !== "admin") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    // In the token-based auth model, sessions are stateless JWTs — there is no
-    // server-side session store to purge. Returning success signals to the client
-    // that the admin action was accepted; individual clients will be logged out
-    // when their tokens expire or when they next call /api/logout.
-    console.log(`[Auth] /api/logout-all invoked by admin ${user.username}`);
-    res.json({ success: true, message: "All sessions invalidated" });
+    console.log(`[Auth] /api/logout-all invoked by admin ${user.username}, revoked ${revoked} sessions`);
+    res.json({ success: true, message: `All sessions invalidated (${revoked} revoked)` });
   });
 
   const store = buildSessionStore();
