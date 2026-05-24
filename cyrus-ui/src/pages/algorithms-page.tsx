@@ -120,8 +120,8 @@ export function AlgorithmsPage() {
           <>
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="w-5 h-5 text-amber-200/90" />
-                <h2 className="text-lg font-medium">{cat.orchestrator.title}</h2>
+                <BookOpen className="w-5 h-5 text-[#e11d48]/80" />
+                <h2 className="text-lg font-bold text-white">{cat.orchestrator.title}</h2>
                 <span className="text-[10px] text-white/40 ml-auto">v{cat.version}</span>
               </div>
               <p className="text-xs text-white/50 mb-4">{cat.orchestrator.description}</p>

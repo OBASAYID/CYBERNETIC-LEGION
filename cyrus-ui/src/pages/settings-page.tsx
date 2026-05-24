@@ -42,9 +42,9 @@ interface SessionEntry {
 const EVENT_COLORS: Record<string, string> = {
   login_success: "text-green-400",
   login_failed: "text-red-400",
-  login_blocked: "text-orange-400",
+  login_blocked: "text-[#e11d48]",
   logout: "text-slate-400",
-  session_revoked: "text-amber-400",
+  session_revoked: "text-[#e11d48]/70",
   user_blocked: "text-red-400",
   user_unblocked: "text-cyan-400",
   user_removed: "text-red-500",
@@ -69,7 +69,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const SOURCE_COLOR: Record<string, string> = {
   database: "text-cyan-400",
-  env: "text-amber-400",
+  env: "text-[#e11d48]/80",
   default: "text-white/40",
 };
 
@@ -129,10 +129,10 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-2xl border border-orange-500/30 bg-slate-950/95 p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-2xl p-6 shadow-2xl" style={{ background: "rgba(8,8,16,0.98)", border: "1px solid rgba(225,29,72,0.25)" }}>
         <div className="flex items-center gap-3 mb-4">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${danger ? "border-red-500/30 bg-red-500/10" : "border-orange-500/30 bg-orange-500/10"}`}>
-            <AlertTriangle className={`h-5 w-5 ${danger ? "text-red-400" : "text-orange-400"}`} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: danger ? "rgba(239,68,68,0.1)" : "rgba(225,29,72,0.1)", border: danger ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(225,29,72,0.3)" }}>
+            <AlertTriangle className="h-5 w-5 text-[#e11d48]" />
           </div>
           <div>
             <h3 className="text-base font-bold tracking-wide text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>
@@ -140,13 +140,13 @@ function ConfirmDialog({
             </h3>
           </div>
         </div>
-        <p className="text-sm text-white/60 bg-white/5 rounded-lg p-4 border border-white/8 mb-5">{description}</p>
+        <p className="text-sm text-white/55 rounded-xl p-4 mb-5" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>{description}</p>
         <div className="flex gap-3">
           <Button onClick={onClose} className="flex-1 border border-white/15 bg-white/[0.07] text-white/70 hover:bg-white/[0.12] hover:text-white">
             Cancel
           </Button>
-          <Button onClick={onConfirm} className={`flex-1 font-semibold tracking-wide text-white ${danger ? "bg-red-700 hover:bg-red-600" : "bg-orange-600 hover:bg-orange-500"}`}
-            style={{ fontFamily: "'Orbitron', system-ui" }}>
+          <Button onClick={onConfirm} className="flex-1 font-semibold tracking-wide text-white"
+            style={{ background: danger ? "rgba(239,68,68,0.8)" : "rgba(225,29,72,0.85)", fontFamily: "'Orbitron', system-ui" }}>
             {confirmLabel}
           </Button>
         </div>
@@ -476,7 +476,7 @@ function UsersTab() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-white/90">{s.username}</span>
-                      <span className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded ${s.role === "admin" ? "bg-amber-500/20 text-amber-400" : "bg-cyan-500/15 text-cyan-400"}`}>
+                      <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: s.role === "admin" ? "rgba(225,29,72,0.15)" : "rgba(6,182,212,0.12)", color: s.role === "admin" ? "#e11d48" : "#06b6d4" }}>
                         {s.role}
                       </span>
                     </div>
@@ -492,7 +492,7 @@ function UsersTab() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => setConfirm({ action: "logout-session", username: s.username, tokenHash: s.tokenHash })}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white/50 text-xs hover:border-amber-500/30 hover:text-amber-300 transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white/50 text-xs hover:border-[#e11d48]/30 hover:text-[#e11d48]/80 transition-colors"
                       title="Revoke this session">
                       <LogOut className="h-3.5 w-3.5" />
                     </button>
@@ -616,10 +616,10 @@ export default function SettingsPage() {
         </div>
 
         {!isAdmin ? (
-          <div className="rounded-xl border border-orange-500/25 bg-orange-500/10 p-6 text-center text-orange-300/80 text-sm">
-            <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-orange-400/70" />
-            <p className="font-semibold tracking-wide">Admin access required</p>
-            <p className="text-xs text-orange-300/50 mt-1">Log in with the admin code to access system settings.</p>
+          <div className="rounded-xl p-6 text-center text-sm" style={{ background: "rgba(225,29,72,0.08)", border: "1px solid rgba(225,29,72,0.2)" }}>
+            <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-[#e11d48]/70" />
+            <p className="font-semibold tracking-wide text-white/80">Admin access required</p>
+            <p className="text-xs text-white/35 mt-1">Log in with the admin code to access system settings.</p>
           </div>
         ) : (
           <>

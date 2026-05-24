@@ -152,7 +152,7 @@ export function ApiKeyModal({ open, onOpenChange }: ApiKeyModalProps) {
           />
           {/* Ambient glow blobs */}
           <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-cyan-500/10 blur-3xl" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-8 -right-8 h-36 w-36 rounded-full bg-orange-500/10 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-8 -right-8 h-36 w-36 rounded-full blur-3xl" style={{ background: "rgba(225,29,72,0.08)" }} aria-hidden />
           {/* Top accent line */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" aria-hidden />
 
@@ -167,7 +167,7 @@ export function ApiKeyModal({ open, onOpenChange }: ApiKeyModalProps) {
                     Configuration
                   </p>
                   <DialogTitle
-                    className="mt-0.5 bg-gradient-to-r from-cyan-100 via-white to-orange-200/90 bg-clip-text text-xl font-bold tracking-tight text-transparent"
+                    className="mt-0.5 bg-gradient-to-r from-cyan-100 via-white to-[#e11d48]/80 bg-clip-text text-xl font-bold tracking-tight text-transparent"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
                     OpenAI API Key
@@ -195,13 +195,13 @@ export function ApiKeyModal({ open, onOpenChange }: ApiKeyModalProps) {
                 "mb-5 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm",
                 isConfigured
                   ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-200"
-                  : "border-amber-500/25 bg-amber-500/[0.08] text-amber-200",
+                  : "border-[#e11d48]/25 bg-[#e11d48]/[0.08] text-[#e11d48]/90",
               )}
             >
               {isConfigured ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
               ) : (
-                <XCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                <XCircle className="h-4 w-4 shrink-0 text-[#e11d48]" />
               )}
               <div className="min-w-0 flex-1">
                 <span className="font-medium">
@@ -255,7 +255,7 @@ export function ApiKeyModal({ open, onOpenChange }: ApiKeyModalProps) {
               </Label>
               <div className="relative group">
                 {/* Focus glow */}
-                <div className="pointer-events-none absolute -inset-px rounded-xl bg-gradient-to-r from-cyan-500/30 via-transparent to-orange-500/30 opacity-0 blur-sm transition-all duration-500 group-focus-within:opacity-100" />
+                <div className="pointer-events-none absolute -inset-px rounded-xl bg-gradient-to-r from-cyan-500/30 via-transparent to-[#e11d48]/20 opacity-0 blur-sm transition-all duration-500 group-focus-within:opacity-100" />
                 <div className="pointer-events-none absolute inset-0 rounded-xl border border-white/10 transition-colors group-focus-within:border-cyan-500/40" />
                 <div className="relative flex items-center rounded-xl bg-black/40 backdrop-blur-sm">
                   <KeyRound className="ml-3.5 h-4 w-4 shrink-0 text-cyan-400/50" aria-hidden />
@@ -316,12 +316,12 @@ export function ApiKeyModal({ open, onOpenChange }: ApiKeyModalProps) {
             </div>
 
             {/* Security warning */}
-            <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-400/80" />
-              <div className="space-y-1 text-xs text-amber-200/70">
-                <p className="font-semibold text-amber-200/90">Security notice</p>
+            <div className="mt-5 flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.15)" }}>
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#e11d48]/70" />
+              <div className="space-y-1 text-xs text-white/50">
+                <p className="font-semibold text-white/70">Security notice</p>
                 <p>
-                  Your key is stored in browser <code className="font-mono text-amber-300/80">localStorage</code> and
+                  Your key is stored in browser <code className="font-mono text-[#06b6d4]/70">localStorage</code> and
                   is accessible to JavaScript on this page. For production use, configure the key
                   via a server-side environment variable instead.
                 </p>
@@ -404,7 +404,7 @@ export function ApiKeyTriggerButton({
           "absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-slate-950",
           isConfigured
             ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
-            : "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] animate-pulse",
+            : "bg-[#e11d48] shadow-[0_0_6px_rgba(225,29,72,0.8)] animate-pulse",
         )}
         aria-label={isConfigured ? "API key configured" : "API key not configured"}
       />

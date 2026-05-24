@@ -598,7 +598,7 @@ export default function DocumentsIntelligence() {
                     ))}
                   </ul>
                   {syncReport.issues?.length > 0 && (
-                    <div className="mt-2 text-sm text-amber-200/85">Issues: {syncReport.issues.join("; ")}</div>
+                    <div className="mt-2 text-sm text-[#e11d48]/80">Issues: {syncReport.issues.join("; ")}</div>
                   )}
                   <p className="mt-2 text-sm text-white/80">Confidence: {syncReport.confidence}</p>
                 </section>
@@ -618,9 +618,9 @@ export default function DocumentsIntelligence() {
               )}
 
               {job?.result?.analysis && job.status === "completed" && (
-                <section className="rounded-xl border border-amber-500/30 bg-gradient-to-b from-amber-950/35 to-slate-950/55 p-3.5 sm:p-4">
+                <section className="rounded-xl p-3.5 sm:p-4" style={{ background: "rgba(225,29,72,0.06)", border: "1px solid rgba(225,29,72,0.2)" }}>
                   <h3
-                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-amber-100"
+                    className="mb-2 flex items-center gap-2.5 text-base font-bold text-white"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
                     <Sparkles className="h-5 w-5" />
