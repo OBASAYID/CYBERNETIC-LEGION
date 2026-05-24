@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutGrid, TerminalSquare, Zap } from "lucide-react";
+import { LayoutGrid, TerminalSquare } from "lucide-react";
 import {
   ModuleCommandConsole,
   ModuleCommandConsoleDock,
@@ -7,24 +7,33 @@ import {
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
 import {
   BottomPanels,
+  CategoryRail,
   EngineMatrixSection,
+  FeaturedSpotlight,
   HeaderBadge,
   HeaderTitle,
   HealthRail,
   HeroSection,
+  LeftSystemPanel,
   MetricsSection,
-  ModuleWorkspaceSection,
+  RightTelemetryPanel,
 } from "@/components/dashboard-fresh/sections";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
 
+/* ── Category hrefs ─────────────────────────────────────────────────── */
+const INTELLIGENCE_HREFS  = ["/intelligence", "/biology", "/medical", "/algorithms"];
+const OPERATIONS_HREFS    = ["/modules", "/ops", "/quantum", "/device"];
+const COMMS_HREFS         = ["/comms", "/nav", "/scan"];
+const COMMAND_HREFS       = ["/files", "/document-builder", "/security", "/settings"];
+
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
-  const role = useUserRole();
+  const role    = useUserRole();
   const isAdmin = role === "admin";
   const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
-  const [adminTab, setAdminTab] = useState<AdminTab>("modules");
+  const [adminTab, setAdminTab]         = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
 
   const {
@@ -38,182 +47,243 @@ export default function DashboardFresh() {
     totalEngines,
     healthPercent,
   } = useDashboardFreshData(moduleFilter, {
-    enableStackSummary: isAdmin,
-    enableOrchestratorData: adminConsole,
+    enableStackSummary: true,
+    enableOrchestratorData: true,
   });
 
-  const headerOperator = !isAdmin || adminTab === "modules";
+  const showMissionControl = !adminConsole;
+
+  /* ── Filter modules into category rails ──────────────────────────── */
+  const intelligenceModules  = visibleModules.filter((m) => INTELLIGENCE_HREFS.includes(m.href));
+  const operationsModules    = visibleModules.filter((m) => OPERATIONS_HREFS.includes(m.href));
+  const communicationsModules = visibleModules.filter((m) => COMMS_HREFS.includes(m.href));
+  const commandModules       = visibleModules.filter((m) => COMMAND_HREFS.includes(m.href));
+
+  const sharedPanelProps = { healthPercent, onlineEngines, totalEngines, degradedEngines, offlineEngines };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden text-white" style={{ background: "transparent" }}>
+    <div className="relative min-h-screen text-white" style={{ background: "transparent" }}>
 
-      {/* ── Sticky gaming header ───────────────────────────────────── */}
+      {/* ══ Compact sticky header ═══════════════════════════════════════ */}
       <header
-        className="sticky top-0 z-30 border-b"
+        className="sticky top-0 z-30"
         style={{
-          background: "rgba(8,8,16,0.92)",
-          borderColor: "rgba(225,29,72,0.15)",
-          backdropFilter: "blur(20px)",
-          boxShadow: "0 4px 40px rgba(0,0,0,0.6)",
+          background: "rgba(8,8,16,0.95)",
+          borderBottom: "1px solid rgba(225,29,72,0.1)",
+          backdropFilter: "blur(24px)",
+          boxShadow: "0 4px 40px rgba(0,0,0,0.7)",
         }}
       >
-        {/* Status bar */}
-        <div
-          className="flex items-center justify-between px-5 py-2 border-b"
-          style={{ borderColor: "rgba(255,255,255,0.05)" }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse" style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />
-            <span className="text-[10px] font-mono tracking-[0.3em] text-[#22c55e]/80 uppercase">System Active</span>
-          </div>
-          <FieldDateTimeHud />
-        </div>
+        <div className="flex items-center justify-between gap-3 px-5 h-[52px]">
+          {/* Left: logo + optional tabs */}
+          <div className="flex items-center gap-3 min-w-0">
+            <HeaderTitle variant={showMissionControl ? "operator" : "default"} />
 
-        {/* Main header row */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div className="flex items-center gap-3">
-            {/* Admin tabs */}
             {isAdmin && (
-              <div className="flex items-center gap-1.5 rounded-xl p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                {[
-                  { id: "modules" as AdminTab, label: "Modules", icon: LayoutGrid, color: "#e11d48" },
+              <div
+                className="flex items-center gap-1 rounded-xl p-1 ml-2"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+              >
+                {([
+                  { id: "modules" as AdminTab, label: "Modules", icon: LayoutGrid,    color: "#e11d48" },
                   { id: "console" as AdminTab, label: "Console", icon: TerminalSquare, color: "#06b6d4" },
-                ].map(({ id, label, icon: Icon, color }) => (
+                ] as const).map(({ id, label, icon: Icon, color }) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setAdminTab(id)}
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-all duration-200"
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-[10px] font-semibold tracking-wide transition-all duration-200"
                     style={{
                       background: adminTab === id ? `${color}18` : "transparent",
                       border: adminTab === id ? `1px solid ${color}35` : "1px solid transparent",
-                      color: adminTab === id ? "#fff" : "rgba(255,255,255,0.4)",
+                      color: adminTab === id ? "#fff" : "rgba(255,255,255,0.35)",
                       boxShadow: adminTab === id ? `0 0 12px ${color}20` : "none",
                       fontFamily: "'Orbitron', system-ui",
                     }}
                   >
-                    <Icon className="h-3.5 w-3.5" style={{ color: adminTab === id ? color : undefined }} strokeWidth={1.85} />
+                    <Icon className="h-3 w-3" style={{ color: adminTab === id ? color : undefined }} strokeWidth={2} />
                     {label}
                   </button>
                 ))}
               </div>
             )}
-            <HeaderTitle variant={headerOperator ? "operator" : "default"} />
           </div>
 
-          <div className="flex items-center gap-2">
-            {isAdmin && <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />}
+          {/* Center: live status pills */}
+          <div className="hidden md:flex items-center gap-2">
+            {[
+              { label: "SYSTEM", value: "ACTIVE",          color: "#22c55e", pulse: true },
+              { label: "ENGINES", value: `${onlineEngines}/${totalEngines}`, color: "#06b6d4", pulse: false },
+              { label: "HEALTH",  value: `${totalEngines > 0 ? healthPercent : "—"}%`, color: healthPercent >= 80 ? "#22c55e" : healthPercent >= 50 ? "#f59e0b" : "#e11d48", pulse: false },
+            ].map(({ label, value, color, pulse }) => (
+              <div
+                key={label}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{ background: `${color}10`, border: `1px solid ${color}22` }}
+              >
+                <span
+                  className={`h-[5px] w-[5px] rounded-full ${pulse ? "animate-pulse" : ""}`}
+                  style={{ background: color, boxShadow: `0 0 5px ${color}` }}
+                />
+                <span className="text-[9px] font-mono tracking-[0.25em] text-white/40 uppercase">{label}</span>
+                <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Right: badge + datetime */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isAdmin && <HeaderBadge livePort={(stackSummary as any)?.stack?.fused?.livePort} />}
+            <FieldDateTimeHud />
           </div>
         </div>
       </header>
 
-      {/* ── Main content ──────────────────────────────────────────── */}
-      <main className="mx-auto w-full max-w-[1600px] px-5 py-6 pb-[30rem] space-y-6 lg:px-8">
+      {/* ══ 3-column mission control layout ════════════════════════════ */}
+      {showMissionControl && (
+        <div className="flex relative">
 
-        {/* Banner hero for non-admins or module view */}
-        {(headerOperator || !isAdmin) && (
-          <section
-            className="relative overflow-hidden rounded-2xl p-6"
+          {/* ── LEFT: sticky system vitals panel ──────────────────────── */}
+          <aside
+            className="sticky top-[52px] hidden lg:block shrink-0 overflow-y-auto"
             style={{
-              background: "linear-gradient(135deg, rgba(225,29,72,0.08) 0%, rgba(8,8,16,0.98) 40%, rgba(6,182,212,0.06) 100%)",
-              border: "1px solid rgba(225,29,72,0.15)",
-              boxShadow: "0 0 80px rgba(225,29,72,0.05)",
+              width: "200px",
+              height: "calc(100vh - 52px)",
+              borderRight: "1px solid rgba(225,29,72,0.08)",
+              background: "rgba(8,8,18,0.6)",
+              scrollbarWidth: "none",
             }}
           >
-            {/* BG glows */}
-            <div className="pointer-events-none absolute -top-12 -left-12 h-48 w-48 rounded-full opacity-15" style={{ background: "radial-gradient(circle, #e11d48, transparent 70%)", filter: "blur(50px)" }} />
-            <div className="pointer-events-none absolute -bottom-8 -right-8 h-40 w-40 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)", filter: "blur(40px)" }} />
-            {/* Top line */}
-            <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(225,29,72,0.5) 40%, rgba(6,182,212,0.3) 60%, transparent)" }} />
+            <LeftSystemPanel {...sharedPanelProps} />
+          </aside>
 
-            <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
-              {/* Icon */}
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl" style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.3)", boxShadow: "0 0 30px rgba(225,29,72,0.2)" }}>
-                <Zap className="h-7 w-7 text-[#e11d48]" />
+          {/* ── CENTER: scrolling main content ────────────────────────── */}
+          <main className="flex-1 min-w-0 pb-[30rem]">
+
+            {/* Featured spotlight */}
+            <FeaturedSpotlight modules={visibleModules} />
+
+            {/* Module category rails */}
+            <div className="px-5 py-6 space-y-10">
+
+              {/* Intelligence category */}
+              {intelligenceModules.length > 0 && (
+                <CategoryRail
+                  title="INTELLIGENCE SYSTEMS"
+                  accent="#7c3aed"
+                  modules={intelligenceModules}
+                />
+              )}
+
+              {/* Operations category */}
+              {operationsModules.length > 0 && (
+                <CategoryRail
+                  title="OPERATIONS CORE"
+                  accent="#ea580c"
+                  modules={operationsModules}
+                />
+              )}
+
+              {/* Communications category */}
+              {communicationsModules.length > 0 && (
+                <CategoryRail
+                  title="COMMUNICATIONS"
+                  accent="#0d9488"
+                  modules={communicationsModules}
+                />
+              )}
+
+              {/* Command & config */}
+              {commandModules.length > 0 && (
+                <CategoryRail
+                  title="COMMAND & CONFIG"
+                  accent="#e11d48"
+                  modules={commandModules}
+                />
+              )}
+
+              {/* Fallback: any uncategorised modules */}
+              {(() => {
+                const allCategorised = [
+                  ...INTELLIGENCE_HREFS,
+                  ...OPERATIONS_HREFS,
+                  ...COMMS_HREFS,
+                  ...COMMAND_HREFS,
+                ];
+                const extra = visibleModules.filter((m) => !allCategorised.includes(m.href));
+                if (extra.length === 0) return null;
+                return (
+                  <CategoryRail
+                    title="OTHER MODULES"
+                    accent="#06b6d4"
+                    modules={extra}
+                  />
+                );
+              })()}
+            </div>
+          </main>
+
+          {/* ── RIGHT: sticky telemetry panel ─────────────────────────── */}
+          <aside
+            className="sticky top-[52px] hidden xl:block shrink-0 overflow-y-auto"
+            style={{
+              width: "240px",
+              height: "calc(100vh - 52px)",
+              borderLeft: "1px solid rgba(6,182,212,0.08)",
+              background: "rgba(8,8,18,0.6)",
+              scrollbarWidth: "none",
+            }}
+          >
+            <RightTelemetryPanel
+              {...sharedPanelProps}
+              stackSummary={stackSummary}
+            />
+          </aside>
+        </div>
+      )}
+
+      {/* ══ Admin console view ══════════════════════════════════════════ */}
+      {adminConsole && (
+        <div className="mx-auto w-full max-w-[1400px] px-5 py-6 pb-[30rem] space-y-5 lg:px-8">
+          <section
+            className="relative overflow-hidden rounded-2xl p-5"
+            style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
+          >
+            <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(6,182,212,0.5), transparent)" }} />
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)" }}>
+                <TerminalSquare className="h-5 w-5 text-cyan-400" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono tracking-[0.4em] text-[#e11d48]/70 uppercase mb-1">OMEGA-TIER QUANTUM AI</p>
-                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>
-                  CYRUS <span style={{ color: "#e11d48" }}>v3.0</span>
-                </h1>
-                <p className="text-sm text-white/40 mt-1">
-                  {isAdmin ? "Full system access — select a module to engage." : "Select a module to open. Admin diagnostics available to administrators only."}
-                </p>
-              </div>
-              {/* Live status indicators */}
-              <div className="flex flex-wrap gap-3 shrink-0">
-                {[
-                  { label: "Engines", value: `${onlineEngines}/${totalEngines}`, color: "#22c55e" },
-                  { label: "Health", value: `${healthPercent}%`, color: healthPercent >= 80 ? "#22c55e" : healthPercent >= 50 ? "#f59e0b" : "#e11d48" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex flex-col items-center rounded-xl px-4 py-2.5 min-w-[72px]" style={{ background: `${color}10`, border: `1px solid ${color}25` }}>
-                    <p className="text-xl font-black" style={{ color }}>{value}</p>
-                    <p className="text-[9px] font-mono tracking-widest text-white/30 uppercase">{label}</p>
-                  </div>
-                ))}
+              <div>
+                <p className="text-[9px] font-mono tracking-[0.4em] text-cyan-400/50 uppercase mb-1">Command & Diagnostics</p>
+                <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
+                <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
               </div>
             </div>
           </section>
-        )}
 
-        {/* Module grid */}
-        {(headerOperator || !isAdmin) && (
-          <ModuleWorkspaceSection
-            modules={visibleModules}
-            moduleFilter={moduleFilter}
-            setModuleFilter={setModuleFilter}
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <HeroSection />
+            <HealthRail {...sharedPanelProps} />
+          </section>
+
+          <MetricsSection
+            stackSummary={stackSummary}
+            onlineEngines={onlineEngines}
+            totalEngines={totalEngines}
+            degradedEngines={degradedEngines}
           />
-        )}
 
-        {/* Admin console */}
-        {adminConsole && (
-          <div className="space-y-5">
-            {/* Console header */}
-            <section
-              className="relative overflow-hidden rounded-2xl p-5"
-              style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
-            >
-              <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(6,182,212,0.5), transparent)" }} />
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)" }}>
-                  <TerminalSquare className="h-5 w-5 text-cyan-400" />
-                </div>
-                <div>
-                  <p className="text-[9px] font-mono tracking-[0.4em] text-cyan-400/50 uppercase mb-1">Command & Diagnostics</p>
-                  <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
-                  <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
-                </div>
-              </div>
-            </section>
+          <EngineMatrixSection
+            modules={orchestratorModules?.modules ?? []}
+            navLabelByRoute={navLabelByRoute}
+          />
 
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <HeroSection />
-              <HealthRail
-                healthPercent={healthPercent}
-                onlineEngines={onlineEngines}
-                totalEngines={totalEngines}
-                degradedEngines={degradedEngines}
-                offlineEngines={offlineEngines}
-              />
-            </section>
+          <BottomPanels hints={(stackSummary as any)?.stack?.hints ?? ["Waiting for stack hints…"]} />
+        </div>
+      )}
 
-            <MetricsSection
-              stackSummary={stackSummary}
-              onlineEngines={onlineEngines}
-              totalEngines={totalEngines}
-              degradedEngines={degradedEngines}
-            />
-
-            <EngineMatrixSection
-              modules={orchestratorModules?.modules ?? []}
-              navLabelByRoute={navLabelByRoute}
-            />
-
-            <BottomPanels hints={stackSummary?.stack?.hints ?? ["Waiting for stack hints…"]} />
-          </div>
-        )}
-      </main>
-
+      {/* ══ Command console dock ════════════════════════════════════════ */}
       <ModuleCommandConsoleDock>
         <ModuleCommandConsole pageContext="Command Center — home / module workspace" />
       </ModuleCommandConsoleDock>
