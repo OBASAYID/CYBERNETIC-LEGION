@@ -40,7 +40,7 @@ function getIp(req: any): string | null {
   return req?.ip ?? req?.connection?.remoteAddress ?? null;
 }
 
-// ─── Activity Log ────────────────────────────────────────────────────────────
+// ─── Activity Log ────────────────────────────────────────────────────────
 
 export async function logActivity(params: {
   username?: string | null;
@@ -67,7 +67,7 @@ export async function getActivityLog(limit = 50): Promise<ActivityEntry[]> {
      LIMIT $1`,
     [limit],
   );
-  return res.rows.map((r) => ({
+  return res.rows.map((r: any) => ({
     id: r.id,
     username: r.username,
     eventType: r.event_type as EventType,
@@ -86,7 +86,7 @@ export function logActivityFromReq(
   void logActivity({ username, eventType, details, ipAddress: getIp(req) });
 }
 
-// ─── Sessions ─────────────────────────────────────────────────────────────────
+// ─── Sessions ──────────────────────────────────────────────────────────
 
 export async function recordSession(params: {
   token: string;
@@ -156,7 +156,7 @@ export async function getActiveSessions(): Promise<SessionEntry[]> {
      ORDER BY last_seen_at DESC
      LIMIT 200`,
   );
-  return res.rows.map((r) => ({
+  return res.rows.map((r: any) => ({
     tokenHash: r.token_hash,
     username: r.username,
     role: r.role,
@@ -171,7 +171,7 @@ export async function removeUserSessions(username: string): Promise<void> {
   await pool.query(`DELETE FROM auth_sessions WHERE username = $1`, [username]);
 }
 
-// ─── Blocked Users ────────────────────────────────────────────────────────────
+// ─── Blocked Users ────────────────────────────────────────────────────────
 
 const BLOCKED_KEY = "auth.blocked_users";
 
