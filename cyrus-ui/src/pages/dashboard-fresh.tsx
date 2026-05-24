@@ -9,31 +9,37 @@ import {
   BottomPanels,
   CategoryRail,
   EngineMatrixSection,
-  FeaturedSpotlight,
   HeaderBadge,
   HeaderTitle,
   HealthRail,
   HeroSection,
-  LeftSystemPanel,
   MetricsSection,
   RightTelemetryPanel,
 } from "@/components/dashboard-fresh/sections";
+import {
+  ActivityFeedPanel,
+  CommsBentoGrid,
+  ResearchSnapshot,
+  SocialLeftPanel,
+} from "@/components/dashboard-fresh/comms-hub";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useConversations } from "@/hooks/use-conversations";
 
 /* ── Category hrefs ─────────────────────────────────────────────────── */
-const INTELLIGENCE_HREFS  = ["/intelligence", "/biology", "/medical", "/algorithms"];
-const OPERATIONS_HREFS    = ["/modules", "/ops", "/quantum", "/device"];
-const COMMS_HREFS         = ["/comms", "/nav", "/scan"];
-const COMMAND_HREFS       = ["/files", "/document-builder", "/security", "/settings"];
+const INTELLIGENCE_HREFS   = ["/intelligence", "/biology", "/medical", "/algorithms"];
+const OPERATIONS_HREFS     = ["/modules", "/ops", "/quantum", "/device"];
+const COMMS_HREFS          = ["/comms", "/nav", "/scan"];
+const COMMAND_HREFS        = ["/files", "/document-builder", "/security", "/settings"];
 
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
   const role    = useUserRole();
   const isAdmin = role === "admin";
-  const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
-  const [adminTab, setAdminTab]         = useState<AdminTab>("modules");
+  const displayName = (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "OPERATOR";
+
+  const [adminTab, setAdminTab] = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
 
   const {
@@ -46,18 +52,20 @@ export default function DashboardFresh() {
     offlineEngines,
     totalEngines,
     healthPercent,
-  } = useDashboardFreshData(moduleFilter, {
+  } = useDashboardFreshData("all", {
     enableStackSummary: true,
     enableOrchestratorData: true,
   });
 
-  const showMissionControl = !adminConsole;
+  const { data: conversations = [] } = useConversations(undefined, 100);
 
-  /* ── Filter modules into category rails ──────────────────────────── */
-  const intelligenceModules  = visibleModules.filter((m) => INTELLIGENCE_HREFS.includes(m.href));
-  const operationsModules    = visibleModules.filter((m) => OPERATIONS_HREFS.includes(m.href));
+  const showHub = !adminConsole;
+
+  /* ── Module category arrays ──────────────────────────────────────── */
+  const intelligenceModules   = visibleModules.filter((m) => INTELLIGENCE_HREFS.includes(m.href));
+  const operationsModules     = visibleModules.filter((m) => OPERATIONS_HREFS.includes(m.href));
   const communicationsModules = visibleModules.filter((m) => COMMS_HREFS.includes(m.href));
-  const commandModules       = visibleModules.filter((m) => COMMAND_HREFS.includes(m.href));
+  const commandModules        = visibleModules.filter((m) => COMMAND_HREFS.includes(m.href));
 
   const sharedPanelProps = { healthPercent, onlineEngines, totalEngines, degradedEngines, offlineEngines };
 
@@ -68,24 +76,23 @@ export default function DashboardFresh() {
       <header
         className="sticky top-0 z-30"
         style={{
-          background: "rgba(8,8,16,0.95)",
+          background: "rgba(8,8,16,0.96)",
           borderBottom: "1px solid rgba(225,29,72,0.1)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 4px 40px rgba(0,0,0,0.7)",
+          boxShadow: "0 4px 32px rgba(0,0,0,0.7)",
         }}
       >
         <div className="flex items-center justify-between gap-3 px-5 h-[52px]">
-          {/* Left: logo + optional tabs */}
+          {/* Left: logo + admin tabs */}
           <div className="flex items-center gap-3 min-w-0">
-            <HeaderTitle variant={showMissionControl ? "operator" : "default"} />
-
+            <HeaderTitle variant={showHub ? "operator" : "default"} />
             {isAdmin && (
               <div
                 className="flex items-center gap-1 rounded-xl p-1 ml-2"
                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
               >
                 {([
-                  { id: "modules" as AdminTab, label: "Modules", icon: LayoutGrid,    color: "#e11d48" },
+                  { id: "modules" as AdminTab, label: "Hub",     icon: LayoutGrid,    color: "#e11d48" },
                   { id: "console" as AdminTab, label: "Console", icon: TerminalSquare, color: "#06b6d4" },
                 ] as const).map(({ id, label, icon: Icon, color }) => (
                   <button
@@ -112,9 +119,9 @@ export default function DashboardFresh() {
           {/* Center: live status pills */}
           <div className="hidden md:flex items-center gap-2">
             {[
-              { label: "SYSTEM", value: "ACTIVE",          color: "#22c55e", pulse: true },
+              { label: "SYSTEM",  value: "ACTIVE",  color: "#22c55e", pulse: true  },
               { label: "ENGINES", value: `${onlineEngines}/${totalEngines}`, color: "#06b6d4", pulse: false },
-              { label: "HEALTH",  value: `${totalEngines > 0 ? healthPercent : "—"}%`, color: healthPercent >= 80 ? "#22c55e" : healthPercent >= 50 ? "#f59e0b" : "#e11d48", pulse: false },
+              { label: "COMMS",   value: "READY",   color: "#7c3aed", pulse: false },
             ].map(({ label, value, color, pulse }) => (
               <div
                 key={label}
@@ -139,34 +146,49 @@ export default function DashboardFresh() {
         </div>
       </header>
 
-      {/* ══ 3-column mission control layout ════════════════════════════ */}
-      {showMissionControl && (
+      {/* ══ Main 3-column hub ══════════════════════════════════════════ */}
+      {showHub && (
         <div className="flex relative">
 
-          {/* ── LEFT: sticky system vitals panel ──────────────────────── */}
+          {/* ── LEFT: social panel ────────────────────────────────────── */}
           <aside
             className="sticky top-[52px] hidden lg:block shrink-0 overflow-y-auto"
             style={{
-              width: "200px",
+              width: "210px",
               height: "calc(100vh - 52px)",
-              borderRight: "1px solid rgba(225,29,72,0.08)",
-              background: "rgba(8,8,18,0.6)",
+              borderRight: "1px solid rgba(255,255,255,0.05)",
+              background: "rgba(8,8,18,0.7)",
               scrollbarWidth: "none",
             }}
           >
-            <LeftSystemPanel {...sharedPanelProps} />
+            <SocialLeftPanel displayName={displayName} />
           </aside>
 
-          {/* ── CENTER: scrolling main content ────────────────────────── */}
+          {/* ── CENTER: communication-first content ───────────────────── */}
           <main className="flex-1 min-w-0 pb-[30rem]">
 
-            {/* Featured spotlight */}
-            <FeaturedSpotlight modules={visibleModules} />
+            {/* Bento comms grid */}
+            <CommsBentoGrid displayName={displayName} />
 
-            {/* Module category rails */}
-            <div className="px-5 py-6 space-y-10">
+            {/* Research stat snapshot */}
+            <ResearchSnapshot conversations={conversations} />
 
-              {/* Intelligence category */}
+            {/* Separator */}
+            <div className="flex items-center gap-4 px-5 py-2">
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.04)" }} />
+              <p className="text-[8px] font-mono tracking-[0.45em] uppercase text-white/20">EXPLORE MODULES</p>
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.04)" }} />
+            </div>
+
+            {/* Category rails */}
+            <div className="px-5 py-3 space-y-8 pb-6">
+              {communicationsModules.length > 0 && (
+                <CategoryRail
+                  title="COMMUNICATIONS & NAVIGATION"
+                  accent="#0d9488"
+                  modules={communicationsModules}
+                />
+              )}
               {intelligenceModules.length > 0 && (
                 <CategoryRail
                   title="INTELLIGENCE SYSTEMS"
@@ -174,8 +196,6 @@ export default function DashboardFresh() {
                   modules={intelligenceModules}
                 />
               )}
-
-              {/* Operations category */}
               {operationsModules.length > 0 && (
                 <CategoryRail
                   title="OPERATIONS CORE"
@@ -183,17 +203,6 @@ export default function DashboardFresh() {
                   modules={operationsModules}
                 />
               )}
-
-              {/* Communications category */}
-              {communicationsModules.length > 0 && (
-                <CategoryRail
-                  title="COMMUNICATIONS"
-                  accent="#0d9488"
-                  modules={communicationsModules}
-                />
-              )}
-
-              {/* Command & config */}
               {commandModules.length > 0 && (
                 <CategoryRail
                   title="COMMAND & CONFIG"
@@ -201,43 +210,28 @@ export default function DashboardFresh() {
                   modules={commandModules}
                 />
               )}
-
-              {/* Fallback: any uncategorised modules */}
               {(() => {
-                const allCategorised = [
-                  ...INTELLIGENCE_HREFS,
-                  ...OPERATIONS_HREFS,
-                  ...COMMS_HREFS,
-                  ...COMMAND_HREFS,
-                ];
+                const allCategorised = [...INTELLIGENCE_HREFS, ...OPERATIONS_HREFS, ...COMMS_HREFS, ...COMMAND_HREFS];
                 const extra = visibleModules.filter((m) => !allCategorised.includes(m.href));
-                if (extra.length === 0) return null;
-                return (
-                  <CategoryRail
-                    title="OTHER MODULES"
-                    accent="#06b6d4"
-                    modules={extra}
-                  />
-                );
+                return extra.length > 0 ? (
+                  <CategoryRail title="OTHER MODULES" accent="#06b6d4" modules={extra} />
+                ) : null;
               })()}
             </div>
           </main>
 
-          {/* ── RIGHT: sticky telemetry panel ─────────────────────────── */}
+          {/* ── RIGHT: activity feed ──────────────────────────────────── */}
           <aside
             className="sticky top-[52px] hidden xl:block shrink-0 overflow-y-auto"
             style={{
-              width: "240px",
+              width: "248px",
               height: "calc(100vh - 52px)",
-              borderLeft: "1px solid rgba(6,182,212,0.08)",
-              background: "rgba(8,8,18,0.6)",
+              borderLeft: "1px solid rgba(255,255,255,0.05)",
+              background: "rgba(8,8,18,0.7)",
               scrollbarWidth: "none",
             }}
           >
-            <RightTelemetryPanel
-              {...sharedPanelProps}
-              stackSummary={stackSummary}
-            />
+            <ActivityFeedPanel stackSummary={stackSummary} />
           </aside>
         </div>
       )}
@@ -285,7 +279,7 @@ export default function DashboardFresh() {
 
       {/* ══ Command console dock ════════════════════════════════════════ */}
       <ModuleCommandConsoleDock>
-        <ModuleCommandConsole pageContext="Command Center — home / module workspace" />
+        <ModuleCommandConsole pageContext="Command Center — home / collaboration hub" />
       </ModuleCommandConsoleDock>
     </div>
   );
