@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "cyrus-asset-ingest": {
+      "command": "node_modules/.bin/tsx",
+      "args": [
+        "server/mcp/cyrus-asset-ingest-server.ts"
+      ],
+      "env": {
+        "CYRUS_ML_ASSETS": "true",
+        "CYRUS_OPENAI_INDEPENDENT": "true",
+        "CYRUS_ML_KNOWLEDGE_SYNC": "true"
+      }
+    },
+    "cyrus-data-collection": {
+      "command": "node_modules/.bin/tsx",
+      "args": [
+        "server/mcp/cyrus-data-collection-server.ts"
+      ],
+      "env": {
+        "CYRUS_INGEST_SCRAPED_ASSETS": "true"
+      }
+    },
+    "cyrus-intelligence": {
+      "command": "node_modules/.bin/tsx",
+      "args": [
+        "server/mcp/cyrus-intelligence-server.ts"
+      ],
+      "env": {
+        "CYRUS_INTELLIGENCE_AUTO": "0",
+        "CYRUS_OPENAI_INDEPENDENT": "true",
+        "CYRUS_ML_ASSETS": "true"
+      }
+    }
+  }
+}
