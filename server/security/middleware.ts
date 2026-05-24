@@ -18,6 +18,8 @@ const PUBLIC_API_PATHS = new Set([
   "/api/mcp/catalog",
   "/api/mcp/status",
   "/api/mcp/health",
+  /** Live broadcast news feed — public RSS proxy, no secrets exposed */
+  "/api/news/rss",
 ]);
 
 function getFullApiPath(req: Parameters<RequestHandler>[0]): string {

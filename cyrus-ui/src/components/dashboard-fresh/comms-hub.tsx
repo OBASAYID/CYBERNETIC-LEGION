@@ -529,102 +529,139 @@ const GAMING_CSS = `
    APPLE TV-STYLE NEWS FEED — cinematic auto-advancing channel cards
 ══════════════════════════════════════════════════════════════════════ */
 
-const CYRUS_CHANNELS = [
+/* ── News item type ────────────────────────────────────────────────── */
+interface LiveNewsItem {
+  id: string;
+  title: string;
+  summary?: string;
+  source?: string;
+  category?: string;
+  url?: string;
+  publishedAt?: string;
+}
+
+/* ── Category → colour theme ──────────────────────────────────────── */
+function newsCategoryTheme(cat?: string): { c1: string; c2: string; accent: string } {
+  const map: Record<string, { c1: string; c2: string; accent: string }> = {
+    world:      { c1: "#1d4ed8", c2: "#0c1a40", accent: "#60a5fa" },
+    technology: { c1: "#7c3aed", c2: "#1e1b4b", accent: "#a78bfa" },
+    finance:    { c1: "#059669", c2: "#022c22", accent: "#34d399" },
+    science:    { c1: "#0891b2", c2: "#0c4a6e", accent: "#22d3ee" },
+    health:     { c1: "#e11d48", c2: "#4c0519", accent: "#fb7185" },
+    politics:   { c1: "#b45309", c2: "#2d1800", accent: "#f59e0b" },
+    crypto:     { c1: "#f97316", c2: "#431407", accent: "#fb923c" },
+  };
+  return map[(cat ?? "").toLowerCase()] ?? { c1: "#374151", c2: "#111827", accent: "#9ca3af" };
+}
+
+/* ── Seed articles shown while RSS loads ─────────────────────────── */
+const SEED_BROADCAST: LiveNewsItem[] = [
   {
-    id: "intelligence",
-    title: "QUANTUM INTELLIGENCE",
-    category: "RESEARCH  ·  OMEGA-TIER",
-    desc: "Advanced neural fusion processing — access the full knowledge synthesis engine powered by GPT-4o.",
-    href: "/intelligence",
-    c1: "#7c3aed", c2: "#1e1b4b",
-    accent: "#a78bfa",
-    badge: "NEW RELEASE",
-    Icon: Brain,
-    tag: "AI · LIVE",
+    id: "s1",
+    title: "Global Leaders Meet in Geneva for Emergency Climate Summit",
+    summary: "World leaders convene amid record-breaking temperatures across three continents, with new emissions targets expected.",
+    source: "BBC News", category: "World",
+    publishedAt: new Date(Date.now() - 1800000).toISOString(), url: "#",
   },
   {
-    id: "comms",
-    title: "SQUAWK COMM SUITE",
-    category: "COMMUNICATIONS  ·  SECURE",
-    desc: "Mission-grade HD voice, video, and encrypted messaging — enterprise comms stack online.",
-    href: "/comms",
-    c1: "#e11d48", c2: "#4c0519",
-    accent: "#fb7185",
-    badge: "NOW STREAMING",
-    Icon: Radio,
-    tag: "LIVE · SECURE",
+    id: "s2",
+    title: "AI Chip War: US and China Race to Dominate Next-Generation Processors",
+    summary: "Semiconductor rivalry intensifies as both nations pour billions into domestic chip manufacturing and advanced AI silicon.",
+    source: "BBC News", category: "Technology",
+    publishedAt: new Date(Date.now() - 3600000).toISOString(), url: "#",
   },
   {
-    id: "scan",
-    title: "VISION CORE",
-    category: "PERCEPTION  ·  MULTIMODAL",
-    desc: "Real-time object detection, OCR, and 8K image analysis — TensorFlow neural eye system.",
-    href: "/scan",
-    c1: "#059669", c2: "#022c22",
-    accent: "#34d399",
-    badge: "HOT",
-    Icon: Camera,
-    tag: "8K · READY",
+    id: "s3",
+    title: "Federal Reserve Signals Rate Hold Amid Mixed Economic Signals",
+    summary: "Officials cite resilient employment data but remain cautious about persistent inflation in services and energy sectors.",
+    source: "BBC News", category: "Finance",
+    publishedAt: new Date(Date.now() - 5400000).toISOString(), url: "#",
   },
   {
-    id: "trading",
-    title: "TRADING MATRIX",
-    category: "FINANCE  ·  QUANTUM",
-    desc: "Expert Forex, Crypto, and technical analysis — real-time market intelligence via Alpaca.",
-    href: "/trading",
-    c1: "#f97316", c2: "#431407",
-    accent: "#fb923c",
-    badge: "MARKET OPEN",
-    Icon: TrendingUp,
-    tag: "BETA · ACTIVE",
+    id: "s4",
+    title: "Mars Sample Return Mission Gets Revised Launch Window",
+    summary: "NASA and ESA confirm an updated timeline for the historic mission designed to bring Martian soil to Earth.",
+    source: "BBC News", category: "Science",
+    publishedAt: new Date(Date.now() - 7200000).toISOString(), url: "#",
   },
   {
-    id: "security",
-    title: "SECURITY CORE",
-    category: "DEFENSE  ·  ENCRYPTED",
-    desc: "AES-256-GCM encryption, biometric auth, and real-time threat monitoring across all channels.",
-    href: "/security",
-    c1: "#0891b2", c2: "#0c4a6e",
-    accent: "#22d3ee",
-    badge: "CLASSIFIED",
-    Icon: Shield,
-    tag: "ACTIVE · SHIELD",
+    id: "s5",
+    title: "Tensions Rise as Disputed Maritime Zones Draw Naval Deployments",
+    summary: "Multiple nations scramble vessels to contested waters as diplomatic efforts stall in back-channel negotiations.",
+    source: "BBC News", category: "World",
+    publishedAt: new Date(Date.now() - 9000000).toISOString(), url: "#",
   },
 ];
 
+/* ── timeAgo helper ───────────────────────────────────────────────── */
+function broadcastTimeAgo(iso?: string) {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function AppleTVNewsFeed() {
+  const [items, setItems]       = useState<LiveNewsItem[]>(SEED_BROADCAST);
   const [active, setActive]     = useState(0);
   const [fading, setFading]     = useState(false);
   const [progress, setProgress] = useState(0);
   const intervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef             = useRef<ReturnType<typeof setInterval> | null>(null);
-  const DURATION                = 6000;
+  const DURATION                = 6500;
 
+  /* ── Fetch real news from BBC RSS via server proxy ── */
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/news/rss")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (alive && d?.items?.length >= 3) {
+          setItems(d.items);
+          setActive(0);
+        }
+      })
+      .catch(() => {/* stay on seed */});
+    return () => { alive = false; };
+  }, []);
+
+  /* ── Auto-advance ── */
   const advance = (next: number) => {
     setFading(true);
     setTimeout(() => { setActive(next); setFading(false); setProgress(0); }, 350);
   };
 
   useEffect(() => {
-    intervalRef.current  = setInterval(() => advance((active + 1) % CYRUS_CHANNELS.length), DURATION);
+    intervalRef.current  = setInterval(() => advance((active + 1) % items.length), DURATION);
     progressRef.current  = setInterval(() => setProgress((p) => Math.min(p + (100 / (DURATION / 80)), 100)), 80);
     return () => {
       clearInterval(intervalRef.current!);
       clearInterval(progressRef.current!);
     };
-  }, [active]);
+  }, [active, items.length]);
 
-  const ch = CYRUS_CHANNELS[active];
+  const item = items[active] ?? items[0];
+  const theme = newsCategoryTheme(item.category);
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
           <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>LIVE BROADCAST</p>
+          <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[7px] font-mono font-bold text-red-400 tracking-widest"
+            style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.3)" }}>
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+            NEWS FEED
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {CYRUS_CHANNELS.map((_, i) => (
+          {items.map((_, i) => (
             <button key={i} type="button" onClick={() => advance(i)}
               className="transition-all duration-300"
               style={{
@@ -640,9 +677,9 @@ function AppleTVNewsFeed() {
       <div
         className="relative overflow-hidden rounded-2xl"
         style={{
-          background: `linear-gradient(135deg, ${ch.c1}33 0%, ${ch.c2}cc 100%)`,
-          border: `1px solid ${ch.c1}55`,
-          boxShadow: `0 8px 40px ${ch.c1}35`,
+          background: `linear-gradient(135deg, ${theme.c1}33 0%, ${theme.c2}cc 100%)`,
+          border: `1px solid ${theme.c1}55`,
+          boxShadow: `0 8px 40px ${theme.c1}35`,
           minHeight: 132,
           opacity: fading ? 0 : 1,
           transition: "opacity 0.35s ease",
@@ -650,83 +687,102 @@ function AppleTVNewsFeed() {
       >
         {/* Background gradient wash */}
         <div className="absolute inset-0"
-          style={{ background: `radial-gradient(ellipse at 80% 40%, ${ch.c1}28 0%, transparent 65%)` }} />
+          style={{ background: `radial-gradient(ellipse at 80% 40%, ${theme.c1}28 0%, transparent 65%)` }} />
         {/* Subtle scan line */}
-        <div className="absolute inset-0 opacity-[0.035]"
+        <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 4px)" }} />
 
         <div className="relative z-10 flex gap-4 p-4">
-          {/* Icon column */}
+          {/* Category badge column */}
           <div className="shrink-0 flex flex-col items-center gap-2 pt-1">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
               style={{
-                background: `${ch.c1}30`,
-                border: `1px solid ${ch.c1}55`,
-                boxShadow: `0 0 24px ${ch.c1}40`,
+                background: `${theme.c1}30`,
+                border: `1px solid ${theme.c1}55`,
+                boxShadow: `0 0 24px ${theme.c1}40`,
               }}>
-              <ch.Icon className="h-7 w-7" style={{ color: ch.accent }} strokeWidth={1.3} />
+              <Radio className="h-7 w-7" style={{ color: theme.accent }} strokeWidth={1.3} />
             </div>
-            <span className="text-[7px] font-black tracking-widest px-1.5 py-0.5 rounded"
-              style={{ background: `${ch.c1}40`, color: ch.accent, border: `1px solid ${ch.c1}50` }}>
-              {ch.tag}
+            <span className="text-[7px] font-black tracking-widest px-1.5 py-0.5 rounded text-center"
+              style={{ background: `${theme.c1}40`, color: theme.accent, border: `1px solid ${theme.c1}50` }}>
+              {(item.category ?? "NEWS").toUpperCase()}
             </span>
           </div>
 
           {/* Content column */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[8px] font-black tracking-[0.3em] px-2 py-0.5 rounded-md"
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="text-[8px] font-black tracking-[0.25em] px-2 py-0.5 rounded-md"
                 style={{ background: "#e11d4833", color: "#fb7185", border: "1px solid #e11d4855" }}>
-                {ch.badge}
+                BREAKING
               </span>
-              <span className="text-[8px] text-white/30 font-mono tracking-wider">{ch.category}</span>
+              {item.source && (
+                <span className="text-[8px] text-white/35 font-mono tracking-wider">{item.source}</span>
+              )}
+              {item.publishedAt && (
+                <span className="text-[7px] text-white/20 font-mono">{broadcastTimeAgo(item.publishedAt)}</span>
+              )}
             </div>
-            <h3 className="text-base font-black text-white leading-tight mb-1.5"
-              style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${ch.c1}80` }}>
-              {ch.title}
+            <h3 className="text-sm font-black text-white leading-tight mb-1.5 line-clamp-2"
+              style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${theme.c1}80` }}>
+              {item.title}
             </h3>
-            <p className="text-[10px] text-white/50 leading-relaxed mb-3 line-clamp-2">{ch.desc}</p>
+            {item.summary && (
+              <p className="text-[10px] text-white/50 leading-relaxed mb-3 line-clamp-2">{item.summary}</p>
+            )}
             <div className="flex items-center gap-2">
-              <Link href={ch.href}>
+              <a
+                href={item.url && item.url !== "#" ? item.url : undefined}
+                target={item.url && item.url !== "#" ? "_blank" : undefined}
+                rel="noopener noreferrer"
+              >
                 <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 cursor-pointer transition-all hover:scale-105"
-                  style={{ background: `${ch.c1}`, boxShadow: `0 4px 16px ${ch.c1}50` }}>
+                  style={{ background: theme.c1, boxShadow: `0 4px 16px ${theme.c1}50` }}>
                   <Play className="h-3 w-3 text-white" strokeWidth={2.5} fill="white" />
-                  <span className="text-[9px] font-black text-white tracking-wide">ACCESS NOW</span>
+                  <span className="text-[9px] font-black text-white tracking-wide">READ NOW</span>
                 </div>
-              </Link>
-              <Link href="/intelligence">
-                <div className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 cursor-pointer transition-all hover:bg-white/10"
-                  style={{ border: "1px solid rgba(255,255,255,0.14)" }}>
-                  <span className="text-[9px] font-medium text-white/45">More</span>
-                  <ChevronRight className="h-2.5 w-2.5 text-white/30" />
-                </div>
-              </Link>
+              </a>
+              <button
+                type="button"
+                onClick={() => advance((active + 1) % items.length)}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 cursor-pointer transition-all hover:bg-white/10"
+                style={{ border: "1px solid rgba(255,255,255,0.14)" }}
+              >
+                <span className="text-[9px] font-medium text-white/45">Next</span>
+                <ChevronRight className="h-2.5 w-2.5 text-white/30" />
+              </button>
             </div>
           </div>
         </div>
 
         {/* Progress bar */}
         <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: "rgba(255,255,255,0.08)" }}>
-          <div className="h-full transition-none" style={{ width: `${progress}%`, background: ch.accent }} />
+          <div className="h-full transition-none" style={{ width: `${progress}%`, background: theme.accent }} />
         </div>
       </div>
 
-      {/* Thumbnail strip */}
-      <div className="flex gap-2 mt-2">
-        {CYRUS_CHANNELS.map((c, i) => (
-          <button key={c.id} type="button" onClick={() => advance(i)}
-            className="flex-1 flex flex-col items-center gap-1 rounded-xl py-2 px-1 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
-            style={{
-              background: i === active ? `${c.c1}25` : "rgba(255,255,255,0.04)",
-              border: i === active ? `1px solid ${c.c1}55` : "1px solid rgba(255,255,255,0.07)",
-            }}>
-            <c.Icon className="h-3.5 w-3.5" style={{ color: i === active ? c.accent : "rgba(255,255,255,0.3)" }} strokeWidth={1.5} />
-            <span className="text-[7px] font-bold text-center leading-tight"
-              style={{ color: i === active ? c.accent : "rgba(255,255,255,0.3)" }}>
-              {c.id.toUpperCase()}
-            </span>
-          </button>
-        ))}
+      {/* Thumbnail strip — news index dots + category labels */}
+      <div className="flex gap-1.5 mt-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+        {items.map((it, i) => {
+          const t = newsCategoryTheme(it.category);
+          return (
+            <button key={it.id} type="button" onClick={() => advance(i)}
+              className="shrink-0 flex flex-col items-center gap-1 rounded-xl py-1.5 px-2 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
+              style={{
+                background: i === active ? `${t.c1}25` : "rgba(255,255,255,0.03)",
+                border: i === active ? `1px solid ${t.c1}55` : "1px solid rgba(255,255,255,0.06)",
+                minWidth: 44,
+              }}>
+              <span className="text-[8px] font-black" style={{ color: i === active ? t.accent : "rgba(255,255,255,0.25)" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span className="text-[6px] font-mono uppercase tracking-wide text-center leading-tight"
+                style={{ color: i === active ? t.accent : "rgba(255,255,255,0.2)" }}>
+                {(it.category ?? "news").slice(0, 4)}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

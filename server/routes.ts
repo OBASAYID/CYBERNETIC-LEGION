@@ -1436,6 +1436,56 @@ export async function registerRoutes(
     res.json({ reminders: listReminders() });
   });
 
+  // Free RSS news feed — no API key required (BBC News)
+  app.get("/api/news/rss", async (_req, res) => {
+    try {
+      const feeds = [
+        { url: "https://feeds.bbci.co.uk/news/world/rss.xml",      category: "World" },
+        { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", category: "Technology" },
+        { url: "https://feeds.bbci.co.uk/news/business/rss.xml",   category: "Finance" },
+        { url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", category: "Science" },
+      ];
+
+      // Handles both <![CDATA[...]]> and plain text content
+      const extract = (block: string, tag: string): string => {
+        const cdata = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i"));
+        if (cdata) return cdata[1].trim();
+        const plain = block.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`, "i"));
+        return plain ? plain[1].trim() : "";
+      };
+
+      const items: any[] = [];
+      for (const feed of feeds) {
+        try {
+          const r = await fetch(feed.url, { signal: AbortSignal.timeout(6000) });
+          if (!r.ok) continue;
+          const xml = await r.text();
+          // Split on <item> tags — BBC wraps each story in <item>\n...
+          const rawItems = xml.split(/<item>/i).slice(1, 5);
+          for (const block of rawItems) {
+            const title   = extract(block, "title");
+            const link    = extract(block, "link");
+            const desc    = extract(block, "description").replace(/<[^>]+>/g, "").trim();
+            const pubDate = extract(block, "pubDate");
+            if (!title || title.length < 5) continue;
+            items.push({
+              id:          `${feed.category}-${items.length}`,
+              title,
+              summary:     desc.slice(0, 200),
+              source:      "BBC News",
+              category:    feed.category,
+              url:         link,
+              publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+            });
+          }
+        } catch { /* skip failing feed */ }
+      }
+      res.json({ items: items.slice(0, 8) });
+    } catch (err: any) {
+      res.status(500).json({ error: "RSS fetch failed", detail: err?.message });
+    }
+  });
+
   // News fetch (server-side proxy)
   app.get("/api/news", async (req, res) => {
     const topics = (req.query.topics as string) || "general";
