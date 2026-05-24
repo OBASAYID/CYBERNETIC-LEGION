@@ -56,35 +56,31 @@ function QuickActionStrip() {
       className="flex items-center gap-2 px-4 shrink-0"
       style={{
         height: 46,
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
-        background: "rgba(8,8,18,0.6)",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(35,35,42,0.9)",
       }}
     >
       <span
-        className="text-[7px] font-black tracking-[0.4em] text-white/20 uppercase shrink-0 mr-1"
-        style={{ fontFamily: "'Orbitron', system-ui" }}
+        className="text-[7px] font-bold tracking-[0.35em] text-white/30 uppercase shrink-0 mr-1"
       >
         QUICK
       </span>
       {QUICK_ACTIONS.map(({ label, icon: Icon, href, color }) => (
         <Link key={label} href={href}>
           <div
-            className="group flex items-center gap-1.5 rounded-xl px-3 h-[30px] cursor-pointer transition-all duration-150 hover:scale-[1.04] hover:brightness-110 shrink-0"
+            className="group flex items-center gap-1.5 rounded-xl px-3 h-[30px] cursor-pointer transition-all duration-150 hover:scale-[1.04] shrink-0"
             style={{
-              background: `${color}10`,
-              border: `1px solid ${color}22`,
+              background: `rgba(255,255,255,0.06)`,
+              border: `1px solid rgba(255,255,255,0.1)`,
             }}
           >
             <Icon
-              className="h-3 w-3 shrink-0 transition-colors"
+              className="h-3 w-3 shrink-0"
               style={{ color }}
               strokeWidth={1.8}
             />
-            <span
-              className="text-[8px] font-bold tracking-wide text-white/55 group-hover:text-white/80 transition-colors whitespace-nowrap"
-              style={{ fontFamily: "'Orbitron', system-ui" }}
-            >
-              {label.toUpperCase()}
+            <span className="text-[8px] font-semibold text-white/60 group-hover:text-white/90 transition-colors whitespace-nowrap">
+              {label}
             </span>
           </div>
         </Link>
@@ -106,33 +102,30 @@ function AllModulesBox({
     <div
       className="mx-3 mb-2 rounded-xl overflow-hidden shrink-0"
       style={{
-        background: "rgba(12,12,26,0.95)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(38,38,46,0.92)",
+        border: "1px solid rgba(255,255,255,0.08)",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center gap-2.5 px-3 py-2"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
         <div
           className="flex h-5 w-5 items-center justify-center rounded-lg"
-          style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.28)" }}
+          style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}
         >
-          <Grid3x3 className="h-3 w-3 text-rose-400" strokeWidth={1.8} />
+          <Grid3x3 className="h-3 w-3 text-white/60" strokeWidth={1.8} />
         </div>
-        <p
-          className="text-[9px] font-black text-white/60 tracking-[0.3em] uppercase"
-          style={{ fontFamily: "'Orbitron', system-ui" }}
-        >
+        <p className="text-[9px] font-semibold text-white/50 tracking-widest uppercase">
           MODULES
         </p>
         <span
           className="text-[7px] font-mono px-1.5 py-0.5 rounded"
           style={{
-            background: "rgba(225,29,72,0.1)",
-            color: "#e11d48",
-            border: "1px solid rgba(225,29,72,0.2)",
+            background: "rgba(255,255,255,0.08)",
+            color: "rgba(255,255,255,0.5)",
+            border: "1px solid rgba(255,255,255,0.12)",
           }}
         >
           {modules.length}
@@ -150,17 +143,17 @@ function AllModulesBox({
             <Link key={m.href} href={m.href}>
               <div
                 className="group flex flex-col items-center gap-1 rounded-lg py-2 px-1 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
-                style={{ background: `${accent}0d`, border: `1px solid ${accent}16` }}
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
               >
                 {IconComp && (
                   <div
                     className="flex h-6 w-6 items-center justify-center rounded-md transition-all group-hover:scale-110"
-                    style={{ background: `${accent}18`, border: `1px solid ${accent}25` }}
+                    style={{ background: `${accent}25`, border: `1px solid ${accent}35` }}
                   >
                     <IconComp className="h-3 w-3" style={{ color: accent }} strokeWidth={1.7} />
                   </div>
                 )}
-                <p className="text-[7px] font-mono text-white/40 group-hover:text-white/65 transition-colors text-center leading-tight truncate w-full px-0.5">
+                <p className="text-[7px] font-semibold text-white/45 group-hover:text-white/75 transition-colors text-center leading-tight truncate w-full px-0.5">
                   {m.label ?? m.href.replace("/", "")}
                 </p>
               </div>
@@ -184,9 +177,9 @@ function NetworkFeedPanel() {
       style={{
         flex: collapsed ? "0 0 36px" : "1 1 0",
         minHeight: 0,
-        background: "rgba(8,8,20,0.98)",
-        border: "1px solid rgba(225,29,72,0.16)",
-        boxShadow: "0 -2px 24px rgba(0,0,0,0.5)",
+        background: "rgba(38,38,46,0.92)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 -2px 16px rgba(0,0,0,0.3)",
         transition: "flex 0.25s ease",
       }}
     >
@@ -194,25 +187,22 @@ function NetworkFeedPanel() {
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
-        className="flex items-center gap-3 px-4 shrink-0 w-full transition-colors hover:bg-white/[0.02]"
+        className="flex items-center gap-3 px-4 shrink-0 w-full transition-colors hover:bg-white/[0.03]"
         style={{
           height: 36,
-          borderBottom: collapsed ? "none" : "1px solid rgba(255,255,255,0.04)",
+          borderBottom: collapsed ? "none" : "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <div className="h-[2px] w-4 rounded-full shrink-0" style={{ background: "#e11d48" }} />
-        <p
-          className="text-[8px] font-black text-white/55 tracking-[0.45em] uppercase"
-          style={{ fontFamily: "'Orbitron', system-ui" }}
-        >
+        <div className="h-[2px] w-4 rounded-full shrink-0" style={{ background: "rgba(255,255,255,0.3)" }} />
+        <p className="text-[8px] font-semibold text-white/50 tracking-widest uppercase">
           NETWORK FEED
         </p>
         <div
           className="flex items-center gap-1 rounded-full px-2 py-0.5 ml-1"
-          style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.18)" }}
+          style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.2)" }}
         >
-          <span className="h-[3px] w-[3px] rounded-full bg-orange-400 animate-pulse" />
-          <span className="text-[6px] font-mono text-orange-400/80">LIVE</span>
+          <span className="h-[3px] w-[3px] rounded-full bg-green-400 animate-pulse" />
+          <span className="text-[6px] font-mono text-green-400/80">LIVE</span>
         </div>
         <div className="ml-auto">
           {collapsed
@@ -265,17 +255,17 @@ export default function DashboardFresh() {
 
   return (
     /* Root: fills the whole viewport, NO page scroll */
-    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh" }}>
+    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#1c1c21" }}>
 
       {/* ══ HEADER — 52px fixed row ════════════════════════════════════ */}
       <header
         className="shrink-0 z-30"
         style={{
           height: 52,
-          background: "rgba(8,8,16,0.96)",
-          borderBottom: "1px solid rgba(225,29,72,0.1)",
+          background: "rgba(28,28,34,0.97)",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 4px 32px rgba(0,0,0,0.7)",
+          boxShadow: "0 2px 20px rgba(0,0,0,0.4)",
         }}
       >
         <div className="flex items-center justify-between gap-3 px-5 h-full">
@@ -349,9 +339,9 @@ export default function DashboardFresh() {
         <aside
           className="hidden lg:flex flex-col shrink-0 overflow-y-auto"
           style={{
-            width: 210,
-            borderRight: "1px solid rgba(255,255,255,0.05)",
-            background: "rgba(8,8,18,0.7)",
+            width: 215,
+            borderRight: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(30,30,36,0.97)",
             scrollbarWidth: "none",
           }}
         >
@@ -384,21 +374,17 @@ export default function DashboardFresh() {
             <div className="mx-auto w-full max-w-[1400px] px-5 py-6 space-y-5 lg:px-8">
               <section
                 className="relative overflow-hidden rounded-2xl p-5"
-                style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
+                style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}
               >
-                <div
-                  className="pointer-events-none absolute top-0 left-0 right-0 h-px"
-                  style={{ background: "linear-gradient(90deg,transparent,rgba(6,182,212,0.5),transparent)" }}
-                />
                 <div className="flex items-start gap-4">
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)" }}
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.13)" }}
                   >
-                    <TerminalSquare className="h-5 w-5 text-cyan-400" />
+                    <TerminalSquare className="h-5 w-5 text-white/60" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono tracking-[0.4em] text-cyan-400/50 uppercase mb-1">Command & Diagnostics</p>
+                    <p className="text-[9px] font-semibold tracking-widest text-white/35 uppercase mb-1">Command & Diagnostics</p>
                     <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
                     <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
                   </div>
@@ -427,9 +413,9 @@ export default function DashboardFresh() {
         <aside
           className="hidden xl:flex flex-col shrink-0 overflow-y-auto"
           style={{
-            width: 248,
-            borderLeft: "1px solid rgba(255,255,255,0.05)",
-            background: "rgba(8,8,18,0.7)",
+            width: 260,
+            borderLeft: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(30,30,36,0.97)",
             scrollbarWidth: "none",
           }}
         >

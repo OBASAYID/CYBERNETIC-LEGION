@@ -92,7 +92,7 @@ function StatusDot({ status, isOnline }: { status: string; isOnline?: boolean })
       style={{
         width: 10, height: 10,
         background: color,
-        borderColor: "#08080e",
+        borderColor: "#1e1e24",
         boxShadow: (live || busy) ? `0 0 6px ${color}` : "none",
       }}
     />
@@ -127,115 +127,112 @@ export function SocialLeftPanel({ displayName }: { displayName?: string }) {
   const opName = displayName ?? "OPERATOR";
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "rgba(10,10,20,0.9)" }}>
+    <div className="flex flex-col h-full">
 
-      {/* ── Profile ── */}
-      <div className="px-4 pt-5 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      {/* ── Profile — matches reference "Amy Winnar" header ── */}
+      <div className="px-4 pt-5 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
         <div className="flex items-center gap-3">
           <div className="relative">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-2xl font-black text-sm text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full font-black text-sm text-white"
               style={{
-                background: "linear-gradient(135deg, rgba(225,29,72,0.4), rgba(124,58,237,0.3))",
-                border: "1px solid rgba(225,29,72,0.4)",
-                boxShadow: "0 0 20px rgba(225,29,72,0.2)",
+                background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
               }}
             >
               {initials(opName)}
             </div>
             <span
               className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2"
-              style={{ background: "#22c55e", borderColor: "#08080e", boxShadow: "0 0 8px rgba(34,197,94,0.8)" }}
+              style={{ background: "#22c55e", borderColor: "#1e1e24" }}
             />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-black text-white truncate" style={{ fontFamily: "'Orbitron', system-ui", letterSpacing: "0.04em" }}>
-              {opName}
-            </p>
-            <p className="text-[9px] font-mono text-[#22c55e]/70 tracking-widest">● ACTIVE</p>
+            <p className="text-sm font-bold text-white truncate">{opName}</p>
+            <p className="text-[10px] text-white/40">Active now</p>
           </div>
           <Link href="/comms">
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-xl cursor-pointer transition-all hover:scale-110"
-              style={{ background: "rgba(6,182,212,0.15)", border: "1px solid rgba(6,182,212,0.3)" }}
+              className="flex h-7 w-7 items-center justify-center rounded-xl cursor-pointer transition-all hover:bg-white/15"
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
               title="Open Comms"
             >
-              <MessageSquare className="h-3.5 w-3.5 text-cyan-400" strokeWidth={1.8} />
+              <MessageSquare className="h-3.5 w-3.5 text-white/60" strokeWidth={1.8} />
             </div>
           </Link>
         </div>
       </div>
 
       {/* ── Sessions (like "Books" in reference) ── */}
-      <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[9px] font-mono tracking-[0.3em] text-white/30 uppercase">Sessions</p>
+      <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-xs font-semibold text-white/55">Sessions</p>
           <Link href="/">
-            <Plus className="h-3.5 w-3.5 text-white/25 hover:text-white/60 cursor-pointer transition-colors" />
+            <div className="flex h-5 w-5 items-center justify-center rounded-md cursor-pointer hover:bg-white/10 transition-colors">
+              <Plus className="h-3 w-3 text-white/40" />
+            </div>
           </Link>
         </div>
         {sessions.length === 0 ? (
-          <p className="text-[10px] text-white/20 italic">No sessions yet</p>
+          <p className="text-[10px] text-white/25 italic">No sessions yet</p>
         ) : (
           <div className="space-y-1">
-            {sessions.map((s) => (
-              <Link key={s.id} href="/">
-                <div
-                  className="group flex items-center gap-2.5 rounded-xl px-2.5 py-2 cursor-pointer transition-all hover:brightness-125"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.04)" }}
-                >
-                  {/* Thumbnail icon */}
+            {sessions.map((s, i) => {
+              const thumbColors = ["#7c3aed", "#f97316", "#059669", "#2563eb", "#e11d48", "#0891b2", "#d97706"];
+              const tc = thumbColors[i % thumbColors.length];
+              return (
+                <Link key={s.id} href="/">
                   <div
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: s.hasImage ? "rgba(6,182,212,0.15)" : "rgba(124,58,237,0.12)", border: "1px solid rgba(255,255,255,0.06)" }}
+                    className="group flex items-center gap-2.5 rounded-xl px-2 py-2 cursor-pointer transition-all hover:bg-white/[0.06]"
                   >
-                    {s.hasImage
-                      ? <Camera className="h-3 w-3 text-cyan-400/70" strokeWidth={1.6} />
-                      : <MessageSquare className="h-3 w-3 text-violet-400/70" strokeWidth={1.6} />
-                    }
+                    {/* Colored thumbnail square — like book covers in reference */}
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                      style={{ background: `linear-gradient(135deg, ${tc}, ${tc}aa)` }}
+                    >
+                      {s.hasImage
+                        ? <Camera className="h-3.5 w-3.5 text-white" strokeWidth={1.6} />
+                        : <MessageSquare className="h-3.5 w-3.5 text-white" strokeWidth={1.6} />
+                      }
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium text-white/70 truncate leading-snug">{s.preview || "…"}</p>
+                      {s.ts && <p className="text-[9px] text-white/30">{timeAgo(s.ts)}</p>}
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] text-white/55 truncate leading-snug">{s.preview || "…"}</p>
-                    {s.ts && <p className="text-[8px] font-mono text-white/20">{timeAgo(s.ts)}</p>}
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* ── Contacts / Friends ── */}
+      {/* ── Contacts / Friends — matches reference "Friends" section ── */}
       <div className="px-4 py-3 flex-1 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[9px] font-mono tracking-[0.3em] text-white/30 uppercase">Friends</p>
-          <span
-            className="text-[8px] font-mono px-1.5 py-0.5 rounded-md"
-            style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.2)" }}
-          >
-            {activeCount} online
-          </span>
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-xs font-semibold text-white/55">Friends</p>
+          <span className="text-[9px] text-[#22c55e]/70">{activeCount} online</span>
         </div>
 
         {onlineUsers.length === 0 ? (
-          <p className="text-[10px] text-white/20 italic">Invite others to connect</p>
+          <p className="text-[10px] text-white/25 italic">Invite others to connect</p>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {onlineUsers.slice(0, 8).map((u) => {
               const live = u.isOnline || u.status === "online";
               return (
-                <div key={u.id} className="flex items-center gap-2.5">
+                <div key={u.id} className="flex items-center gap-2.5 group cursor-pointer rounded-xl px-1 py-1 hover:bg-white/[0.05] transition-colors">
                   <div className="relative">
-                    <Avatar name={u.displayName} src={u.profileImageUrl} size={30} />
+                    <Avatar name={u.displayName} src={u.profileImageUrl} size={32} />
                     <StatusDot status={u.status} isOnline={u.isOnline} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-semibold text-white/70 truncate">{u.displayName}</p>
-                    <p className="text-[8px] font-mono text-white/25 capitalize">{u.status ?? "offline"}</p>
+                    <p className="text-[12px] font-medium text-white/75 truncate">{u.displayName}</p>
+                    <p className="text-[9px] text-white/30 capitalize">{u.status ?? "offline"}</p>
                   </div>
                   {live && (
                     <Link href="/comms">
-                      <Phone className="h-3 w-3 text-[#22c55e]/50 hover:text-[#22c55e] transition-colors cursor-pointer" />
+                      <Phone className="h-3 w-3 text-white/25 group-hover:text-[#22c55e] transition-colors cursor-pointer" />
                     </Link>
                   )}
                 </div>
@@ -246,23 +243,19 @@ export function SocialLeftPanel({ displayName }: { displayName?: string }) {
 
         {onlineUsers.length > 0 && (
           <Link href="/comms">
-            <div
-              className="mt-3 flex items-center justify-center gap-1.5 rounded-xl py-2 cursor-pointer transition-all hover:brightness-125"
-              style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.14)" }}
-            >
-              <Users className="h-3 w-3 text-cyan-400/60" />
-              <p className="text-[10px] font-mono text-cyan-400/55">See all</p>
-            </div>
+            <p className="mt-3 text-[10px] font-medium text-white/35 hover:text-white/60 transition-colors cursor-pointer">
+              See more
+            </p>
           </Link>
         )}
       </div>
 
-      {/* ── Settings link ── */}
-      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+      {/* ── Settings link — matches reference bottom settings gear ── */}
+      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
         <Link href="/settings">
           <div className="flex items-center gap-2 cursor-pointer group">
-            <Settings className="h-3.5 w-3.5 text-white/20 group-hover:text-white/50 transition-colors" />
-            <p className="text-[10px] text-white/25 group-hover:text-white/50 transition-colors">Settings</p>
+            <Settings className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors" />
+            <p className="text-[11px] text-white/35 group-hover:text-white/60 transition-colors">Settings</p>
           </div>
         </Link>
       </div>
@@ -287,9 +280,10 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
     <div
       className="relative overflow-hidden rounded-3xl flex"
       style={{
-        background: "rgba(12,12,24,0.95)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        boxShadow: "0 8px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03)",
+        background: "rgba(42,42,52,0.88)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
+        backdropFilter: "blur(20px)",
         minHeight: 220,
       }}
     >
@@ -298,46 +292,40 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
         className="relative shrink-0 flex flex-col items-center justify-center"
         style={{
           width: 140,
-          background: "linear-gradient(160deg, #0d1a3a 0%, #0a0f20 50%, #12082a 100%)",
-          borderRight: "1px solid rgba(255,255,255,0.05)",
+          background: "linear-gradient(160deg, #2a2a38 0%, #1e1e2c 50%, #252530 100%)",
+          borderRight: "1px solid rgba(255,255,255,0.08)",
         }}
       >
-        {/* Ambient glows */}
+        {/* Ambient purple glow */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full opacity-25"
-            style={{ background: "radial-gradient(circle, #e11d48, transparent 70%)", filter: "blur(20px)" }} />
-          <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full opacity-20"
-            style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(18px)" }} />
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full opacity-30"
+            style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(22px)" }} />
         </div>
         {/* CYRUS logo mark */}
         <div className="relative z-10 flex flex-col items-center gap-2">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
             style={{
-              background: "linear-gradient(135deg, rgba(225,29,72,0.3), rgba(124,58,237,0.25))",
-              border: "1px solid rgba(225,29,72,0.35)",
-              boxShadow: "0 0 30px rgba(225,29,72,0.2)",
+              background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+              boxShadow: "0 8px 24px rgba(124,58,237,0.5)",
             }}
           >
-            <Brain className="h-7 w-7 text-rose-400" strokeWidth={1.5} />
+            <Brain className="h-7 w-7 text-white" strokeWidth={1.5} />
           </div>
-          <p
-            className="text-[11px] font-black text-white/80 tracking-[0.2em]"
-            style={{ fontFamily: "'Orbitron', system-ui" }}
-          >
+          <p className="text-[11px] font-black text-white/90 tracking-[0.2em]" style={{ fontFamily: "'Orbitron', system-ui" }}>
             CYRUS
           </p>
-          <p className="text-[8px] font-mono text-white/30 tracking-widest">v3.0</p>
+          <p className="text-[8px] text-white/35 tracking-widest">v3.0</p>
         </div>
 
         {/* Session timer at bottom */}
         <div className="absolute bottom-3 left-0 right-0 flex justify-center">
           <div
             className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-            style={{ background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.2)" }}
+            style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
           >
-            <Clock className="h-2.5 w-2.5 text-cyan-400/70" strokeWidth={1.8} />
-            <p className="text-[9px] font-mono text-cyan-400/70">{mm}:{ss}</p>
+            <Clock className="h-2.5 w-2.5 text-white/50" strokeWidth={1.8} />
+            <p className="text-[9px] font-mono text-white/50">{mm}:{ss}</p>
           </div>
         </div>
       </div>
@@ -345,33 +333,31 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
       {/* Right: info panel — like book title/author */}
       <div className="flex-1 flex flex-col justify-between p-5">
         <div>
-          <p className="text-[9px] font-mono tracking-[0.4em] text-white/30 uppercase mb-1.5">PRIMARY INTERFACE</p>
-          <h2 className="text-2xl font-black leading-tight text-white mb-0.5"
-            style={{ fontFamily: "'Orbitron', system-ui" }}>
+          <p className="text-[9px] font-medium tracking-widest text-white/35 uppercase mb-1.5">PRIMARY INTERFACE</p>
+          <h2 className="text-2xl font-bold leading-tight text-white mb-0.5">
             Communication
           </h2>
-          <h2 className="text-2xl font-black leading-tight mb-3"
-            style={{ fontFamily: "'Orbitron', system-ui", color: "#06b6d4" }}>
+          <h2 className="text-2xl font-bold leading-tight mb-3 text-white/60">
             & Research
           </h2>
-          <p className="text-[10px] text-white/35 mb-1">
+          <p className="text-[10px] text-white/30 mb-1">
             Powered by CYRUS QAI — OMEGA-TIER Intelligence
           </p>
 
-          {/* Active capabilities chips — FUSION INDICATORS */}
+          {/* Active capabilities chips */}
           <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
             {[
               { label: "Vision Fused",   color: "#06b6d4", icon: Eye },
-              { label: "Docs Live",      color: "#15803d", icon: FileText },
+              { label: "Docs Live",      color: "#22c55e", icon: FileText },
               { label: "Research Ready", color: "#7c3aed", icon: Brain },
             ].map(({ label, color, icon: Icon }) => (
               <div
                 key={label}
-                className="flex items-center gap-1 rounded-full px-2 py-0.5"
-                style={{ background: `${color}15`, border: `1px solid ${color}35` }}
+                className="flex items-center gap-1 rounded-full px-2.5 py-1"
+                style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
               >
                 <Icon className="h-2.5 w-2.5" style={{ color }} strokeWidth={2} />
-                <p className="text-[8px] font-mono" style={{ color }}>{label}</p>
+                <p className="text-[8px] font-medium text-white/65">{label}</p>
               </div>
             ))}
           </div>
@@ -388,7 +374,7 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
                   </div>
                 ))}
               </div>
-              <p className="text-[9px] font-mono text-white/35">
+              <p className="text-[9px] text-white/35">
                 {online.length} operator{online.length > 1 ? "s" : ""} in session
               </p>
             </div>
@@ -398,25 +384,20 @@ function HeroCommsCard({ onlineUsers }: { onlineUsers: OnlineUser[] }) {
           <div className="flex items-center gap-2">
             <Link href="/comms" className="flex-1">
               <div
-                className="flex items-center justify-center gap-1.5 rounded-xl py-2 cursor-pointer transition-all hover:brightness-110 hover:scale-[1.02]"
-                style={{
-                  background: "linear-gradient(90deg, rgba(6,182,212,0.25), rgba(124,58,237,0.2))",
-                  border: "1px solid rgba(6,182,212,0.3)",
-                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl py-2 cursor-pointer transition-all hover:bg-white/15 hover:scale-[1.02]"
+                style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.16)" }}
               >
-                <Zap className="h-3 w-3 text-cyan-400" />
-                <p className="text-[10px] font-bold text-white/85" style={{ fontFamily: "'Orbitron', system-ui" }}>
-                  OPEN COMMS
-                </p>
+                <Zap className="h-3 w-3 text-white/70" />
+                <p className="text-[10px] font-semibold text-white/80">OPEN COMMS</p>
               </div>
             </Link>
             <Link href="/intelligence">
               <div
-                className="flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 cursor-pointer transition-all hover:brightness-110"
-                style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.28)" }}
+                className="flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 cursor-pointer transition-all hover:bg-white/12"
+                style={{ background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.35)" }}
               >
-                <Brain className="h-3 w-3 text-violet-400" />
-                <p className="text-[10px] font-bold text-violet-300/80" style={{ fontFamily: "'Orbitron', system-ui" }}>RESEARCH</p>
+                <Brain className="h-3 w-3 text-violet-300" />
+                <p className="text-[10px] font-semibold text-violet-200/80">RESEARCH</p>
               </div>
             </Link>
           </div>
@@ -555,10 +536,10 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
 
       {/* ── Section header ── */}
       <div className="flex items-center gap-3 mb-1">
-        <div className="h-[2px] w-5 rounded-full" style={{ background: "#06b6d4" }} />
-        <p className="text-[9px] font-mono tracking-[0.5em] uppercase text-cyan-400/50">COLLABORATION HUB</p>
-        <div className="flex items-center gap-1.5 rounded-full px-2 py-0.5" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
-          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />
+        <div className="h-[2px] w-5 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }} />
+        <p className="text-[9px] font-semibold tracking-widest uppercase text-white/40">COLLABORATION HUB</p>
+        <div className="flex items-center gap-1.5 rounded-full px-2 py-0.5" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.22)" }}>
+          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" />
           <p className="text-[8px] font-mono text-[#22c55e]/80">LIVE</p>
         </div>
       </div>
@@ -684,27 +665,25 @@ export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
   const onlineCount = onlineUsers.filter((u) => u.isOnline || u.status === "online").length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "rgba(10,10,20,0.9)" }}>
+    <div className="flex flex-col h-full">
 
       {/* ── Header (matches reference "Activity" header) ── */}
       <div
         className="px-4 py-4 flex items-center justify-between"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
-        <div>
-          <p className="text-xs font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Activity</p>
-        </div>
+        <p className="text-sm font-bold text-white">Activity</p>
         <div
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-          style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}
+          style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.22)" }}
         >
-          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" style={{ boxShadow: "0 0 5px rgba(34,197,94,0.8)" }} />
-          <span className="text-[8px] font-mono text-[#22c55e]/80">live</span>
+          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" />
+          <span className="text-[8px] font-medium text-[#22c55e]/80">live</span>
         </div>
       </div>
 
       {/* ── System status ── */}
-      <div className="px-4 py-2.5 space-y-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <div className="px-4 py-2.5 space-y-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         {[
           { label: "AI Service",  val: aiOk ? "Online" : "Standby", color: aiOk ? "#22c55e" : "#f59e0b" },
           { label: "Contacts",    val: `${onlineCount} online`,        color: "#06b6d4" },
@@ -713,10 +692,10 @@ export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
         ].map(({ label, val, color }) => (
           <div key={label} className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <div className="h-[4px] w-[4px] rounded-full" style={{ background: color, boxShadow: `0 0 5px ${color}80` }} />
-              <p className="text-[9px] text-white/35">{label}</p>
+              <div className="h-[4px] w-[4px] rounded-full" style={{ background: color }} />
+              <p className="text-[9px] text-white/40">{label}</p>
             </div>
-            <p className="text-[9px] font-mono" style={{ color }}>{val}</p>
+            <p className="text-[9px] font-medium" style={{ color }}>{val}</p>
           </div>
         ))}
       </div>
@@ -821,8 +800,8 @@ export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
       </div>
 
       {/* ── Fusion shortcuts at bottom ── */}
-      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-        <p className="text-[8px] font-mono tracking-[0.3em] text-white/20 uppercase mb-2">FUSE INTO CHAT</p>
+      <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <p className="text-[8px] font-semibold tracking-widest text-white/25 uppercase mb-2">FUSE INTO CHAT</p>
         <div className="grid grid-cols-2 gap-1.5">
           {[
             { href: "/scan",             icon: Scan,     label: "Vision",    color: "#06b6d4" },
@@ -832,11 +811,11 @@ export function ActivityFeedPanel({ stackSummary }: { stackSummary?: any }) {
           ].map(({ href, icon: Icon, label, color }) => (
             <Link key={href + label} href={href}>
               <div
-                className="group flex items-center gap-2 rounded-xl px-2.5 py-2 cursor-pointer transition-all hover:brightness-125"
-                style={{ background: `${color}0c`, border: `1px solid ${color}1a` }}
+                className="group flex items-center gap-2 rounded-xl px-2.5 py-2 cursor-pointer transition-all hover:bg-white/[0.07]"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
               >
                 <Icon className="h-3 w-3 shrink-0" style={{ color }} strokeWidth={1.8} />
-                <p className="text-[9px] font-mono text-white/40 group-hover:text-white/70 transition-colors">{label}</p>
+                <p className="text-[9px] font-medium text-white/45 group-hover:text-white/75 transition-colors">{label}</p>
               </div>
             </Link>
           ))}

@@ -814,9 +814,9 @@ export function ModuleWorkspaceSection({
 
 export function HeroSection() {
   return (
-    <div className="relative col-span-2 overflow-hidden rounded-2xl p-6" style={{ background: "linear-gradient(135deg, rgba(225,29,72,0.12) 0%, rgba(13,13,30,0.97) 50%, rgba(6,182,212,0.08) 100%)", border: "1px solid rgba(225,29,72,0.2)" }}>
-      <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full opacity-20" style={{ background: "radial-gradient(circle, #e11d48, transparent 70%)", filter: "blur(40px)" }} />
-      <p className="text-[10px] font-mono tracking-[0.4em] text-[#e11d48]/70 uppercase mb-2">Command Surface</p>
+    <div className="relative col-span-2 overflow-hidden rounded-2xl p-6" style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.1)" }}>
+      <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full opacity-15" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(40px)" }} />
+      <p className="text-[10px] font-semibold tracking-widest text-white/40 uppercase mb-2">Command Surface</p>
       <h2 className="text-xl font-black tracking-wide text-white mb-2" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>Unified Control for Modules, Engines & Stack Health</h2>
       <p className="text-sm text-white/50 mb-4 max-w-xl">Mission console — launch orchestration, monitor engine state, and verify fused stack readiness.</p>
       <div className="flex flex-wrap gap-2">
@@ -834,9 +834,9 @@ export function HealthRail({ healthPercent, onlineEngines, totalEngines, degrade
   const health = healthPercent;
   const color = health >= 80 ? "#22c55e" : health >= 50 ? "#f59e0b" : "#e11d48";
   return (
-    <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(13,13,30,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}>
+    <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}>
       <div className="flex items-center gap-2 mb-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${color}22`, border: `1px solid ${color}38` }}>
           <Gauge className="h-4 w-4" style={{ color }} />
         </div>
         <div>
@@ -876,14 +876,14 @@ export function MetricsSection({ stackSummary, onlineEngines, totalEngines, degr
 
 export function EngineMatrixSection({ modules, navLabelByRoute }: { modules: DashboardModuleStatus[]; navLabelByRoute: Map<string, string> }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(13,13,30,0.9)", border: "1px solid rgba(225,29,72,0.12)" }}>
+    <section className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}>
       <div className="flex items-center gap-3 mb-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.25)" }}>
-          <Cpu className="h-4 w-4 text-[#e11d48]" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.13)" }}>
+          <Cpu className="h-4 w-4 text-white/60" />
         </div>
         <div>
-          <p className="text-[9px] font-mono tracking-[0.3em] text-[#e11d48]/50 uppercase">Command</p>
-          <h2 className="text-sm font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Engine Orchestrator Matrix</h2>
+          <p className="text-[9px] font-semibold tracking-widest text-white/35 uppercase">Command</p>
+          <h2 className="text-sm font-bold text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Engine Orchestrator Matrix</h2>
         </div>
       </div>
       <div className="space-y-2">
@@ -916,10 +916,10 @@ export function EngineMatrixSection({ modules, navLabelByRoute }: { modules: Das
 export function BottomPanels({ hints }: { hints: string[] }) {
   return (
     <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(13,13,30,0.9)", border: "1px solid rgba(6,182,212,0.15)" }}>
-        <div className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-20" style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)", filter: "blur(20px)" }} />
+      <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}>
+        <div className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-12" style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)", filter: "blur(20px)" }} />
         <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck className="h-4 w-4 text-cyan-400" />
+          <ShieldCheck className="h-4 w-4 text-white/50" />
           <h3 className="text-sm font-bold text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Operational Notes</h3>
         </div>
         <ul className="space-y-2">
@@ -931,10 +931,10 @@ export function BottomPanels({ hints }: { hints: string[] }) {
           ))}
         </ul>
       </div>
-      <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(13,13,30,0.9)", border: "1px solid rgba(225,29,72,0.15)" }}>
-        <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full opacity-20" style={{ background: "radial-gradient(circle, #e11d48, transparent 70%)", filter: "blur(20px)" }} />
+      <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}>
+        <div className="pointer-events-none absolute -left-4 -bottom-4 h-20 w-20 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(20px)" }} />
         <div className="flex items-center gap-2 mb-3">
-          <TerminalSquare className="h-4 w-4 text-[#e11d48]" />
+          <TerminalSquare className="h-4 w-4 text-white/50" />
           <h3 className="text-sm font-bold text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Operator Workflow</h3>
         </div>
         <ul className="space-y-2 text-xs text-white/50">
@@ -953,12 +953,12 @@ export function BottomPanels({ hints }: { hints: string[] }) {
 export function HeaderTitle({ variant = "default" }: { variant?: "default" | "operator" }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <div className="relative hidden h-10 w-10 shrink-0 sm:flex items-center justify-center rounded-xl" style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.3)", boxShadow: "0 0 20px rgba(225,29,72,0.2)" }}>
+      <div className="relative hidden h-10 w-10 shrink-0 sm:flex items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)", boxShadow: "0 4px 16px rgba(124,58,237,0.4)" }}>
         <img src="/images/cyrus-logo.png" alt="" className="h-8 w-8 object-cover rounded-lg" style={{ clipPath: "circle(44% at center)" }} />
       </div>
       <div className="min-w-0">
-        <p className="text-[9px] font-mono tracking-[0.35em] text-[#e11d48]/70 uppercase">CYRUS v3.0</p>
-        <h1 className="text-base font-black tracking-wide text-white sm:text-lg" style={{ fontFamily: "'Orbitron', system-ui" }}>
+        <p className="text-[9px] font-semibold tracking-widest text-white/35 uppercase">CYRUS v3.0</p>
+        <h1 className="text-base font-bold tracking-wide text-white sm:text-lg" style={{ fontFamily: "'Orbitron', system-ui" }}>
           {variant === "operator" ? "Module Workspace" : "Mission Console"}
         </h1>
       </div>
@@ -968,7 +968,7 @@ export function HeaderTitle({ variant = "default" }: { variant?: "default" | "op
 
 export function HeaderBadge({ livePort }: { livePort?: number }) {
   return (
-    <span className="inline-flex whitespace-nowrap rounded-lg px-3 py-1.5 text-[11px] font-mono" style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)", color: "#67e8f9" }}>
+    <span className="inline-flex whitespace-nowrap rounded-lg px-3 py-1.5 text-[11px] font-mono" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.13)", color: "rgba(255,255,255,0.55)" }}>
       PORT {livePort ?? "—"}
     </span>
   );
