@@ -24,6 +24,11 @@ import {
   ArrowUpRight,
   Scan,
   Globe,
+  Shield,
+  Radio,
+  TrendingUp,
+  Crosshair,
+  Cpu,
 } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { useConversations } from "@/hooks/use-conversations";
@@ -513,8 +518,25 @@ function FusionCapabilityStrip() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   COMMS BENTO GRID — main center layout
+   COMMS BENTO GRID — gaming platform aesthetic (Game Prime reference)
 ══════════════════════════════════════════════════════════════════════ */
+
+const GAMING_CSS = `
+@keyframes gm-scan { 0%{transform:translateY(-100%);opacity:0} 15%{opacity:.6} 85%{opacity:.6} 100%{transform:translateY(800%);opacity:0} }
+@keyframes gm-glow { 0%,100%{opacity:.5} 50%{opacity:1} }
+`;
+
+const FEATURED_MODULES = [
+  { label: "Intelligence Hub", Icon: Brain,        href: "/intelligence", c1: "#7c3aed", c2: "#3b0764", tag: "AI" },
+  { label: "Comms Suite",      Icon: MessageSquare, href: "/comms",        c1: "#e11d48", c2: "#7f1d1d", tag: "LIVE" },
+  { label: "Vision Core",      Icon: Camera,        href: "/scan",         c1: "#059669", c2: "#064e3b", tag: "8K" },
+  { label: "Trading Matrix",   Icon: TrendingUp,    href: "/trading",      c1: "#f97316", c2: "#7c2d12", tag: "BETA" },
+  { label: "Global Nav",       Icon: Globe,         href: "/nav",          c1: "#2563eb", c2: "#1e3a8a", tag: "GPS" },
+  { label: "Security Core",    Icon: Shield,        href: "/security",     c1: "#6d28d9", c2: "#2e1065", tag: "ACTIVE" },
+  { label: "Drone Control",    Icon: Crosshair,     href: "/drone",        c1: "#0891b2", c2: "#0c4a6e", tag: "UAV" },
+  { label: "System Ops",       Icon: Cpu,           href: "/ops",          c1: "#dc2626", c2: "#7f1d1d", tag: "CORE" },
+];
+
 export function CommsBentoGrid({ displayName }: { displayName?: string }) {
   const { data: conversations = [] } = useConversations(undefined, 100);
   const { data: onlineUsers = [] } = useQuery<OnlineUser[]>({
@@ -526,64 +548,220 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
     refetchInterval: 15000,
   });
 
-  const userMsgs  = conversations.filter((c: any) => c.role === "user").length;
-  const cyrusMsgs = conversations.filter((c: any) => c.role === "cyrus").length;
+  const userMsgs    = conversations.filter((c: any) => c.role === "user").length;
+  const cyrusMsgs   = conversations.filter((c: any) => c.role === "cyrus").length;
   const visionScans = conversations.filter((c: any) => c.hasImage).length;
-  const total     = conversations.length;
+  const total       = conversations.length;
 
   return (
-    <div className="px-5 pt-5 pb-2 space-y-3">
+    <div className="px-5 pt-5 pb-4 space-y-6">
+      <style>{GAMING_CSS}</style>
 
-      {/* ── Section header ── */}
-      <div className="flex items-center gap-3 mb-1">
-        <div className="h-[2px] w-5 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }} />
-        <p className="text-[9px] font-semibold tracking-widest uppercase text-white/40">COLLABORATION HUB</p>
-        <div className="flex items-center gap-1.5 rounded-full px-2 py-0.5" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.22)" }}>
-          <span className="h-[5px] w-[5px] rounded-full bg-[#22c55e] animate-pulse" />
-          <p className="text-[8px] font-mono text-[#22c55e]/80">LIVE</p>
+      {/* ═══════════════════════════════════════════════════════
+          HERO SPOTLIGHT BANNER  (Game Prime "Great New Games")
+      ═══════════════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden rounded-2xl flex"
+        style={{
+          background: "linear-gradient(135deg, #060608 0%, #1c0406 35%, #0c0c14 100%)",
+          border: "1px solid rgba(225,29,72,0.28)",
+          minHeight: 230,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",
+        }}>
+
+        {/* Crimson radial glow */}
+        <div className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(ellipse at 22% 50%, rgba(225,29,72,0.25) 0%, transparent 55%)" }} />
+        {/* Top crimson line */}
+        <div className="absolute top-0 left-0 right-0 h-[1px]"
+          style={{ background: "linear-gradient(90deg, transparent 0%, rgba(225,29,72,0.8) 30%, rgba(225,29,72,0.4) 60%, transparent 100%)" }} />
+        {/* Animated scan line */}
+        <div className="pointer-events-none absolute left-0 right-0 h-[1px] z-10"
+          style={{ background: "linear-gradient(90deg, transparent, rgba(225,29,72,0.45), transparent)", animation: "gm-scan 6s ease-in-out infinite" }} />
+        {/* Dot-grid texture */}
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{ backgroundImage: "radial-gradient(rgba(255,255,255,0.8) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+
+        {/* ── LEFT: text ── */}
+        <div className="relative z-10 flex flex-col justify-center p-7 flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 mb-4">
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1"
+              style={{ background: "rgba(225,29,72,0.22)", border: "1px solid rgba(225,29,72,0.45)" }}>
+              <span className="h-[5px] w-[5px] rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[8px] font-black tracking-[0.35em] text-red-400 uppercase">SYSTEM SPOTLIGHT</span>
+            </span>
+            <span className="text-[8px] text-white/25 font-mono">Build 3.0 · OMEGA-TIER</span>
+          </div>
+          <h2 className="text-[2.2rem] font-black text-white leading-[1.05] mb-3"
+            style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 60px rgba(225,29,72,0.4)" }}>
+            GREAT NEW<br/>
+            <span style={{ color: "#e11d48", textShadow: "0 0 30px rgba(225,29,72,0.9)" }}>AI SYSTEM</span><br/>
+            SPOTLIGHT
+          </h2>
+          <p className="text-[11px] text-white/40 mb-5 max-w-xs leading-relaxed">
+            Explore the full power of CYRUS OMEGA-TIER — quantum intelligence, vision fusion, and autonomous research.
+          </p>
+          <div className="flex items-center gap-3">
+            <Link href="/intelligence">
+              <div className="flex items-center gap-2 rounded-xl px-5 py-2.5 cursor-pointer transition-all hover:scale-105 hover:brightness-110"
+                style={{
+                  background: "linear-gradient(135deg, #e11d48, #9f1239)",
+                  boxShadow: "0 8px 28px rgba(225,29,72,0.55), 0 0 0 1px rgba(225,29,72,0.3)",
+                }}>
+                <Zap className="h-4 w-4 text-white" strokeWidth={2.2} />
+                <span className="text-sm font-bold text-white tracking-wide">Explore Now</span>
+              </div>
+            </Link>
+            <Link href="/">
+              <div className="flex items-center gap-2 rounded-xl px-4 py-2.5 cursor-pointer transition-all hover:bg-white/10"
+                style={{ border: "1px solid rgba(255,255,255,0.14)" }}>
+                <span className="text-[11px] font-semibold text-white/55">Launch Chat</span>
+                <ArrowUpRight className="h-3.5 w-3.5 text-white/40" />
+              </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* ── RIGHT: 3 game-cover module tiles ── */}
+        <div className="relative z-10 flex items-center gap-3 pr-7 shrink-0">
+          {[
+            { label: "CYRUS PRIME",  Icon: Brain,    href: "/",            c1: "#7c3aed", c2: "#2e1065" },
+            { label: "INTELLIGENCE", Icon: BookOpen, href: "/intelligence", c1: "#2563eb", c2: "#1e3a8a" },
+            { label: "VISION CORE",  Icon: Camera,   href: "/scan",         c1: "#059669", c2: "#064e3b" },
+          ].map(({ label, Icon, href, c1, c2 }) => (
+            <Link key={label} href={href}>
+              <div className="relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300 hover:scale-[1.07] hover:-translate-y-2"
+                style={{
+                  width: 100, height: 148,
+                  background: `linear-gradient(165deg, ${c1} 0%, ${c2} 100%)`,
+                  boxShadow: `0 16px 40px ${c1}60, 0 0 0 1px ${c1}30`,
+                }}>
+                {/* Grid overlay */}
+                <div className="absolute inset-0 opacity-[0.07]" style={{
+                  backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent 9px,rgba(255,255,255,0.3) 9px,rgba(255,255,255,0.3) 10px),
+                                    repeating-linear-gradient(90deg,transparent,transparent 9px,rgba(255,255,255,0.3) 9px,rgba(255,255,255,0.3) 10px)`,
+                }} />
+                {/* Glow dot top-left */}
+                <span className="absolute top-2.5 left-2.5 h-1.5 w-1.5 rounded-full block animate-pulse" style={{ background: "rgba(255,255,255,0.5)" }} />
+                {/* Center icon */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Icon className="h-11 w-11 text-white/65" strokeWidth={0.9} />
+                </div>
+                {/* Bottom label */}
+                <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2.5"
+                  style={{ background: "linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%)" }}>
+                  <p className="text-[8px] font-black text-white/90 tracking-[0.12em]">{label}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
 
-      {/* ── Hero card ── */}
-      <HeroCommsCard onlineUsers={onlineUsers} />
+      {/* ═══════════════════════════════════════════════════════
+          FEATURED MODULES  (Game Prime "Featured Games" row)
+      ═══════════════════════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
+            <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>FEATURED MODULES</p>
+          </div>
+          <Link href="/intelligence">
+            <div className="flex items-center gap-1 cursor-pointer group">
+              <p className="text-[10px] font-semibold text-white/35 group-hover:text-white/65 transition-colors">Explore</p>
+              <ArrowUpRight className="h-3 w-3 text-white/25 group-hover:text-white/55 transition-colors" />
+            </div>
+          </Link>
+        </div>
 
-      {/* ── 4-card bento stat row — bold solid-color backgrounds (reference style) ── */}
-      <div className="grid grid-cols-4 gap-3">
-        <BentoCard
-          icon={MessageSquare} label="MESSAGES" value={total}
-          sub={`${userMsgs} sent · ${cyrusMsgs} replies`}
-          href="/"
-          gradient="linear-gradient(145deg, #7c3aed 0%, #5b21b6 100%)"
-          accent="#a78bfa" textColor="#ffffff"
-        />
-        <BentoCard
-          icon={Clock} label="SESSION" value="Active"
-          sub="real-time intelligence"
-          href="/comms"
-          gradient="linear-gradient(145deg, #f97316 0%, #c2410c 100%)"
-          accent="#fb923c" textColor="#ffffff"
-        />
-        <BentoCard
-          icon={Brain} label="RESEARCH" value={cyrusMsgs}
-          sub="AI responses generated"
-          href="/intelligence"
-          gradient="linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%)"
-          accent="#60a5fa" textColor="#ffffff"
-        />
-        <BentoCard
-          icon={Camera} label="VISION" value={visionScans}
-          sub="scans & image analyses"
-          href="/scan"
-          gradient="linear-gradient(145deg, #059669 0%, #047857 100%)"
-          accent="#34d399" textColor="#ffffff"
-        />
+        <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {FEATURED_MODULES.map(({ label, Icon, href, c1, c2, tag }) => (
+            <Link key={href + label} href={href}>
+              <div className="relative overflow-hidden rounded-2xl shrink-0 cursor-pointer transition-all duration-300 hover:scale-[1.06] hover:-translate-y-2"
+                style={{
+                  width: 138, height: 178,
+                  background: `linear-gradient(165deg, ${c1} 0%, ${c2} 100%)`,
+                  boxShadow: `0 12px 36px ${c1}45, 0 0 0 1px ${c1}25`,
+                }}>
+                {/* Grid texture */}
+                <div className="absolute inset-0 opacity-[0.065]" style={{
+                  backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent 9px,rgba(255,255,255,0.25) 9px,rgba(255,255,255,0.25) 10px),
+                                    repeating-linear-gradient(90deg,transparent,transparent 9px,rgba(255,255,255,0.25) 9px,rgba(255,255,255,0.25) 10px)`,
+                }} />
+                {/* Radial glow center */}
+                <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 45%, ${c1}40 0%, transparent 65%)` }} />
+                {/* Top tag badge */}
+                <div className="absolute top-2.5 right-2.5 z-10">
+                  <span className="px-1.5 py-0.5 rounded-md text-[7px] font-black tracking-widest"
+                    style={{ background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    {tag}
+                  </span>
+                </div>
+                {/* Center icon in frosted circle */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                    style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.22)", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
+                    <Icon className="h-7 w-7 text-white" strokeWidth={1.2} />
+                  </div>
+                </div>
+                {/* Bottom label gradient */}
+                <div className="absolute bottom-0 left-0 right-0 px-3 py-3"
+                  style={{ background: "linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%)" }}>
+                  <p className="text-[10px] font-black text-white leading-tight tracking-wide">{label}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
 
-      {/* ── Fusion capability strip — "USE DURING CHAT/CALLS" ── */}
+      {/* ═══════════════════════════════════════════════════════
+          MISSION STATS  (Game Prime stat cards row)
+      ═══════════════════════════════════════════════════════ */}
       <div>
-        <div className="flex items-center gap-3 mb-2.5">
-          <Layers className="h-3.5 w-3.5 text-white/25" strokeWidth={1.6} />
-          <p className="text-[9px] font-mono tracking-[0.35em] text-white/25 uppercase">Fused Capabilities — use during chat &amp; calls</p>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
+          <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>MISSION STATS</p>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          <BentoCard
+            icon={MessageSquare} label="MESSAGES" value={total}
+            sub={`${userMsgs} sent · ${cyrusMsgs} replies`}
+            href="/"
+            gradient="linear-gradient(145deg, #7c3aed 0%, #3b0764 100%)"
+            accent="#a78bfa" textColor="#ffffff"
+          />
+          <BentoCard
+            icon={Clock} label="SESSION" value="Active"
+            sub="real-time intelligence"
+            href="/comms"
+            gradient="linear-gradient(145deg, #e11d48 0%, #7f1d1d 100%)"
+            accent="#fb923c" textColor="#ffffff"
+          />
+          <BentoCard
+            icon={Brain} label="AI RESPONSES" value={cyrusMsgs}
+            sub="generated this session"
+            href="/intelligence"
+            gradient="linear-gradient(145deg, #2563eb 0%, #1e3a8a 100%)"
+            accent="#60a5fa" textColor="#ffffff"
+          />
+          <BentoCard
+            icon={Camera} label="VISION" value={visionScans}
+            sub="scans & image analyses"
+            href="/scan"
+            gradient="linear-gradient(145deg, #059669 0%, #064e3b 100%)"
+            accent="#34d399" textColor="#ffffff"
+          />
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          QUICK ACTIONS  (Game Prime "Explore Now" strips)
+      ═══════════════════════════════════════════════════════ */}
+      <div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
+          <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>QUICK ACTIONS</p>
         </div>
         <FusionCapabilityStrip />
       </div>

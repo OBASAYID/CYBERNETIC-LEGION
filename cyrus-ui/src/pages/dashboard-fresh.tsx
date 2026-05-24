@@ -255,17 +255,17 @@ export default function DashboardFresh() {
 
   return (
     /* Root: fills the whole viewport, NO page scroll */
-    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#1c1c21" }}>
+    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#0c0c14" }}>
 
       {/* ══ HEADER — 52px fixed row ════════════════════════════════════ */}
       <header
         className="shrink-0 z-30"
         style={{
           height: 52,
-          background: "rgba(28,28,34,0.97)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          background: "rgba(8,8,14,0.99)",
+          borderBottom: "1px solid rgba(225,29,72,0.2)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 2px 20px rgba(0,0,0,0.4)",
+          boxShadow: "0 2px 32px rgba(0,0,0,0.8)",
         }}
       >
         <div className="flex items-center justify-between gap-3 px-5 h-full">
@@ -340,8 +340,8 @@ export default function DashboardFresh() {
           className="hidden lg:flex flex-col shrink-0 overflow-y-auto"
           style={{
             width: 215,
-            borderRight: "1px solid rgba(255,255,255,0.07)",
-            background: "rgba(30,30,36,0.97)",
+            borderRight: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(14,14,20,0.99)",
             scrollbarWidth: "none",
           }}
         >
@@ -414,8 +414,8 @@ export default function DashboardFresh() {
           className="hidden xl:flex flex-col shrink-0 overflow-y-auto"
           style={{
             width: 260,
-            borderLeft: "1px solid rgba(255,255,255,0.07)",
-            background: "rgba(30,30,36,0.97)",
+            borderLeft: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(14,14,20,0.99)",
             scrollbarWidth: "none",
           }}
         >
