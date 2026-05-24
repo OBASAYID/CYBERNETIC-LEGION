@@ -122,7 +122,8 @@ function AudioBars({ active=false, color=C.cyan, bars=8 }: { active?:boolean; co
     <div className="flex items-end gap-[2px]" style={{ height:20 }}>
       {Array.from({length:bars}).map((_,i) => (
         <div key={i} className="w-[3px] rounded-full"
-          style={{ background:color, animation:`${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.6+(i%3)*0.15}s ease-in-out infinite`, animationDelay:`${i*55}ms` }} />
+          style={{ background:color,
+            animation:`${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.6+(i%3)*0.15}s ease-in-out ${i*55}ms infinite` }} />
       ))}
     </div>
   );
@@ -168,13 +169,14 @@ function Waveform({ active=false, color=C.orange, bars=20 }: { active?:boolean; 
   return (
     <div className="flex items-end gap-1" style={{ height:40 }}>
       {WAVE_HEIGHTS.slice(0,bars).map((h,i) => (
-        <div key={i} className="rounded-full transition-all"
+        <div key={i} className="rounded-full"
           style={{
             width:6, minHeight:4,
             background: active ? color : `${color}20`,
             height: active ? h : 4,
-            animation: active ? `${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.5+(i%4)*0.15}s ease-in-out infinite` : "none",
-            animationDelay:`${i*35}ms`,
+            animation: active
+              ? `${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.5+(i%4)*0.15}s ease-in-out ${i*35}ms infinite`
+              : "none",
             transition: "background 0.3s, height 0.3s",
           }} />
       ))}
@@ -503,8 +505,7 @@ function ParticleField({ color, count=12 }: { color:string; count?:number }) {
             opacity:0,
             ["--px" as any]:p.px,
             ["--py" as any]:p.py,
-            animation:`cy-particle ${p.dur} ease-out infinite`,
-            animationDelay:p.delay,
+            animation:`cy-particle ${p.dur} ease-out ${p.delay} infinite`,
           }} />
       ))}
     </div>
@@ -552,8 +553,7 @@ function GroupCallHub({
           <div key={r} className="absolute rounded-full"
             style={{ width:r, height:r,
               border:`1px solid ${C.cyan}${i===0?"40":i===1?"28":i===2?"16":"0a"}`,
-              animation:`cy-pulse ${1+i*0.4}s ease-in-out infinite`,
-              animationDelay:`${i*0.2}s` }} />
+              animation:`cy-pulse ${1+i*0.4}s ease-in-out ${i*0.2}s infinite` }} />
         ))}
         <div className="relative" style={{ animation:"cy-float 3s ease-in-out infinite" }}>
           <Avatar name={caller} size={88} ring speaking />
@@ -684,7 +684,7 @@ function GroupCallHub({
                         animation:"cy-ripple 1.2s ease-out infinite" }} />
                     <div className="absolute rounded-full"
                       style={{ width:62, height:62, border:`1px solid ${c}30`,
-                        animation:"cy-ripple 1.2s ease-out infinite", animationDelay:"0.4s" }} />
+                        animation:"cy-ripple 1.2s ease-out 0.4s infinite" }} />
                   </>
                 )}
                 <Avatar name={p.displayName} size={50} ring={!speaking} speaking={speaking} />
@@ -1145,7 +1145,7 @@ function IncomingCallOverlay({ call, onAccept, onDecline }:
           <div key={r} className="absolute rounded-full"
             style={{ width:r, height:r,
               border:`1px solid ${C.cyan}${i===0?"35":i===1?"20":"10"}`,
-              animation:`cy-pulse ${1.2+i*0.5}s ease-in-out infinite`, animationDelay:`${i*0.3}s` }} />
+              animation:`cy-pulse ${1.2+i*0.5}s ease-in-out ${i*0.3}s infinite` }} />
         ))}
         <p className="text-[8px] font-mono tracking-[0.5em] text-white/30 uppercase z-10">
           INCOMING {call.callType?.toUpperCase()??"VOICE"} CALL
