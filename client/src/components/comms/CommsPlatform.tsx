@@ -12,7 +12,12 @@ interface CommsPlatformProps {
   typingUsers?: Record<string, string[]>;
   initialConversationId?: string | null;
   onSendMessage: (conversationId: string, content: string) => void;
-  onSendMedia?: (conversationId: string, file: File, caption: string) => void;
+  onSendMedia?: (
+    conversationId: string,
+    file: File,
+    caption: string,
+    onProgress?: (progress: import("../../lib/comms-media-upload").CommsUploadProgress) => void,
+  ) => Promise<void> | void;
   onSendVoice?: (conversationId: string, blob: Blob, duration: number) => void;
   onSendLocation?: (conversationId: string) => void;
   onToggleEmoji?: () => void;
@@ -123,10 +128,7 @@ export function CommsPlatform({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div
-        className="relative flex min-h-0 flex-1 overflow-hidden"
-        style={holoSurface ? { perspective: "1500px" } : undefined}
-      >
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
       {cascadeVisible && (
         <div key={newChatCascadeKey} className="comms-chat-cascade" aria-hidden>
           <div className="comms-chat-cascade__band" />
@@ -158,7 +160,7 @@ export function CommsPlatform({
       <div
         className={`relative w-full shrink-0 border-r md:w-80 lg:w-80 ${
           holoSurface
-            ? "border-cyan-400/35 bg-black/35 shadow-[inset_0_0_48px_rgba(0,229,255,0.07),0_0_40px_-16px_rgba(0,229,255,0.2)] backdrop-blur-xl md:rounded-l-2xl md:[transform:rotateY(5deg)] md:[transform-origin:right_center]"
+            ? "border-cyan-400/30 bg-black/40 shadow-[inset_0_0_32px_rgba(0,229,255,0.06)] backdrop-blur-xl"
             : "border-amber-500/25 bg-gradient-to-b from-amber-950/20 via-slate-950/40 to-orange-950/15 shadow-[inset_0_0_40px_rgba(251,146,60,0.06)]"
         } ${
           mobileView === "chat" ? "hidden md:flex md:flex-col" : "flex flex-col"
@@ -177,7 +179,7 @@ export function CommsPlatform({
       <div
         className={`relative min-h-0 min-w-0 flex-1 ${
           holoSurface
-            ? "border-cyan-400/25 bg-black/28 shadow-[inset_0_0_70px_rgba(0,229,255,0.05)] backdrop-blur-xl md:scale-[1.01] md:[transform-origin:center_top]"
+            ? "border-cyan-400/20 bg-black/32 shadow-[inset_0_0_48px_rgba(0,229,255,0.04)] backdrop-blur-xl"
             : "bg-gradient-to-br from-cyan-950/25 via-slate-950/50 to-orange-950/18"
         } ${
           mobileView === "list" ? "hidden md:flex md:flex-col" : "flex flex-col"
@@ -199,7 +201,8 @@ export function CommsPlatform({
           }
           onSendMedia={
             onSendMedia && selectedConversation
-              ? (file, caption) => onSendMedia(selectedConversation.id, file, caption)
+              ? (file, caption, onProgress) =>
+                  onSendMedia(selectedConversation.id, file, caption, onProgress)
               : undefined
           }
           onSendVoice={
@@ -236,6 +239,8 @@ export function CommsPlatform({
           }
           onBack={handleBack}
           composerSuppressed={newChatMode}
+          participantIds={selectedConversation?.participants}
+          getUserDisplayName={getUserDisplayName}
         />
       </div>
 
@@ -243,7 +248,7 @@ export function CommsPlatform({
         <div
           className={`hidden w-[min(100%,18rem)] shrink-0 min-[1100px]:flex min-[1100px]:flex-col min-[1100px]:border-l ${
             holoSurface
-              ? "min-[1100px]:border-cyan-400/35 min-[1100px]:bg-black/35 min-[1100px]:shadow-[inset_0_0_40px_rgba(0,229,255,0.06),0_0_36px_-14px_rgba(0,229,255,0.18)] min-[1100px]:backdrop-blur-xl min-[1100px]:rounded-r-2xl min-[1100px]:[transform:rotateY(-5deg)] min-[1100px]:[transform-origin:left_center]"
+              ? "min-[1100px]:border-cyan-400/30 min-[1100px]:bg-black/40 min-[1100px]:shadow-[inset_0_0_32px_rgba(0,229,255,0.05)] min-[1100px]:backdrop-blur-xl"
               : "min-[1100px]:border-amber-500/25"
           }`}
         >
@@ -317,7 +322,7 @@ export function CommsPlatform({
             onSend={(content) => onNewChatSend(content)}
             onSendMedia={
               firstPick
-                ? (file, caption) => onSendMedia?.(firstPick, file, caption)
+                ? (file, caption, onProgress) => onSendMedia?.(firstPick, file, caption, onProgress)
                 : undefined
             }
             onSendVoice={

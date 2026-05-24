@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, callHistory, meetingRooms, reminders, newsItems, contacts, incomingCalls, groupChats, callSessions, liveStreams, sharedMedia, callMessages } from "../../shared/schema";
 import { commsInteractionEvents } from "../../shared/models/comms";
-import { eq, or, and, desc, asc, ilike, inArray, sql } from "drizzle-orm";
+import { eq, or, and, desc, asc, ilike, inArray, sql, isNotNull } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
@@ -16,14 +16,35 @@ import {
   invalidateLocationShareCache,
 } from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
+import { gwaRouter } from "./gwa-routes.js";
+import { getDeliveryHubStats } from "./delivery-hub.js";
 import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
+import {
+  completeChunkUpload,
+  getChunkUploadSession,
+  getCommsChunkSizeBytes,
+  getCommsChunksDir,
+  getCommsMaxUploadBytes,
+  initChunkUpload,
+  writeUploadChunk,
+} from "./comms-chunk-upload.js";
+import { serveCommsMediaWithRange } from "./comms-media-serve.js";
+import {
+  avatarImageExtensionForSave,
+  isAllowedAvatarImage,
+} from "../../shared/comms/avatar-image-formats.js";
+import { AVATAR_SERVE_MIME } from "../../shared/comms/avatar-image-formats.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 
 const COMMS_UPLOAD_DIR = path.join(process.cwd(), "uploads", "comms");
+const COMMS_RECORDINGS_DIR = path.join(COMMS_UPLOAD_DIR, "recordings");
 if (!fs.existsSync(COMMS_UPLOAD_DIR)) {
   fs.mkdirSync(COMMS_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(COMMS_RECORDINGS_DIR)) {
+  fs.mkdirSync(COMMS_RECORDINGS_DIR, { recursive: true });
 }
 
 const commsUpload = multer({
@@ -34,7 +55,25 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
+const recordingUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, COMMS_RECORDINGS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".webm";
+      cb(null, `recording-${Date.now()}-${uuid()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 512 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      file.mimetype.startsWith("audio/") ||
+      file.mimetype.startsWith("video/") ||
+      file.mimetype === "application/octet-stream";
+    cb(null, ok);
+  },
 });
 
 /** Served with correct Content-Type so PDF/HTML open in-browser; ?download=1 forces attachment. */
@@ -59,25 +98,90 @@ const COMMS_SERVE_MIME: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".svgz": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".avif": "image/avif",
+  ".jfif": "image/jpeg",
+  ".apng": "image/png",
   ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".m4a": "audio/mp4",
+  ".m4b": "audio/mp4",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".wmv": "video/x-msvideo",
+  ".mov": "video/quicktime",
+  ".mpeg": "video/mpeg",
+  ".mpg": "video/mpeg",
+  ".3gp": "video/3gpp",
+  ".epub": "application/epub+zip",
+  ".mobi": "application/x-mobipocket-ebook",
+  ".azw": "application/vnd.amazon.ebook",
+  ".azw3": "application/vnd.amazon.ebook",
+  ".fb2": "application/x-fictionbook+xml",
+  ".opus": "audio/opus",
+  ".flac": "audio/flac",
+  ".wma": "audio/x-ms-wma",
+  ".7z": "application/x-7z-compressed",
+  ".rar": "application/vnd.rar",
+  ".tar": "application/x-tar",
+  ".gz": "application/gzip",
+  ".bz2": "application/x-bzip2",
+  ".rtf": "application/rtf",
   ".webm": "video/webm",
   ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".aac": "audio/aac",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
+  ".step": "application/step",
+  ".stp": "application/step",
+  ".iges": "model/iges",
+  ".igs": "model/iges",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".ply": "application/ply",
+  ".3mf": "application/3mf",
+  ".fbx": "application/octet-stream",
+  ".dae": "model/vnd.collada+xml",
+  ".x_t": "application/octet-stream",
+  ".x_b": "application/octet-stream",
+  ".sldprt": "application/octet-stream",
+  ".sldasm": "application/octet-stream",
+  ".slddrw": "application/octet-stream",
+  ".jt": "application/octet-stream",
+  ".amf": "application/amf+xml",
+  ".off": "application/octet-stream",
+  ".wrl": "model/vrml",
+  ".vrml": "model/vrml",
 };
 
 const avatarUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, COMMS_UPLOAD_DIR),
     filename: (_req, file, cb) => {
-      const uniqueName = `avatar-${Date.now()}-${uuid()}${path.extname(file.originalname)}`;
+      const ext = avatarImageExtensionForSave(file.originalname, file.mimetype);
+      const uniqueName = `avatar-${Date.now()}-${uuid()}${ext}`;
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 16 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    if (isAllowedAvatarImage(file.originalname, file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Only image files are allowed for avatars"));
+      cb(
+        new Error(
+          "Unsupported image type. Use JPG, PNG, WebP, GIF, HEIC, AVIF, SVG, or other common photo formats.",
+        ),
+      );
     }
   },
 });
@@ -100,6 +204,11 @@ const voiceNoteUpload = multer({
   },
 });
 
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: getCommsChunkSizeBytes() + 1024 * 1024 },
+});
+
 const router = Router();
 
 function getUserId(req: any): string | null {
@@ -112,6 +221,10 @@ function getUserId(req: any): string | null {
     null
   );
 }
+
+router.get("/api/comms/delivery/stats", (_req, res) => {
+  res.json(getDeliveryHubStats());
+});
 
 router.get("/api/comms/users", async (req: any, res) => {
   try {
@@ -1121,6 +1234,18 @@ router.get("/api/comms/status", (req, res) => {
   });
 });
 
+/** SFU runtime status (mediasoup vs star relay fallback). */
+router.get("/api/comms/sfu/status", (_req, res) => {
+  try {
+    const { getSfuStatus } = require("./sfu/sfu-manager.js") as {
+      getSfuStatus: () => import("../../shared/comms/sfu-types.js").SfuStatusResponse;
+    };
+    res.json(getSfuStatus());
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "sfu status failed" });
+  }
+});
+
 /** Phase 4: lightweight WebRTC readiness probe for ops / dashboards (no secrets). */
 router.get("/api/comms/webrtc-health", (_req, res) => {
   try {
@@ -1187,13 +1312,108 @@ router.post(
   }
 );
 
+router.get("/api/comms/upload/capabilities", (_req, res) => {
+  res.json({
+    maxUploadBytes: getCommsMaxUploadBytes(),
+    chunkSizeBytes: getCommsChunkSizeBytes(),
+    directUploadMaxBytes: 6 * 1024 * 1024,
+    supportsChunkedUpload: true,
+    supportsRangeStreaming: true,
+  });
+});
+
+router.post("/api/comms/upload/init", async (req: any, res) => {
+  try {
+    const userId = getUserId(req) || "unknown";
+    const { fileName, fileSize, mimeType } = req.body || {};
+    const size = parseInt(String(fileSize), 10);
+    if (!fileName || !Number.isFinite(size) || size <= 0) {
+      return res.status(400).json({ error: "fileName and fileSize are required" });
+    }
+    const session = initChunkUpload(getCommsChunksDir(COMMS_UPLOAD_DIR), {
+      fileName: String(fileName),
+      fileSize: size,
+      mimeType: typeof mimeType === "string" ? mimeType : undefined,
+      userId,
+    });
+    res.json({
+      uploadId: session.uploadId,
+      chunkSize: session.chunkSize,
+      totalChunks: session.totalChunks,
+      fileName: session.fileName,
+      mimeType: session.mimeType,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Failed to init upload" });
+  }
+});
+
+router.post("/api/comms/upload/chunk", chunkUpload.single("chunk"), async (req: any, res) => {
+  try {
+    const uploadId = String(req.body.uploadId || "");
+    const chunkIndex = parseInt(String(req.body.chunkIndex), 10);
+    if (!uploadId || !Number.isFinite(chunkIndex)) {
+      return res.status(400).json({ error: "uploadId and chunkIndex required" });
+    }
+    if (!req.file?.buffer) {
+      return res.status(400).json({ error: "No chunk data" });
+    }
+    const progress = await writeUploadChunk(
+      getCommsChunksDir(COMMS_UPLOAD_DIR),
+      uploadId,
+      chunkIndex,
+      req.file.buffer,
+    );
+    res.json({ success: true, ...progress });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Chunk upload failed" });
+  }
+});
+
+router.get("/api/comms/upload/:uploadId/status", (req, res) => {
+  const session = getChunkUploadSession(String(req.params.uploadId || ""));
+  if (!session) return res.status(404).json({ error: "Upload session not found" });
+  res.json({
+    uploadId: session.uploadId,
+    fileName: session.fileName,
+    fileSize: session.fileSize,
+    chunkSize: session.chunkSize,
+    totalChunks: session.totalChunks,
+    receivedChunks: session.receivedChunks.size,
+  });
+});
+
+router.post("/api/comms/upload/complete", async (req: any, res) => {
+  try {
+    const uploadId = String(req.body.uploadId || "");
+    if (!uploadId) return res.status(400).json({ error: "uploadId required" });
+    const merged = await completeChunkUpload(
+      getCommsChunksDir(COMMS_UPLOAD_DIR),
+      COMMS_UPLOAD_DIR,
+      uploadId,
+    );
+    const safeFilename = path.basename(merged.fileName);
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
+    res.json({
+      success: true,
+      fileUrl,
+      fileName: safeFilename,
+      fileSize: merged.fileSize,
+      mimeType: merged.mimeType,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Failed to complete upload" });
+  }
+});
+
 router.post("/api/comms/upload", commsUpload.single("file"), async (req: any, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     res.json({
       success: true,
       fileId,
@@ -1213,8 +1433,9 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
     if (!req.file) {
       return res.status(400).json({ error: "No audio file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     const duration = req.body.duration || null;
     res.json({
       success: true,
@@ -1249,29 +1470,167 @@ router.get("/api/comms/media/:id", (req, res) => {
       filePath = path.join(COMMS_UPLOAD_DIR, match);
     }
     const ext = path.extname(resolvedName).toLowerCase();
-    const mime = COMMS_SERVE_MIME[ext] || "application/octet-stream";
-    res.setHeader("Content-Type", mime);
-    const forceDownload = String(req.query.download || "") === "1";
-    const baseName = path.basename(resolvedName);
-    if (forceDownload) {
-      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
-    } else if (
-      mime.startsWith("application/pdf") ||
-      mime.startsWith("text/html") ||
-      mime.startsWith("text/plain") ||
-      mime.startsWith("text/csv") ||
-      mime.startsWith("image/") ||
-      mime.startsWith("video/") ||
-      mime.startsWith("audio/")
-    ) {
-      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(baseName)}"`);
-    } else {
-      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(baseName)}"`);
-    }
-    res.sendFile(filePath);
+    const mime = COMMS_SERVE_MIME[ext] || AVATAR_SERVE_MIME[ext] || "application/octet-stream";
+    serveCommsMediaWithRange(req, res, filePath, mime, path.basename(resolvedName));
   } catch (error: any) {
     console.error("Error serving media:", error);
     res.status(500).json({ error: "Failed to serve media" });
+  }
+});
+
+router.get("/api/comms/recordings", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    const limit = Math.min(parseInt(String(req.query.limit || "30"), 10) || 30, 100);
+
+    let rows;
+    if (userId) {
+      rows = await db
+        .select()
+        .from(callSessions)
+        .where(
+          and(
+            isNotNull(callSessions.recordingUrl),
+            sql`${callSessions.participants}::jsonb @> ${JSON.stringify([{ userId }])}::jsonb`,
+          ),
+        )
+        .orderBy(desc(callSessions.startTime))
+        .limit(limit);
+    } else {
+      rows = await db
+        .select()
+        .from(callSessions)
+        .where(isNotNull(callSessions.recordingUrl))
+        .orderBy(desc(callSessions.startTime))
+        .limit(limit);
+    }
+
+    const recordings = rows.map((s) => {
+      const mediaConfig = (s.mediaConfig || {}) as { video?: boolean };
+      const meta = (s.metadata || {}) as { recordedBy?: string; fileSizeBytes?: number };
+      return {
+        id: s.id,
+        callId: s.callId,
+        type: s.type,
+        participants: s.participants,
+        callType: mediaConfig.video ? "video" : "audio",
+        quality: s.quality,
+        startTime: s.startTime?.toISOString() || null,
+        endTime: s.endTime?.toISOString() || null,
+        durationSeconds: s.durationSeconds,
+        recordingUrl: s.recordingUrl,
+        recordedBy: meta.recordedBy || null,
+        fileSizeBytes: meta.fileSizeBytes || null,
+      };
+    });
+
+    res.json({ recordings });
+  } catch (error: any) {
+    console.error("Error listing recordings:", error);
+    res.status(500).json({ error: "Failed to list recordings" });
+  }
+});
+
+router.post(
+  "/api/comms/sessions/:roomId/recording",
+  recordingUpload.single("file"),
+  async (req: any, res) => {
+    try {
+      const roomId = String(req.params.roomId || "").trim();
+      if (!roomId) return res.status(400).json({ error: "roomId required" });
+      if (!req.file) return res.status(400).json({ error: "No recording file uploaded" });
+
+      const userId = getUserId(req) || req.body.recordedBy || "unknown";
+      const displayName = typeof req.body.displayName === "string" ? req.body.displayName : undefined;
+      const callType = req.body.callType === "video" ? "video" : "audio";
+      const durationSeconds = parseInt(String(req.body.durationSeconds || "0"), 10) || null;
+
+      const safeFilename = path.basename(req.file.filename);
+      const recordingUrl = `/api/comms/media/recordings/${encodeURIComponent(safeFilename)}`;
+
+      const [existing] = await db
+        .select()
+        .from(callSessions)
+        .where(eq(callSessions.callId, roomId))
+        .limit(1);
+
+      const metadata = {
+        ...((existing?.metadata as Record<string, unknown>) || {}),
+        recordedBy: userId,
+        recordedByName: displayName,
+        fileSizeBytes: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      if (existing) {
+        await db
+          .update(callSessions)
+          .set({
+            recordingUrl,
+            durationSeconds: durationSeconds ?? existing.durationSeconds,
+            metadata,
+          })
+          .where(eq(callSessions.callId, roomId));
+      } else {
+        await db.insert(callSessions).values({
+          callId: roomId,
+          type: "p2p",
+          participants: [{ userId, displayName, joinedAt: new Date().toISOString() }],
+          mediaConfig: { audio: true, video: callType === "video", screen: false },
+          quality: "HD",
+          startTime: new Date(),
+          durationSeconds,
+          recordingUrl,
+          metadata,
+        });
+      }
+
+      try {
+        await db
+          .update(callHistory)
+          .set({ isRecording: false, recordingUrl })
+          .where(eq(callHistory.roomId, roomId));
+      } catch {
+        /* optional */
+      }
+
+      res.json({
+        success: true,
+        recordingUrl,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        durationSeconds,
+      });
+    } catch (error: any) {
+      console.error("Error uploading session recording:", error);
+      res.status(500).json({ error: "Failed to save recording" });
+    }
+  },
+);
+
+router.get("/api/comms/media/recordings/:id", (req, res) => {
+  try {
+    const raw = decodeURIComponent(String(req.params.id || ""));
+    const safeName = path.basename(raw);
+    if (!safeName) return res.status(404).json({ error: "Recording not found" });
+    const filePath = path.join(COMMS_RECORDINGS_DIR, safeName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+    const ext = path.extname(safeName).toLowerCase();
+    const mime = COMMS_SERVE_MIME[ext] || "video/webm";
+    res.setHeader("Content-Type", mime);
+    const forceDownload = String(req.query.download || "") === "1";
+    if (forceDownload) {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeName)}"`);
+    } else {
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(safeName)}"`);
+    }
+    res.sendFile(filePath);
+  } catch (error: any) {
+    console.error("Error serving recording:", error);
+    res.status(500).json({ error: "Failed to serve recording" });
   }
 });
 
@@ -1813,18 +2172,8 @@ router.post("/api/comms/shared-media/:mediaId/annotate", async (req: any, res) =
 
 router.get("/api/comms/ice-servers", (_req: any, res) => {
   try {
-    const iceServers = [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun2.l.google.com:19302" },
-      { urls: "stun:stun3.l.google.com:19302" },
-      { urls: "stun:stun4.l.google.com:19302" },
-      { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-      { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
-    ];
-
-    res.json({ iceServers });
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({ iceServers: cfg.iceServers, relayConfigured: cfg.relayConfigured });
   } catch (error: any) {
     console.error("Error fetching ICE servers:", error);
     res.status(500).json({ error: "Failed to fetch ICE servers" });
@@ -1976,7 +2325,9 @@ router.post("/api/comms/intelligence/detect-anomalies-ml", async (req: any, res)
 
 export function registerCommsRoutes(app: any) {
   app.use(pshareRouter);
+  app.use(gwaRouter);
   app.use(router);
   console.log("[Comms] Registered communication routes (60+ endpoints)");
   console.log("[Comms Intelligence] 12 intelligence API endpoints active (8 core + 4 ML-enhanced)");
+  console.log("[Comms GWA] Group Work Assessment routes active (timed team analytics + reports)");
 }

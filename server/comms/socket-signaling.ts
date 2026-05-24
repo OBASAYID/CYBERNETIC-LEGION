@@ -1,10 +1,18 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
+import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
+import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms";
 import { eq, ilike, sql } from "drizzle-orm";
 import { commsIntelligence } from "./comms-intelligence.js";
+import { gwaEngine } from "./gwa-engine.js";
+import {
+  flushPendingForUser,
+  persistChatMessage,
+  queueForOfflineRecipient,
+} from "./delivery-hub.js";
 
 interface User {
   id: string;
@@ -41,9 +49,11 @@ interface ActiveCall {
   callType: "audio" | "video";
   startedAt: Date;
   screenSharingBy?: string;
+  hostPeerId: string;
+  sfuMode?: "mediasoup" | "star" | "p2p";
 }
 
-type MessageType = "text" | "emoji" | "media" | "file" | "voice-note" | "location" | "system";
+type MessageType = "text" | "emoji" | "media" | "file" | "cad-3d" | "voice-note" | "location" | "system";
 
 interface EnhancedMessage {
   targetUserId?: string;
@@ -72,9 +82,35 @@ const GROUP_CALL_MAX_PARTICIPANTS = 20;
 
 let ioInstance: SocketIOServer | null = null;
 
+function presenceMapKey(commsUserId: string, deviceId: string): string {
+  return `${commsUserId}::${deviceId}`;
+}
+
+/** Find any online socket row for a comms user id (account or device). */
+function findUserByCommsId(commsUserId: string): User | undefined {
+  const direct = users.get(commsUserId);
+  if (direct) return direct;
+  for (const u of users.values()) {
+    if (u.id === commsUserId) return u;
+  }
+  return undefined;
+}
+
+function getSocketUser(socket: Socket): User | undefined {
+  const key = (socket as any).presenceKey as string | undefined;
+  if (key) return users.get(key);
+  const uid = (socket as any).userId as string | undefined;
+  return uid ? findUserByCommsId(uid) : undefined;
+}
+
 function emitPresenceUpdate() {
   if (!ioInstance) return;
-  const userList = Array.from(users.values()).map((u) => ({
+  // One row per comms user id (multi-device may register several sockets under the same account).
+  const byCommsId = new Map<string, User>();
+  for (const u of users.values()) {
+    byCommsId.set(u.id, u);
+  }
+  const userList = Array.from(byCommsId.values()).map((u) => ({
     id: u.id,
     displayName: u.displayName,
     deviceId: u.deviceId,
@@ -87,8 +123,9 @@ function emitPresenceUpdate() {
 
 /** After HTTP avatar upload: sync in-memory presence + broadcast. */
 export function refreshCommsUserAvatar(userId: string, profileImageUrl: string | null) {
-  const u = users.get(userId);
-  if (u) u.profileImageUrl = profileImageUrl;
+  for (const u of users.values()) {
+    if (u.id === userId) u.profileImageUrl = profileImageUrl;
+  }
   emitPresenceUpdate();
 }
 
@@ -130,6 +167,7 @@ export function broadcastForceLogout(userId: string): void {
 }
 
 export function initSocketSignaling(server: HttpServer) {
+  const allowWebSocket = process.env.CYRUS_COMM_SOCKET_WS !== "false";
   const io = new SocketIOServer(server, {
     cors: {
       origin: createCyrusCorsOriginAccess(),
@@ -137,17 +175,18 @@ export function initSocketSignaling(server: HttpServer) {
       credentials: true,
     },
     path: "/cyrus-io",
-    // Polling-only + no WS upgrade: Railway edge / Bun often break Engine.IO WebSocket upgrade; polling is reliable.
-    transports: ["polling"],
+    transports: allowWebSocket ? ["websocket", "polling"] : ["polling"],
     allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000,
     connectTimeout: 60000,
     maxHttpBufferSize: 1e6,
-    allowUpgrades: false,
+    allowUpgrades: allowWebSocket,
   });
 
   ioInstance = io;
+
+  registerSfuSocketHandlers(io);
 
   console.log("[Socket.IO] Signaling server initialized");
 
@@ -234,18 +273,20 @@ export function initSocketSignaling(server: HttpServer) {
     console.log(`[Socket.IO] New connection: ${socket.id}`);
 
     socket.on("register", async (data: { userId: string; displayName: string; deviceId: string; profileImageUrl?: string | null }) => {
-      const { userId, displayName, deviceId } = data;
+      const { displayName, deviceId } = data;
+      const commsUserId = data.userId || deviceId;
+      const mapKey = presenceMapKey(commsUserId, deviceId);
 
       let dbAvatar: string | null | undefined;
       try {
-        const [existing] = await db.select({ profileImageUrl: onlineUsers.profileImageUrl }).from(onlineUsers).where(eq(onlineUsers.id, userId)).limit(1);
+        const [existing] = await db.select({ profileImageUrl: onlineUsers.profileImageUrl }).from(onlineUsers).where(eq(onlineUsers.id, commsUserId)).limit(1);
         dbAvatar = existing?.profileImageUrl ?? null;
       } catch { /* table missing etc. */ }
 
       const profileImageUrl = (data.profileImageUrl ?? dbAvatar) || null;
 
       const user: User = {
-        id: userId,
+        id: commsUserId,
         socketId: socket.id,
         displayName,
         deviceId,
@@ -254,14 +295,15 @@ export function initSocketSignaling(server: HttpServer) {
         profileImageUrl,
       };
 
-      users.set(userId, user);
-      (socket as any).userId = userId;
+      users.set(mapKey, user);
+      (socket as any).userId = commsUserId;
+      (socket as any).presenceKey = mapKey;
 
-      console.log(`[Socket.IO] User registered: ${displayName} (${userId}) - Total: ${users.size}`);
+      console.log(`[Socket.IO] User registered: ${displayName} (${commsUserId} @ ${deviceId}) - Total: ${users.size}`);
 
       try {
         await db.insert(onlineUsers).values({
-          id: userId,
+          id: commsUserId,
           displayName,
           email: null,
           profileImageUrl: profileImageUrl || null,
@@ -283,21 +325,28 @@ export function initSocketSignaling(server: HttpServer) {
         console.error("[Socket.IO] Failed to persist user:", err);
       }
 
-      socket.emit("registered", { userId, totalOnline: users.size });
+      socket.emit("registered", { userId: commsUserId, totalOnline: users.size });
+
+      const delivered = flushPendingForUser(commsUserId, (payload) => {
+        socket.emit("new-message", payload);
+      });
+      if (delivered > 0) {
+        console.log(`[Socket.IO] Delivered ${delivered} pending message(s) to ${displayName}`);
+      }
 
       emitPresenceUpdate();
     });
 
     socket.on("call-user", (data: { targetUserId: string; callType: "audio" | "video" }) => {
       const callerId = (socket as any).userId;
-      const caller = users.get(callerId);
+      const caller = getSocketUser(socket) || findUserByCommsId(callerId);
 
       if (!caller) {
         socket.emit("call-failed", { reason: "not-registered" });
         return;
       }
 
-      const target = users.get(data.targetUserId);
+      const target = findUserByCommsId(data.targetUserId);
 
       if (!target) {
         socket.emit("call-failed", { reason: "user-offline" });
@@ -362,6 +411,8 @@ export function initSocketSignaling(server: HttpServer) {
         participants: [pendingCall.callerId, userId],
         callType: pendingCall.callType,
         startedAt: new Date(),
+        hostPeerId: pendingCall.callerId,
+        sfuMode: "p2p",
       };
       activeCalls.set(data.roomId, activeCall);
 
@@ -569,6 +620,8 @@ export function initSocketSignaling(server: HttpServer) {
           } catch (err) {
             console.error("[Socket.IO] Failed to update call session end:", err);
           }
+        } else if (activeCall.participants.length >= 1) {
+          socket.to(data.roomId).emit("peer-left", { roomId: data.roomId, peerId: userId });
         }
         if (activeCall.screenSharingBy === userId) {
           activeCall.screenSharingBy = undefined;
@@ -576,7 +629,16 @@ export function initSocketSignaling(server: HttpServer) {
         }
       }
 
-      socket.to(data.roomId).emit("call-ended", { roomId: data.roomId, userId });
+      try {
+        sfuLeaveRoom(data.roomId, userId, socket.id);
+      } catch {
+        /* optional SFU */
+      }
+
+      const roomEmpty = !activeCall || activeCall.participants.length === 0;
+      if (roomEmpty) {
+        socket.to(data.roomId).emit("call-ended", { roomId: data.roomId, userId });
+      }
       socket.leave(data.roomId);
 
       try {
@@ -594,62 +656,26 @@ export function initSocketSignaling(server: HttpServer) {
       if (!sender) return;
 
       const messageType = (data.messageType || "text") as MessageType;
-      let messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      let textBody = data.message;
-      if (messageType === "location" && data.latitude != null && data.longitude != null) {
-        textBody = JSON.stringify({
-          lat: data.latitude,
-          lng: data.longitude,
-          c: (data.message || "").trim(),
-        });
-      } else if (messageType === "voice-note") {
-        textBody = JSON.stringify({
-          d: data.voiceDurationSeconds ?? 0,
-          c: (data.message || "").trim(),
-        });
-      }
-
-      try {
-        const [inserted] = await db
-          .insert(directMessages)
-          .values({
-            senderId: senderId,
-            recipientId: data.targetUserId || "",
-            groupId: data.groupId || null,
-            content: textBody,
-            messageType: messageType,
-            fileUrl: data.fileUrl || null,
-            fileName: data.fileName || null,
-            fileMimeType: data.fileMimeType || null,
-            fileSizeBytes: data.fileSizeBytes ?? null,
-            replyToId: data.replyToId || null,
-          })
-          .returning({ id: directMessages.id });
-        if (inserted?.id) {
-          messageId = inserted.id;
-        }
-      } catch (err) {
-        console.error("[Socket.IO] Failed to persist message:", err);
-      }
-
-      const outgoingPayload = {
-        id: messageId,
+      const outgoingPayload = await persistChatMessage({
         senderId,
         senderName: sender.displayName,
-        message: data.message,
-        messageType,
-        timestamp: data.timestamp,
-        fileUrl: data.fileUrl,
-        fileName: data.fileName,
-        fileMimeType: data.fileMimeType,
-        fileSizeBytes: data.fileSizeBytes,
-        voiceDurationSeconds: data.voiceDurationSeconds,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        replyToId: data.replyToId,
-        groupId: data.groupId,
-      };
+        data: {
+          targetUserId: data.targetUserId,
+          groupId: data.groupId,
+          message: data.message,
+          messageType,
+          timestamp: data.timestamp,
+          fileUrl: data.fileUrl,
+          fileName: data.fileName,
+          fileMimeType: data.fileMimeType,
+          fileSizeBytes: data.fileSizeBytes,
+          voiceDurationSeconds: data.voiceDurationSeconds,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          replyToId: data.replyToId,
+        },
+      });
 
       if (data.groupId) {
         const room = groupRooms.get(data.groupId);
@@ -660,11 +686,13 @@ export function initSocketSignaling(server: HttpServer) {
         const target = users.get(data.targetUserId);
         if (target) {
           io.to(target.socketId).emit("new-message", outgoingPayload);
+        } else {
+          queueForOfflineRecipient(data.targetUserId, outgoingPayload);
         }
       }
 
       socket.emit("message-sent", {
-        id: messageId,
+        id: outgoingPayload.id,
         recipientId: data.targetUserId,
         groupId: data.groupId,
         message: data.message,
@@ -685,7 +713,11 @@ export function initSocketSignaling(server: HttpServer) {
           contentLength: data.message?.length || 0,
           channelType: data.groupId ? 'group' : 'direct',
           messageType,
+          groupId: data.groupId,
         });
+        if (data.groupId && data.message) {
+          gwaEngine.recordGroupMessage(data.groupId, senderId, data.message, messageType);
+        }
       } catch (_) { }
     });
 
@@ -809,6 +841,8 @@ export function initSocketSignaling(server: HttpServer) {
         participants: [userId],
         callType: data.callType,
         startedAt: new Date(),
+        hostPeerId: userId,
+        sfuMode: resolveGroupSfuMode(),
       };
       activeCalls.set(roomId, activeCall);
 
@@ -851,13 +885,20 @@ export function initSocketSignaling(server: HttpServer) {
         groupId: data.groupId,
         callType: data.callType,
         participants: activeCall.participants,
+        hostPeerId: activeCall.hostPeerId,
+        sfuMode: activeCall.sfuMode,
       });
 
       console.log(`[Socket.IO] Group call started: ${room.name} by ${user.displayName} (${data.callType})`);
       emitPresenceUpdate();
     });
 
-    socket.on("create-group-call", async (data: { participantIds: string[]; callType: "audio" | "video"; groupName?: string }) => {
+    socket.on("create-group-call", async (data: {
+      participantIds: string[];
+      callType: "audio" | "video";
+      groupName?: string;
+      roomId?: string;
+    }) => {
       const userId = (socket as any).userId;
       const user = users.get(userId);
       if (!user) return;
@@ -868,13 +909,19 @@ export function initSocketSignaling(server: HttpServer) {
         return;
       }
 
-      const roomId = `gcall_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const requestedRoomId = typeof data.roomId === "string" ? data.roomId.trim() : "";
+      const roomId =
+        requestedRoomId && !activeCalls.has(requestedRoomId)
+          ? requestedRoomId
+          : `gcall_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       const activeCall: ActiveCall = {
         roomId,
         participants: [userId],
         callType: data.callType || "video",
         startedAt: new Date(),
+        hostPeerId: userId,
+        sfuMode: resolveGroupSfuMode(),
       };
       activeCalls.set(roomId, activeCall);
 
@@ -898,7 +945,7 @@ export function initSocketSignaling(server: HttpServer) {
 
       for (const participantId of data.participantIds) {
         if (participantId === userId) continue;
-        const member = users.get(participantId);
+        const member = findUserByCommsId(participantId);
         if (member && !member.inCall) {
           io.to(member.socketId).emit("incoming-group-call", {
             callerId: userId,
@@ -911,7 +958,13 @@ export function initSocketSignaling(server: HttpServer) {
         }
       }
 
-      socket.emit("group-call-created", { roomId, callType: data.callType, participants: allParticipants });
+      socket.emit("group-call-created", {
+        roomId,
+        callType: data.callType,
+        participants: allParticipants,
+        hostPeerId: activeCall.hostPeerId,
+        sfuMode: activeCall.sfuMode,
+      });
       console.log(`[Socket.IO] Group call created by ${user.displayName} with ${allParticipants.length} participants`);
       emitPresenceUpdate();
     });
@@ -949,6 +1002,8 @@ export function initSocketSignaling(server: HttpServer) {
         participants: activeCall.participants,
         callType: activeCall.callType,
         existingPeers: activeCall.participants.filter(p => p !== userId),
+        hostPeerId: activeCall.hostPeerId,
+        sfuMode: activeCall.sfuMode,
       });
 
       emitPresenceUpdate();
@@ -1017,10 +1072,21 @@ export function initSocketSignaling(server: HttpServer) {
       });
     });
 
-    socket.on("call-chat-message", async (data: { roomId: string; message: string; timestamp: string }) => {
+    socket.on("call-chat-message", async (data: {
+      roomId: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }) => {
       const userId = (socket as any).userId;
       const user = users.get(userId);
       if (!user) return;
+
+      const msgType = data.messageType || "text";
+      const mediaUrls = data.fileUrl ? [data.fileUrl] : [];
 
       try {
         await db.insert(callMessages).values({
@@ -1028,17 +1094,22 @@ export function initSocketSignaling(server: HttpServer) {
           userId,
           userName: user.displayName,
           content: data.message,
-          messageType: "text",
+          messageType: msgType,
+          mediaUrls,
           isPrivate: false,
         });
       } catch (err) {
         console.error("[Socket.IO] Failed to persist call message:", err);
       }
 
-      socket.to(data.roomId).emit("call-chat-message", {
+      io.to(data.roomId).emit("call-chat-message", {
         senderId: userId,
         senderName: user.displayName,
         message: data.message,
+        messageType: msgType,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName,
+        fileMimeType: data.fileMimeType,
         timestamp: data.timestamp,
         roomId: data.roomId,
       });
@@ -1298,6 +1369,21 @@ export function initSocketSignaling(server: HttpServer) {
       });
     });
 
+    socket.on(
+      "session-recording-state",
+      (data: { roomId: string; isRecording: boolean; userId?: string; displayName?: string }) => {
+        const userId = (socket as any).userId;
+        const user = users.get(userId);
+        if (!data?.roomId) return;
+        io.to(data.roomId).emit("session-recording-state", {
+          roomId: data.roomId,
+          isRecording: Boolean(data.isRecording),
+          userId: data.userId || userId,
+          displayName: data.displayName || user?.displayName,
+        });
+      },
+    );
+
     socket.on("message-read", async (data: { messageIds: string[]; readBy: string }) => {
       const userId = (socket as any).userId;
 
@@ -1496,6 +1582,8 @@ export function initSocketSignaling(server: HttpServer) {
         participants: [pendingCall.callerId, userId],
         callType: pendingCall.callType,
         startedAt: new Date(),
+        hostPeerId: pendingCall.callerId,
+        sfuMode: "p2p",
       };
       activeCalls.set(data.roomId, activeCall);
 
@@ -1632,10 +1720,11 @@ export function initSocketSignaling(server: HttpServer) {
     });
 
     socket.on("disconnect", async () => {
-      const userId = (socket as any).userId;
+      const userId = (socket as any).userId as string | undefined;
+      const presenceKey = (socket as any).presenceKey as string | undefined;
 
       if (userId) {
-        const user = users.get(userId);
+        const user = getSocketUser(socket);
 
         if (user?.currentRoomId) {
           socket.to(user.currentRoomId).emit("call-ended", { roomId: user.currentRoomId, reason: "peer-disconnected", userId });
@@ -1666,15 +1755,19 @@ export function initSocketSignaling(server: HttpServer) {
           }
         }
 
-        users.delete(userId);
+        if (presenceKey) users.delete(presenceKey);
+        else users.delete(userId);
         console.log(`[Socket.IO] Disconnected: ${user?.displayName || userId} - Remaining: ${users.size}`);
 
-        try {
-          await db.update(onlineUsers)
-            .set({ isOnline: false, lastSeen: new Date(), status: "offline" })
-            .where(eq(onlineUsers.id, userId));
-        } catch (err) {
-          console.error("[Socket.IO] Failed to update offline status:", err);
+        const stillOnline = Array.from(users.values()).some((u) => u.id === userId);
+        if (!stillOnline) {
+          try {
+            await db.update(onlineUsers)
+              .set({ isOnline: false, lastSeen: new Date(), status: "offline" })
+              .where(eq(onlineUsers.id, userId));
+          } catch (err) {
+            console.error("[Socket.IO] Failed to update offline status:", err);
+          }
         }
 
         emitPresenceUpdate();

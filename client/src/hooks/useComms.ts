@@ -17,7 +17,9 @@ import {
   detectNetworkType,
   CallQualityMetrics,
 } from "../lib/webrtc-config";
-import { getCommsDeviceId } from "../lib/comms-device-id";
+import { acquireCommsUserMedia } from "../lib/comms-call-media";
+import { applyCommsMediaFilters } from "../lib/comms-media-filters";
+import { getCommsDeviceId, resolveCyrusIdentity } from "../lib/cyrus-identity";
 
 function commsHeaders(): HeadersInit {
   return {
@@ -121,6 +123,8 @@ export function useComms() {
   const wsRef = useRef<WebSocket | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
+  const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
+  const videoFilterDisposeRef = useRef<(() => void) | null>(null);
   const bitrateControllerRef = useRef<AdaptiveBitrateController | null>(null);
   const connectionManagerRef = useRef<ConnectionManager | null>(null);
   const qualityMonitorIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,7 +138,7 @@ export function useComms() {
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
-    refetchInterval: 15000,
+    refetchInterval: false,
   });
 
   const allUsersQuery = useQuery<
@@ -161,7 +165,8 @@ export function useComms() {
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: true,
   });
 
   const remindersQuery = useQuery<Reminder[]>({
@@ -276,16 +281,10 @@ export function useComms() {
       const networkType = detectNetworkType();
 
       try {
-        const videoConstraints = type === "video" ? getOptimalVideoConstraints() : false;
-        const audioConstraints = getAudioConstraints();
-
-        let stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-
-        audioProcessorRef.current = new AudioProcessor();
-        stream = await audioProcessorRef.current.processStream(stream);
+        const acquired = await acquireCommsUserMedia(type);
+        mediaPipelineDisposeRef.current = acquired.disposeMediaPipeline;
+        audioProcessorRef.current = acquired.audioProcessor;
+        const stream = acquired.stream;
 
         setLocalStream(stream);
 
@@ -455,16 +454,10 @@ export function useComms() {
       const networkType = detectNetworkType();
 
       try {
-        const videoConstraints = type === "video" ? getOptimalVideoConstraints() : false;
-        const audioConstraints = getAudioConstraints();
-
-        let stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-
-        audioProcessorRef.current = new AudioProcessor();
-        stream = await audioProcessorRef.current.processStream(stream);
+        const acquired = await acquireCommsUserMedia(type);
+        mediaPipelineDisposeRef.current = acquired.disposeMediaPipeline;
+        audioProcessorRef.current = acquired.audioProcessor;
+        const stream = acquired.stream;
 
         setLocalStream(stream);
 
@@ -581,16 +574,10 @@ export function useComms() {
       const networkType = detectNetworkType();
 
       try {
-        const videoConstraints = type === "video" ? getOptimalVideoConstraints() : false;
-        const audioConstraints = getAudioConstraints();
-
-        let stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-
-        audioProcessorRef.current = new AudioProcessor();
-        stream = await audioProcessorRef.current.processStream(stream);
+        const acquired = await acquireCommsUserMedia(type);
+        mediaPipelineDisposeRef.current = acquired.disposeMediaPipeline;
+        audioProcessorRef.current = acquired.audioProcessor;
+        const stream = acquired.stream;
 
         setLocalStream(stream);
 
@@ -689,7 +676,10 @@ export function useComms() {
     bitrateControllerRef.current?.stop();
     bitrateControllerRef.current = null;
 
-    audioProcessorRef.current?.destroy();
+    mediaPipelineDisposeRef.current?.();
+    mediaPipelineDisposeRef.current = null;
+    videoFilterDisposeRef.current?.();
+    videoFilterDisposeRef.current = null;
     audioProcessorRef.current = null;
 
     connectionManagerRef.current = null;
@@ -758,12 +748,15 @@ export function useComms() {
     const newFacing = currentFacing === "user" ? "environment" : "user";
 
     try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
+      const raw = await navigator.mediaDevices.getUserMedia({
         video: { ...getOptimalVideoConstraints(), facingMode: newFacing },
         audio: false,
       });
+      const filtered = await applyCommsMediaFilters(raw, "video");
+      videoFilterDisposeRef.current?.();
+      videoFilterDisposeRef.current = filtered.disposeVideoEnhancer;
 
-      const newVideoTrack = newStream.getVideoTracks()[0];
+      const newVideoTrack = filtered.stream.getVideoTracks()[0];
       
       const sender = peerConnectionRef.current
         .getSenders()
@@ -788,8 +781,9 @@ export function useComms() {
   const connectPresence = useCallback((displayName: string = "User") => {
     if (presenceWsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const deviceId = `device_${navigator.userAgent.substring(0, 20).replace(/\s/g, '_')}`;
+    void (async () => {
+      const identity = await resolveCyrusIdentity();
+      const { deviceId, commsUserId: userId } = identity;
 
     const q = new URLSearchParams({
       userId,
@@ -876,6 +870,7 @@ export function useComms() {
     ws.onerror = (error) => {
       console.error("[Presence] WebSocket error:", error);
     };
+    })();
   }, [myUserId, activeCall?.type]);
 
   const callUser = useCallback(async (targetUserId: string, targetName: string, type: "audio" | "video") => {

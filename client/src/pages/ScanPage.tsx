@@ -198,7 +198,7 @@ export function ScanPage() {
           <button
             type="button"
             onClick={clearResults}
-            className="rounded-lg p-2 text-gray-400 transition-all hover:bg-gray-800/50 hover:text-white"
+            className="rounded-lg p-2 text-white/50 transition-all hover:bg-white/\[0.05\] hover:text-white"
             aria-label="Clear results"
           >
             <RefreshCw className="h-5 w-5" />
@@ -374,39 +374,39 @@ export function ScanPage() {
           </div>
 
           <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="order-1 bg-gray-900/60 backdrop-blur-sm border border-cyan-500/30 rounded-xl p-4">
+            <div className="order-1 bg-black/40 backdrop-blur-sm border border-cyan-500/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
                   <Eye className="w-4 h-4 text-cyan-400" />
                 </div>
-                <span className="text-xs text-gray-400">Scene / Vision</span>
+                <span className="text-xs text-white/50">Scene / Vision</span>
               </div>
               <p className="text-lg font-bold text-cyan-400">Primary</p>
             </div>
-            <div className="order-2 bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-4">
+            <div className="order-2 bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
                   <QrCode className="w-4 h-4 text-purple-400" />
                 </div>
-                <span className="text-xs text-gray-400">QR & codes</span>
+                <span className="text-xs text-white/50">QR & codes</span>
               </div>
               <p className="text-lg font-bold text-purple-400">Active</p>
             </div>
-            <div className="order-3 bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-4">
+            <div className="order-3 bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
                   <FileText className="w-4 h-4 text-blue-400" />
                 </div>
-                <span className="text-xs text-gray-400">OCR (labels)</span>
+                <span className="text-xs text-white/50">OCR (labels)</span>
               </div>
               <p className="text-lg font-bold text-blue-400">Ready</p>
             </div>
-            <div className="order-4 bg-gray-900/60 backdrop-blur-sm border border-violet-500/25 rounded-xl p-4">
+            <div className="order-4 bg-black/40 backdrop-blur-sm border border-violet-500/25 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 bg-violet-500/20 rounded-lg flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-violet-400" />
                 </div>
-                <span className="text-xs text-gray-400">Full report</span>
+                <span className="text-xs text-white/50">Full report</span>
               </div>
               <p className="text-lg font-bold text-violet-300">Pipeline</p>
             </div>
@@ -415,14 +415,14 @@ export function ScanPage() {
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <div className="grid md:grid-cols-1 gap-6">
-                <div className="bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-5">
+                <div className="bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-5">
                   <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
                       <Camera className="w-4 h-4 text-white" />
                     </div>
                     <span>Device camera</span>
                   </h2>
-                  <p className="text-xs text-gray-500 mb-3">
+                  <p className="text-xs text-white/40 mb-3">
                     Frame a scene, object, label, or code. Use Vision for what you see, QR for barcodes, OCR for text on surfaces. Full CYRUS analysis can produce a structured report in your selected output language.
                   </p>
                   <div className="relative mb-4 overflow-hidden rounded-xl border border-cyan-500/20 bg-black/40">
@@ -433,7 +433,7 @@ export function ScanPage() {
                       muted
                     />
                     {camState !== "preview" && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs text-gray-500">
+                      <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs text-white/40">
                         {camState === "idle" && "Camera off"}
                         {camState === "denied" && "Allow camera in the browser to scan live text."}
                         {camState === "error" && (camError || "Camera unavailable.")}
@@ -461,7 +461,7 @@ export function ScanPage() {
                         <button
                           type="button"
                           onClick={stopCamera}
-                          className="rounded-lg border border-white/20 px-3 py-2 text-sm text-gray-300 hover:bg-white/5"
+                          className="rounded-lg border border-white/20 px-3 py-2 text-sm text-white/70 hover:bg-white/5"
                         >
                           Stop
                         </button>
@@ -490,7 +490,7 @@ export function ScanPage() {
                       <img
                         src={imagePreview}
                         alt="Preview"
-                        className="w-full h-48 object-contain bg-gray-800/50 rounded-xl border border-gray-700/50"
+                        className="w-full h-48 object-contain bg-white/\[0.05\] rounded-xl border border-white/\[0.08\]"
                       />
                       <button
                         onClick={() => {
@@ -505,12 +505,12 @@ export function ScanPage() {
                   ) : (
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full h-48 border-2 border-dashed border-gray-700/50 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+                      className="w-full h-48 border-2 border-dashed border-white/\[0.08\] rounded-xl flex flex-col items-center justify-center gap-3 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
                     >
-                      <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-500/20 transition-all">
-                        <Camera className="w-6 h-6 text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                      <div className="w-12 h-12 bg-white/\[0.06\] rounded-xl flex items-center justify-center group-hover:bg-cyan-500/20 transition-all">
+                        <Camera className="w-6 h-6 text-white/40 group-hover:text-cyan-400 transition-colors" />
                       </div>
-                      <span className="text-gray-400 group-hover:text-gray-300">Click to upload image</span>
+                      <span className="text-white/50 group-hover:text-white/70">Click to upload image</span>
                     </button>
                   )}
 
@@ -564,15 +564,15 @@ export function ScanPage() {
                       <Brain className="h-4 w-4 text-violet-400" />
                       Full CYRUS analysis
                     </h3>
-                    <p className="mb-3 text-xs text-gray-500">
+                    <p className="mb-3 text-xs text-white/40">
                       Decode QR (if any) → OCR → language detection → output in the language you choose below → brief interpretation. Use after capture when you want one consolidated report.
                     </p>
                     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <label className="text-xs text-gray-400 sm:shrink-0">Output language</label>
+                      <label className="text-xs text-white/50 sm:shrink-0">Output language</label>
                       <select
                         value={targetLang}
                         onChange={(e) => setTargetLang(e.target.value)}
-                        className="w-full flex-1 rounded-lg border border-gray-700/50 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 sm:max-w-xs"
+                        className="w-full flex-1 rounded-lg border border-white/\[0.08\] bg-white/\[0.05\] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 sm:max-w-xs"
                       >
                         {languages.map((lang) => (
                           <option key={lang.code} value={lang.code}>
@@ -582,11 +582,11 @@ export function ScanPage() {
                       </select>
                     </div>
                     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <label className="text-xs text-gray-400 sm:shrink-0">Tone / mode</label>
+                      <label className="text-xs text-white/50 sm:shrink-0">Tone / mode</label>
                       <select
                         value={analyzeMode}
                         onChange={(e) => setAnalyzeMode(e.target.value as typeof analyzeMode)}
-                        className="w-full flex-1 rounded-lg border border-gray-700/50 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 sm:max-w-xs"
+                        className="w-full flex-1 rounded-lg border border-white/\[0.08\] bg-white/\[0.05\] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/40 sm:max-w-xs"
                       >
                         <option value="business">Business</option>
                         <option value="casual">Casual</option>
@@ -628,7 +628,7 @@ export function ScanPage() {
 
               <div className="grid md:grid-cols-2 gap-6">
                 {lastResult && (
-                  <div className="bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-5">
+                  <div className="bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-5">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold flex items-center gap-2">
                         <Scan className="w-5 h-5 text-cyan-400" />
@@ -646,12 +646,12 @@ export function ScanPage() {
                     </div>
 
                     {lastResult.text && (
-                      <div className="bg-gray-800/50 rounded-xl p-4 mb-4 border border-gray-700/50">
+                      <div className="bg-white/\[0.05\] rounded-xl p-4 mb-4 border border-white/\[0.08\]">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm whitespace-pre-wrap text-gray-200">{lastResult.text}</p>
                           <button
                             onClick={() => copyToClipboard(lastResult.text!)}
-                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-all"
+                            className="p-2 text-white/50 hover:text-white hover:bg-white/\[0.08\] rounded-lg transition-all"
                           >
                             {copied ? (
                               <Check className="w-4 h-4 text-emerald-400" />
@@ -670,7 +670,7 @@ export function ScanPage() {
                           <button
                             type="button"
                             onClick={() => copyToClipboard(String(lastResult.translation))}
-                            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-700/50 hover:text-white"
+                            className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/\[0.08\] hover:text-white"
                             aria-label="Copy scan translation"
                           >
                             <Copy className="h-3.5 w-3.5" />
@@ -695,14 +695,14 @@ export function ScanPage() {
 
                     <div className="space-y-2 text-sm">
                       {lastResult.detectedLanguage && (
-                        <p className="text-gray-400">
-                          <span className="text-gray-500">Language:</span> {lastResult.detectedLanguage}
+                        <p className="text-white/50">
+                          <span className="text-white/40">Language:</span> {lastResult.detectedLanguage}
                         </p>
                       )}
                       {lastResult.confidence && (
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-500">Confidence:</span>
-                          <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <span className="text-white/40">Confidence:</span>
+                          <div className="flex-1 h-2 bg-white/\[0.06\] rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-gradient-to-r from-cyan-500 to-blue-500"
                               style={{ width: `${lastResult.confidence * 100}%` }}
@@ -733,17 +733,17 @@ export function ScanPage() {
                 )}
 
                 {fullReport && (
-                  <div className="bg-gray-900/60 backdrop-blur-sm border border-violet-500/30 rounded-xl p-5 md:col-span-2">
+                  <div className="bg-black/40 backdrop-blur-sm border border-violet-500/30 rounded-xl p-5 md:col-span-2">
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <Brain className="h-5 w-5 text-violet-400" />
                       Full CYRUS report
                     </h3>
-                    <p className="text-xs text-gray-500 mb-3">
+                    <p className="text-xs text-white/40 mb-3">
                       {String(fullReport.sourceDescription || "")}
                     </p>
                     {typeof fullReport.originalText === "string" && fullReport.originalText && (
-                      <div className="mb-3 rounded-lg border border-gray-700/50 bg-gray-800/40 p-3">
-                        <p className="text-xs text-gray-500 mb-1">Source / extracted</p>
+                      <div className="mb-3 rounded-lg border border-white/\[0.08\] bg-white/\[0.06\]/40 p-3">
+                        <p className="text-xs text-white/40 mb-1">Source / extracted</p>
                         <p className="text-sm text-gray-200 whitespace-pre-wrap">{fullReport.originalText}</p>
                       </div>
                     )}
@@ -775,56 +775,56 @@ export function ScanPage() {
             </div>
 
             <div className="space-y-6">
-              <div className="bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-5">
+              <div className="bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-5">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center">
                     <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <span>CYRUS — vision & safety</span>
                 </h3>
-                <p className="text-xs text-gray-400 mb-4">
+                <p className="text-xs text-white/50 mb-4">
                   Ask what is in the frame, whether a QR link looks safe, and how to read labels. Full analysis below can also produce a report in your chosen output language.
                 </p>
                 <CyrusHumanoid module="vision" context={visionContext} />
               </div>
 
-              <div className="bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-5">
-                <h3 className="font-semibold mb-4 text-sm text-gray-400">This workspace</h3>
+              <div className="bg-black/40 backdrop-blur-sm border border-white/\[0.08\] rounded-xl p-5">
+                <h3 className="font-semibold mb-4 text-sm text-white/50">This workspace</h3>
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg border border-cyan-500/15">
+                  <div className="flex items-center gap-3 p-3 bg-white/\[0.04\] rounded-lg border border-cyan-500/15">
                     <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
                       <Eye className="w-4 h-4 text-cyan-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Scene & Vision</p>
-                      <p className="text-xs text-gray-500">What the image shows</p>
+                      <p className="text-xs text-white/40">What the image shows</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-white/\[0.04\] rounded-lg">
                     <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
                       <QrCode className="w-4 h-4 text-purple-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">QR / barcode</p>
-                      <p className="text-xs text-gray-500">Instant decode</p>
+                      <p className="text-xs text-white/40">Instant decode</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-white/\[0.04\] rounded-lg">
                     <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
                       <FileText className="w-4 h-4 text-blue-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">OCR (labels & signs)</p>
-                      <p className="text-xs text-gray-500">Text on surfaces</p>
+                      <p className="text-xs text-white/40">Text on surfaces</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg border border-violet-500/15">
+                  <div className="flex items-center gap-3 p-3 bg-white/\[0.04\] rounded-lg border border-violet-500/15">
                     <div className="w-8 h-8 bg-violet-500/20 rounded-lg flex items-center justify-center">
                       <Brain className="w-4 h-4 text-violet-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Full CYRUS report</p>
-                      <p className="text-xs text-gray-500">Includes optional translated output</p>
+                      <p className="text-xs text-white/40">Includes optional translated output</p>
                     </div>
                   </div>
                 </div>

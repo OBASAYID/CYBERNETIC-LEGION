@@ -1,5 +1,10 @@
 import OpenAI from "openai";
 import { Audience, DocType, templates, toneByAudience, defaultDocType } from "./templates.js";
+import {
+    extractDocumentTitle,
+    outlinePurpose,
+    sanitizeDocgenSource,
+} from "./sanitize.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
@@ -88,8 +93,7 @@ function normalizeAudience(audience?: string): Audience {
 }
 
 function titleFromInput(docType: DocType, payload: DocGenInput): string {
-    const root = payload.topic || payload.purpose || payload.rawText?.slice(0, 80) || "Untitled";
-    return `${docType.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())}: ${root.slice(0, 72)}`;
+    return extractDocumentTitle(payload, docType);
 }
 
 function fallbackContent(template: DocType, payload: DocGenInput): AnalysisOutput {
@@ -113,7 +117,7 @@ function buildDeterministicOutput(
     const outline = sections.map((section, index) => ({
         level: index === 0 ? "H1" : "H2",
         title: section.title,
-        purpose: `${section.title} for ${docType.replace(/_/g, " ")}`,
+        purpose: outlinePurpose(section.title, section.content),
     }));
     const pullQuotes = sections.slice(0, 4).map((section, index) => ({
         quote: section.content.split(/(?<=[.!?])\s+/)[0]?.slice(0, 180) || section.content.slice(0, 180),
@@ -206,10 +210,11 @@ export async function analyzeDocument(payload: DocGenInput): Promise<AnalysisOut
     const docType = normalizeDocType(payload.docType);
     const audience = normalizeAudience(payload.audience);
     const template = templates[docType] || templates[defaultDocType];
-    const rawText = payload.rawText || payload.topic || payload.purpose || "";
+    const rawText = sanitizeDocgenSource(payload.rawText || payload.topic || payload.purpose || "");
+    const sanitizedPayload = { ...payload, rawText: rawText || payload.rawText };
 
     if (!rawText && !payload.data) {
-        return fallbackContent(docType, payload);
+        return fallbackContent(docType, sanitizedPayload);
     }
 
     const context = rawText.slice(0, DOC_CONTEXT_LIMIT);
@@ -220,7 +225,7 @@ export async function analyzeDocument(payload: DocGenInput): Promise<AnalysisOut
 
     const contentMap: Record<string, string> = {};
     for (const batch of batches) {
-        const generated = await generateSectionContent(docType, audience, payload, batch, context);
+        const generated = await generateSectionContent(docType, audience, sanitizedPayload, batch, context);
         Object.assign(contentMap, generated);
     }
 
@@ -239,5 +244,5 @@ export async function analyzeDocument(payload: DocGenInput): Promise<AnalysisOut
         assumptions.push("LLM service unavailable; heuristic section drafting applied.");
     }
 
-    return buildDeterministicOutput(docType, audience, payload, sections, assumptions);
+    return buildDeterministicOutput(docType, audience, sanitizedPayload, sections, assumptions);
 }

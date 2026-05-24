@@ -32,7 +32,7 @@ function statusColor(status: OnlineUser["status"]): string {
     case "busy":
       return "bg-yellow-500";
     case "in_call":
-      return "bg-orange-400";
+      return "bg-[#e11d48]";
     default:
       return "bg-slate-500";
   }

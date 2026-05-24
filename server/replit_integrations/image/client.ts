@@ -6,8 +6,12 @@ import { localImageGen } from "./local-image-client.js";
 
 const getApiKey = () => process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 
-// Use local image generation as primary, OpenAI as fallback
-const useLocalImageGen = process.env.USE_LOCAL_IMAGE_GEN !== 'false';
+const openAiIndependent =
+  process.env.CYRUS_OPENAI_INDEPENDENT === "true" || process.env.CYRUS_NO_OPENAI === "true";
+
+// Web assets + local SD; OpenAI only when explicitly allowed
+const useLocalImageGen =
+  openAiIndependent || process.env.USE_LOCAL_IMAGE_GEN !== "false";
 
 export const openai = useLocalImageGen ? null : (getApiKey() ? new (await import("openai")).default({
   apiKey: getApiKey(),
@@ -67,7 +71,30 @@ export interface ImageVariationOptions {
 }
 
 export async function generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
-  // Try local image generation first
+  if (openAiIndependent || useLocalImageGen) {
+    try {
+      const { resolveBestImage, assetToDataUrl } = await import("../../assets/asset-resolver.js");
+      const web = await resolveBestImage(options.prompt);
+      if (web) {
+        const dataUrl = assetToDataUrl(web);
+        const b64 = dataUrl?.includes(",") ? dataUrl.split(",")[1] : undefined;
+        return {
+          success: true,
+          model: "cyrus-web-asset",
+          prompt: options.prompt,
+          size: options.size || "1024x1024",
+          quality: "standard",
+          style: options.style || "natural",
+          images: [{ url: web.publicPath, b64_json: b64, revised_prompt: web.title }],
+          timestamp: new Date().toISOString(),
+        };
+      }
+    } catch (err) {
+      console.warn("[Image Gen] Web asset lookup failed:", err);
+    }
+  }
+
+  // Try local image generation
   if (useLocalImageGen) {
     try {
       console.log(`[Local Image Gen] Generating image with prompt: ${options.prompt}`);
@@ -101,11 +128,16 @@ export async function generateImage(options: ImageGenerationOptions): Promise<Im
         };
       }
     } catch (error) {
-      console.warn("[LocalImageGen] Failed, falling back to OpenAI:", error);
+      console.warn("[LocalImageGen] Failed:", error);
     }
   }
 
-  // Fallback to OpenAI
+  if (openAiIndependent) {
+    throw new Error(
+      "OpenAI image generation disabled (CYRUS_OPENAI_INDEPENDENT). Use web assets (/api/assets) or local Stable Diffusion.",
+    );
+  }
+
   const client = await getClient();
   if (!client) {
     throw new Error("No image generation service available. Configure OpenAI or enable local image generation.");

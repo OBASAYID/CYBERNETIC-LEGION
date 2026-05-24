@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,35 +9,14 @@ import { PasswordGate, type GateProfile, readStoredDisplayName } from "@/compone
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
-import { ArrowLeft } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
-
-function ReturnHomeButton() {
-  const [location] = useLocation();
-  if (location === "/") return null;
-
-  return (
-    <div className="fixed left-4 top-4 z-[100]">
-      <Link href="/">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/70 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-black/85 transition-colors"
-          data-testid="button-return-home"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Return Home
-        </button>
-      </Link>
-    </div>
-  );
-}
+import { GameSidebar } from "@/components/game-sidebar";
 
 function App() {
   const { isAuthenticated, onAuthenticated } = useAuthSession();
-  /** Lifted from `PasswordGate`; `sessionStorage` survives full `App` remounts (HMR) in the same tab. */
   const [gateUsername, setGateUsername] = useState(
     () => readGateDraft(readStoredDisplayName()).username,
   );
@@ -48,12 +26,11 @@ function App() {
   const prevAuthenticatedRef = useRef<boolean | null>(null);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const { isConfigured: apiKeyConfigured } = useApiKey();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
-    return () => {
-      console.log("[CYRUS] App unmounted.");
-    };
+    return () => { console.log("[CYRUS] App unmounted."); };
   }, []);
 
   useEffect(() => {
@@ -75,13 +52,12 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // Derive a stable userId from localStorage device ID (same key used by PresenceContext)
   const callUserId =
     (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
     (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
     `device_${Math.random().toString(36).substr(2, 9)}`;
   const callDisplayName = gateUsername || readStoredDisplayName() || "User";
-  // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
+
   useEffect(() => {
     if (!isAuthenticated) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -94,15 +70,16 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
+  const sidebarW = sidebarCollapsed ? 72 : 240;
+
   return (
     <ThemeProvider>
       <AppErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <div className="relative isolate min-h-screen overflow-x-hidden bg-black text-white">
+          <div className="relative isolate min-h-screen overflow-x-hidden text-white" style={{ background: "#080810" }}>
             <AtmosphericSmokeBackground />
-            <div className="relative z-10 min-h-screen">
-              <ReturnHomeButton />
-              {!isAuthenticated ? (
+            {!isAuthenticated ? (
+              <div className="relative z-10 min-h-screen">
                 <PasswordGate
                   key="cyrus-password-gate"
                   username={gateUsername}
@@ -115,26 +92,32 @@ function App() {
                     onAuthenticated(sessionToken, profile);
                   }}
                 />
-              ) : (
-                <TooltipProvider>
-                  <Toaster />
-                  <AppErrorBoundary>
-                    {/* CallProvider wraps all authenticated routes so incoming/active
-                        call overlays are globally available regardless of current page. */}
-                    <CallProvider
-                      webRTCOptions={{
-                        userId: callUserId,
-                        userName: callDisplayName,
-                        isAuthenticated,
-                      }}
+              </div>
+            ) : (
+              <TooltipProvider>
+                <Toaster />
+                <AppErrorBoundary>
+                  <CallProvider
+                    webRTCOptions={{ userId: callUserId, userName: callDisplayName, isAuthenticated }}
+                  >
+                    {/* Sidebar */}
+                    <GameSidebar
+                      collapsed={sidebarCollapsed}
+                      onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+                      displayName={callDisplayName}
+                    />
+                    {/* Main content shifted right by sidebar width */}
+                    <div
+                      className="relative z-10 min-h-screen transition-all duration-300"
+                      style={{ marginLeft: sidebarW }}
                     >
                       <AppRoutes />
-                    </CallProvider>
-                  </AppErrorBoundary>
-                  <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
-                </TooltipProvider>
-              )}
-            </div>
+                    </div>
+                  </CallProvider>
+                </AppErrorBoundary>
+                <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
+              </TooltipProvider>
+            )}
           </div>
         </QueryClientProvider>
       </AppErrorBoundary>

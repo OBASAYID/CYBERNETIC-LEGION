@@ -8,10 +8,21 @@ import {
   buildRtcConfiguration,
   createPeerConnectionConfig,
   getRuntimeIceServers,
+  isLikelyCrossNetworkPath,
   mergeIceServerLists,
 } from "../lib/webrtc-config";
 
 type ApiIce = { urls: string | string[]; username?: string; credential?: string };
+
+export type CyrusRtcConfigResponse = {
+  iceServers?: unknown;
+  iceTransportPolicy?: "all" | "relay";
+  relayConfigured?: boolean;
+  linkHints?: {
+    recommendedAudioBitrateMax?: number;
+    recommendedVideoBitrateMax?: number;
+  };
+};
 
 function normalizeIceServers(raw: unknown): RTCIceServer[] {
   if (!Array.isArray(raw)) return [];
@@ -30,6 +41,7 @@ function normalizeIceServers(raw: unknown): RTCIceServer[] {
 
 export async function fetchCyrusCommRtcConfiguration(query?: {
   link?: string;
+  forceRelay?: boolean;
 }): Promise<RTCConfiguration> {
   const params = new URLSearchParams();
   if (query?.link) params.set("link", query.link);
@@ -38,13 +50,24 @@ export async function fetchCyrusCommRtcConfiguration(query?: {
   try {
     const res = await systemFetch(path);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { iceServers?: unknown };
+    const data = (await res.json()) as CyrusRtcConfigResponse;
     const serverIce = normalizeIceServers(data.iceServers);
     const localIce = getRuntimeIceServers();
     const merged = mergeIceServerLists(serverIce, localIce);
-    return buildRtcConfiguration(merged);
+
+    const forceRelay =
+      query?.forceRelay === true ||
+      data.iceTransportPolicy === "relay" ||
+      (Boolean(data.relayConfigured) && isLikelyCrossNetworkPath());
+
+    return buildRtcConfiguration(merged, { forceRelay });
   } catch (e) {
     console.warn("[CYRUS-RTC] Server ICE config unavailable, using client defaults:", e);
     return createPeerConnectionConfig();
   }
+}
+
+export async function fetchCyrusCommIceServers(): Promise<RTCIceServer[]> {
+  const cfg = await fetchCyrusCommRtcConfiguration();
+  return cfg.iceServers ?? getRuntimeIceServers();
 }

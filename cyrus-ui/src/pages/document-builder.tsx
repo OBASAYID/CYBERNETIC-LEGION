@@ -139,7 +139,7 @@ export default function DocumentBuilder() {
                 <div>Assumptions: {result.assumptions.join("; ")}</div>
               )}
               {result.missing?.length > 0 && (
-                <div className="text-amber-300">Missing: {result.missing.join("; ")}</div>
+                <div className="text-[#e11d48]/80">Missing: {result.missing.join("; ")}</div>
               )}
               {result.sections.map((s, i) => (
                 <div key={i} className="space-y-1">

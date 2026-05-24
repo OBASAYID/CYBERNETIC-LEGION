@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "startedAt": "2026-05-23T18:05:23.712Z",
+  "completedAt": "2026-05-23T22:28:48.368Z",
+  "progress": {
+    "knowledgeIngested": 39,
+    "knowledgeSkipped": 0,
+    "knowledgeFailed": 1,
+    "assetsBefore": 205,
+    "assetsAfter": 706,
+    "topicsProcessed": 35,
+    "webPagesProcessed": 4,
+    "assetQueriesProcessed": 174
+  },
+  "knowledgeBaseEntries": 73
+}

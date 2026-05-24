@@ -21,5 +21,15 @@ export interface ScanReport {
   warnings: string[];
   attempted: string[];
   nextSteps: string[];
+  qualityScores?: Record<string, number>;
+  calibration?: {
+    algorithmVersion: string;
+    calibrated: boolean;
+    overallScanQuality?: number;
+    trainedAt?: string;
+    simulations?: number;
+    metrics?: { maeBefore: number; maeAfter: number; r2After: number };
+    blend?: number;
+  };
 }
 

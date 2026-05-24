@@ -7,14 +7,24 @@ import {
   MapPin,
   X,
   Image as ImageIcon,
+  Box,
   FileAudio,
 } from "lucide-react";
 import { EmojiPicker } from "./EmojiPicker";
 import { analyzeTextSentiment } from "../../hooks/useCommsIntelligence";
+import { COMMS_MEDIA_FILE_ACCEPT, type CommsUploadProgress } from "../../lib/comms-media-upload";
+import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
+import { isCommsCad3dFile } from "../../lib/comms-cad-formats";
+import { CommsUploadProgressBar } from "./CommsUploadProgress";
+import { formatCommsFileSize, inferCommsMediaCategory, getCommsMediaCategoryLabel } from "@shared/comms/media-formats";
 
 interface MessageInputProps {
   onSend: (content: string) => void;
-  onSendMedia?: (file: File, caption: string) => void;
+  onSendMedia?: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: CommsUploadProgress) => void,
+  ) => Promise<void> | void;
   onSendVoice?: (blob: Blob, duration: number) => void;
   onSendLocation?: () => void;
   onToggleEmoji?: () => void;
@@ -41,19 +51,12 @@ export function MessageInput({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [attachPreview, setAttachPreview] = useState<{ file: File; url: string } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [sentiment, setSentiment] = useState<{ score: number; label: string; confidence: number }>({ score: 0, label: "neutral", confidence: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const filePickerAccept =
-    "image/*,video/*,audio/*," +
-    "application/pdf,application/zip," +
-    "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
-    "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
-    "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
-    "text/plain,text/html,text/csv,text/markdown,application/json,application/xml," +
-    ".pdf,.html,.htm,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp," +
-    ".txt,.csv,.md,.json,.xml,.zip," +
-    ".mp3,.m4a,.wav,.ogg,.flac,.aac,.mp4,.webm,.mov,.mkv";
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -75,12 +78,22 @@ export function MessageInput({
     };
   }, [text]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (attachPreview && onSendMedia) {
-      onSendMedia(attachPreview.file, text.trim());
-      URL.revokeObjectURL(attachPreview.url);
-      setAttachPreview(null);
-      setText("");
+      setIsUploading(true);
+      setUploadError(null);
+      setUploadProgress({ loaded: 0, total: attachPreview.file.size, percent: 0, phase: "init" });
+      try {
+        await onSendMedia(attachPreview.file, text.trim(), setUploadProgress);
+        URL.revokeObjectURL(attachPreview.url);
+        setAttachPreview(null);
+        setText("");
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed");
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(null);
+      }
       return;
     }
     const trimmed = text.trim();
@@ -89,6 +102,8 @@ export function MessageInput({
     setText("");
     onTypingStop?.();
   }, [text, attachPreview, onSend, onSendMedia, onTypingStop]);
+
+  const composerDisabled = disabled || isUploading;
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -111,10 +126,19 @@ export function MessageInput({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setAttachPreview({ file, url });
+    queueAttachment(file);
     e.target.value = "";
   };
+
+  const queueAttachment = useCallback((file: File) => {
+    if (!onSendMedia) return;
+    setAttachPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { file, url: URL.createObjectURL(file) };
+    });
+  }, [onSendMedia]);
+
+  useCommsMediaPaste(queueAttachment, Boolean(onSendMedia) && !composerDisabled);
 
   const clearAttachment = () => {
     if (attachPreview) {
@@ -246,14 +270,32 @@ export function MessageInput({
               <img src={attachPreview.url} alt="" className="h-16 rounded-lg border border-gray-700/50" />
             ) : attachPreview.file.type.startsWith("video/") ? (
               <video src={attachPreview.url} className="h-20 max-w-[200px] rounded-lg border border-gray-700/50" muted playsInline />
+            ) : isCommsCad3dFile(attachPreview.file.name, attachPreview.file.type) ? (
+              <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-cyan-500/35 bg-cyan-950/40 px-3 py-2">
+                <Box className={`h-4 w-4 shrink-0 ${holoSurface ? "text-cyan-300" : "text-amber-300"}`} />
+                <div className="min-w-0">
+                  <span className="block truncate text-xs text-gray-200">{attachPreview.file.name}</span>
+                  <span className="text-[10px] text-cyan-200/55">
+                    3D CAD · {formatCommsFileSize(attachPreview.file.size)}
+                  </span>
+                </div>
+              </div>
             ) : (
-              <div className="flex max-w-[220px] items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/80 px-3 py-2">
-                {attachPreview.file.type.startsWith("audio/") ? (
+              <div className="flex max-w-[240px] items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/80 px-3 py-2">
+                {attachPreview.file.type.startsWith("audio/") ||
+                /\.(mp3|m4a|m4b|wav|flac|aac|ogg)$/i.test(attachPreview.file.name) ? (
                   <FileAudio className={`h-4 w-4 shrink-0 ${holoSurface ? "text-cyan-400" : "text-amber-400"}`} />
                 ) : (
                   <ImageIcon className="h-4 w-4 shrink-0 text-cyan-400" />
                 )}
-                <span className="truncate text-xs text-gray-300">{attachPreview.file.name}</span>
+                <div className="min-w-0">
+                  <span className="block truncate text-xs text-gray-300">{attachPreview.file.name}</span>
+                  <span className="text-[10px] text-gray-500">
+                    {getCommsMediaCategoryLabel(inferCommsMediaCategory(attachPreview.file.name, attachPreview.file.type))}
+                    {" · "}
+                    {formatCommsFileSize(attachPreview.file.size)}
+                  </span>
+                </div>
               </div>
             )}
             <button
@@ -265,11 +307,16 @@ export function MessageInput({
           </div>
         </div>
       )}
+      <CommsUploadProgressBar
+        fileName={attachPreview?.file.name}
+        progress={uploadProgress}
+        error={uploadError}
+      />
       <div className="flex items-end gap-2 px-3 py-2.5">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowEmoji(!showEmoji)}
-            disabled={disabled}
+            disabled={composerDisabled}
             className={`rounded-full p-2 transition-colors disabled:opacity-40 ${
               showEmoji
                 ? holoSurface
@@ -287,13 +334,13 @@ export function MessageInput({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={disabled}
+                disabled={composerDisabled}
                 className={
                   holoSurface
                     ? "rounded-full p-2 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100 disabled:opacity-40"
                     : "rounded-full p-2 text-amber-200/50 transition hover:bg-cyan-500/10 hover:text-cyan-200 disabled:opacity-40"
                 }
-                title="Share photos, videos, documents (PDF, Word, Excel, HTML…), or other files"
+                title="Share photos, videos, movies, audiobooks, e-books, 3D models, documents, and other files (up to 2 GB)"
               >
                 <Paperclip className="h-5 w-5" />
               </button>
@@ -302,14 +349,14 @@ export function MessageInput({
                 type="file"
                 onChange={handleFileSelect}
                 className="hidden"
-                accept={filePickerAccept}
+                accept={COMMS_MEDIA_FILE_ACCEPT}
               />
             </>
           )}
           {onSendLocation && (
             <button
               onClick={onSendLocation}
-              disabled={disabled}
+              disabled={composerDisabled}
               className={
                 holoSurface
                   ? "rounded-full p-2 text-cyan-200/50 transition hover:bg-violet-500/15 hover:text-violet-100 disabled:opacity-40"
@@ -327,7 +374,7 @@ export function MessageInput({
             onChange={(e) => handleTextChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            disabled={disabled}
+            disabled={composerDisabled}
             rows={1}
             className={`w-full max-h-[120px] resize-none rounded-xl border bg-slate-950/60 px-3.5 py-2.5 pr-8 text-sm text-white focus:border-cyan-400/50 focus:outline-none focus:ring-2 disabled:opacity-40 ${
               holoSurface
@@ -360,7 +407,7 @@ export function MessageInput({
         {text.trim() || attachPreview ? (
           <button
             onClick={handleSend}
-            disabled={disabled}
+            disabled={composerDisabled}
             className={
               holoSurface
                 ? "rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-violet-600 p-2.5 shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-400 hover:via-sky-400 hover:to-violet-500 disabled:opacity-40"
@@ -372,7 +419,7 @@ export function MessageInput({
         ) : onSendVoice ? (
           <button
             onClick={startRecording}
-            disabled={disabled}
+            disabled={composerDisabled}
             className={
               holoSurface
                 ? "rounded-full p-2.5 text-cyan-200/50 transition hover:bg-cyan-500/15 hover:text-cyan-100 disabled:opacity-40"

@@ -1,26 +1,44 @@
 {
-	"servers": {
-		"io.github.github/github-mcp-server": {
-			"type": "stdio",
-			"command": "docker",
-			"args": [
-				"run",
-				"-i",
-				"--rm",
-				"-e",
-				"GITHUB_PERSONAL_ACCESS_TOKEN=${input:token}",
-				"ghcr.io/github/github-mcp-server:0.33.0"
-			],
-			"gallery": "https://api.mcp.github.com",
-			"version": "0.33.0"
-		}
-	},
-	"inputs": [
-		{
-			"id": "token",
-			"type": "promptString",
-			"description": "",
-			"password": true
-		}
-	]
+  "servers": {
+    "cyrus-asset-ingest": {
+      "type": "stdio",
+      "command": "node_modules/.bin/tsx",
+      "args": ["server/mcp/cyrus-asset-ingest-server.ts"],
+      "env": {
+        "CYRUS_ML_ASSETS": "true",
+        "CYRUS_OPENAI_INDEPENDENT": "true",
+        "CYRUS_ML_KNOWLEDGE_SYNC": "true"
+      }
+    },
+    "cyrus-data-collection": {
+      "type": "stdio",
+      "command": "node_modules/.bin/tsx",
+      "args": ["server/mcp/cyrus-data-collection-server.ts"],
+      "env": {
+        "CYRUS_INGEST_SCRAPED_ASSETS": "true"
+      }
+    },
+    "io.github.github/github-mcp-server": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN=${input:token}",
+        "ghcr.io/github/github-mcp-server:0.33.0"
+      ],
+      "gallery": "https://api.mcp.github.com",
+      "version": "0.33.0"
+    }
+  },
+  "inputs": [
+    {
+      "id": "token",
+      "type": "promptString",
+      "description": "GitHub personal access token",
+      "password": true
+    }
+  ]
 }

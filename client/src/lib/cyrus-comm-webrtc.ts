@@ -1,20 +1,34 @@
-/** WebRTC helpers for CYRUS Comm mesh layer (SDP offer/answer + trickle ICE). */
+/** WebRTC helpers for CYRUS Comm mesh layer — shares Presence call quality stack. */
+
+import {
+  applyPreferredCodecsToPeerConnection,
+  resetOutboundBitrateTracker,
+  SDP_NEGOTIATION_OPTIONS,
+} from "./webrtc-config";
+import { acquireCommsUserMedia, tuneCommsPeerConnection } from "./comms-call-media";
+import { fetchCyrusCommRtcConfiguration } from "../realtime/fetch-rtc-config";
+import type { AdaptiveBitrateController } from "./webrtc-config";
 
 const DEFAULT_ICE: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
-export function createCyrusCommPeerConnection(
-  iceServers: RTCIceServer[],
+export type CyrusCommPeer = {
+  pc: RTCPeerConnection;
+  abr: AdaptiveBitrateController | null;
+  audioProcessor: import("./webrtc-config").AudioProcessor | null;
+};
+
+export async function createCyrusCommPeerConnection(
   handlers: {
     onLocalCandidate: (c: RTCIceCandidate) => void;
     onRemoteTrack: (ev: RTCTrackEvent) => void;
     onConnectionState?: (state: RTCPeerConnectionState) => void;
+    onIceState?: (state: RTCIceConnectionState) => void;
   },
-) {
-  const servers = iceServers?.length ? iceServers : DEFAULT_ICE;
-  const pc = new RTCPeerConnection({
-    iceServers: servers,
-    iceCandidatePoolSize: 10,
-  });
+  options?: { callType?: "audio" | "video"; forceRelay?: boolean },
+): Promise<CyrusCommPeer> {
+  const rtcConfig = await fetchCyrusCommRtcConfiguration({ forceRelay: options?.forceRelay });
+  const pc = new RTCPeerConnection(rtcConfig);
+  resetOutboundBitrateTracker(pc);
 
   let restartAttempted = false;
 
@@ -29,7 +43,6 @@ export function createCyrusCommPeerConnection(
     handlers.onConnectionState?.(state);
     if (state === "failed" && !restartAttempted) {
       restartAttempted = true;
-      console.warn("[CyrusComm] ICE failed — restartIce");
       try {
         pc.restartIce();
       } catch (e) {
@@ -38,12 +51,31 @@ export function createCyrusCommPeerConnection(
     }
   };
 
-  return pc;
+  pc.oniceconnectionstatechange = () => {
+    handlers.onIceState?.(pc.iceConnectionState);
+    if (pc.iceConnectionState === "failed" && !restartAttempted) {
+      restartAttempted = true;
+      try {
+        pc.restartIce();
+      } catch (e) {
+        console.error("[CyrusComm] restartIce (ice)", e);
+      }
+    }
+  };
+
+  applyPreferredCodecsToPeerConnection(pc);
+  const callType = options?.callType ?? "video";
+  const abr = await tuneCommsPeerConnection(pc, callType);
+
+  return { pc, abr, audioProcessor: null };
 }
 
-export async function getCyrusCommUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream | null> {
+export async function getCyrusCommUserMedia(
+  callType: "audio" | "video",
+): Promise<import("./comms-call-media").CommsAcquiredMedia | null> {
   try {
-    return await navigator.mediaDevices.getUserMedia(constraints);
+    const acquired = await acquireCommsUserMedia(callType);
+    return acquired;
   } catch (e) {
     console.error("[CyrusComm] getUserMedia", e);
     return null;
@@ -56,8 +88,16 @@ export function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream) {
   }
 }
 
-export function closeCyrusCommPeer(pc: RTCPeerConnection | null) {
-  if (!pc) return;
+export function closeCyrusCommPeer(peer: CyrusCommPeer | RTCPeerConnection | null) {
+  if (!peer) return;
+  const pc = "pc" in peer ? peer.pc : peer;
+  const abr = "abr" in peer ? peer.abr : null;
+  const audioProcessor = "audioProcessor" in peer ? peer.audioProcessor : null;
+
+  abr?.stop();
+  audioProcessor?.destroy();
+  resetOutboundBitrateTracker(pc);
+
   try {
     for (const s of pc.getSenders()) {
       try {
@@ -69,8 +109,11 @@ export function closeCyrusCommPeer(pc: RTCPeerConnection | null) {
     pc.onicecandidate = null;
     pc.ontrack = null;
     pc.onconnectionstatechange = null;
+    pc.oniceconnectionstatechange = null;
     pc.close();
   } catch (e) {
     console.warn("[CyrusComm] closePeer", e);
   }
 }
+
+export { SDP_NEGOTIATION_OPTIONS, DEFAULT_ICE };

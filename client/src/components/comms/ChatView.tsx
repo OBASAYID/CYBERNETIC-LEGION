@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import {
   Phone,
   Video,
@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { MessageBubble, CommsMessage } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
+import { CommsMediaDropZone } from "./CommsMediaDropZone";
+import { GroupWorkAssessmentPanel } from "./GroupWorkAssessmentPanel";
 
 interface ChatViewProps {
   conversationId: string | null;
@@ -20,7 +22,11 @@ interface ChatViewProps {
   currentUserId: string;
   typingUsers?: string[];
   onSendMessage: (content: string) => void;
-  onSendMedia?: (file: File, caption: string) => void;
+  onSendMedia?: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: import("../../lib/comms-media-upload").CommsUploadProgress) => void,
+  ) => Promise<void> | void;
   onSendVoice?: (blob: Blob, duration: number) => void;
   onSendLocation?: () => void;
   onToggleEmoji?: () => void;
@@ -34,6 +40,8 @@ interface ChatViewProps {
   /** When true, bottom message input is hidden (e.g. floating new-chat composer is shown). */
   composerSuppressed?: boolean;
   holoSurface?: boolean;
+  participantIds?: string[];
+  getUserDisplayName?: (userId: string) => string;
 }
 
 export function ChatView({
@@ -59,8 +67,17 @@ export function ChatView({
   getAvatarForUser,
   composerSuppressed = false,
   holoSurface = false,
+  participantIds,
+  getUserDisplayName,
 }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleDropMedia = useCallback(
+    (file: File) => {
+      onSendMedia?.(file, "");
+    },
+    [onSendMedia],
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -100,11 +117,25 @@ export function ChatView({
           }
           style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
         >
-          Select a channel
+          {holoSurface ? "Your secure comms hub" : "Select a channel"}
         </h3>
-        <p className={`relative text-sm ${holoSurface ? "text-cyan-200/40" : "text-amber-200/45"}`}>
-          Pick a thread from the list to open the line
+        <p className={`relative max-w-sm px-6 text-center text-sm ${holoSurface ? "text-cyan-200/50" : "text-amber-200/45"}`}>
+          {holoSurface
+            ? "Choose a conversation to send encrypted messages, voice notes, media, and 3D CAD models."
+            : "Pick a thread from the list to open the line"}
         </p>
+        {holoSurface ? (
+          <ul className="relative mt-5 flex flex-wrap justify-center gap-2 px-4">
+            {["Encrypted chat", "Voice notes", "Media & CAD", "HD calls"].map((label) => (
+              <li
+                key={label}
+                className="rounded-full border border-cyan-500/25 bg-cyan-950/40 px-2.5 py-1 text-[10px] font-medium text-cyan-100/75"
+              >
+                {label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     );
   }
@@ -223,6 +254,23 @@ export function ChatView({
         </div>
       </div>
 
+      {isGroup && conversationId ? (
+        <GroupWorkAssessmentPanel
+          groupId={conversationId}
+          groupName={conversationName}
+          myUserId={currentUserId}
+          participantIds={participantIds}
+          getUserDisplayName={getUserDisplayName}
+          holoSurface={holoSurface}
+        />
+      ) : null}
+
+      <CommsMediaDropZone
+        enabled={Boolean(onSendMedia) && !composerSuppressed}
+        holoSurface={holoSurface}
+        onFile={handleDropMedia}
+        className="flex min-h-0 flex-1 flex-col"
+      >
       <div
         ref={scrollRef}
         className={
@@ -244,7 +292,7 @@ export function ChatView({
             </div>
             <p className={`text-sm ${holoSurface ? "text-cyan-100/85" : "text-amber-100/85"}`}>No messages yet</p>
             <p className={`mt-1 text-xs ${holoSurface ? "text-cyan-200/38" : "text-amber-200/40"}`}>
-              Open the line — first transmission wins
+              Open the line — attach, paste, or drop files to share
             </p>
           </div>
         ) : (
@@ -310,6 +358,7 @@ export function ChatView({
           disabled={!conversationId}
         />
       )}
+      </CommsMediaDropZone>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { systemFetch, commsAssetUrl } from "@shared/cyrus-api-client";
 import { useComms } from "../hooks/useComms";
 import { usePresence } from "../contexts/PresenceContext";
 import { useLocation } from "wouter";
-import { MessageSquare, Phone, Users, Activity, Smile, X, Radio, Share2 } from "lucide-react";
+import { MessageSquare, Phone, Users, Activity, X, Radio, Share2 } from "lucide-react";
 import { CommsPlatform } from "../components/comms/CommsPlatform";
 import { CommsUserRoster } from "../components/comms/CommsUserRoster";
 import { Conversation } from "../components/comms/ConversationList";
@@ -28,18 +28,27 @@ import {
   mapServerMessageToComms,
 } from "../lib/comms-message-map";
 import { getCommsDeviceId } from "../lib/comms-device-id";
+import { normalizeAvatarUploadFile } from "../lib/comms-avatar-upload";
+import { uploadAndBuildCommsMediaPayload } from "../lib/comms-media-upload";
+import { buildTypingPayload, isGroupConversationId } from "../lib/comms-outbound";
+import { presetToCallQualityLabel } from "../lib/comms-call-media";
 import { buildOrbitalForwardSlots, writeOrbitalSlotPin } from "../lib/comms-orbital-integration";
 import { callShellVisible } from "@shared/calls/call-session-types";
 import { CommsCallDiagnosticsOverlay } from "../components/comms/CommsCallDiagnosticsOverlay";
 import { ConferenceQuickPanel } from "../components/comms/ConferenceQuickPanel";
-import { CommsNexusWorkspace } from "../components/comms/CommsNexusWorkspace";
-import { CommsOrbitalCommandDeck, type OrbitalMainTab } from "../components/comms/CommsOrbitalCommandDeck";
+import { GroupCallPanel } from "../components/comms/GroupCallPanel";
+import { useCyrusGroupCall } from "../hooks/useCyrusGroupCall";
+import { useCommsSessionRecording } from "../hooks/useCommsSessionRecording";
+import { SessionRecordingsPanel } from "../components/comms/SessionRecordingsPanel";
+import type { CommsConference } from "../lib/comms-conference-api";
+import { CommsPremiumShell } from "../components/comms/CommsPremiumShell";
+import { CommsOrbitalDeckConnected } from "../components/comms/CommsOrbitalDeckConnected";
 import { NexusModuleSurface } from "../components/comms/NexusModuleSurface";
 
 type MainTab = "chat" | "calls" | "people" | "streams" | "monitor" | "pshare";
 
 const MODULE_SECTOR_SUBTITLE: Record<MainTab, string> = {
-  chat: "Encrypted messaging, voice notes, and media",
+  chat: "Encrypted messaging, voice notes, media & 3D CAD",
   pshare: "Timeline, handoffs, and field posts",
   calls: "Mesh calls, quick dial, and conference bridge",
   people: "Presence, roster, and discovery",
@@ -56,9 +65,11 @@ function conversationPreviewLine(msg: {
   const mt = (msg.messageType || "").toLowerCase();
   if (mt === "voice-note") return "🎤 Voice message";
   if (mt === "location") return "📍 Location";
+  if (mt === "cad-3d") return "🧊 3D model";
   if (mt === "emoji") return msg.content || "Emoji";
-  if (mt === "media" || msg.fileUrl) {
+  if (mt === "media" || mt === "file" || mt === "cad-3d" || msg.fileUrl) {
     const m = msg.fileMimeType || "";
+    if (mt === "cad-3d") return "🧊 3D model";
     if (m.startsWith("image/")) return "📷 Photo";
     if (m.startsWith("video/")) return "🎬 Video";
     if (m.startsWith("audio/")) return "🎵 Audio";
@@ -79,14 +90,27 @@ export function CommsPage() {
     return localStorage.getItem("cyrus-theme") !== "light";
   });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiTarget, setEmojiTarget] = useState<string>("");
   const [displayName, setDisplayName] = useState("");
   const [callChatMessages, setCallChatMessages] = useState<
-    { senderId: string; senderName: string; message: string; timestamp: string }[]
+    {
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }[]
   >([]);
+  const [chatGroups, setChatGroups] = useState<Array<{ id: string; name: string; members: string[] }>>([]);
+  const pendingGroupBootstrapRef = useRef<{ message: string } | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [selectedConvForMessage, setSelectedConvForMessage] = useState<string | null>(null);
   const [callReactions, setCallReactions] = useState<Reaction[]>([]);
+  const [remoteRecording, setRemoteRecording] = useState<{ active: boolean; by?: string }>({
+    active: false,
+  });
   const [callQuality, setCallQuality] = useState<"HD" | "SD" | "Low">("HD");
   const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
   const [localMessages, setLocalMessages] = useState<CommsMessage[]>([]);
@@ -102,6 +126,9 @@ export function CommsPage() {
   const [newChatPicks, setNewChatPicks] = useState<string[]>([]);
   const [orbitalAssignSlot, setOrbitalAssignSlot] = useState<number | null>(null);
   const [slotPinRevision, setSlotPinRevision] = useState(0);
+  const [networkMapExpanded, setNetworkMapExpanded] = useState(true);
+  const [orbitalConference, setOrbitalConference] = useState<CommsConference | null>(null);
+  const noopSetChatPanel = useCallback((_open: boolean) => {}, []);
 
   const {
     messages,
@@ -136,14 +163,132 @@ export function CommsPage() {
     callDiagnostics,
     reportRemoteMediaPlayback,
     recoverCallMedia,
+    isScreenSharing,
+    screenShareStream,
+    remoteScreenSharerName,
+    startScreenShare,
+    stopScreenShare,
+    sendCallChatMessage,
   } = usePresence();
+
+  const myId = myUserId || myDeviceId;
+
+  const {
+    sfuStatus,
+    incomingGroupCall,
+    activeGroupCall,
+    localStream: groupLocalStream,
+    isMuted: groupMuted,
+    isVideoEnabled: groupVideoEnabled,
+    createGroupCall,
+    joinGroupCall,
+    acceptIncomingGroupCall,
+    declineIncomingGroupCall,
+    endGroupCall,
+    toggleMute: toggleGroupMute,
+    toggleVideo: toggleGroupVideo,
+  } = useCyrusGroupCall({
+    socketRef: wsRef,
+    selfId: myId,
+    displayName,
+    isConnected,
+  });
+
+  const activeSessionRoomId = activeCall?.roomId ?? activeGroupCall?.roomId ?? null;
+  const activeSessionCallType = activeCall?.callType ?? activeGroupCall?.callType ?? "audio";
+  const activeSessionLocalStream = activeCall ? localStream : groupLocalStream;
+  const activeSessionRemoteStreams = useMemo(() => {
+    if (activeCall && remoteStream) return [remoteStream];
+    if (activeGroupCall) {
+      return activeGroupCall.participants
+        .map((p) => p.stream)
+        .filter((s): s is MediaStream => Boolean(s));
+    }
+    return [];
+  }, [activeCall, remoteStream, activeGroupCall]);
+
+  const sessionRecording = useCommsSessionRecording({
+    roomId: activeSessionRoomId,
+    callType: activeSessionCallType,
+    localStream: activeSessionLocalStream,
+    remoteStreams: activeSessionRemoteStreams,
+    screenShareStream:
+      isScreenSharing && screenShareStream ? screenShareStream : undefined,
+    recordedBy: myId,
+    displayName,
+    socketRef: wsRef,
+  });
+
+  useEffect(() => {
+    if (!activeSessionRoomId) {
+      setRemoteRecording({ active: false });
+    }
+  }, [activeSessionRoomId]);
+
+  useEffect(() => {
+    const sock = wsRef.current;
+    if (!sock) return;
+    const handler = (data: {
+      roomId: string;
+      isRecording: boolean;
+      userId?: string;
+      displayName?: string;
+    }) => {
+      if (!activeSessionRoomId || data.roomId !== activeSessionRoomId) return;
+      if (data.userId && data.userId === myId) return;
+      setRemoteRecording({
+        active: Boolean(data.isRecording),
+        by: data.displayName,
+      });
+    };
+    sock.on("session-recording-state", handler);
+    return () => {
+      sock.off("session-recording-state", handler);
+    };
+  }, [activeSessionRoomId, myId, wsRef]);
+
+  const handleToggleRecording = useCallback(async () => {
+    if (sessionRecording.isRecording) {
+      await sessionRecording.stopRecording();
+    } else {
+      sessionRecording.startRecording();
+    }
+  }, [sessionRecording]);
 
   const myUserIdRef = useRef(myUserId);
   const myDeviceIdRef = useRef(myDeviceId);
   const displayNameRef = useRef(displayName);
+  const presenceSendChatMessageRef = useRef(presenceSendChatMessage);
   useEffect(() => { myUserIdRef.current = myUserId; }, [myUserId]);
   useEffect(() => { myDeviceIdRef.current = myDeviceId; }, [myDeviceId]);
   useEffect(() => { displayNameRef.current = displayName; }, [displayName]);
+  useEffect(() => { presenceSendChatMessageRef.current = presenceSendChatMessage; }, [presenceSendChatMessage]);
+
+  useEffect(() => {
+    if (!activeCall) setCallChatMessages([]);
+  }, [activeCall?.roomId, activeCall]);
+
+  useEffect(() => {
+    const preset = callDiagnostics?.abrPreset;
+    if (preset) {
+      setCallQuality(presetToCallQualityLabel(preset));
+    }
+  }, [callDiagnostics?.abrPreset]);
+
+  useEffect(() => {
+    const uid = myUserId || myDeviceId;
+    if (!uid) return;
+    void systemFetch("/api/comms/groups", {
+      headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: Array<{ id: string; name: string; members?: string[] }>) => {
+        if (Array.isArray(rows)) {
+          setChatGroups(rows.map((g) => ({ id: g.id, name: g.name, members: g.members || [] })));
+        }
+      })
+      .catch(() => {});
+  }, [myUserId, myDeviceId]);
 
   useEffect(() => {
     const savedName = localStorage.getItem("cyrus-display-name") || "CYRUS User";
@@ -238,6 +383,7 @@ export function CommsPage() {
       message: string;
       messageType?: string;
       timestamp: string;
+      groupId?: string;
       fileUrl?: string;
       fileName?: string;
       fileMimeType?: string;
@@ -254,6 +400,7 @@ export function CommsPage() {
           senderName: data.senderName,
           message: data.message,
           messageType: data.messageType,
+          groupId: data.groupId,
           timestamp: data.timestamp || new Date().toISOString(),
           fileUrl: data.fileUrl,
           fileName: data.fileName,
@@ -275,6 +422,7 @@ export function CommsPage() {
     const handleMessageSent = (data: {
       id: string;
       recipientId: string;
+      groupId?: string;
       message: string;
       messageType?: string;
       timestamp: string;
@@ -290,7 +438,8 @@ export function CommsPage() {
       const sentMsg: CommsMessage = fromSocketMessageSent(
         {
           id: data.id || `sent_${Date.now()}`,
-          recipientId: data.recipientId,
+          recipientId: data.groupId || data.recipientId,
+          groupId: data.groupId,
           message: data.message,
           messageType: data.messageType,
           timestamp: data.timestamp || new Date().toISOString(),
@@ -312,8 +461,23 @@ export function CommsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/comms/messages"] });
     };
 
-    const handleCallChatMessage = (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
-      setCallChatMessages(prev => [...prev, data]);
+    const handleCallChatMessage = (data: {
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+    }) => {
+      setCallChatMessages((prev) => {
+        const sig = `${data.senderId}|${data.timestamp}|${data.fileUrl ?? ""}|${data.message}`;
+        if (prev.some((m) => `${m.senderId}|${m.timestamp}|${m.fileUrl ?? ""}|${m.message}` === sig)) {
+          return prev;
+        }
+        return [...prev, data];
+      });
     };
 
     const handleReactionReceived = (data: { emoji: string; x: number; y: number; userId: string }) => {
@@ -371,11 +535,32 @@ export function CommsPage() {
       ));
     };
 
+    const handleGroupCreated = (data: {
+      groupId: string;
+      name: string;
+      members: string[];
+    }) => {
+      setChatGroups((prev) => {
+        if (prev.some((g) => g.id === data.groupId)) return prev;
+        return [...prev, { id: data.groupId, name: data.name, members: data.members || [] }];
+      });
+      setPendingConversationId(data.groupId);
+      setActiveTab("chat");
+      setNewChatMode(false);
+      setNewChatPicks([]);
+      const bootstrap = pendingGroupBootstrapRef.current;
+      if (bootstrap?.message.trim()) {
+        presenceSendChatMessageRef.current(data.groupId, { message: bootstrap.message, messageType: "text" });
+        pendingGroupBootstrapRef.current = null;
+      }
+    };
+
     socket.on("new-message", handleNewMessage);
     socket.on("message-sent", handleMessageSent);
     socket.on("typing-started", handleTypingStart);
     socket.on("typing-stopped", handleTypingStop);
     socket.on("call-chat-message", handleCallChatMessage);
+    socket.on("group-created", handleGroupCreated);
     socket.on("reaction-received", handleReactionReceived);
     socket.on("call-quality-updated", handleCallQualityUpdated);
     socket.on("live-stream-started", handleLiveStreamStarted);
@@ -389,6 +574,7 @@ export function CommsPage() {
       socket.off("typing-started", handleTypingStart);
       socket.off("typing-stopped", handleTypingStop);
       socket.off("call-chat-message", handleCallChatMessage);
+      socket.off("group-created", handleGroupCreated);
       socket.off("reaction-received", handleReactionReceived);
       socket.off("call-quality-updated", handleCallQualityUpdated);
       socket.off("live-stream-started", handleLiveStreamStarted);
@@ -397,8 +583,6 @@ export function CommsPage() {
       socket.off("stream-viewer-left", handleStreamViewerLeft);
     };
   }, [queryClient, isConnected, myUserId]);
-
-  const myId = myUserId || myDeviceId;
 
   const newChatPickCandidates = useMemo(
     () => (allUsers || []).filter((u) => u.id && u.id !== myId).map((u) => ({ id: u.id, displayName: u.displayName })),
@@ -428,7 +612,7 @@ export function CommsPage() {
       id: u.id,
       displayName: u.displayName,
       profileImageUrl: commsAssetUrl(liveProfile.get(u.id) ?? u.profileImageUrl) ?? null,
-      isOnline: on.has(u.id),
+      isOnline: on.has(u.id) || Boolean(u.isOnline),
     }));
   }, [allUsers, onlineUsers]);
 
@@ -464,10 +648,11 @@ export function CommsPage() {
   const handleChatAvatarUpload = useCallback(
     async (file: File) => {
       if (!myId) return;
+      const normalized = normalizeAvatarUploadFile(file);
       setAvatarUploading(true);
       try {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", normalized, normalized.name);
         const res = await systemFetch("/api/comms/user/avatar", {
           method: "POST",
           body: fd,
@@ -481,15 +666,19 @@ export function CommsPage() {
           await queryClient.invalidateQueries({ queryKey: ["/api/comms/users/all"] });
         } else {
           console.error("Avatar upload failed:", data.error || res.status);
-          window.alert(data.error || `Photo upload failed (${res.status}). Try a smaller JPG or PNG.`);
+          window.alert(
+            data.error ||
+              `Photo upload failed (${res.status}). Try JPG, PNG, WebP, HEIC, or another image under 16 MB.`,
+          );
         }
       } catch (e) {
         console.error("Avatar upload failed:", e);
+        window.alert("Photo upload failed. Check your connection and try again.");
       } finally {
         setAvatarUploading(false);
       }
     },
-    [myId, queryClient]
+    [myId, queryClient],
   );
 
   useEffect(() => {
@@ -533,18 +722,42 @@ export function CommsPage() {
     });
 
     for (const msg of dedupedMsgs) {
-      const partnerId = msg.senderId === myId ? msg.recipientId : msg.senderId;
-      if (partnerId === "broadcast" || !partnerId) continue;
-      const existing = convMap.get(partnerId);
-      const partnerUser = allUsers.find(u => u.id === partnerId);
-      const partnerOnline = onlineUsers.find(u => u.id === partnerId);
-      const name = partnerUser?.displayName || partnerOnline?.displayName || partnerId.substring(0, 12) + "...";
+      const threadId = isGroupConversationId(msg.recipientId)
+        ? msg.recipientId
+        : msg.senderId === myId
+          ? msg.recipientId
+          : msg.senderId;
+      if (!threadId || threadId === "broadcast") continue;
+
+      if (isGroupConversationId(threadId)) {
+        const group = chatGroups.find((g) => g.id === threadId);
+        const existing = convMap.get(threadId);
+        if (!existing || new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
+          const unread = (existing?.unreadCount || 0) + (msg.senderId !== myId && !msg.read ? 1 : 0);
+          convMap.set(threadId, {
+            id: threadId,
+            name: group?.name || "Group discussion",
+            isGroup: true,
+            participants: group?.members,
+            lastMessage: conversationPreviewLine(msg),
+            lastMessageTime: msg.timestamp,
+            unreadCount: unread,
+          });
+        }
+        continue;
+      }
+
+      const existing = convMap.get(threadId);
+      const partnerUser = allUsers.find((u) => u.id === threadId);
+      const partnerOnline = onlineUsers.find((u) => u.id === threadId);
+      const name =
+        partnerUser?.displayName || partnerOnline?.displayName || threadId.substring(0, 12) + "...";
       const isOnline = partnerUser?.isOnline || !!partnerOnline;
 
       if (!existing || new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
         const unread = (existing?.unreadCount || 0) + (msg.senderId !== myId && !msg.read ? 1 : 0);
-        convMap.set(partnerId, {
-          id: partnerId,
+        convMap.set(threadId, {
+          id: threadId,
           name,
           isGroup: false,
           lastMessage: conversationPreviewLine(msg),
@@ -555,25 +768,55 @@ export function CommsPage() {
       }
     }
 
+    for (const g of chatGroups) {
+      if (!convMap.has(g.id)) {
+        convMap.set(g.id, {
+          id: g.id,
+          name: g.name,
+          isGroup: true,
+          participants: g.members,
+          lastMessage: "Group thread — share media & CAD",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+        });
+      }
+    }
+
     if (pendingConversationId && !convMap.has(pendingConversationId)) {
-      const partnerUser = allUsers.find(u => u.id === pendingConversationId);
-      const partnerOnline = onlineUsers.find(u => u.id === pendingConversationId);
-      const name = partnerUser?.displayName || partnerOnline?.displayName || pendingConversationId.substring(0, 12) + "...";
-      convMap.set(pendingConversationId, {
-        id: pendingConversationId,
-        name,
-        isGroup: false,
-        lastMessage: "Start a conversation...",
-        lastMessageTime: new Date().toISOString(),
-        unreadCount: 0,
-        isOnline: !!partnerOnline || partnerUser?.isOnline,
-      });
+      if (isGroupConversationId(pendingConversationId)) {
+        const g = chatGroups.find((x) => x.id === pendingConversationId);
+        convMap.set(pendingConversationId, {
+          id: pendingConversationId,
+          name: g?.name || "Group discussion",
+          isGroup: true,
+          participants: g?.members,
+          lastMessage: "Start the group thread…",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+        });
+      } else {
+        const partnerUser = allUsers.find((u) => u.id === pendingConversationId);
+        const partnerOnline = onlineUsers.find((u) => u.id === pendingConversationId);
+        const name =
+          partnerUser?.displayName ||
+          partnerOnline?.displayName ||
+          pendingConversationId.substring(0, 12) + "...";
+        convMap.set(pendingConversationId, {
+          id: pendingConversationId,
+          name,
+          isGroup: false,
+          lastMessage: "Start a conversation...",
+          lastMessageTime: new Date().toISOString(),
+          unreadCount: 0,
+          isOnline: !!partnerOnline || partnerUser?.isOnline,
+        });
+      }
     }
 
     return Array.from(convMap.values()).sort(
       (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
     );
-  }, [messages, localMessages, myId, allUsers, onlineUsers, pendingConversationId]);
+  }, [messages, localMessages, myId, allUsers, onlineUsers, pendingConversationId, chatGroups]);
 
   const getSenderName = useCallback(
     (senderId: string) => {
@@ -638,45 +881,42 @@ export function CommsPage() {
     (content: string) => {
       const t = content.trim();
       if (!t || newChatPicks.length === 0) return;
+      const members = newChatPicks.filter((id) => id !== myId);
+      if (members.length >= 2 || (members.length >= 1 && newChatPicks.length >= 2)) {
+        const label =
+          newChatPicks
+            .slice(0, 3)
+            .map((id) => getUserDisplayNameForChat(id))
+            .join(", ") + (newChatPicks.length > 3 ? "…" : "");
+        pendingGroupBootstrapRef.current = { message: t };
+        wsRef.current?.emit("create-group", {
+          name: label || "Group discussion",
+          members,
+        });
+        return;
+      }
       const target = newChatPicks[0];
       setPendingConversationId(target);
       presenceSendChatMessage(target, { message: t, messageType: "text" });
       setNewChatMode(false);
       setNewChatPicks([]);
     },
-    [newChatPicks, presenceSendChatMessage]
+    [newChatPicks, myId, presenceSendChatMessage, getUserDisplayNameForChat, wsRef],
   );
 
   const handleSendMedia = useCallback(
-    async (conversationId: string, file: File, caption: string) => {
-      const formData = new FormData();
-      formData.append("file", file);
+    async (
+      conversationId: string,
+      file: File,
+      caption: string,
+      onProgress?: (progress: import("../lib/comms-media-upload").CommsUploadProgress) => void,
+    ) => {
       const uid = myUserId || myDeviceId;
-      try {
-        const res = await systemFetch("/api/comms/upload", {
-          method: "POST",
-          body: formData,
-          headers: { "X-Device-Id": getCommsDeviceId(), "X-User-Id": uid },
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { fileUrl: string; fileName: string; mimeType?: string };
-          const mime = data.mimeType || file.type || "";
-          const isRichMedia =
-            mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
-          presenceSendChatMessage(conversationId, {
-            message: caption || " ",
-            messageType: isRichMedia ? "media" : "file",
-            fileUrl: data.fileUrl,
-            fileName: data.fileName || file.name,
-            fileMimeType: mime || undefined,
-            fileSizeBytes: file.size,
-          });
-        }
-      } catch (err) {
-        console.error("Upload failed:", err);
-      }
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid, undefined, onProgress);
+      if (!payload) throw new Error("Upload failed — file may be too large or unsupported");
+      presenceSendChatMessage(conversationId, payload);
     },
-    [myUserId, myDeviceId, presenceSendChatMessage]
+    [myUserId, myDeviceId, presenceSendChatMessage],
   );
 
   const handleSendVoice = useCallback(
@@ -729,13 +969,19 @@ export function CommsPage() {
     [presenceSendChatMessage]
   );
 
-  const handleTypingStart = useCallback((conversationId: string) => {
-    wsRef.current?.emit("typing-start", { targetUserId: conversationId, conversationId });
-  }, [wsRef]);
+  const handleTypingStart = useCallback(
+    (conversationId: string) => {
+      wsRef.current?.emit("typing-start", buildTypingPayload(conversationId));
+    },
+    [wsRef],
+  );
 
-  const handleTypingStop = useCallback((conversationId: string) => {
-    wsRef.current?.emit("typing-stop", { targetUserId: conversationId, conversationId });
-  }, [wsRef]);
+  const handleTypingStop = useCallback(
+    (conversationId: string) => {
+      wsRef.current?.emit("typing-stop", buildTypingPayload(conversationId));
+    },
+    [wsRef],
+  );
 
   const handleReact = useCallback((messageId: string, emoji: string) => {
     wsRef.current?.emit("message-reaction", { messageId, emoji });
@@ -752,8 +998,29 @@ export function CommsPage() {
   }, [callUser]);
 
   const handleCreateGroup = useCallback(() => {
-    // TODO: Group creation modal
-  }, []);
+    const tablePeerIds = forwardSlots
+      .map((s) => s.peer)
+      .filter((p): p is NonNullable<typeof p> => !!p?.isOnline && p.id !== myId)
+      .map((p) => p.id);
+    if (tablePeerIds.length >= 2) {
+      const label =
+        forwardSlots
+          .map((s) => s.peer?.displayName)
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(", ") || "Round table";
+      wsRef.current?.emit("create-group", {
+        name: `${label} discussion`,
+        members: tablePeerIds,
+      });
+      setActiveTab("chat");
+      return;
+    }
+    setNewChatMode(true);
+    setNewChatCascadeKey((k) => k + 1);
+    setNewChatPicks(tablePeerIds);
+    setActiveTab("chat");
+  }, [forwardSlots, myId, wsRef]);
 
   const handleNewChat = useCallback(() => {
     setNewChatMode(true);
@@ -780,39 +1047,14 @@ export function CommsPage() {
     setActiveTab("chat");
   }, [orbitalAssignSlot]);
 
-  const handleOrbitalPeerMessage = useCallback((userId: string, _userName: string, slotIndex: number) => {
-    writeOrbitalSlotPin(slotIndex, userId);
-    setSlotPinRevision((r) => r + 1);
-    setSelectedConvForMessage(userId);
-    setActiveTab("chat");
-  }, []);
-
   const handleEmptyOrbitalSlot = useCallback((slotIndex: number, _refLabel: string) => {
     setOrbitalAssignSlot(slotIndex);
     setActiveTab("people");
   }, []);
 
-  const handleOrbitalHubActivate = useCallback(() => {
-    setActiveTab("chat");
-  }, []);
-
   const handleUserCall = useCallback((userId: string, userName: string, type: "audio" | "video") => {
     callUser(userId, userName, type);
   }, [callUser]);
-
-  /** Orbital HUD: soft invite via chat + jump to channel (distinct from immediate video dial). */
-  const handleOrbitalVideoInvite = useCallback(
-    (userId: string, _userName: string) => {
-      setActiveTab("chat");
-      setSelectedConvForMessage(userId);
-      presenceSendChatMessage(userId, {
-        message: `📹 ${displayName} invites you to a video session — open Calls when you're ready to connect.`,
-        messageType: "text",
-        timestamp: new Date().toISOString(),
-      });
-    },
-    [displayName, presenceSendChatMessage]
-  );
 
   const handleEmojiSelect = useCallback((emoji: string) => {
     setShowEmojiPicker(false);
@@ -878,37 +1120,32 @@ export function CommsPage() {
   }, [wsRef]);
 
   const handleScreenShareStart = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      wsRef.current?.emit("screen-share-start", {
-        roomId: activeCall?.roomId,
-      });
-      stream.getVideoTracks()[0].onended = () => {
-        wsRef.current?.emit("screen-share-stop", { roomId: activeCall?.roomId });
-      };
-    } catch (err) {
-      console.error("Screen share failed:", err);
-    }
-  }, [wsRef, activeCall]);
+    await startScreenShare();
+  }, [startScreenShare]);
 
-  const handleScreenShareStop = useCallback(() => {
-    wsRef.current?.emit("screen-share-stop", { roomId: activeCall?.roomId });
-  }, [wsRef, activeCall]);
+  const handleScreenShareStop = useCallback(async () => {
+    await stopScreenShare();
+  }, [stopScreenShare]);
 
   const handleCallChatSend = useCallback((message: string) => {
     if (!activeCall?.roomId || !myUserId) return;
-    wsRef.current?.emit("call-chat-message", {
-      roomId: activeCall.roomId,
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    setCallChatMessages(prev => [...prev, {
-      senderId: myUserId,
-      senderName: displayName,
-      message,
-      timestamp: new Date().toISOString(),
-    }]);
-  }, [wsRef, activeCall, myUserId, displayName]);
+    sendCallChatMessage({ message, messageType: "text" });
+  }, [activeCall?.roomId, myUserId, sendCallChatMessage]);
+
+  const handleCallChatMedia = useCallback(
+    async (
+      file: File,
+      caption: string,
+      onProgress?: (progress: import("../lib/comms-media-upload").CommsUploadProgress) => void,
+    ) => {
+      if (!activeCall?.roomId || !myUserId) return;
+      const uid = myUserId || myDeviceId;
+      const payload = await uploadAndBuildCommsMediaPayload(file, caption, uid, undefined, onProgress);
+      if (!payload) throw new Error("Upload failed");
+      sendCallChatMessage(payload);
+    },
+    [activeCall?.roomId, myUserId, myDeviceId, sendCallChatMessage],
+  );
 
   const callParticipants: CallParticipant[] = activeCall
     ? [
@@ -918,10 +1155,53 @@ export function CommsPage() {
           stream: remoteStream || undefined,
           isMuted: false,
           isVideoEnabled: activeCall.callType === "video",
-          connectionQuality: "good" as const,
+          connectionQuality:
+            callDiagnostics?.qualityScores?.label === "Critical" ||
+            callDiagnostics?.qualityScores?.label === "Poor"
+              ? "poor"
+              : callDiagnostics?.qualityScores?.label === "Good"
+                ? "fair"
+                : "good",
         },
       ]
     : [];
+
+  const groupCallParticipants: CallParticipant[] = activeGroupCall
+    ? activeGroupCall.participants.map((p) => ({
+        id: p.peerId,
+        displayName: p.displayName,
+        stream: p.stream || undefined,
+        isVideoEnabled: activeGroupCall.callType === "video",
+      }))
+    : [];
+
+  const handleConferenceMedia = useCallback(
+    (conference: CommsConference, action: "create" | "join") => {
+      if (action === "create") {
+        createGroupCall([], "video", conference.title, conference.conferenceId);
+      } else {
+        joinGroupCall(conference.conferenceId);
+      }
+    },
+    [createGroupCall, joinGroupCall],
+  );
+
+  const handleStartGroupCall = useCallback(
+    (peerIds: string[], callType: "audio" | "video") => {
+      createGroupCall(peerIds, callType, "Group call");
+    },
+    [createGroupCall],
+  );
+
+  const activeScreenShareStream =
+    isScreenSharing && screenShareStream
+      ? screenShareStream
+      : remoteScreenSharerName && remoteStream
+        ? remoteStream
+        : undefined;
+  const activeScreenSharerName = isScreenSharing
+    ? displayName
+    : remoteScreenSharerName || undefined;
 
   const tabConfig = [
     { id: "chat" as MainTab, icon: MessageSquare, label: "Chat" },
@@ -931,8 +1211,6 @@ export function CommsPage() {
     { id: "streams" as MainTab, icon: Radio, label: "Streams" },
     { id: "monitor" as MainTab, icon: Activity, label: "Monitor" },
   ];
-
-  const socialChannelTab = activeTab === "chat" || activeTab === "pshare";
 
   const themeClass = darkMode ? "" : "light-theme";
 
@@ -985,18 +1263,55 @@ export function CommsPage() {
           callDuration={callDuration}
           callQuality={callQuality}
           mediaEstablishing={activeCall.status !== "connected"}
+          isScreenSharing={isScreenSharing || Boolean(remoteScreenSharerName)}
+          screenShareStream={activeScreenShareStream}
+          screenSharerName={activeScreenSharerName}
           onToggleMute={toggleMute}
           onToggleVideo={toggleVideo}
           onEndCall={endCall}
           onStartScreenShare={handleScreenShareStart}
           onStopScreenShare={handleScreenShareStop}
           onSendChatMessage={handleCallChatSend}
+          onSendCallMedia={handleCallChatMedia}
           onSendReaction={handleSendReaction}
           onShareLocation={handleCallLocationShare}
           chatMessages={callChatMessages}
           reactions={callReactions}
           socketRef={wsRef}
           onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
+          isRecording={sessionRecording.isRecording}
+          isRecordingUploading={sessionRecording.isUploading}
+          recordingDurationSec={sessionRecording.recordingDurationSec}
+          remoteRecordingActive={remoteRecording.active}
+          remoteRecordingBy={remoteRecording.by}
+          onToggleRecording={() => void handleToggleRecording()}
+        />
+      )}
+
+      {activeGroupCall && !activeCall && (
+        <CallView
+          roomId={activeGroupCall.roomId}
+          callType={activeGroupCall.callType}
+          participants={groupCallParticipants}
+          localStream={groupLocalStream}
+          currentUserId={myId}
+          currentUserName={displayName}
+          isMuted={groupMuted}
+          isVideoEnabled={groupVideoEnabled}
+          callDuration={0}
+          callQuality={callQuality}
+          onToggleMute={toggleGroupMute}
+          onToggleVideo={toggleGroupVideo}
+          onEndCall={endGroupCall}
+          onSendReaction={handleSendReaction}
+          reactions={callReactions}
+          socketRef={wsRef}
+          isRecording={sessionRecording.isRecording}
+          isRecordingUploading={sessionRecording.isUploading}
+          recordingDurationSec={sessionRecording.recordingDurationSec}
+          remoteRecordingActive={remoteRecording.active}
+          remoteRecordingBy={remoteRecording.by}
+          onToggleRecording={() => void handleToggleRecording()}
         />
       )}
 
@@ -1009,15 +1324,27 @@ export function CommsPage() {
         />
       )}
 
-      <CommsNexusWorkspace
+      {incomingGroupCall && !incomingCall && (
+        <IncomingCallOverlay
+          callerName={incomingGroupCall.callerName}
+          callType={incomingGroupCall.callType}
+          onAccept={acceptIncomingGroupCall}
+          onDecline={declineIncomingGroupCall}
+          isGroup
+          groupName={incomingGroupCall.groupName}
+        />
+      )}
+
+      <CommsPremiumShell
         className="min-h-0 flex-1"
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         displayName={displayName}
         isConnected={isConnected}
         onlineUsersLength={onlineUsers.length}
-        sceneTitle="Key Event Assurance Service"
-        sceneSubtitle="— Delivering Network Resilience to Maintain Customer Satisfaction"
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        tabs={tabConfig.map((t) => ({ ...t, subtitle: MODULE_SECTOR_SUBTITLE[t.id] }))}
         handoff={
           commsHandoffText ? (
             <div
@@ -1055,184 +1382,186 @@ export function CommsPage() {
                 </button>
               </div>
             </div>
-          ) : null
-        }
-        commandDeck={
-          <CommsOrbitalCommandDeck
-            darkMode={darkMode}
-            displayName={displayName}
-            isConnected={isConnected}
-            mainUserPhotoUrl={localChatAvatar}
-            onMainUserPhotoUpload={handleChatAvatarUpload}
-            photoUploading={avatarUploading}
-            forwardSlots={forwardSlots}
-            selectedPeerId={selectedOrbitalPeerId}
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            onPeerCall={handleUserCall}
-            onPeerMessage={handleOrbitalPeerMessage}
-            onPeerVideoInvite={handleOrbitalVideoInvite}
-            onEmptySlotClick={handleEmptyOrbitalSlot}
-            onHubActivate={handleOrbitalHubActivate}
-          />
-        }
-        integratedConsole={
-          activeTab === "chat" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              {anomalyBanner}
-              <div
-                className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-5 sm:py-2.5 ${
-                  darkMode ? "border-cyan-500/25 bg-black/25" : "border-sky-200/60 bg-white/40"
-                }`}
-              >
-                <div className="min-w-0">
-                  <p
-                    className={`font-mono text-[8px] uppercase tracking-[0.42em] sm:text-[9px] ${
-                      darkMode ? "text-cyan-400/65" : "text-sky-600/80"
-                    }`}
-                  >
-                    NEXUS console · messaging band
-                  </p>
-                  <p
-                    className={`truncate text-sm font-semibold sm:text-base ${darkMode ? "text-white" : "text-slate-900"}`}
-                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                  >
-                    Chat
-                  </p>
-                  <p className={`truncate text-[10px] sm:text-[11px] ${darkMode ? "text-white/45" : "text-slate-600"}`}>
-                    {MODULE_SECTOR_SUBTITLE.chat}
-                  </p>
-                </div>
-              </div>
-              <div className={modulePanelShell}>
-                <NexusModuleSurface variant="flush">
-                  <CommsPlatform
-                    holoSurface
-                    conversations={conversations}
-                    messages={commsMessages}
-                    currentUserId={myId}
-                    typingUsers={typingUsers}
-                    initialConversationId={pendingConversationId}
-                    onSendMessage={handleSendMessage}
-                    onSendMedia={handleSendMedia}
-                    onSendVoice={handleSendVoice}
-                    onSendLocation={handleSendLocation}
-                    onTypingStart={handleTypingStart}
-                    onTypingStop={handleTypingStop}
-                    onReact={handleReact}
-                    onAudioCall={handleAudioCall}
-                    onVideoCall={handleVideoCall}
-                    onCreateGroup={handleCreateGroup}
-                    onNewChat={handleNewChat}
-                    getAvatarForUser={getAvatarForUser}
-                    newChatMode={newChatMode}
-                    newChatCascadeKey={newChatCascadeKey}
-                    newChatPicks={newChatPicks}
-                    onToggleNewChatPick={handleToggleNewChatPick}
-                    onNewChatSend={handleNewChatSend}
-                    onDismissNewChat={handleDismissNewChat}
-                    getUserDisplayName={getUserDisplayNameForChat}
-                    newChatPickCandidates={newChatPickCandidates}
-                    roster={
-                      <CommsUserRoster
-                        holoSurface
-                        users={rosterUsers}
-                        myUserId={myId}
-                        onUploadAvatar={handleChatAvatarUpload}
-                        isUploading={avatarUploading}
-                        pickMode={newChatMode}
-                        pickedUserIds={newChatPicks}
-                        onTogglePick={handleToggleNewChatPick}
-                      />
-                    }
-                  />
-                </NexusModuleSurface>
-              </div>
-            </div>
           ) : undefined
         }
-        moduleLabel={tabConfig.find((t) => t.id === activeTab)?.label ?? "Module"}
-        moduleSublabel={MODULE_SECTOR_SUBTITLE[activeTab]}
-        socialChannelTab={socialChannelTab}
       >
-        {activeTab !== "chat" ? (
-        <div className={modulePanelShell}>
+        <div className={`flex h-full min-h-0 flex-col ${modulePanelShell}`}>
           {anomalyBanner}
 
-                {activeTab === "pshare" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 p-1 sm:p-2">
-                      <PsharePanel
-                        holoBlend
-                        myUserId={myId}
-                        allUsers={allUsers}
-                        highlightPostId={psharePostHighlight}
-                        onClearHighlight={() => setPsharePostHighlight(null)}
-                        initialPostBody={commsHandoffText}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "chat" && (
+            <NexusModuleSurface variant="flush">
+              <CommsPlatform
+                holoSurface
+                conversations={conversations}
+                messages={commsMessages}
+                currentUserId={myId}
+                typingUsers={typingUsers}
+                initialConversationId={pendingConversationId}
+                onSendMessage={handleSendMessage}
+                onSendMedia={handleSendMedia}
+                onSendVoice={handleSendVoice}
+                onSendLocation={handleSendLocation}
+                onToggleEmoji={() => setShowEmojiPicker(true)}
+                onTypingStart={handleTypingStart}
+                onTypingStop={handleTypingStop}
+                onReact={handleReact}
+                onAudioCall={handleAudioCall}
+                onVideoCall={handleVideoCall}
+                onCreateGroup={handleCreateGroup}
+                onNewChat={handleNewChat}
+                getAvatarForUser={getAvatarForUser}
+                newChatMode={newChatMode}
+                newChatCascadeKey={newChatCascadeKey}
+                newChatPicks={newChatPicks}
+                onToggleNewChatPick={handleToggleNewChatPick}
+                onNewChatSend={handleNewChatSend}
+                onDismissNewChat={handleDismissNewChat}
+                getUserDisplayName={getUserDisplayNameForChat}
+                newChatPickCandidates={newChatPickCandidates}
+                roster={
+                  <CommsUserRoster
+                    holoSurface
+                    users={rosterUsers}
+                    myUserId={myId}
+                    onUploadAvatar={handleChatAvatarUpload}
+                    isUploading={avatarUploading}
+                    pickMode={newChatMode}
+                    pickedUserIds={newChatPicks}
+                    onTogglePick={handleToggleNewChatPick}
+                  />
+                }
+              />
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "people" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                      <UserDiscoveryWithMesh
-                        nexusChrome
-                        onlineUsers={onlineUsers}
-                        allUsers={allUsers}
-                        contacts={contacts}
-                        myDeviceId={myDeviceId}
-                        onMessage={handleUserMessage}
-                        onCall={handleUserCall}
-                        onAddContact={handleAddContact}
-                        onRemoveContact={handleRemoveContact}
-                        onOpenMeshCalls={() => setActiveTab("calls")}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "pshare" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 p-1 sm:p-2">
+                <PsharePanel
+                  holoBlend
+                  myUserId={myId}
+                  myDisplayName={displayName}
+                  allUsers={allUsers}
+                  getAvatarForUser={getAvatarForUser}
+                  highlightPostId={psharePostHighlight}
+                  onClearHighlight={() => setPsharePostHighlight(null)}
+                  initialPostBody={commsHandoffText}
+                />
+              </div>
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "streams" && (
-                  <NexusModuleSurface>
-                    <LiveStreamPanel
-                      holoBlend
-                      streams={liveStreams}
-                      currentUserId={myUserId || myDeviceId}
-                      onStartStream={handleStartStream}
-                      onEndStream={handleEndStream}
-                      onJoinStream={handleJoinStream}
-                      onLeaveStream={handleLeaveStream}
-                      onRefreshList={refreshLiveStreams}
+          {activeTab === "people" && (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div
+                className={`shrink-0 border-b ${
+                  darkMode ? "border-cyan-500/20 bg-black/25" : "border-sky-200/60 bg-white/40"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setNetworkMapExpanded((v) => !v)}
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-xs font-medium transition hover:bg-white/5 ${
+                    darkMode ? "text-cyan-100/90" : "text-slate-700"
+                  }`}
+                >
+                  <span>Network command map · round-table hub</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider opacity-60">
+                    {networkMapExpanded ? "Collapse" : "Expand"}
+                  </span>
+                </button>
+                {networkMapExpanded ? (
+                  <div className="min-h-[min(52vh,560px)] max-h-[min(72vh,680px)] overflow-hidden border-t border-inherit">
+                    <CommsOrbitalDeckConnected
+                      darkMode={darkMode}
+                      displayName={displayName}
+                      isConnected={isConnected}
+                      mainUserPhotoUrl={localChatAvatar}
+                      onMainUserPhotoUpload={handleChatAvatarUpload}
+                      photoUploading={avatarUploading}
+                      forwardSlots={forwardSlots}
+                      myId={myId}
+                      selectedPeerId={selectedOrbitalPeerId}
+                      activeTab={activeTab}
+                      onSelectTab={setActiveTab}
+                      setChatPanelOpen={noopSetChatPanel}
+                      setPendingConversationId={setPendingConversationId}
+                      setSlotPinRevision={setSlotPinRevision}
+                      callUser={callUser}
+                      presenceSendChatMessage={presenceSendChatMessage}
+                      onConferenceReady={setOrbitalConference}
+                      onEmptySlotClick={handleEmptyOrbitalSlot}
+                      serviceTitle="Key Event Assurance Service"
+                      serviceSubtitle="Delivering network resilience · tap a peer for voice, video, or chat"
+                      sceneMode="round-table"
                     />
-                  </NexusModuleSurface>
-                )}
+                  </div>
+                ) : null}
+              </div>
+              <NexusModuleSurface>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                  <UserDiscoveryWithMesh
+                    nexusChrome
+                    onlineUsers={onlineUsers}
+                    allUsers={allUsers}
+                    contacts={contacts}
+                    myDeviceId={myDeviceId}
+                    onMessage={handleUserMessage}
+                    onCall={handleUserCall}
+                    onAddContact={handleAddContact}
+                    onRemoveContact={handleRemoveContact}
+                    onOpenMeshCalls={() => setActiveTab("calls")}
+                  />
+                </div>
+              </NexusModuleSurface>
+            </div>
+          )}
 
-                {activeTab === "monitor" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
-                      <CommsIntelligence userId={myId} />
-                      <AdminDashboard />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "streams" && (
+            <NexusModuleSurface>
+              <LiveStreamPanel
+                holoBlend
+                streams={liveStreams}
+                currentUserId={myUserId || myDeviceId}
+                onStartStream={handleStartStream}
+                onEndStream={handleEndStream}
+                onJoinStream={handleJoinStream}
+                onLeaveStream={handleLeaveStream}
+                onRefreshList={refreshLiveStreams}
+              />
+            </NexusModuleSurface>
+          )}
 
-                {activeTab === "calls" && (
-                  <NexusModuleSurface>
-                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
-                      <CallHistoryPanel
-                        myDeviceId={myDeviceId}
-                        displayName={displayName}
-                        allUsers={allUsers}
-                        onlineUsers={onlineUsers}
-                        onCall={handleUserCall}
-                      />
-                    </div>
-                  </NexusModuleSurface>
-                )}
+          {activeTab === "monitor" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 space-y-0 overflow-y-auto overscroll-contain">
+                <CommsIntelligence userId={myId} />
+                <AdminDashboard />
+              </div>
+            </NexusModuleSurface>
+          )}
+
+          {activeTab === "calls" && (
+            <NexusModuleSurface>
+              <div className="h-full min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
+                <CallHistoryPanel
+                  myDeviceId={myDeviceId}
+                  myUserId={myId}
+                  displayName={displayName}
+                  allUsers={allUsers}
+                  onlineUsers={onlineUsers}
+                  onCall={handleUserCall}
+                  seedConference={orbitalConference}
+                  sfuMode={sfuStatus}
+                  onStartGroupCall={handleStartGroupCall}
+                  onJoinGroupMedia={joinGroupCall}
+                  onConferenceMedia={handleConferenceMedia}
+                />
+              </div>
+            </NexusModuleSurface>
+          )}
         </div>
-        ) : null}
-      </CommsNexusWorkspace>
+      </CommsPremiumShell>
 
       {showEmojiPicker && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
@@ -1280,23 +1609,63 @@ function UserDiscoveryWithMesh(
 
 function CallHistoryPanel({
   myDeviceId,
+  myUserId,
   displayName,
   allUsers,
   onlineUsers,
   onCall,
+  seedConference,
+  sfuMode,
+  onStartGroupCall,
+  onJoinGroupMedia,
+  onConferenceMedia,
 }: {
   myDeviceId: string;
+  myUserId: string;
   displayName: string;
   allUsers: { id: string; displayName: string; isOnline: boolean; lastSeen: string | null; status: string }[];
   onlineUsers: { id: string; displayName: string; deviceId: string; inCall: boolean }[];
   onCall: (userId: string, userName: string, type: "audio" | "video") => void;
+  seedConference?: import("../lib/comms-conference-api").CommsConference | null;
+  sfuMode: import("@shared/comms/sfu-types").CyrusSfuMode;
+  onStartGroupCall: (peerIds: string[], callType: "audio" | "video") => void;
+  onJoinGroupMedia: (roomId: string) => void;
+  onConferenceMedia?: (
+    conference: import("../lib/comms-conference-api").CommsConference,
+    action: "create" | "join",
+  ) => void;
 }) {
   const onlineOthers = onlineUsers.filter(u => u.id !== myDeviceId && u.id !== "cyrus-001");
 
   return (
     <div className="space-y-6">
-      <ConferenceQuickPanel displayName={displayName} />
+      {seedConference ? (
+        <div className="rounded-xl border border-cyan-500/35 bg-cyan-950/30 px-3 py-2.5 text-xs text-cyan-100/90">
+          <p className="font-semibold text-cyan-50">Round-table group call linked</p>
+          <p className="mt-0.5 text-[11px] text-cyan-200/75">
+            Room <span className="font-mono text-cyan-100">{seedConference.roomCode}</span> — you are joined on the server. Share the code with table peers (invites sent via chat).
+          </p>
+        </div>
+      ) : null}
+      <ConferenceQuickPanel
+        displayName={displayName}
+        seedConference={seedConference}
+        onConferenceMedia={onConferenceMedia}
+      />
+      <GroupCallPanel
+        myUserId={myUserId}
+        displayName={displayName}
+        sfuMode={sfuMode}
+        onlinePeers={onlineUsers.map((u) => ({
+          id: u.id,
+          displayName: u.displayName,
+          inCall: u.inCall,
+        }))}
+        onStartGroupCall={onStartGroupCall}
+        onJoinByRoomId={onJoinGroupMedia}
+      />
       <CommsP2PCallDock />
+      <SessionRecordingsPanel />
       <div>
         <h3
           className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-cyan-200/90"
@@ -1394,6 +1763,18 @@ function CallHistoryPanel({
               desc: "Message during calls",
               border: "border-teal-500/25",
               title: "text-teal-400",
+            },
+            {
+              label: "Session Recording",
+              desc: "Record & replay calls",
+              border: "border-rose-500/25",
+              title: "text-rose-400",
+            },
+            {
+              label: "Heavy media",
+              desc: "Chunked uploads up to 2 GB",
+              border: "border-fuchsia-500/25",
+              title: "text-fuchsia-400",
             },
             {
               label: "E2E Encrypted",

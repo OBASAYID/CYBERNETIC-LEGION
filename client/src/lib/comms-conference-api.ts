@@ -65,3 +65,54 @@ export async function commsListActiveConferences(): Promise<{
   if (!res.ok) return {};
   return res.json();
 }
+
+export const LAST_CONFERENCE_KEY = "cyrus-comms-last-conference";
+
+export type StoredConference = {
+  conferenceId: string;
+  roomCode?: string;
+  title?: string;
+};
+
+export function readStoredConference(): StoredConference | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(LAST_CONFERENCE_KEY);
+    if (!raw) return null;
+    const j = JSON.parse(raw) as StoredConference;
+    return typeof j.conferenceId === "string" ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistStoredConference(c: StoredConference): void {
+  try {
+    sessionStorage.setItem(LAST_CONFERENCE_KEY, JSON.stringify(c));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/** Create a server conference, persist session, and join as host. */
+export async function commsCreateAndJoinConference(body: {
+  title: string;
+  userName?: string;
+  maxParticipants?: number;
+}): Promise<{ conference?: CommsConference; error?: string }> {
+  const { conference, error } = await commsCreateConference(body);
+  if (error || !conference) return { error: error || "Create failed" };
+
+  persistStoredConference({
+    conferenceId: conference.conferenceId,
+    roomCode: conference.roomCode,
+    title: conference.title,
+  });
+
+  const join = await commsJoinConference({
+    conferenceId: conference.conferenceId,
+    userName: body.userName ?? "Host",
+  });
+  if (!join.success) return { conference, error: join.error || "Join failed" };
+  return { conference };
+}

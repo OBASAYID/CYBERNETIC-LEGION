@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "5hTA5uE3P5EdPhkOjd19m"
+uri = "file://attached_assets/generated_images/ultra_aggressive_black_jaguar_99de.png"
+type = "image"
+title = "generated_image"

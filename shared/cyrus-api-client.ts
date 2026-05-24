@@ -4,6 +4,8 @@
  * Imported by cyrus-ui, client Command Center, and re-exported from cyrus-ui `system-api` / `api-url`.
  */
 
+import { resilientFetch } from "./cyrus-resilience.js";
+
 export function getCyrusApiBase(): string {
   if (typeof import.meta === "undefined") return "";
   const env = (import.meta as ImportMeta & { env?: { VITE_CYRUS_API_BASE?: string } }).env;
@@ -60,6 +62,28 @@ export function appendCommSignalingTokenToSearchParams(q: URLSearchParams): void
   if (t) q.set("token", t);
 }
 
+/**
+ * HTTP(S) origin for Socket.IO (`io(origin, { path: "/cyrus-io" })`).
+ * Matches {@link systemFetch} host when `VITE_CYRUS_API_BASE` is set.
+ */
+export function resolveCyrusSocketIoOrigin(): string {
+  const base = getCyrusApiBase();
+  if (typeof window === "undefined") {
+    return base || "";
+  }
+  if (!base) return window.location.origin;
+  try {
+    const normalized =
+      base.startsWith("http://") || base.startsWith("https://")
+        ? base
+        : `https://${base.replace(/^\/\//, "")}`;
+    const u = new URL(normalized);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 export function resolveCyrusWebSocketUrl(pathAndQuery: string): string {
   const path = pathAndQuery.trim().startsWith("/") ? pathAndQuery.trim() : `/${pathAndQuery.trim()}`;
   const base = getCyrusApiBase();
@@ -104,14 +128,18 @@ export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Resp
           if (!headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
         }
       }
+      if (parsed.pathname.startsWith("/api/comms") && !headers.has("X-Device-Id")) {
+        const deviceId = localStorage.getItem("cyrus_device_id") || localStorage.getItem("cyrus-device-id");
+        if (deviceId) headers.set("X-Device-Id", deviceId);
+      }
     } catch {
       // Keep fetch resilient even if URL parsing fails.
     }
   }
 
-  return fetch(url, {
+  return resilientFetch(url, {
     ...init,
     headers,
-    credentials: "include", // ALWAYS include credentials
+    credentials: "include",
   });
 }

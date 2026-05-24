@@ -1,0 +1,12 @@
+{
+  "name": "cyrus_scrape_url",
+  "description": "Scrape a web page for text, links, and images; auto-ingest images into the asset library.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "url": { "type": "string", "description": "Page URL to scrape" }
+    },
+    "required": ["url"],
+    "additionalProperties": false
+  }
+}

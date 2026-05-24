@@ -1,6 +1,12 @@
 import { parseMaxAnalysisChunks } from "../../shared/cyrus-document-limits.js";
 import { localLLM } from "../ai/local-llm-client.js";
 import { ExtractionResult } from "./extract.js";
+import {
+    applyDocCalibration,
+    buildDocCalibrationMeta,
+    type DocAnalysisSignals,
+} from "./doc-scoring-core.js";
+import { loadDocModel } from "./doc-model.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
@@ -62,6 +68,12 @@ export interface AnalysisResult {
     chunksAnalyzed?: number;
     entities?: Array<{ type: string; value: string }>;
     riskLevel?: "low" | "medium" | "high";
+    qualityScores?: Record<string, number>;
+    calibration?: {
+        algorithmVersion: string;
+        calibrated: boolean;
+        overallQuality?: number;
+    };
 }
 
 interface ChunkInsight {
@@ -445,6 +457,35 @@ export async function analyzeExtraction(ext: ExtractionResult, options: Analysis
         return { type, value };
     });
 
+    const finalRiskLevel = legalBridge?.riskLevel || riskFromIssues(mergedIssues.length, Boolean(options.strictLegalReview));
+    const finalConfidence = legalBridge?.confidence || confidence;
+    const finalDocType = legalBridge?.documentType || documentType;
+    const finalTypeConf = legalBridge?.documentTypeConfidence || documentTypeConfidence;
+    const finalSummary = legalBridge?.summary || summary;
+
+    const docSignals: DocAnalysisSignals = {
+        textLength: aggregateText.length,
+        chunkCount: legalBridge?.chunksAnalyzed || chunks.length,
+        findingsCount: mergedFindings.length,
+        issuesCount: mergedIssues.length,
+        actionsCount: mergedActions.length,
+        citationsCount: mergedCitations.length,
+        entitiesCount: mergedEntities.length,
+        recommendationsCount: mergedRecommendations.length,
+        documentType: finalDocType,
+        documentTypeConfidence: finalTypeConf,
+        riskLevel: finalRiskLevel,
+        confidence: finalConfidence,
+        strictLegalReview: legalBridge?.strictLegalReview ?? Boolean(options.strictLegalReview),
+        jurisdictionSet: Boolean(options.jurisdiction || legalBridge?.jurisdictionApplied),
+        mode: options.mode || "standard",
+        hasLegalBridge: Boolean(legalBridge),
+        mandatoryActions: mergedActions.filter((a) => a.obligation === "Mandatory").length,
+        summaryQuality: Math.min(15, Math.round(finalSummary.length / 120)),
+    };
+
+    const { scores: qualityScores, calibrated, algorithmVersion } = applyDocCalibration(docSignals);
+
     return {
         summary: legalBridge?.summary || summary,
         findings: mergedFindings,
@@ -463,6 +504,13 @@ export async function analyzeExtraction(ext: ExtractionResult, options: Analysis
         citationAnchors: mergedCitations,
         chunksAnalyzed: legalBridge?.chunksAnalyzed || chunks.length,
         entities: mergedEntities,
-        riskLevel: legalBridge?.riskLevel || riskFromIssues(mergedIssues.length, Boolean(options.strictLegalReview)),
+        riskLevel: finalRiskLevel,
+        qualityScores,
+        calibration: {
+            algorithmVersion,
+            calibrated,
+            overallQuality: qualityScores.overall_quality,
+            ...(calibrated ? buildDocCalibrationMeta(loadDocModel()) : {}),
+        },
     };
 }

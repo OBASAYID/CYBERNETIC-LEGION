@@ -27,18 +27,15 @@ const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
   const missing: string[] = [];
-  const warnings: string[] = [];
-
-  // Optional but recommended
-  if (!process.env.OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
-    warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
-  }
-
-  if (warnings.length > 0) {
-    warnings.forEach(w => console.warn(`[Environment] ${w}`));
-  }
-
+  // OPENAI_API_KEY check is deferred — key normalization runs at module top-level
+  // before this function is called, so the check happens after integration keys are resolved.
   return missing;
+}
+
+function warnOptionalEnv(): void {
+  if (!process.env.OPENAI_API_KEY && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
+    console.warn('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+  }
 }
 
 // Keep both OpenAI key env names aligned to avoid stale-key mismatches across modules.
@@ -375,9 +372,18 @@ if (distPublic) {
       maxAge: STATIC_ASSET_MAX_AGE,
       immutable: true,
       setHeaders: (res, filePath) => {
-        // HTML must never be cached so users always get the latest shell
-        if (filePath.endsWith(".html")) {
+        const base = path.basename(filePath);
+        // HTML + PWA bootstrap must never be long-cached (stale shell/SW → old lazy chunks).
+        if (
+          filePath.endsWith(".html") ||
+          base === "sw.js" ||
+          base === "registerSW.js" ||
+          base === "manifest.webmanifest" ||
+          base.startsWith("workbox-")
+        ) {
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
         }
       },
     })(req, res, next);
@@ -515,6 +521,7 @@ async function bootstrapServer(): Promise<void> {
     console.error("[Environment] Critical environment variables missing:", envErrors);
     process.exit(1);
   }
+  warnOptionalEnv();
 
   try {
     await initializeSystem();
@@ -529,8 +536,15 @@ async function bootstrapServer(): Promise<void> {
   }
 
   httpServer.listen(listenOptions, () => {
+    let publicUrl = BASE_URL;
+    try {
+      const { getPublicBaseUrl } = require("./config/deployment.js") as { getPublicBaseUrl: () => string };
+      publicUrl = getPublicBaseUrl();
+    } catch {
+      /* deployment module optional at boot */
+    }
     const loopbackUrl = `http://127.0.0.1:${port}/`;
-    console.log(`Server running at ${loopbackUrl} (bind ${serverHost}:${port})`);
+    console.log(`Server running — public ${publicUrl} (bind ${serverHost}:${port}, local ${loopbackUrl})`);
     for (const line of formatStackStartupBanner()) {
       console.log(line);
     }
@@ -550,33 +564,25 @@ async function initializeSystem() {
   let isAuthenticatedMiddleware: any = null;
 
   // Auth setup — critical; failure here means API auth middleware is absent
+  // Always use standalone (access-code) auth — the frontend's PasswordGate posts
+  // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    if (process.env.REPL_ID) {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("./replit_integrations/auth");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Hosted environment auth initialized (Replit)");
-    } else {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Standalone Auth initialized");
-    }
+    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
+    await setupAuth(app);
+    registerAuthRoutes(app);
+    isAuthenticatedMiddleware = isAuthenticated;
+    log("Standalone Auth initialized");
   } catch (e) {
     console.error("[Init] Auth setup failed:", e);
   }
 
-  // Optional fusion demo routes (non-fatal)
-  if (process.env.CYRUS_DISABLE_FUSION_STUBS !== "true") {
-    try {
-      const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
-      app.use("/api", completeFusionApi);
-      log("[Fusion] Public demo routes from complete-fusion-api (before /api auth)");
-    } catch (e) {
-      console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
-    }
+  // Fusion bootstrap (honest capability map for gate UI)
+  try {
+    const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
+    app.use("/api", completeFusionApi);
+    log("[Fusion] Bootstrap routes registered (honest capability map)");
+  } catch (e) {
+    console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
   }
 
   // Security middleware — non-fatal so the server still starts without it
@@ -651,6 +657,15 @@ async function initializeSystem() {
     console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
 
+  try {
+    const { mcpRouter } = await import("./mcp/mcp-routes.js");
+    app.use("/api", mcpRouter);
+    const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
+    await initializeMcpOnBoot();
+  } catch (e) {
+    console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
   await tick();
 
   try {
@@ -693,6 +708,13 @@ async function initializeSystem() {
 
   systemReady = true;
   log("All systems initialized - accepting API traffic");
+
+  try {
+    const { startIntelligenceAutomationScheduler } = await import("./ai/intelligence-automation-core.js");
+    startIntelligenceAutomationScheduler();
+  } catch (e) {
+    console.warn("[Init] Intelligence automation scheduler not loaded (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
 
   const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
   /** Lightweight Comms ML only (ml_service.py); does not start the heavy quantum bridge. */

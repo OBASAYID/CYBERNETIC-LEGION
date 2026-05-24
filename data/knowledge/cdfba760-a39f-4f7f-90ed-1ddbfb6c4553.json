@@ -1,0 +1,18 @@
+{
+  "content": "In machine learning, deep learning (DL) focuses on utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning. The field takes inspiration from biological neuroscience and revolves around stacking artificial neurons into layers and \"training\" them to process data. The adjective \"deep\" refers to the use of multiple layers in the network. Methods used can be supervised, semi-supervised or unsupervised.",
+  "metadata": {
+    "title": "Deep learning",
+    "url": "https://en.wikipedia.org/wiki/Deep_learning",
+    "domain": "science"
+  },
+  "source": "https://en.wikipedia.org/wiki/Deep_learning",
+  "category": "ai",
+  "tags": [
+    "deep-learning",
+    "neural",
+    "wikipedia",
+    "ai"
+  ],
+  "id": "cdfba760-a39f-4f7f-90ed-1ddbfb6c4553",
+  "timestamp": "2026-05-24T13:02:46.564Z"
+}

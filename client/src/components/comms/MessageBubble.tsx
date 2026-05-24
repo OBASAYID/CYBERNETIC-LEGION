@@ -10,8 +10,12 @@ import {
   FileAudio,
   Download,
   ExternalLink,
+  BookOpen,
+  Film,
 } from "lucide-react";
 import { systemApiUrl } from "@shared/cyrus-api-client";
+import { formatCommsFileSize, inferCommsMediaCategory } from "@shared/comms/media-formats";
+import { CommsCad3dAttachment } from "./CommsCad3dAttachment";
 
 function resolveChatMediaUrl(pathOrUrl: string | undefined): string {
   if (!pathOrUrl) return "";
@@ -23,7 +27,7 @@ function withDownloadParam(resolvedUrl: string): string {
   return resolvedUrl.includes("?") ? `${resolvedUrl}&download=1` : `${resolvedUrl}?download=1`;
 }
 
-export type MessageType = "text" | "emoji" | "media" | "voice-note" | "location" | "system";
+export type MessageType = "text" | "emoji" | "media" | "cad-3d" | "voice-note" | "location" | "system";
 
 export interface Reaction {
   emoji: string;
@@ -43,6 +47,7 @@ export interface CommsMessage {
   mediaUrl?: string;
   mediaMimeType?: string;
   fileName?: string;
+  fileSizeBytes?: number;
   duration?: number;
   latitude?: number;
   longitude?: number;
@@ -94,6 +99,22 @@ export function MessageBubble({
           </div>
         );
 
+      case "cad-3d": {
+        const raw = message.mediaUrl || "";
+        const url = resolveChatMediaUrl(raw);
+        const downloadUrl = raw ? withDownloadParam(url) : "";
+        return (
+          <CommsCad3dAttachment
+            url={url}
+            downloadUrl={downloadUrl}
+            fileName={message.fileName}
+            mimeType={message.mediaMimeType}
+            caption={message.content}
+            holoSurface={holoSurface}
+          />
+        );
+      }
+
       case "media": {
         const raw = message.mediaUrl || "";
         const url = resolveChatMediaUrl(raw);
@@ -101,8 +122,10 @@ export function MessageBubble({
         const fn = (message.fileName || "").toLowerCase();
         const mt = (message.mediaMimeType || "").toLowerCase();
         const isImg = mt.startsWith("image/") || /\.(jpe?g|png|gif|webp|bmp)$/i.test(fn);
-        const isVid = mt.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(fn);
-        const isAud = mt.startsWith("audio/") || /\.(mp3|m4a|wav|ogg|flac|aac)$/i.test(fn);
+        const isVid = mt.startsWith("video/") || /\.(mp4|webm|mov|mkv|m4v|avi|wmv|mpeg|mpg|3gp)$/i.test(fn);
+        const isAud = mt.startsWith("audio/") || /\.(mp3|m4a|wav|ogg|flac|aac|opus|wma)$/i.test(fn);
+        const isAudiobook = /\.(m4b|aa|aax)$/i.test(fn) || mt.includes("audible");
+        const isEbook = /\.(epub|mobi|azw3?|fb2)$/i.test(fn) || mt.includes("epub") || mt.includes("mobipocket") || mt.includes("ebook");
         const isPdf = mt.includes("pdf") || fn.endsWith(".pdf");
         const isHtml = mt.includes("html") || /\.(html?|xhtml)$/i.test(fn);
         const isTexty =
@@ -133,20 +156,45 @@ export function MessageBubble({
               </div>
             )}
             {isVid && url && (
-              <div className="max-w-[min(100%,320px)] overflow-hidden rounded-lg border border-white/10">
-                <video src={url} className="max-h-56 w-full" controls playsInline preload="metadata" />
+              <div className="max-w-[min(100%,360px)] overflow-hidden rounded-lg border border-white/10">
+                <video src={url} className="max-h-64 w-full" controls playsInline preload="metadata" />
               </div>
             )}
-            {isAud && url && (
+            {(isAud || isAudiobook) && url && (
               <div
-                className={`min-w-[220px] max-w-sm rounded-lg border bg-slate-950/50 px-2 py-1.5 ${
+                className={`min-w-[240px] max-w-md rounded-lg border bg-slate-950/50 px-2 py-1.5 ${
                   holoSurface ? "border-cyan-400/35" : "border-amber-500/25"
                 }`}
               >
-                <p className="mb-1 truncate text-[10px] text-cyan-200/80">
-                  {message.fileName || "Audio"}
+                <p className="mb-1 flex items-center gap-1 truncate text-[10px] text-cyan-200/80">
+                  {isAudiobook ? <BookOpen className="h-3 w-3 shrink-0" /> : <FileAudio className="h-3 w-3 shrink-0" />}
+                  {message.fileName || (isAudiobook ? "Audiobook" : "Audio")}
+                  {message.fileSizeBytes ? ` · ${formatCommsFileSize(message.fileSizeBytes)}` : ""}
                 </p>
                 <audio src={url} className="h-8 w-full" controls preload="metadata" />
+              </div>
+            )}
+            {isEbook && url && (
+              <div className="flex min-w-0 max-w-sm flex-col gap-1 rounded-lg border border-violet-500/25 bg-violet-950/20 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 shrink-0 text-violet-300" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{message.fileName || "E-book"}</p>
+                    <p className="text-[10px] text-white/45">
+                      {inferCommsMediaCategory(message.fileName, mt) === "ebook" ? "E-book" : "Book file"}
+                      {message.fileSizeBytes ? ` · ${formatCommsFileSize(message.fileSizeBytes)}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-violet-200 underline">
+                    Open
+                  </a>
+                  <a href={downloadUrl} className="inline-flex items-center gap-1 text-violet-200/90 underline">
+                    <Download className="h-3 w-3" />
+                    Download
+                  </a>
+                </div>
               </div>
             )}
             {isPdf && url && (
@@ -261,21 +309,25 @@ export function MessageBubble({
                 </a>
               </div>
             )}
-            {!isImg && !isVid && !isAud && !isPdf && !isHtml && !isTexty && !isOffice && url && (
+            {!isImg && !isVid && !isAud && !isAudiobook && !isEbook && !isPdf && !isHtml && !isTexty && !isOffice && url && (
               <a
                 href={downloadUrl}
                 className="flex min-w-0 max-w-sm items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
               >
-                {(message.fileName || "").match(/\.(mp3|m4a|wav|ogg|flac|aac)$/i) ? (
+                {(message.fileName || "").match(/\.(mp3|m4a|m4b|wav|ogg|flac|aac)$/i) ? (
                   <FileAudio className={`h-5 w-5 shrink-0 ${holoSurface ? "text-cyan-300" : "text-amber-300"}`} />
+                ) : (message.fileName || "").match(/\.(mp4|mkv|mov|avi|wmv)$/i) ? (
+                  <Film className="h-5 w-5 shrink-0 text-sky-300" />
                 ) : (
                   <FileText className="h-5 w-5 shrink-0 text-cyan-400" />
                 )}
                 <div className="min-w-0">
                   <p className="truncate text-sm">{message.fileName || "File"}</p>
-                  {message.mediaMimeType && (
-                    <p className="text-xs text-gray-400">{message.mediaMimeType}</p>
-                  )}
+                  <p className="text-xs text-gray-400">
+                    {message.fileSizeBytes
+                      ? formatCommsFileSize(message.fileSizeBytes)
+                      : message.mediaMimeType || ""}
+                  </p>
                 </div>
                 <Download className="ml-auto h-4 w-4 shrink-0 text-white/50" />
               </a>

@@ -20,6 +20,8 @@ import {
   closeCyrusCommPeer,
   createCyrusCommPeerConnection,
   getCyrusCommUserMedia,
+  SDP_NEGOTIATION_OPTIONS,
+  type CyrusCommPeer,
 } from "../../lib/cyrus-comm-webrtc";
 
 export type MeshOnlineRow = { userId: string; displayName: string; socketId: string };
@@ -38,6 +40,8 @@ async function fetchIceConfig(): Promise<RTCIceServer[]> {
   const data = (await res.json()) as { iceServers?: RTCIceServer[] };
   return data.iceServers?.length ? data.iceServers : [{ urls: "stun:stun.l.google.com:19302" }];
 }
+
+type ActiveMeshPeer = CyrusCommPeer & { audioProcessor: import("../../lib/webrtc-config").AudioProcessor | null };
 
 type Ctx = {
   selfId: string;
@@ -77,8 +81,10 @@ export function CommsP2PLayerProvider({
   children: ReactNode;
 }) {
   const socketRef = useRef<Socket | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const pcRef = useRef<ActiveMeshPeer | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const audioProcessorRef = useRef<import("../../lib/webrtc-config").AudioProcessor | null>(null);
+  const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
   const pendingRemoteIceRef = useRef<unknown[]>([]);
   const callIdRef = useRef<string | null>(null);
   const remotePeerRef = useRef<string | null>(null);
@@ -128,6 +134,9 @@ export function CommsP2PLayerProvider({
     }
     closeCyrusCommPeer(pcRef.current);
     pcRef.current = null;
+    mediaPipelineDisposeRef.current?.();
+    mediaPipelineDisposeRef.current = null;
+    audioProcessorRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     setLocalStream(null);
@@ -140,7 +149,7 @@ export function CommsP2PLayerProvider({
   }, []);
 
   const ensurePc = useCallback(
-    (targetUserId: string, callId: string) => {
+    async (targetUserId: string, callId: string, callType: "audio" | "video") => {
       if (pcRef.current) {
         closeCyrusCommPeer(pcRef.current);
         pcRef.current = null;
@@ -148,25 +157,30 @@ export function CommsP2PLayerProvider({
       remotePeerRef.current = targetUserId;
       callIdRef.current = callId;
       const sock = socketRef.current;
-      const pc = createCyrusCommPeerConnection(iceServers, {
-        onLocalCandidate: (candidate) => {
-          sock?.emit("ice-candidate", {
-            targetUserId,
-            callId,
-            candidate: typeof candidate.toJSON === "function" ? candidate.toJSON() : candidate,
-          });
+      const peer = await createCyrusCommPeerConnection(
+        {
+          onLocalCandidate: (candidate) => {
+            sock?.emit("ice-candidate", {
+              targetUserId,
+              callId,
+              candidate: typeof candidate.toJSON === "function" ? candidate.toJSON() : candidate,
+            });
+          },
+          onRemoteTrack: (ev) => {
+            const [ms] = ev.streams;
+            if (ms) setRemoteStream(ms);
+            else if (ev.track) setRemoteStream(new MediaStream([ev.track]));
+          },
+          onConnectionState: (s) => pushLog(`pc: ${s}`),
+          onIceState: (s) => pushLog(`ice: ${s}`),
         },
-        onRemoteTrack: (ev) => {
-          const [ms] = ev.streams;
-          if (ms) setRemoteStream(ms);
-          else if (ev.track) setRemoteStream(new MediaStream([ev.track]));
-        },
-        onConnectionState: (s) => pushLog(`pc: ${s}`),
-      });
-      pcRef.current = pc;
-      return pc;
+        { callType },
+      );
+      peer.abr?.start();
+      pcRef.current = peer;
+      return peer.pc;
     },
-    [iceServers, pushLog],
+    [pushLog],
   );
 
   const startOutgoing = useCallback(
@@ -174,22 +188,23 @@ export function CommsP2PLayerProvider({
       const sock = socketRef.current;
       if (!sock?.connected || !selfId) return;
       const callId = crypto.randomUUID();
-      const constraints: MediaStreamConstraints = withVideo
-        ? { audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 } } }
-        : { audio: true, video: false };
-      const stream = await getCyrusCommUserMedia(constraints);
-      if (!stream) {
+      const callType = withVideo ? "video" : "audio";
+      const media = await getCyrusCommUserMedia(callType);
+      if (!media) {
         pushLog("No local media");
         return;
       }
+      mediaPipelineDisposeRef.current = media.disposeMediaPipeline;
+      audioProcessorRef.current = media.audioProcessor;
+      const stream = media.stream;
       localStreamRef.current = stream;
       setLocalStream(stream);
       setRemoteName(users.find((u) => u.userId === targetUserId)?.displayName || targetUserId);
       setInCall(true);
-      const pc = ensurePc(targetUserId, callId);
+      const pc = await ensurePc(targetUserId, callId, callType);
       attachLocalTracks(pc, stream);
       try {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
         await pc.setLocalDescription(offer);
         sock.emit("call-user", {
           targetUserId,
@@ -222,24 +237,25 @@ export function CommsP2PLayerProvider({
       setRemoteName(fromDisplayName || fromUserId);
       setInCall(true);
       const wantsVideo = typeof offer?.sdp === "string" && offer.sdp.includes("m=video");
-      const constraints: MediaStreamConstraints = wantsVideo
-        ? { audio: true, video: { width: { ideal: 640 }, height: { ideal: 480 } } }
-        : { audio: true, video: false };
-      const stream = await getCyrusCommUserMedia(constraints);
-      if (!stream) {
+      const callType = wantsVideo ? "video" : "audio";
+      const media = await getCyrusCommUserMedia(callType);
+      if (!media) {
         pushLog("no media for mesh incoming");
         setInCall(false);
         return;
       }
+      mediaPipelineDisposeRef.current = media.disposeMediaPipeline;
+      audioProcessorRef.current = media.audioProcessor;
+      const stream = media.stream;
       localStreamRef.current = stream;
       setLocalStream(stream);
-      const pc = ensurePc(fromUserId, callId);
+      const pc = await ensurePc(fromUserId, callId, callType);
       attachLocalTracks(pc, stream);
       const sock = socketRef.current;
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer as RTCSessionDescriptionInit));
         await flushPendingIce(pc);
-        const answer = await pc.createAnswer();
+        const answer = await pc.createAnswer(SDP_NEGOTIATION_OPTIONS.answer);
         await pc.setLocalDescription(answer);
         sock?.emit("answer-call", {
           targetUserId: fromUserId,
@@ -257,7 +273,7 @@ export function CommsP2PLayerProvider({
   );
 
   const addRemoteIce = useCallback(async (candidate: unknown) => {
-    const pc = pcRef.current;
+    const pc = pcRef.current?.pc;
     if (!pc || candidate == null) return;
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate as RTCIceCandidateInit));
@@ -342,7 +358,7 @@ export function CommsP2PLayerProvider({
       "call-answered",
       async (p: { answer: { type?: string; sdp?: string }; fromUserId: string; callId: string }) => {
         if (callIdRef.current !== p.callId || remotePeerRef.current !== p.fromUserId) return;
-        const pc = pcRef.current;
+        const pc = pcRef.current?.pc;
         if (!pc) return;
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(p.answer as RTCSessionDescriptionInit));

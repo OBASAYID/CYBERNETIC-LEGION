@@ -138,8 +138,8 @@ export function NavigationPage() {
     return (
       <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-[#0a84ff] animate-spin mx-auto mb-3" />
-          <p className="text-[rgba(235,235,245,0.6)] text-sm">Initializing Navigation Module...</p>
+          <Loader2 className="w-8 h-8 text-\[#e11d48\] animate-spin mx-auto mb-3" />
+          <p className="text-white/60 text-sm">Initializing Navigation Module...</p>
         </div>
       </div>
     );
@@ -498,10 +498,10 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
   return (
     <ModuleWorkspacePageShell mode="page">
     <div className="flex min-h-full h-screen min-h-0 flex-col overflow-hidden bg-[#000000]">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[rgba(84,84,88,0.35)] bg-[rgba(10,10,12,0.95)] backdrop-blur-xl z-20">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-white/\[0.08\] bg-black/90 backdrop-blur-xl z-20">
         <div className="flex items-center gap-3">
           <Link href="/">
-            <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-all">
+            <button className="p-2 text-white/50 hover:text-white hover:bg-white/\[0.05\] rounded-lg transition-all">
               <ArrowLeft className="w-5 h-5" />
             </button>
           </Link>
@@ -511,7 +511,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
           <div>
             <h1 className="text-[15px] font-bold tracking-tight text-white">Satellite Navigation</h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] text-[rgba(235,235,245,0.5)]">Geospatial Intelligence</span>
+              <span className="text-[11px] text-white/50">Geospatial Intelligence</span>
               {isWatching && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 bg-[rgba(48,209,88,0.15)] text-[#30d158] text-[9px] font-bold rounded-full">
                   <span className="w-1.5 h-1.5 bg-[#30d158] rounded-full animate-pulse" />
@@ -534,8 +534,8 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 onClick={() => setMapType(type)}
                 className={`px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
                   mapType === type
-                    ? "bg-[#0a84ff] text-white shadow-sm"
-                    : "text-[rgba(235,235,245,0.6)] hover:text-white"
+                    ? "bg-\[#e11d48\] text-white shadow-sm"
+                    : "text-white/60 hover:text-white"
                 }`}
               >
                 {label}
@@ -688,34 +688,34 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/45">
             <div className="relative h-full min-h-0 min-w-0 flex-1">
           {!apiKey ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="text-center p-8 max-w-md">
                 <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[#ff9f0a] to-[#ff375f] rounded-3xl flex items-center justify-center">
                   <MapPin className="w-10 h-10 text-white" />
                 </div>
                 <h2 className="text-xl font-semibold mb-3">Google Maps API Required</h2>
-                <p className="text-[rgba(235,235,245,0.6)] text-sm mb-4">
+                <p className="text-white/60 text-sm mb-4">
                   To enable real-time maps and GPS features, please configure your Google Maps API key.
                 </p>
               </div>
             </div>
           ) : loadError ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="text-center p-8 max-w-md">
                 <div className="w-16 h-16 mx-auto mb-4 bg-[#ff375f] rounded-2xl flex items-center justify-center">
                   <MapPin className="w-8 h-8 text-white" />
                 </div>
                 <h2 className="text-lg font-semibold mb-2">Maps JavaScript API Not Activated</h2>
-                <p className="text-[rgba(235,235,245,0.6)] text-sm mb-3">
+                <p className="text-white/60 text-sm mb-3">
                   Enable it in Google Cloud Console.
                 </p>
               </div>
             </div>
           ) : !isLoaded ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-3 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
-                <p className="text-[rgba(235,235,245,0.6)]">Loading maps...</p>
+                <p className="text-white/60">Loading maps...</p>
               </div>
             </div>
           ) : (
@@ -772,19 +772,19 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       <p className="text-xs text-gray-600 mb-2">{locationName || "Resolving..."}</p>
                       <div className="grid grid-cols-2 gap-2 text-[10px]">
                         <div>
-                          <span className="text-gray-400">LAT</span>
+                          <span className="text-white/50">LAT</span>
                           <p className="font-mono font-bold text-green-700">{currentPosition.lat.toFixed(6)}</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">LON</span>
+                          <span className="text-white/50">LON</span>
                           <p className="font-mono font-bold text-blue-700">{currentPosition.lon.toFixed(6)}</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">ALT</span>
+                          <span className="text-white/50">ALT</span>
                           <p className="font-mono">{altitude.toFixed(1)}m</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">ACC</span>
+                          <span className="text-white/50">ACC</span>
                           <p className="font-mono">{(currentPosition.accuracy || 0).toFixed(0)}m</p>
                         </div>
                       </div>
@@ -831,7 +831,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                         >
                           <div className="p-2 text-black min-w-[170px] text-xs">
                             <p className="font-bold text-sm mb-0.5">{p.label}</p>
-                            <p className="text-[10px] text-gray-500 mb-1">
+                            <p className="text-[10px] text-white/40 mb-1">
                               {p.source === "comms"
                                 ? "Team (Comms GPS)"
                                 : p.source === "tracked"
@@ -840,22 +840,22 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                             </p>
                             <div className="grid grid-cols-2 gap-1 text-[10px] mb-2">
                               <div>
-                                <span className="text-gray-400">LAT</span>
+                                <span className="text-white/50">LAT</span>
                                 <p className="font-mono font-semibold">{p.lat.toFixed(5)}</p>
                               </div>
                               <div>
-                                <span className="text-gray-400">LON</span>
+                                <span className="text-white/50">LON</span>
                                 <p className="font-mono font-semibold">{p.lng.toFixed(5)}</p>
                               </div>
                             </div>
                             {p.updatedAt ? (
-                              <p className="text-[9px] text-gray-500 mb-2">
+                              <p className="text-[9px] text-white/40 mb-2">
                                 Updated {new Date(p.updatedAt).toLocaleString()}
                               </p>
                             ) : null}
                             <button
                               type="button"
-                              className="w-full rounded-md bg-gray-900 py-1.5 text-[11px] font-medium text-white hover:bg-gray-800"
+                              className="w-full rounded-md bg-black/40 py-1.5 text-[11px] font-medium text-white hover:bg-white/\[0.06\]"
                               onClick={() => unpinFieldPin(p.key)}
                             >
                               Remove pin
@@ -869,14 +869,14 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
               </GoogleMap>
 
               <div className="absolute right-3 top-3 flex flex-col gap-2 z-10">
-                <div className="bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/80 backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-white/\[0.08\]">
                   <button
                     onClick={handleZoomIn}
                     className="w-10 h-10 flex items-center justify-center text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
                   >
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <div className="h-px bg-[rgba(84,84,88,0.35)]" />
+                  <div className="h-px bg-white/[0.06]" />
                   <button
                     onClick={handleZoomOut}
                     className="w-10 h-10 flex items-center justify-center text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
@@ -887,7 +887,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 <button
                   onClick={centerOnPosition}
                   disabled={!currentPosition}
-                  className="w-10 h-10 bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl flex items-center justify-center text-[#0a84ff] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-[rgba(84,84,88,0.35)]"
+                  className="w-10 h-10 bg-black/80 backdrop-blur-xl rounded-xl flex items-center justify-center text-\[#e11d48\] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-white/\[0.08\]"
                 >
                   <LocateFixed className="w-4 h-4" />
                 </button>
@@ -896,7 +896,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   onClick={fitAllFieldPins}
                   disabled={fieldPins.length === 0}
                   title="Fit map to pinned team / tracked targets"
-                  className="w-10 h-10 bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl flex items-center justify-center text-[#f97316] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-[rgba(84,84,88,0.35)]"
+                  className="w-10 h-10 bg-black/80 backdrop-blur-xl rounded-xl flex items-center justify-center text-[#f97316] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-white/\[0.08\]"
                 >
                   <Users className="w-4 h-4" />
                 </button>
@@ -905,7 +905,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   className={`w-10 h-10 backdrop-blur-xl rounded-xl flex items-center justify-center transition-colors shadow-2xl border ${
                     isWatching 
                       ? "bg-[rgba(48,209,88,0.2)] border-[rgba(48,209,88,0.4)] text-[#30d158]" 
-                      : "bg-[rgba(20,20,22,0.92)] border-[rgba(84,84,88,0.35)] text-gray-400"
+                      : "bg-black/80 border-white/\[0.08\] text-white/50"
                   }`}
                 >
                   {isWatching ? <Radio className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
@@ -955,7 +955,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
           <div className="flex-1 p-3 space-y-3 overflow-y-auto">
             {activePanel === "tracking" && (
               <>
-                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Crosshair className="w-3.5 h-3.5 text-[#30d158]" />
@@ -977,9 +977,9 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   </button>
                 </div>
 
-                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                   <div className="flex items-center gap-2 mb-3">
-                    <Navigation className="w-3.5 h-3.5 text-[#0a84ff]" />
+                    <Navigation className="w-3.5 h-3.5 text-\[#e11d48\]" />
                     <span className="text-[12px] font-semibold">Manual Position</span>
                   </div>
                   
@@ -989,19 +989,19 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       placeholder="Latitude (e.g. -24.6282)"
                       value={manualLat}
                       onChange={(e) => setManualLat(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#0a84ff] focus:outline-none transition-colors font-mono"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-\[#e11d48\] focus:outline-none transition-colors font-mono"
                     />
                     <input
                       type="text"
                       placeholder="Longitude (e.g. 25.9231)"
                       value={manualLon}
                       onChange={(e) => setManualLon(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#0a84ff] focus:outline-none transition-colors font-mono"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-\[#e11d48\] focus:outline-none transition-colors font-mono"
                     />
                     <button
                       onClick={handleSetManualPosition}
                       disabled={isLoading}
-                      className="w-full py-2 bg-[#0a84ff] text-white rounded-lg text-[12px] font-semibold hover:bg-[#0070d4] transition-colors disabled:opacity-50"
+                      className="w-full py-2 bg-\[#e11d48\] text-white rounded-lg text-[12px] font-semibold hover:bg-[#0070d4] transition-colors disabled:opacity-50"
                     >
                       Set Position
                     </button>
@@ -1009,41 +1009,41 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 </div>
 
                 {currentPosition && (
-                  <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                  <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                     <div className="flex items-center gap-2 mb-2">
                       <Target className="w-3.5 h-3.5 text-[#ff9f0a]" />
                       <span className="text-[12px] font-semibold">Position Data</span>
                     </div>
                     <div className="space-y-1.5 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Source</span>
+                        <span className="text-white/40">Source</span>
                         <span className="font-mono text-[#30d158]">{currentPosition.source?.toUpperCase() || "GPS"}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Altitude</span>
+                        <span className="text-white/40">Altitude</span>
                         <span className="font-mono">{altitude.toFixed(1)}m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Speed</span>
+                        <span className="text-white/40">Speed</span>
                         <span className="font-mono">{(speed * 3.6).toFixed(1)} km/h</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Heading</span>
+                        <span className="text-white/40">Heading</span>
                         <span className="font-mono">{heading.toFixed(0)}° {getCardinalDirection(heading)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Accuracy</span>
+                        <span className="text-white/40">Accuracy</span>
                         <span className="font-mono">{(currentPosition.accuracy || 0).toFixed(0)}m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Updated</span>
+                        <span className="text-white/40">Updated</span>
                         <span className="font-mono">{new Date().toLocaleTimeString()}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <Users className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
@@ -1053,13 +1053,13 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       type="button"
                       onClick={() => void refreshFieldRoster()}
                       disabled={rosterLoading}
-                      className="shrink-0 p-1.5 rounded-lg border border-[rgba(84,84,88,0.35)] text-[rgba(235,235,245,0.7)] hover:bg-[#2c2c2e] disabled:opacity-40"
+                      className="shrink-0 p-1.5 rounded-lg border border-white/\[0.08\] text-white/70 hover:bg-white/\[0.05\] disabled:opacity-40"
                       title="Refresh team & tracked list"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${rosterLoading ? "animate-spin" : ""}`} />
                     </button>
                   </div>
-                  <p className="text-[10px] text-[rgba(235,235,245,0.45)] mb-2">
+                  <p className="text-[10px] text-white/45 mb-2">
                     Pin shared team GPS (Comms) or last known Nav-tracked positions. Deep link:{" "}
                     <span className="font-mono text-[9px]">/nav?pinUser=…</span>
                   </p>
@@ -1073,7 +1073,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                         return (
                           <div
                             key={key}
-                            className="flex items-center gap-2 rounded-lg bg-[#2c2c2e]/80 px-2 py-1.5 text-[10px]"
+                            className="flex items-center gap-2 rounded-lg bg-white/\[0.05\]/80 px-2 py-1.5 text-[10px]"
                           >
                             <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
                               {u.displayName}
@@ -1132,7 +1132,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                         return (
                           <div
                             key={key}
-                            className="flex items-center gap-2 rounded-lg bg-[#2c2c2e]/80 px-2 py-1.5 text-[10px]"
+                            className="flex items-center gap-2 rounded-lg bg-white/\[0.05\]/80 px-2 py-1.5 text-[10px]"
                           >
                             <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
                               {tu.userName || tu.userId}
@@ -1193,14 +1193,14 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   </div>
                 </div>
 
-                <Link href="/drone">
+                <Link href="/intelligence">
                   <button className="w-full bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 rounded-xl p-3 flex items-center gap-3 hover:border-cyan-400/50 transition-all group">
                     <div className="w-8 h-8 bg-cyan-600/30 rounded-lg flex items-center justify-center">
                       <Plane className="w-4 h-4 text-cyan-400" />
                     </div>
                     <div className="text-left">
-                      <p className="text-[11px] font-semibold text-cyan-400">Drone Operations</p>
-                      <p className="text-[9px] text-[rgba(235,235,245,0.4)]">NAV-guided flight control</p>
+                      <p className="text-[11px] font-semibold text-cyan-400">Intelligence Hub</p>
+                      <p className="text-[9px] text-white/40">Missions, assets & automation</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-cyan-400/50 ml-auto group-hover:text-cyan-400 transition-colors" />
                   </button>
@@ -1209,7 +1209,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             )}
 
             {activePanel === "route" && (
-              <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+              <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                 <div className="flex items-center gap-2 mb-3">
                   <Route className="w-3.5 h-3.5 text-[#ff9f0a]" />
                   <span className="text-[12px] font-semibold">Route Planning</span>
@@ -1224,7 +1224,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                         className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
                           travelMode === mode
                             ? "bg-[#ff9f0a] text-black"
-                            : "bg-[#2c2c2e] text-[rgba(235,235,245,0.6)] hover:text-white"
+                            : "bg-white/\[0.05\] text-white/60 hover:text-white"
                         }`}
                       >
                         {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -1236,14 +1236,14 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                     placeholder="Destination Latitude"
                     value={destLat}
                     onChange={(e) => setDestLat(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#ff9f0a] focus:outline-none transition-colors font-mono"
+                    className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-amber-400 focus:outline-none transition-colors font-mono"
                   />
                   <input
                     type="text"
                     placeholder="Destination Longitude"
                     value={destLon}
                     onChange={(e) => setDestLon(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#ff9f0a] focus:outline-none transition-colors font-mono"
+                    className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-amber-400 focus:outline-none transition-colors font-mono"
                   />
                   <button
                     onClick={handleGetRoute}
@@ -1256,17 +1256,17 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 </div>
 
                 {getRoute.data && (
-                  <div className="mt-3 pt-3 border-t border-[rgba(84,84,88,0.35)] space-y-2">
+                  <div className="mt-3 pt-3 border-t border-white/\[0.08\] space-y-2">
                     <div className="flex justify-between text-[11px]">
-                      <span className="text-[rgba(235,235,245,0.4)]">Distance</span>
+                      <span className="text-white/40">Distance</span>
                       <span className="font-semibold text-[#ff9f0a]">{getRoute.data.totalDistance}</span>
                     </div>
                     <div className="flex justify-between text-[11px]">
-                      <span className="text-[rgba(235,235,245,0.4)]">Duration</span>
+                      <span className="text-white/40">Duration</span>
                       <span className="font-semibold">{getRoute.data.totalDuration}</span>
                     </div>
                     {getRoute.data.steps?.slice(0, 5).map((step: any, i: number) => (
-                      <div key={i} className="text-[10px] text-[rgba(235,235,245,0.5)] pl-2 border-l-2 border-[rgba(84,84,88,0.35)]">
+                      <div key={i} className="text-[10px] text-white/50 pl-2 border-l-2 border-white/\[0.08\]">
                         {step.instruction?.replace(/<[^>]*>/g, '')}
                       </div>
                     ))}
@@ -1276,7 +1276,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             )}
 
             {activePanel === "share" && (
-              <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+              <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                 <div className="flex items-center gap-2 mb-3">
                   <Share2 className="w-3.5 h-3.5 text-[#bf5af2]" />
                   <span className="text-[12px] font-semibold">Live Sharing</span>
@@ -1284,8 +1284,8 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 
                 {activeShare ? (
                   <div className="space-y-2">
-                    <div className="bg-[#2c2c2e] rounded-lg p-3">
-                      <p className="text-[10px] text-[rgba(235,235,245,0.4)] mb-1">Sharing with</p>
+                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                      <p className="text-[10px] text-white/40 mb-1">Sharing with</p>
                       <p className="text-[12px] font-medium">{activeShare.recipientId}</p>
                       <div className="flex items-center gap-1 mt-2 text-[#bf5af2]">
                         <Clock className="w-3 h-3" />
@@ -1306,12 +1306,12 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       placeholder="Recipient ID"
                       value={shareRecipient}
                       onChange={(e) => setShareRecipient(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#bf5af2] focus:outline-none transition-colors"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-[#bf5af2] focus:outline-none transition-colors"
                     />
                     <select
                       value={shareDuration}
                       onChange={(e) => setShareDuration(parseInt(e.target.value))}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] border border-[rgba(84,84,88,0.35)] focus:border-[#bf5af2] focus:outline-none transition-colors"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] border border-white/\[0.08\] focus:border-[#bf5af2] focus:outline-none transition-colors"
                     >
                       <option value={300}>5 minutes</option>
                       <option value={900}>15 minutes</option>

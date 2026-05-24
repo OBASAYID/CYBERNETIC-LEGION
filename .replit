@@ -6,6 +6,7 @@ packages = ["cairo", "ffmpeg", "ffmpeg-full", "freetype", "ghostscript", "glibcL
 [agent]
 expertMode = true
 integrations = ["javascript_openai_ai_integrations:2.0.0", "javascript_log_in_with_replit:2.0.0"]
+stack = "GAMESTACK_JS"
 
 [workflows]
 runButton = "Project"
@@ -23,13 +24,13 @@ args = "Start CYRUS"
 name = "Start CYRUS"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "CYRUS_SINGLE_ORIGIN=1 NODE_ENV=development CYRUS_UI_ROOT=cyrus-ui TMPDIR=/tmp SERVER_HOST=0.0.0.0 tsx server/index.ts"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
@@ -37,7 +38,7 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["npm", "run", "start"]
+run = ["node", "./dist/index.cjs"]
 build = ["npm", "run", "build"]
 
 [userenv]
@@ -46,3 +47,9 @@ build = ["npm", "run", "build"]
 # Match [[ports]] / waitForPort 5000 so `npm run dev` binds the webview target.
 PORT = "5000"
 ALPACA_ENVIRONMENT = "live"
+SERVER_HOST = "0.0.0.0"
+CYRUS_SINGLE_ORIGIN = "1"
+CYRUS_UI_ROOT = "cyrus-ui"
+TMPDIR = "/tmp"
+NODE_ENV = "development"
+TRUST_PROXY = "1"

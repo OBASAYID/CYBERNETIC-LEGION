@@ -65,6 +65,7 @@ let registerAdvancedUpgradeRoutes: any;
 let moduleOrchestrator: any;
 let autonomyRoutes: any;
 let dataCollectionRoutes: any;
+let assetRouter: any;
 let humanoidRoutes: any;
 let registerInteractiveRoutes: any;
 let quantumBridge: any;
@@ -305,6 +306,14 @@ async function loadDependencies() {
     dataCollectionRoutes = dcM.default;
   } catch (e) {
     console.warn("[Routes] Failed to load data-collection routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+  await tick();
+
+  try {
+    const assetM = await import("./assets/asset-routes");
+    assetRouter = assetM.assetRouter;
+  } catch (e) {
+    console.warn("[Routes] Failed to load asset routes (non-fatal):", e instanceof Error ? e.message : String(e));
   }
   await tick();
 
@@ -630,6 +639,13 @@ export async function registerRoutes(
 ): Promise<Server> {
   await loadDependencies();
 
+  try {
+    const sfuM = await import("./comms/sfu/sfu-manager.js");
+    await sfuM.initCyrusSfu();
+  } catch (e) {
+    console.warn("[SFU] init skipped (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
   if (initSignalingServer) {
     try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
@@ -708,6 +724,42 @@ export async function registerRoutes(
   if (registerCommsRoutes) {
     try { registerCommsRoutes(app); } catch (e) { console.warn("[Routes] registerCommsRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
+
+  try {
+    const { docRouter } = await import("./ingestion/doc-routes.js");
+    app.use(docRouter);
+  } catch (e) {
+    console.warn("[Routes] doc calibration routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { visionRouter } = await import("./scan/vision-routes.js");
+    app.use(visionRouter);
+  } catch (e) {
+    console.warn("[Routes] vision calibration routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { missionRouter } = await import("./ai/mission-routes.js");
+    app.use(missionRouter);
+  } catch (e) {
+    console.warn("[Routes] mission autonomy routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { intelligenceAutomationRouter } = await import("./ai/intelligence-automation-routes.js");
+    app.use(intelligenceAutomationRouter);
+  } catch (e) {
+    console.warn("[Routes] intelligence automation routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { intelligenceGrowthRouter } = await import("./intelligence/intelligence-growth-routes.js");
+    app.use(intelligenceGrowthRouter);
+  } catch (e) {
+    console.warn("[Routes] intelligence growth routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
   if (registerAdvancedUpgradeRoutes) {
     try { registerAdvancedUpgradeRoutes(app); } catch (e) { console.warn("[Routes] registerAdvancedUpgradeRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
@@ -1484,6 +1536,7 @@ export async function registerRoutes(
         audience,
         confidence,
         sections,
+        attachments,
         wordCount,
         estimatedPages,
       } = req.body || {};
@@ -1501,6 +1554,7 @@ export async function registerRoutes(
         audience,
         confidence,
         sections,
+        attachments,
         wordCount,
         estimatedPages,
       });
@@ -4278,8 +4332,31 @@ Return ONLY valid JSON.`
   // Use data collection routes
   app.use("/api/data-collection", dataCollectionRoutes);
 
+  if (assetRouter) {
+    app.use(assetRouter);
+  }
+
   // Use humanoid routes
   app.use("/api/humanoid", humanoidRoutes);
+
+  // ── PShare broadcast posts (in-memory, real-time for all active users) ──
+  const pSharePosts: Array<{
+    id: string; user: string; content: string; ts: string; avatar?: string;
+  }> = [];
+
+  app.get("/api/pshare/posts", (_req, res) => {
+    res.json(pSharePosts.slice(-60).reverse());
+  });
+
+  app.post("/api/pshare/posts", (req: any, res) => {
+    const user    = req.session?.user?.username ?? req.body?.user ?? "OPERATOR";
+    const content = (req.body?.content ?? "").trim().slice(0, 500);
+    if (!content) return res.status(400).json({ error: "empty" });
+    const post = { id: Date.now().toString(), user, content, ts: new Date().toISOString() };
+    pSharePosts.push(post);
+    if (pSharePosts.length > 200) pSharePosts.splice(0, pSharePosts.length - 200);
+    res.json(post);
+  });
 
   return httpServer;
 }

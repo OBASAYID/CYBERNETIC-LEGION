@@ -77,6 +77,7 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
       // Store session token if provided
       if (data.sessionToken) {
         localStorage.setItem("cyrus_session_token", data.sessionToken);
+        window.dispatchEvent(new CustomEvent("cyrus-auth-session-changed"));
       }
 
       // Success - call onAuthenticated

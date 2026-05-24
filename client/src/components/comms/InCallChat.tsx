@@ -1,19 +1,36 @@
-import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
-import { Send, X } from "lucide-react";
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ChangeEvent } from "react";
+import { Image as ImageIcon, Paperclip, Send, X, FileAudio } from "lucide-react";
+import { commsAssetUrl } from "@shared/cyrus-api-client";
+import { COMMS_MEDIA_FILE_ACCEPT, type CommsUploadProgress } from "../../lib/comms-media-upload";
+import { isCommsCad3dFile } from "../../lib/comms-cad-formats";
+import { CommsMediaDropZone } from "./CommsMediaDropZone";
+import { CommsCad3dAttachment } from "./CommsCad3dAttachment";
+import { CommsUploadProgressBar } from "./CommsUploadProgress";
+import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
+import { formatCommsFileSize } from "@shared/comms/media-formats";
 
-interface ChatMessage {
+export interface InCallChatMessage {
   senderId: string;
   senderName: string;
   message: string;
   timestamp: string;
+  messageType?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileMimeType?: string;
 }
 
 interface InCallChatProps {
   roomId: string;
   currentUserId: string;
   currentUserName: string;
-  messages: ChatMessage[];
+  messages: InCallChatMessage[];
   onSendMessage?: (message: string) => void;
+  onSendMedia?: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: CommsUploadProgress) => void,
+  ) => Promise<void>;
   onClose: () => void;
   socketRef?: React.MutableRefObject<any>;
 }
@@ -24,11 +41,17 @@ export function InCallChat({
   currentUserName,
   messages,
   onSendMessage,
+  onSendMedia,
   onClose,
   socketRef,
 }: InCallChatProps) {
   const [text, setText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [attachPreview, setAttachPreview] = useState<{ file: File; url: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -36,8 +59,44 @@ export function InCallChat({
     }
   }, [messages]);
 
-  const handleSend = useCallback(() => {
+  const clearAttachment = useCallback(() => {
+    setAttachPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  }, []);
+
+  const queueAttachment = useCallback(
+    (file: File) => {
+      if (!onSendMedia) return;
+      setAttachPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { file, url: URL.createObjectURL(file) };
+      });
+    },
+    [onSendMedia],
+  );
+
+  useCommsMediaPaste(queueAttachment, Boolean(onSendMedia) && !uploading);
+
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
+    if (attachPreview && onSendMedia) {
+      setUploading(true);
+      setUploadError(null);
+      setUploadProgress({ loaded: 0, total: attachPreview.file.size, percent: 0, phase: "init" });
+      try {
+        await onSendMedia(attachPreview.file, trimmed, setUploadProgress);
+        clearAttachment();
+        setText("");
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed");
+      } finally {
+        setUploading(false);
+        setUploadProgress(null);
+      }
+      return;
+    }
     if (!trimmed) return;
 
     if (onSendMessage) {
@@ -51,13 +110,19 @@ export function InCallChat({
     }
 
     setText("");
-  }, [text, roomId, onSendMessage, socketRef]);
+  }, [text, attachPreview, roomId, onSendMessage, onSendMedia, socketRef, clearAttachment]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
+  };
+
+  const handleFilePick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) queueAttachment(file);
   };
 
   const formatTime = (ts: string) => {
@@ -71,73 +136,187 @@ export function InCallChat({
     }
   };
 
+  const renderBody = (msg: InCallChatMessage) => {
+    const url = msg.fileUrl ? commsAssetUrl(msg.fileUrl) ?? msg.fileUrl : null;
+    const mime = msg.fileMimeType || "";
+    if (url && (msg.messageType === "cad-3d" || isCommsCad3dFile(msg.fileName, mime))) {
+      const downloadUrl = url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+      return (
+        <CommsCad3dAttachment
+          url={url}
+          downloadUrl={downloadUrl}
+          fileName={msg.fileName}
+          mimeType={mime}
+          caption={msg.message}
+          holoSurface
+          compact
+        />
+      );
+    }
+    if (url && mime.startsWith("image/")) {
+      return (
+        <div className="space-y-1">
+          <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg">
+            <img src={url} alt={msg.fileName || "Shared image"} className="max-h-36 w-full object-cover" />
+          </a>
+          {msg.message.trim() ? <p>{msg.message}</p> : null}
+        </div>
+      );
+    }
+    if (url && (mime.startsWith("video/") || mime.startsWith("audio/"))) {
+      return (
+        <div className="space-y-1">
+          {mime.startsWith("video/") ? (
+            <video src={url} controls className="max-h-36 w-full rounded-lg bg-black/40" />
+          ) : (
+            <audio src={url} controls className="w-full" />
+          )}
+          {msg.message.trim() ? <p>{msg.message}</p> : null}
+        </div>
+      );
+    }
+    if (url) {
+      return (
+        <a href={url} target="_blank" rel="noreferrer" className="underline decoration-cyan-400/50">
+          📎 {msg.fileName || "Shared file"}
+          {msg.message.trim() ? ` — ${msg.message}` : ""}
+        </a>
+      );
+    }
+    return msg.message;
+  };
+
+  const canSend = Boolean((text.trim() || attachPreview) && !uploading);
+
   return (
-    <div className="w-72 bg-gray-900/95 border-l border-gray-800/50 backdrop-blur-md flex flex-col">
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-800/40">
-        <h3 className="text-sm font-semibold text-white">In-Call Chat</h3>
+    <CommsMediaDropZone
+      enabled={Boolean(onSendMedia) && !uploading}
+      holoSurface
+      onFile={queueAttachment}
+      className="flex w-80 max-w-[92vw] flex-col border-l border-cyan-500/20 bg-[#021018]/95 backdrop-blur-md"
+    >
+      <div className="flex items-center justify-between border-b border-cyan-500/20 px-3 py-2.5">
+        <div>
+          <h3 className="text-sm font-semibold text-white">In-call chat</h3>
+          <p className="text-[10px] text-cyan-300/55">Drop CAD · STL · STEP · OBJ · media</p>
+        </div>
         <button
+          type="button"
           onClick={onClose}
-          className="p-1 text-gray-400 hover:text-white hover:bg-gray-800/60 rounded-lg transition-colors"
+          className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-800/60 hover:text-white"
         >
-          <X className="w-4 h-4" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-800"
+        className="flex-1 space-y-2 overflow-y-auto px-3 py-2 scrollbar-thin scrollbar-thumb-gray-800"
       >
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-gray-500 text-center">
-              No messages yet.
-              <br />
-              Chat with call participants here.
+          <div className="flex h-full items-center justify-center">
+            <p className="text-center text-xs text-gray-500">
+              Share photos, documents, or files with everyone on this call.
             </p>
           </div>
         ) : (
           messages.map((msg, idx) => {
             const isOwn = msg.senderId === currentUserId;
+            const isCad =
+              msg.messageType === "cad-3d" || isCommsCad3dFile(msg.fileName, msg.fileMimeType);
             return (
-              <div
-                key={idx}
-                className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}
-              >
-                {!isOwn && (
-                  <span className="text-[10px] text-cyan-400/80 mb-0.5 px-1">
-                    {msg.senderName}
-                  </span>
-                )}
+              <div key={`${msg.timestamp}-${idx}`} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+                {!isOwn ? (
+                  <span className="mb-0.5 px-1 text-[10px] text-cyan-400/80">{msg.senderName}</span>
+                ) : null}
                 <div
-                  className={`max-w-[220px] px-3 py-1.5 rounded-xl text-xs ${isOwn ? "bg-cyan-600/30 text-cyan-100 rounded-br-sm" : "bg-gray-800/60 text-gray-200 rounded-bl-sm"}`}
+                  className={`rounded-xl px-3 py-1.5 text-xs ${
+                    isCad ? "max-w-[min(100%,320px)]" : "max-w-[240px]"
+                  } ${
+                    isOwn
+                      ? "rounded-br-sm bg-cyan-600/30 text-cyan-100"
+                      : "rounded-bl-sm bg-gray-800/60 text-gray-200"
+                  }`}
                 >
-                  {msg.message}
+                  {renderBody(msg)}
                 </div>
-                <span className="text-[9px] text-gray-500 mt-0.5 px-1">
-                  {formatTime(msg.timestamp)}
-                </span>
+                <span className="mt-0.5 px-1 text-[9px] text-gray-500">{formatTime(msg.timestamp)}</span>
               </div>
             );
           })
         )}
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-2.5 border-t border-gray-800/40">
+      {attachPreview ? (
+        <div className="flex items-center gap-2 border-t border-cyan-500/15 px-3 py-2">
+          <div className="relative inline-block">
+            {attachPreview.file.type.startsWith("image/") ? (
+              <img src={attachPreview.url} alt="" className="h-14 rounded-lg border border-gray-700/50" />
+            ) : attachPreview.file.type.startsWith("video/") ? (
+              <video src={attachPreview.url} className="h-14 max-w-[120px] rounded-lg border border-gray-700/50" muted playsInline />
+            ) : (
+              <div className="flex max-w-[160px] items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/80 px-2 py-1.5">
+                {attachPreview.file.type.startsWith("audio/") ? (
+                  <FileAudio className="h-4 w-4 shrink-0 text-cyan-400" />
+                ) : (
+                  <ImageIcon className="h-4 w-4 shrink-0 text-cyan-400" />
+                )}
+                <span className="truncate text-[10px] text-gray-300">{attachPreview.file.name}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={clearAttachment}
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600"
+            >
+              <X className="h-3 w-3 text-white" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <CommsUploadProgressBar
+        fileName={attachPreview?.file.name}
+        progress={uploadProgress}
+        error={uploadError}
+      />
+
+      <div className="flex items-center gap-2 border-t border-cyan-500/20 px-3 py-2.5">
+        <input
+          ref={fileRef}
+          type="file"
+          accept={COMMS_MEDIA_FILE_ACCEPT}
+          className="hidden"
+          onChange={handleFilePick}
+        />
+        {onSendMedia ? (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+            className="rounded-lg p-2 text-cyan-300/80 transition hover:bg-cyan-500/10 disabled:opacity-40"
+            title="Attach photo, video, or file"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+        ) : null}
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          className="flex-1 bg-gray-800/60 border border-gray-700/40 text-white text-xs placeholder-gray-500 px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+          placeholder={uploading ? "Uploading…" : attachPreview ? "Add a caption…" : "Message or caption…"}
+          disabled={uploading}
+          className="flex-1 rounded-lg border border-gray-700/40 bg-gray-800/60 px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
         />
         <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          className="p-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          type="button"
+          onClick={() => void handleSend()}
+          disabled={!canSend}
+          className="rounded-lg bg-cyan-600 p-2 transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <Send className="w-3.5 h-3.5 text-white" />
+          <Send className="h-3.5 w-3.5 text-white" />
         </button>
       </div>
-    </div>
+    </CommsMediaDropZone>
   );
 }

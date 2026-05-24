@@ -1,0 +1,18 @@
+{
+  "content": "In machine learning and optimal control, reinforcement learning (RL) is concerned with how an intelligent agent should take actions in a dynamic environment in order to maximize a reward signal. Reinforcement learning is one of the three basic machine learning paradigms, alongside supervised learning and unsupervised learning.",
+  "metadata": {
+    "title": "Reinforcement learning",
+    "url": "https://en.wikipedia.org/wiki/Reinforcement_learning",
+    "domain": "science"
+  },
+  "source": "https://en.wikipedia.org/wiki/Reinforcement_learning",
+  "category": "ai",
+  "tags": [
+    "rl",
+    "agents",
+    "wikipedia",
+    "ai"
+  ],
+  "id": "9a1c613b-8568-440d-a2dc-3908cd2ce0da",
+  "timestamp": "2026-05-23T18:04:18.944Z"
+}

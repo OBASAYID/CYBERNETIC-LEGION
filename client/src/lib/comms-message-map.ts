@@ -1,4 +1,5 @@
 import type { CommsMessage, MessageType } from "../components/comms/MessageBubble";
+import { guessCommsCadMime, isCommsCad3dFile } from "./comms-cad-formats";
 
 export function guessMimeFromFileName(name: string | null | undefined): string | undefined {
   if (!name) return undefined;
@@ -37,6 +38,18 @@ export function guessMimeFromFileName(name: string | null | undefined): string |
     md: "text/markdown",
     json: "application/json",
     xml: "application/xml",
+    stl: "model/stl",
+    obj: "model/obj",
+    step: "application/step",
+    stp: "application/step",
+    iges: "model/iges",
+    igs: "model/iges",
+    glb: "model/gltf-binary",
+    gltf: "model/gltf+json",
+    ply: "application/ply",
+    "3mf": "application/3mf",
+    fbx: "application/octet-stream",
+    dae: "model/vnd.collada+xml",
   };
   return map[ext];
 }
@@ -128,7 +141,41 @@ export function mapServerMessageToComms(
     };
   }
 
+  if (mt === "cad-3d" && row.fileUrl) {
+    return {
+      id: row.id,
+      senderId: row.senderId,
+      senderName,
+      recipientId: row.recipientId,
+      content: row.content,
+      timestamp: row.timestamp,
+      read: row.read,
+      type: "cad-3d",
+      mediaUrl: row.fileUrl,
+      mediaMimeType: fileMime || undefined,
+      fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
+    };
+  }
+
   if ((mt === "media" || mt === "file") && row.fileUrl) {
+    const cad = isCommsCad3dFile(row.fileName, fileMime);
+    if (cad) {
+      return {
+        id: row.id,
+        senderId: row.senderId,
+        senderName,
+        recipientId: row.recipientId,
+        content: row.content,
+        timestamp: row.timestamp,
+        read: row.read,
+        type: "cad-3d",
+        mediaUrl: row.fileUrl,
+        mediaMimeType: fileMime || guessCommsCadMime(row.fileName) || undefined,
+        fileName: row.fileName || undefined,
+        fileSizeBytes: row.fileSizeBytes ?? undefined,
+      };
+    }
     return {
       id: row.id,
       senderId: row.senderId,
@@ -141,11 +188,13 @@ export function mapServerMessageToComms(
       mediaUrl: row.fileUrl,
       mediaMimeType: fileMime || undefined,
       fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
     };
   }
 
   if (row.fileUrl) {
-    const t: MessageType = "media";
+    const cad = isCommsCad3dFile(row.fileName, fileMime);
+    const t: MessageType = cad ? "cad-3d" : "media";
     return {
       id: row.id,
       senderId: row.senderId,
@@ -158,6 +207,7 @@ export function mapServerMessageToComms(
       mediaUrl: row.fileUrl,
       mediaMimeType: fileMime || undefined,
       fileName: row.fileName || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
     };
   }
 
@@ -194,6 +244,7 @@ export function fromSocketNewMessage(
     senderName?: string;
     message: string;
     messageType?: string;
+    groupId?: string;
     timestamp: string;
     fileUrl?: string;
     fileName?: string;
@@ -211,7 +262,7 @@ export function fromSocketNewMessage(
       id: data.id,
       senderId: data.senderId,
       senderName: data.senderName || data.senderId,
-      recipientId: myUserId,
+      recipientId: data.groupId || myUserId,
       content: data.message,
       timestamp: data.timestamp,
       read: false,
@@ -225,7 +276,7 @@ export function fromSocketNewMessage(
       id: data.id,
       senderId: data.senderId,
       senderName: data.senderName || data.senderId,
-      recipientId: myUserId,
+      recipientId: data.groupId || myUserId,
       content: "",
       timestamp: data.timestamp,
       read: false,
@@ -235,7 +286,7 @@ export function fromSocketNewMessage(
       duration: data.voiceDurationSeconds,
     };
   }
-  if ((data.messageType === "media" || data.messageType === "file" || data.fileUrl) && data.fileUrl) {
+  if ((data.messageType === "media" || data.messageType === "file" || data.messageType === "cad-3d" || data.fileUrl) && data.fileUrl) {
     const m = mapServerMessageToComms(
       {
         id: data.id,
@@ -244,7 +295,7 @@ export function fromSocketNewMessage(
         content: data.message,
         timestamp: data.timestamp,
         read: false,
-        messageType: data.messageType === "file" ? "file" : "media",
+        messageType: data.messageType || "media",
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,
@@ -253,6 +304,7 @@ export function fromSocketNewMessage(
       name
     );
     m.senderName = data.senderName || m.senderName;
+    if (data.groupId) m.recipientId = data.groupId;
     return m;
   }
   if (data.messageType === "emoji") {
@@ -260,7 +312,7 @@ export function fromSocketNewMessage(
       id: data.id,
       senderId: data.senderId,
       senderName: data.senderName || data.senderId,
-      recipientId: myUserId,
+      recipientId: data.groupId || myUserId,
       content: data.message,
       timestamp: data.timestamp,
       read: false,
@@ -271,7 +323,7 @@ export function fromSocketNewMessage(
     id: data.id,
     senderId: data.senderId,
     senderName: data.senderName || data.senderId,
-    recipientId: myUserId,
+    recipientId: data.groupId || myUserId,
     content: data.message,
     timestamp: data.timestamp,
     read: false,
@@ -283,6 +335,7 @@ export function fromSocketMessageSent(
   data: {
     id: string;
     recipientId: string;
+    groupId?: string;
     message: string;
     messageType?: string;
     timestamp: string;
@@ -326,16 +379,16 @@ export function fromSocketMessageSent(
       duration: data.voiceDurationSeconds,
     };
   }
-  if ((data.messageType === "media" || data.messageType === "file" || data.fileUrl) && data.fileUrl) {
-    return mapServerMessageToComms(
+  if ((data.messageType === "media" || data.messageType === "file" || data.messageType === "cad-3d" || data.fileUrl) && data.fileUrl) {
+    const mapped = mapServerMessageToComms(
       {
         id: data.id,
         senderId: myId,
-        recipientId: data.recipientId,
+        recipientId: data.groupId || data.recipientId,
         content: data.message,
         timestamp: data.timestamp,
         read: true,
-        messageType: data.messageType === "file" ? "file" : "media",
+        messageType: data.messageType || "media",
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,
@@ -343,6 +396,7 @@ export function fromSocketMessageSent(
       },
       () => myName
     );
+    return mapped;
   }
   if (data.messageType === "emoji") {
     return {

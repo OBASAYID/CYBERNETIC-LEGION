@@ -5,7 +5,6 @@ import {
   Microscope,
   Dna,
   Bug,
-  Droplets,
   AlertTriangle,
   CheckCircle2,
   Loader2,
@@ -14,6 +13,15 @@ import {
   Zap,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+
+const PANEL: React.CSSProperties = {
+  background: "rgba(13,13,30,0.75)",
+  backdropFilter: "blur(12px)",
+};
+
+const INNER: React.CSSProperties = {
+  background: "rgba(255,255,255,0.04)",
+};
 
 interface DNAAnalysisResult {
   sequence: string;
@@ -61,9 +69,7 @@ export function BiologyPage() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
-      setDnaResult(data);
-    },
+    onSuccess: (data) => setDnaResult(data),
   });
 
   const detectPathogenMutation = useMutation({
@@ -77,56 +83,42 @@ export function BiologyPage() {
         const hasPathogen = Math.random() > 0.5;
         return {
           detected: hasPathogen,
-          pathogens: hasPathogen ? [
-            { name: "Staphylococcus aureus", confidence: 0.87, severity: "medium", treatment: "Methicillin" },
-          ] : [],
+          pathogens: hasPathogen ? [{ name: "Staphylococcus aureus", confidence: 0.87, severity: "medium", treatment: "Methicillin" }] : [],
           sampleQuality: 0.94,
         };
       }
       return res.json();
     },
-    onSuccess: (data) => {
-      setPathogenResult(data);
-    },
+    onSuccess: (data) => setPathogenResult(data),
   });
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case "high": return "text-red-400 bg-red-500/20";
-      case "medium": return "text-amber-400 bg-amber-500/20";
-      default: return "text-emerald-400 bg-emerald-500/20";
+      case "high": return "text-[#e11d48] bg-[#e11d48]/20 border-[#e11d48]/20";
+      case "medium": return "text-amber-400 bg-amber-500/20 border-amber-500/20";
+      default: return "text-emerald-400 bg-emerald-500/20 border-emerald-500/20";
     }
   };
 
   const commandHandoffText = () => {
     if (dnaResult) {
-      const muts = dnaResult.mutations
-        ?.map((m) => `Position ${m.position}: ${m.type} (${m.impact})`)
-        .join("\n");
+      const muts = dnaResult.mutations?.map((m) => `Position ${m.position}: ${m.type} (${m.impact})`).join("\n");
       const genes = dnaResult.genes?.map((g) => `${g.name}: ${g.function}`).join("\n");
-      return [
-        `DNA analysis — length ${dnaResult.length}, GC ${typeof dnaResult.gcContent === "number" ? dnaResult.gcContent.toFixed(1) : dnaResult.gcContent}%`,
+      return [`DNA analysis — length ${dnaResult.length}, GC ${typeof dnaResult.gcContent === "number" ? dnaResult.gcContent.toFixed(1) : dnaResult.gcContent}%`,
         dnaResult.sequence ? `Sequence (excerpt):\n${dnaResult.sequence}` : "",
         muts ? `Mutations:\n${muts}` : "",
         genes ? `Genes:\n${genes}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      ].filter(Boolean).join("\n\n");
     }
     if (pathogenResult) {
-      const ps = pathogenResult.pathogens
-        ?.map((p) => `- ${p.name} (confidence ${p.confidence}, ${p.severity}): ${p.treatment}`)
-        .join("\n");
-      return [
-        `Pathogen screen — ${pathogenResult.detected ? "organisms detected" : "none detected"}, sample quality ${pathogenResult.sampleQuality}`,
-        ps || "",
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const ps = pathogenResult.pathogens?.map((p) => `- ${p.name} (confidence ${p.confidence}, ${p.severity}): ${p.treatment}`).join("\n");
+      return [`Pathogen screen — ${pathogenResult.detected ? "organisms detected" : "none detected"}, sample quality ${pathogenResult.sampleQuality}`, ps || ""].filter(Boolean).join("\n\n");
     }
     if (dnaSequence.trim()) return `DNA sequence input:\n${dnaSequence.trim()}`;
     return undefined;
   };
+
+  const inputClass = "w-full rounded-lg px-4 py-3 text-white text-sm border border-white/[0.08] bg-white/[0.05] focus:outline-none focus:border-[#e11d48]/40 placeholder-white/30 font-mono";
 
   return (
     <ModuleWorkspacePageShell
@@ -138,81 +130,72 @@ export function BiologyPage() {
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* DNA Analysis */}
           <div className="space-y-6">
-            <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Dna className="w-5 h-5 text-blue-400" />
+            <div className="rounded-xl border border-white/[0.08] p-5" style={PANEL}>
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: "'Orbitron', system-ui" }}>
+                <Dna className="w-5 h-5 text-[#06b6d4]" />
                 DNA Sequence Analysis
               </h2>
-
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-[rgba(235,235,245,0.5)] mb-2">DNA Sequence (A, T, C, G)</label>
+                  <label className="block text-xs text-white/50 mb-2 font-mono uppercase tracking-wider">DNA Sequence (A, T, C, G)</label>
                   <textarea
                     value={dnaSequence}
                     onChange={(e) => setDnaSequence(e.target.value)}
                     placeholder="Enter DNA sequence (e.g., ATCGATCGATCG...)"
-                    className="w-full bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-4 py-3 text-white placeholder-[rgba(235,235,245,0.3)] min-h-[120px] font-mono text-sm uppercase"
+                    className={inputClass + " min-h-[120px] uppercase"}
                   />
                 </div>
-
                 <button
                   onClick={() => analyzeDNAMutation.mutate()}
                   disabled={!dnaSequence || analyzeDNAMutation.isPending}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="w-full bg-gradient-to-r from-[#06b6d4] to-[#0891b2] hover:from-[#0891b2] hover:to-[#0e7490] text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   {analyzeDNAMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Analyzing...
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" />Analyzing...</>
                   ) : (
-                    <>
-                      <Dna className="w-5 h-5" />
-                      Analyze DNA
-                    </>
+                    <><Dna className="w-5 h-5" />Analyze DNA</>
                   )}
                 </button>
 
                 {dnaResult && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-[#2c2c2e] rounded-lg p-3">
-                        <p className="text-xs text-[rgba(235,235,245,0.5)]">Sequence Length</p>
-                        <p className="text-xl font-bold text-blue-400">{dnaResult.length.toLocaleString()}</p>
-                        <p className="text-xs text-[rgba(235,235,245,0.4)]">base pairs</p>
+                      <div className="rounded-lg p-3 border border-cyan-500/20" style={{ ...INNER, boxShadow: "0 0 12px rgba(6,182,212,0.08)" }}>
+                        <p className="text-xs text-white/50">Sequence Length</p>
+                        <p className="text-xl font-bold text-[#06b6d4]" style={{ fontFamily: "'Orbitron', system-ui" }}>{dnaResult.length.toLocaleString()}</p>
+                        <p className="text-xs text-white/30">base pairs</p>
                       </div>
-                      <div className="bg-[#2c2c2e] rounded-lg p-3">
-                        <p className="text-xs text-[rgba(235,235,245,0.5)]">GC Content</p>
-                        <p className="text-xl font-bold text-cyan-400">{dnaResult.gcContent.toFixed(1)}%</p>
-                        <p className="text-xs text-[rgba(235,235,245,0.4)]">GC ratio</p>
+                      <div className="rounded-lg p-3 border border-emerald-500/20" style={{ ...INNER, boxShadow: "0 0 12px rgba(34,197,94,0.08)" }}>
+                        <p className="text-xs text-white/50">GC Content</p>
+                        <p className="text-xl font-bold text-emerald-400" style={{ fontFamily: "'Orbitron', system-ui" }}>{dnaResult.gcContent.toFixed(1)}%</p>
+                        <p className="text-xs text-white/30">GC ratio</p>
                       </div>
                     </div>
 
-                    <div className="bg-[#2c2c2e] rounded-lg p-4">
-                      <h3 className="text-sm font-medium mb-3">Detected Mutations</h3>
+                    <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
+                      <h3 className="text-sm font-medium mb-3 text-white/70">Detected Mutations</h3>
                       <div className="space-y-2">
                         {dnaResult.mutations.map((mut, i) => (
-                          <div key={i} className="flex items-center justify-between bg-[#1c1c1e] rounded p-2">
+                          <div key={i} className="flex items-center justify-between rounded p-2 bg-black/20">
                             <div>
-                              <span className="text-sm">Position {mut.position}</span>
-                              <span className="text-xs text-[rgba(235,235,245,0.4)] ml-2">{mut.type}</span>
+                              <span className="text-sm text-white">Position {mut.position}</span>
+                              <span className="text-xs text-white/40 ml-2">{mut.type}</span>
                             </div>
-                            <span className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(mut.impact)}`}>
-                              {mut.impact}
-                            </span>
+                            <span className={`text-xs px-2 py-1 rounded-full border ${getSeverityColor(mut.impact)}`}>{mut.impact}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="bg-[#2c2c2e] rounded-lg p-4">
-                      <h3 className="text-sm font-medium mb-3">Identified Genes</h3>
+                    <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
+                      <h3 className="text-sm font-medium mb-3 text-white/70">Identified Genes</h3>
                       <div className="space-y-2">
                         {dnaResult.genes.map((gene, i) => (
-                          <div key={i} className="bg-[#1c1c1e] rounded p-3">
+                          <div key={i} className="rounded p-3 bg-black/20 border border-emerald-500/10">
                             <p className="font-medium text-emerald-400">{gene.name}</p>
-                            <p className="text-xs text-[rgba(235,235,245,0.5)]">{gene.function}</p>
+                            <p className="text-xs text-white/50">{gene.function}</p>
                           </div>
                         ))}
                       </div>
@@ -223,20 +206,21 @@ export function BiologyPage() {
             </div>
           </div>
 
+          {/* Pathogen Detection */}
           <div className="space-y-6">
-            <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Bug className="w-5 h-5 text-red-400" />
+            <div className="rounded-xl border border-white/[0.08] p-5" style={PANEL}>
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: "'Orbitron', system-ui" }}>
+                <Bug className="w-5 h-5 text-[#e11d48]" />
                 Pathogen Detection
               </h2>
-
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-[rgba(235,235,245,0.5)] mb-2">Sample Type</label>
+                  <label className="block text-xs text-white/50 mb-2 font-mono uppercase tracking-wider">Sample Type</label>
                   <select
                     value={sampleType}
                     onChange={(e) => setSampleType(e.target.value)}
-                    className="w-full bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-4 py-3 text-white"
+                    className={inputClass}
+                    style={{ background: "rgba(255,255,255,0.05)" }}
                   >
                     <option value="blood">Blood Sample</option>
                     <option value="urine">Urine Sample</option>
@@ -245,43 +229,32 @@ export function BiologyPage() {
                     <option value="swab">Nasal/Throat Swab</option>
                   </select>
                 </div>
-
                 <button
                   onClick={() => detectPathogenMutation.mutate()}
                   disabled={detectPathogenMutation.isPending}
-                  className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="w-full bg-gradient-to-r from-[#e11d48] to-[#be123c] hover:from-[#be123c] hover:to-[#9f1239] text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   {detectPathogenMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Scanning...
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" />Scanning...</>
                   ) : (
-                    <>
-                      <Search className="w-5 h-5" />
-                      Detect Pathogens
-                    </>
+                    <><Search className="w-5 h-5" />Detect Pathogens</>
                   )}
                 </button>
 
                 {pathogenResult && (
                   <div className="space-y-3">
-                    <div className={`rounded-lg p-4 ${
-                      pathogenResult.detected
-                        ? "bg-red-500/20 border border-red-500/30"
-                        : "bg-emerald-500/20 border border-emerald-500/30"
-                    }`}>
+                    <div className={`rounded-lg p-4 border ${pathogenResult.detected ? "border-[#e11d48]/30 bg-[#e11d48]/10" : "border-emerald-500/30 bg-emerald-500/10"}`}>
                       <div className="flex items-center gap-3">
                         {pathogenResult.detected ? (
-                          <AlertTriangle className="w-6 h-6 text-red-400" />
+                          <AlertTriangle className="w-6 h-6 text-[#e11d48]" />
                         ) : (
                           <CheckCircle2 className="w-6 h-6 text-emerald-400" />
                         )}
                         <div>
-                          <p className={`font-semibold ${pathogenResult.detected ? "text-red-400" : "text-emerald-400"}`}>
+                          <p className={`font-semibold ${pathogenResult.detected ? "text-[#e11d48]" : "text-emerald-400"}`}>
                             {pathogenResult.detected ? "Pathogens Detected" : "No Pathogens Detected"}
                           </p>
-                          <p className="text-xs text-[rgba(235,235,245,0.5)]">
+                          <p className="text-xs text-white/50">
                             Sample quality: {(pathogenResult.sampleQuality * 100).toFixed(0)}%
                           </p>
                         </div>
@@ -289,31 +262,24 @@ export function BiologyPage() {
                     </div>
 
                     {pathogenResult.pathogens.length > 0 && (
-                      <div className="bg-[#2c2c2e] rounded-lg p-4">
-                        <h3 className="text-sm font-medium mb-3">Identified Pathogens</h3>
+                      <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
+                        <h3 className="text-sm font-medium mb-3 text-white/70">Identified Pathogens</h3>
                         <div className="space-y-3">
                           {pathogenResult.pathogens.map((pathogen, i) => (
-                            <div key={i} className="bg-[#1c1c1e] rounded-lg p-4">
+                            <div key={i} className="rounded-lg p-4 border border-[#e11d48]/10 bg-black/20">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-red-400">{pathogen.name}</span>
-                                <span className={`text-xs px-2 py-1 rounded-full ${getSeverityColor(pathogen.severity)}`}>
-                                  {pathogen.severity}
-                                </span>
+                                <span className="font-medium text-[#e11d48]">{pathogen.name}</span>
+                                <span className={`text-xs px-2 py-1 rounded-full border ${getSeverityColor(pathogen.severity)}`}>{pathogen.severity}</span>
                               </div>
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="flex-1 h-2 bg-[#2c2c2e] rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-red-500 to-orange-500"
-                                    style={{ width: `${pathogen.confidence * 100}%` }}
-                                  />
+                                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                  <div className="h-full bg-gradient-to-r from-[#e11d48] to-orange-500" style={{ width: `${pathogen.confidence * 100}%` }} />
                                 </div>
-                                <span className="text-xs text-[rgba(235,235,245,0.5)]">
-                                  {(pathogen.confidence * 100).toFixed(0)}%
-                                </span>
+                                <span className="text-xs text-white/50">{(pathogen.confidence * 100).toFixed(0)}%</span>
                               </div>
                               <div className="flex items-center gap-2 text-xs">
                                 <Zap className="w-3 h-3 text-amber-400" />
-                                <span className="text-[rgba(235,235,245,0.5)]">Treatment:</span>
+                                <span className="text-white/50">Treatment:</span>
                                 <span className="text-amber-400">{pathogen.treatment}</span>
                               </div>
                             </div>
@@ -326,12 +292,12 @@ export function BiologyPage() {
               </div>
             </div>
 
-            <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            {/* Lab capabilities */}
+            <div className="rounded-xl border border-white/[0.08] p-5" style={PANEL}>
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: "'Orbitron', system-ui" }}>
                 <FileText className="w-5 h-5 text-purple-400" />
                 Lab Capabilities
               </h2>
-
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { name: "DNA Sequencing", status: "active" },
@@ -341,11 +307,9 @@ export function BiologyPage() {
                   { name: "Biosensor Integration", status: "standby" },
                   { name: "Gene Editing", status: "standby" },
                 ].map((cap, i) => (
-                  <div key={i} className="bg-[#2c2c2e] rounded-lg p-3 flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      cap.status === "active" ? "bg-emerald-400" : "bg-amber-400"
-                    }`} />
-                    <span className="text-sm">{cap.name}</span>
+                  <div key={i} className="rounded-lg p-3 flex items-center gap-2 border border-white/[0.06]" style={INNER}>
+                    <div className={`w-2 h-2 rounded-full ${cap.status === "active" ? "bg-emerald-400 shadow-[0_0_6px_rgba(34,197,94,0.8)]" : "bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.8)]"}`} />
+                    <span className="text-sm text-white/80">{cap.name}</span>
                   </div>
                 ))}
               </div>

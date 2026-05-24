@@ -1,34 +1,30 @@
 /**
  * Shared mapping from module-orchestrator engine id → Command Center UI path.
- * Used by cyrus-ui dashboard and server algorithm catalog.
- */
-/**
- * Engine id → path must match `cyrus-ui/src/command-center-routes.tsx` and `command-center-nav.ts`
- * (not the older standalone pages like `/device-control` unless you add redirects).
+ * Only routes to operational surfaces (see `cyrus-ui/src/config/command-center-nav.ts`).
  */
 export const ENGINE_MODULE_ROUTE_MAP: Record<string, string> = {
   "vector-knowledge": "/files",
   "emotional-cognition": "/comms",
   "universal-language": "/scan",
-  "decentralized-intelligence": "/ops",
+  "decentralized-intelligence": "/intelligence",
   "iot-ntn-connectivity": "/comms",
   "ethical-governance": "/security",
-  "self-evolution": "/ops",
+  "self-evolution": "/intelligence",
   "quantum-neural": "/quantum",
-  "ai-simulations": "/ops",
+  "ai-simulations": "/intelligence",
   "cross-dimensional": "/quantum",
   "nanotechnology": "/biology",
-  "hyperlinked-reality": "/design",
+  "hyperlinked-reality": "/scan",
   "bio-neural": "/medical",
   "adaptive-hardware": "/device",
   biology: "/biology",
   environmental: "/nav",
   medical: "/medical",
-  robotic: "/drone",
-  teaching: "/ai-assistant",
+  robotic: "/intelligence",
+  teaching: "/files",
   security: "/security",
-  "blood-sampling": "/blood",
-  "quantum-nexus": "/ops",
+  "blood-sampling": "/medical",
+  "quantum-nexus": "/quantum",
 };
 
 export function getDesignatedModuleRouteForEngine(engineId: string): string | null {

@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, Square, Send, X, Play, Pause } from "lucide-react";
+import { getAudioConstraints } from "../../lib/webrtc-config";
+import { applyCleanAudioToStream } from "../../lib/comms-media-filters";
 
 interface VoiceRecorderProps {
   onSend: (blob: Blob, duration: number) => void;
@@ -65,7 +67,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: getAudioConstraints() });
+      await applyCleanAudioToStream(stream);
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();

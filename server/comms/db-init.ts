@@ -291,6 +291,47 @@ const DDL_STATEMENTS = [
     created_at TIMESTAMP DEFAULT NOW() NOT NULL,
     PRIMARY KEY (post_id, user_id)
   )`,
+
+  // ── gwa_sessions (Group Work Assessment) ───────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS gwa_sessions (
+    id                     VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id               VARCHAR NOT NULL,
+    title                  VARCHAR NOT NULL,
+    scenario_brief         TEXT,
+    status                 VARCHAR NOT NULL DEFAULT 'scheduled',
+    current_phase          VARCHAR NOT NULL DEFAULT 'individual_preparation',
+    phase_started_at       TIMESTAMP,
+    session_started_at     TIMESTAMP,
+    session_ended_at       TIMESTAMP,
+    total_duration_minutes INTEGER DEFAULT 120,
+    phase_durations        JSONB DEFAULT '{}',
+    participant_ids        JSONB NOT NULL DEFAULT '[]',
+    assessor_ids           JSONB DEFAULT '[]',
+    created_by             VARCHAR NOT NULL,
+    live_metrics           JSONB DEFAULT '{}',
+    created_at             TIMESTAMP DEFAULT NOW() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS gwa_observations (
+    id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id  VARCHAR NOT NULL,
+    user_id     VARCHAR,
+    phase       VARCHAR,
+    event_type  VARCHAR NOT NULL,
+    payload     JSONB DEFAULT '{}',
+    created_at  TIMESTAMP DEFAULT NOW() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS gwa_reports (
+    id                       VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id               VARCHAR NOT NULL UNIQUE,
+    group_id                 VARCHAR NOT NULL,
+    team_score               VARCHAR,
+    report_json              JSONB NOT NULL DEFAULT '{}',
+    html_report              TEXT,
+    synced_to_intelligence   BOOLEAN DEFAULT FALSE,
+    generated_at             TIMESTAMP DEFAULT NOW() NOT NULL
+  )`,
 ];
 
 // Column additions for tables that may already exist without these columns

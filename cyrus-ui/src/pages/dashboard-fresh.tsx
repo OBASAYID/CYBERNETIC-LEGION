@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
-import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import {
-  ModuleCommandConsole,
-  ModuleCommandConsoleDock,
-} from "@/components/command-center/module-command-console";
+  LayoutGrid,
+  TerminalSquare,
+  Camera,
+  FileText,
+  Video,
+  Phone,
+  MessageSquare,
+  Mic,
+  Film,
+} from "lucide-react";
+import { Link } from "wouter";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
 import {
   BottomPanels,
@@ -13,231 +19,268 @@ import {
   HeaderTitle,
   HealthRail,
   HeroSection,
-  LegacyBanner,
   MetricsSection,
-  ModuleWorkspaceSection,
 } from "@/components/dashboard-fresh/sections";
+import {
+  PSharePanel,
+  CommsBentoGrid,
+} from "@/components/dashboard-fresh/comms-hub";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
+
 type AdminTab = "modules" | "console";
 
-export default function DashboardFresh() {
-  const role = useUserRole();
-  const isAdmin = role === "admin";
-  const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
-  const [adminTab, setAdminTab] = useState<AdminTab>("modules");
-  const adminConsole = isAdmin && adminTab === "console";
+/* ══════════════════════════════════════════════════════════════════════
+   QUICK ACTION STRIP — 7 instant-access features
+══════════════════════════════════════════════════════════════════════ */
+const QUICK_ACTIONS = [
+  { label: "Vision Scan", icon: Camera,       href: "/scan",             color: "#06b6d4" },
+  { label: "Build Docs",  icon: FileText,      href: "/document-builder", color: "#7c3aed" },
+  { label: "Video Call",  icon: Video,         href: "/comms?tab=video",  color: "#e11d48" },
+  { label: "Voice Call",  icon: Phone,         href: "/comms?tab=voice",  color: "#22c55e" },
+  { label: "Text",        icon: MessageSquare, href: "/comms?tab=text",   color: "#f97316" },
+  { label: "Voice Note",  icon: Mic,           href: "/comms?tab=vnote",  color: "#eab308" },
+  { label: "Video Note",  icon: Film,          href: "/comms?tab=vidnote",color: "#f43f5e" },
+];
 
-  const loadStack = isAdmin;
-  const loadOrchestrator = adminConsole;
+function QuickActionStrip() {
+  return (
+    <div
+      className="flex items-center gap-2 px-4 shrink-0"
+      style={{
+        height: 46,
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(35,35,42,0.9)",
+      }}
+    >
+      <span
+        className="text-[7px] font-bold tracking-[0.35em] text-white/30 uppercase shrink-0 mr-1"
+      >
+        QUICK
+      </span>
+      {QUICK_ACTIONS.map(({ label, icon: Icon, href, color }) => (
+        <Link key={label} href={href}>
+          <div
+            className="group flex items-center gap-1.5 rounded-xl px-3 h-[30px] cursor-pointer transition-all duration-150 hover:scale-[1.04] shrink-0"
+            style={{
+              background: `rgba(255,255,255,0.06)`,
+              border: `1px solid rgba(255,255,255,0.1)`,
+            }}
+          >
+            <Icon
+              className="h-3 w-3 shrink-0"
+              style={{ color }}
+              strokeWidth={1.8}
+            />
+            <span className="text-[8px] font-semibold text-white/60 group-hover:text-white/90 transition-colors whitespace-nowrap">
+              {label}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   PAGE — h-screen, no scroll, everything flex-fitted
+══════════════════════════════════════════════════════════════════════ */
+export default function DashboardFresh() {
+  const role        = useUserRole();
+  const isAdmin     = role === "admin";
+  const displayName =
+    (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "OPERATOR";
+
+  const [adminTab, setAdminTab]   = useState<AdminTab>("modules");
+  const adminConsole              = isAdmin && adminTab === "console";
 
   const {
     stackSummary,
     orchestratorModules,
     navLabelByRoute,
-    visibleModules,
     onlineEngines,
     degradedEngines,
     offlineEngines,
     totalEngines,
     healthPercent,
-  } = useDashboardFreshData(moduleFilter, {
-    enableStackSummary: loadStack,
-    enableOrchestratorData: loadOrchestrator,
+  } = useDashboardFreshData("all", {
+    enableStackSummary:    true,
+    enableOrchestratorData: true,
   });
 
-  const handleLogout = () => {
-    clearAuthSessionStorage();
-    window.location.reload();
-  };
-
-  const headerOperator = !isAdmin || adminTab === "modules";
+  const showHub = !adminConsole;
+  const sharedPanelProps = { healthPercent, onlineEngines, totalEngines, degradedEngines, offlineEngines };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-transparent text-white">
-      {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
-      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
-      <div className="pointer-events-none fixed inset-0">
-        <div
-          className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
-          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(0.8px)" }}
+    /* Root: fills the whole viewport, NO page scroll */
+    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh", background: "#0c0c14", position: "relative" }}>
+
+      {/* ══ GABORONE SATELLITE MAP BACKGROUND ═══════════════════════════ */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <img
+          src="/gaborone-map.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            filter: "saturate(1.8) contrast(1.5) brightness(0.5) hue-rotate(5deg)",
+            opacity: 0.9,
+          }}
         />
-        <div
-          className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
-          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
-        />
-        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/45 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-amber-300/[0.1] blur-3xl" />
-        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(251,191,36,0.22),rgba(120,53,15,0.08)_56%,transparent_78%)] blur-2xl" />
-        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
-        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
+        {/* Blood-red pulse overlay — city-core aggression */}
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 48% 52%, rgba(225,29,72,0.22) 0%, rgba(80,0,0,0.3) 40%, transparent 75%)" }} />
+        {/* Dark vignette to keep UI readable */}
+        <div className="absolute inset-0" style={{ background: "rgba(6,6,12,0.62)" }} />
+        {/* Red HUD scanlines */}
+        <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(225,29,72,0.025) 3px, rgba(225,29,72,0.025) 4px)" }} />
+        {/* Teal route-glow echo */}
+        <div className="absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,220,130,0.012) 3px, rgba(0,220,130,0.012) 4px)" }} />
       </div>
-      <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5">
-            {/* Status + field clock — own row so nothing stacks under fixed HUD */}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
-                <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
-              </div>
-              <FieldDateTimeHud className="shrink-0" />
-            </div>
 
-            {/* Title row: admin toggles + branding | fused + logout */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-              <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2 sm:min-w-[12rem] sm:gap-3">
-                {isAdmin ? (
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setAdminTab("modules")}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
-                        adminTab === "modules"
-                          ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
-                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
-                      }`}
-                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                    >
-                      <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
-                      <span className="hidden sm:inline">Module workspace</span>
-                      <span className="sm:hidden">Modules</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminTab("console")}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
-                        adminTab === "console"
-                          ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
-                          : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
-                      }`}
-                      style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                    >
-                      <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={1.85} aria-hidden />
-                      <span className="hidden sm:inline">Mission console</span>
-                      <span className="sm:hidden">Console</span>
-                    </button>
-                  </div>
-                ) : null}
-                <div className="min-w-0 flex-1 basis-[min(100%,16rem)] sm:basis-auto">
-                  <HeaderTitle variant={headerOperator ? "operator" : "default"} />
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-2.5">
-                {isAdmin && (
-                  <HeaderBadge livePort={stackSummary?.stack?.fused?.livePort} />
-                )}
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
-                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-                >
-                  <LogOut className="h-3.5 w-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">Logout</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
-        {!isAdmin && (
-          <p className="max-w-2xl rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>
-            Choose a module to open. System diagnostics and command tooling are available to
-            administrators only.
-          </p>
-        )}
-
-        {(headerOperator || !isAdmin) && (
-          <ModuleWorkspaceSection
-            modules={visibleModules}
-            moduleFilter={moduleFilter}
-            setModuleFilter={setModuleFilter}
-          />
-        )}
-
-        {adminConsole && (
-          <div className="relative w-full">
-            <div
-              className="pointer-events-none absolute left-1/2 top-[52%] z-0 w-[min(76rem,108vw)] -translate-x-1/2 -translate-y-1/2"
-              aria-hidden
-            >
-              <div className="mx-auto h-80 max-w-5xl rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
-              <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
-              <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
-            </div>
-          <section className="relative z-10 overflow-hidden rounded-3xl bg-slate-950/60 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_12px_40px_rgba(0,0,0,0.4)]">
-            <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950" aria-hidden />
-            <div
-              className="pointer-events-none absolute inset-0 z-[1] opacity-[0.12]"
-              style={{
-                backgroundImage: `radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.4) 1px, transparent 0)`,
-                backgroundSize: "24px 24px",
-              }}
-            />
-            <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-cyan-500/5 via-transparent to-orange-500/10" />
-
-            <div className="relative z-10 space-y-5 rounded-[1.4rem] bg-slate-950/45 p-4 shadow-inner shadow-black/20 backdrop-blur-sm sm:p-5">
-              <div className="mb-1 flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-                  <TerminalSquare className="h-5 w-5 text-amber-200" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/60">
-                    Command & diagnostics
-                  </p>
-                  <h2
-                    className="mt-0.5 bg-gradient-to-r from-amber-100 via-white to-cyan-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
-                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+      {/* ══ HEADER — 52px fixed row ════════════════════════════════════ */}
+      <header
+        className="shrink-0 z-30"
+        style={{
+          height: 52,
+          background: "rgba(8,8,14,0.99)",
+          borderBottom: "1px solid rgba(225,29,72,0.2)",
+          backdropFilter: "blur(24px)",
+          boxShadow: "0 2px 32px rgba(0,0,0,0.8)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 h-full">
+          {/* Left */}
+          <div className="flex items-center gap-3 min-w-0">
+            <HeaderTitle variant={showHub ? "operator" : "default"} />
+            {isAdmin && (
+              <div
+                className="flex items-center gap-1 rounded-xl p-1 ml-2"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+              >
+                {([
+                  { id: "modules" as AdminTab, label: "Hub",     icon: LayoutGrid,    color: "#e11d48" },
+                  { id: "console" as AdminTab, label: "Console", icon: TerminalSquare, color: "#06b6d4" },
+                ] as const).map(({ id, label, icon: Icon, color }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setAdminTab(id)}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-[10px] font-semibold tracking-wide transition-all duration-200"
+                    style={{
+                      background:  adminTab === id ? `${color}18` : "transparent",
+                      border:      adminTab === id ? `1px solid ${color}35` : "1px solid transparent",
+                      color:       adminTab === id ? "#fff" : "rgba(255,255,255,0.35)",
+                      boxShadow:   adminTab === id ? `0 0 12px ${color}20` : "none",
+                      fontFamily: "'Orbitron', system-ui",
+                    }}
                   >
-                    Mission console
-                  </h2>
-                  <p className="mt-1 max-w-lg text-xs text-white/70">
-                    Stack health, engine matrix, and operational hints—same glass language as module workspace.
-                  </p>
-                </div>
+                    <Icon className="h-3 w-3" style={{ color: adminTab === id ? color : undefined }} strokeWidth={2} />
+                    {label}
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
 
-              <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                <HeroSection />
-                <HealthRail
-                  healthPercent={healthPercent}
-                  onlineEngines={onlineEngines}
-                  totalEngines={totalEngines}
-                  degradedEngines={degradedEngines}
-                  offlineEngines={offlineEngines}
+          {/* Centre status pills */}
+          <div className="hidden md:flex items-center gap-2">
+            {[
+              { label: "SYSTEM",  value: "ACTIVE",                           color: "#22c55e", pulse: true  },
+              { label: "ENGINES", value: `${onlineEngines}/${totalEngines}`,  color: "#06b6d4", pulse: false },
+              { label: "COMMS",   value: "READY",                            color: "#7c3aed", pulse: false },
+            ].map(({ label, value, color, pulse }) => (
+              <div
+                key={label}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{ background: `${color}10`, border: `1px solid ${color}22` }}
+              >
+                <span
+                  className={`h-[5px] w-[5px] rounded-full ${pulse ? "animate-pulse" : ""}`}
+                  style={{ background: color, boxShadow: `0 0 5px ${color}` }}
                 />
-              </section>
+                <span className="text-[9px] font-mono tracking-[0.25em] text-white/40 uppercase">{label}</span>
+                <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
+              </div>
+            ))}
+          </div>
 
+          {/* Right */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isAdmin && <HeaderBadge livePort={(stackSummary as any)?.stack?.fused?.livePort} />}
+            <FieldDateTimeHud />
+          </div>
+        </div>
+      </header>
+
+      {/* ══ BODY — fills remaining height, no overflow ═════════════════ */}
+      <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
+
+        {/* ── CENTER — hub or admin console ────────────────────────────── */}
+        {showHub ? (
+          <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+
+            {/* Quick-action strip */}
+            <QuickActionStrip />
+
+            {/* Comms bento — fills remaining height, no scroll */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <CommsBentoGrid displayName={displayName} />
+            </div>
+          </main>
+        ) : (
+          /* Admin console — own internal scroll */
+          <main className="flex-1 min-w-0 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1400px] px-5 py-6 space-y-5 lg:px-8">
+              <section
+                className="relative overflow-hidden rounded-2xl p-5"
+                style={{ background: "rgba(42,42,52,0.88)", border: "1px solid rgba(255,255,255,0.09)" }}
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.13)" }}
+                  >
+                    <TerminalSquare className="h-5 w-5 text-white/60" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold tracking-widest text-white/35 uppercase mb-1">Command & Diagnostics</p>
+                    <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
+                    <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
+                  </div>
+                </div>
+              </section>
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <HeroSection />
+                <HealthRail {...sharedPanelProps} />
+              </section>
               <MetricsSection
                 stackSummary={stackSummary}
                 onlineEngines={onlineEngines}
                 totalEngines={totalEngines}
                 degradedEngines={degradedEngines}
               />
-
               <EngineMatrixSection
                 modules={orchestratorModules?.modules ?? []}
                 navLabelByRoute={navLabelByRoute}
               />
-
-              <BottomPanels hints={stackSummary?.stack?.hints ?? ["Waiting for stack hints..."]} />
-              <LegacyBanner />
+              <BottomPanels hints={(stackSummary as any)?.stack?.hints ?? ["Waiting for stack hints…"]} />
             </div>
-          </section>
-          </div>
+          </main>
         )}
-      </main>
 
-        <ModuleCommandConsoleDock>
-          <ModuleCommandConsole pageContext="Command Center — home / module workspace" />
-        </ModuleCommandConsoleDock>
+        {/* ── RIGHT sidebar ────────────────────────────────────────────── */}
+        <aside
+          className="hidden xl:flex flex-col shrink-0 overflow-y-auto"
+          style={{
+            width: 280,
+            borderLeft: "1px solid rgba(225,29,72,0.18)",
+            background: "rgba(8,8,14,0.88)",
+            backdropFilter: "blur(20px)",
+            scrollbarWidth: "none",
+          }}
+        >
+          <PSharePanel />
+        </aside>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ export {
   systemApiUrl,
   systemCredentials,
   resolveCyrusWebSocketUrl,
+  resolveCyrusSocketIoOrigin,
   appendCommSignalingTokenToSearchParams,
 } from "@shared/cyrus-api-client";
 
