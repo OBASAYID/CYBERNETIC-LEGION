@@ -21,8 +21,8 @@ import { systemFetch } from "@shared/cyrus-api-client";
 const C = {
   crimson: "#e11d48", cyan: "#06b6d4", purple: "#7c3aed",
   green: "#22c55e", orange: "#f97316", yellow: "#eab308",
-  bg: "rgba(8,8,16,0.99)", card: "rgba(10,10,24,0.97)",
-  border: "rgba(255,255,255,0.06)",
+  bg: "#1c1c21", card: "rgba(42,42,52,0.88)",
+  border: "rgba(255,255,255,0.08)",
 } as const;
 
 type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote";
@@ -102,7 +102,7 @@ function Avatar({ name, size=36, ring=false, speaking=false }:
 function StatusDot({ status }: { status?: string }) {
   const col = status==="online"?C.green:status==="busy"?C.orange:status==="in_call"?C.crimson:"#555";
   return <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2"
-    style={{ background:col, borderColor:"rgba(8,8,16,1)", boxShadow:`0 0 6px ${col}80` }} />;
+    style={{ background:col, borderColor:"#1e1e24", boxShadow: (status==="online"||status==="busy"||status==="in_call") ? `0 0 6px ${col}80` : "none" }} />;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -199,73 +199,103 @@ function StatPill({ label, value, color=C.cyan }:
 }
 
 /* ══════════════════════════════════════════════════════════════
-   USERS RAIL
+   USERS RAIL  — matches reference Friends sidebar exactly
 ══════════════════════════════════════════════════════════════ */
-function UsersRail({ users, myId, onCallVoice, onCallVideo, onMessage }:
-  { users:OnlineUser[]; myId:string; onCallVoice:(id:string,name:string)=>void;
+function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
+  { users:OnlineUser[]; myId:string; myName:string; onCallVoice:(id:string,name:string)=>void;
     onCallVideo:(id:string,name:string)=>void; onMessage:(id:string,name:string)=>void; }) {
   const [search, setSearch] = useState("");
   const filtered = users.filter(u => u.id!==myId && u.displayName.toLowerCase().includes(search.toLowerCase()));
   const online = filtered.filter(u=>u.isOnline).length;
 
+  function initials2(n: string) { return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?"; }
+
   return (
     <aside className="flex flex-col shrink-0"
-      style={{ width:210, borderRight:`1px solid ${C.border}`, background:"rgba(6,6,16,0.92)" }}>
-      {/* Header */}
-      <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom:`1px solid ${C.border}` }}>
-        <div className="flex items-center gap-2 mb-2">
-          <div className="h-[5px] w-[5px] rounded-full" style={{ background:C.green, boxShadow:`0 0 8px ${C.green}` }} />
-          <span className="text-[8px] font-black tracking-[0.3em] text-white/30 uppercase" style={{ fontFamily:"'Orbitron',system-ui" }}>
-            OPERATORS · {online}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2"
-          style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}` }}>
-          <Search className="h-3 w-3 text-white/20 shrink-0" strokeWidth={1.8} />
-          <input type="text" placeholder="Search…" value={search}
-            onChange={e=>setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none" />
-        </div>
-      </div>
+      style={{ width:215, borderRight:`1px solid ${C.border}`, background:"rgba(30,30,36,0.97)" }}>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ scrollbarWidth:"none" }}>
-        {filtered.length===0 ? (
-          <p className="text-center text-[10px] text-white/20 pt-8">No operators</p>
-        ) : filtered.map(u => (
-          <div key={u.id}
-            className="group flex items-center gap-2 rounded-xl px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.04]">
-            <div className="relative shrink-0">
-              <Avatar name={u.displayName} size={30} />
-              <StatusDot status={u.status??(u.isOnline?"online":"offline")} />
+      {/* ── Profile header — matches "Amy Winnar" in reference ── */}
+      <div className="px-4 pt-5 pb-4 shrink-0" style={{ borderBottom:`1px solid ${C.border}` }}>
+        <div className="flex items-center gap-3">
+          <div className="relative shrink-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full font-bold text-sm text-white"
+              style={{ background:"linear-gradient(135deg, #7c3aed, #4f46e5)", boxShadow:"0 4px 16px rgba(124,58,237,0.4)" }}>
+              {initials2(myName)}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-white/75 truncate">{u.displayName}</p>
-              <p className="text-[7px] font-mono text-white/25 uppercase">
-                {u.status==="in_call"?"in call":u.isOnline?"online":"offline"}
-              </p>
-            </div>
-            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-              {[
-                { title:"Chat", icon:MessageSquare, color:C.cyan, fn:()=>onMessage(u.id,u.displayName) },
-                { title:"Voice", icon:Phone, color:C.green, fn:()=>onCallVoice(u.id,u.displayName) },
-                { title:"Video", icon:Video, color:C.crimson, fn:()=>onCallVideo(u.id,u.displayName) },
-              ].map(({title,icon:Icon,color,fn})=>(
-                <button key={title} type="button" onClick={fn}
-                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title={title}>
-                  <Icon className="h-2.5 w-2.5" style={{color}} strokeWidth={1.8} />
-                </button>
-              ))}
-            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2"
+              style={{ background:C.green, borderColor:"#1e1e24" }} />
           </div>
-        ))}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-white truncate">{myName}</p>
+            <p className="text-[10px] text-white/40">Active now</p>
+          </div>
+        </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Search ── */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+          style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
+          <Search className="h-3 w-3 text-white/25 shrink-0" strokeWidth={1.8} />
+          <input type="text" placeholder="Search friends…" value={search}
+            onChange={e=>setSearch(e.target.value)}
+            className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/25 focus:outline-none" />
+        </div>
+      </div>
+
+      {/* ── Friends list — matches reference Friends section ── */}
+      <div className="px-4 pt-1 pb-1 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-white/55">Friends</p>
+          <span className="text-[9px] text-green-400/70">{online} online</span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 pb-3" style={{ scrollbarWidth:"none" }}>
+        {filtered.length===0 ? (
+          <p className="text-center text-[10px] text-white/25 pt-8 italic">No operators found</p>
+        ) : filtered.map(u => {
+          const isOnline = u.isOnline || u.status==="online";
+          return (
+            <div key={u.id}
+              className="group flex items-center gap-2.5 rounded-xl px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.06]"
+              onClick={()=>onMessage(u.id,u.displayName)}>
+              <div className="relative shrink-0">
+                <Avatar name={u.displayName} size={34} />
+                <StatusDot status={u.status??(u.isOnline?"online":"offline")} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-white/80 truncate">{u.displayName}</p>
+                <p className="text-[9px] text-white/30 capitalize">
+                  {u.status==="in_call"?"in call":isOnline?"online":"offline"}
+                </p>
+              </div>
+              <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                <button type="button" onClick={e=>{e.stopPropagation();onCallVoice(u.id,u.displayName);}}
+                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title="Voice">
+                  <Phone className="h-3 w-3 text-green-400/70" strokeWidth={1.8} />
+                </button>
+                <button type="button" onClick={e=>{e.stopPropagation();onCallVideo(u.id,u.displayName);}}
+                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title="Video">
+                  <Video className="h-3 w-3 text-white/40" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {filtered.length > 0 && (
+          <p className="mt-2 px-2 text-[10px] font-medium text-white/30 hover:text-white/55 cursor-pointer transition-colors">
+            See more
+          </p>
+        )}
+      </div>
+
+      {/* ── Settings footer ── */}
       <div className="flex items-center gap-2 px-4 py-3 shrink-0"
         style={{ borderTop:`1px solid ${C.border}` }}>
-        <Lock className="h-3 w-3 shrink-0" style={{ color:C.green }} strokeWidth={1.8} />
-        <p className="text-[6px] font-mono text-white/20 uppercase tracking-widest">AES-256-GCM ENCRYPTED</p>
+        <Settings2 className="h-3.5 w-3.5 text-white/30" strokeWidth={1.8} />
+        <p className="text-[11px] text-white/35">Settings</p>
       </div>
     </aside>
   );
@@ -317,50 +347,74 @@ function ChatPanel({ myId, myName, targetUser }:
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Chat header */}
-      <div className="flex items-center gap-3 px-5 py-3 shrink-0"
+      {/* Chat header — Activity panel style: bold "name" header */}
+      <div className="flex items-center gap-3 px-5 py-3.5 shrink-0"
         style={{ borderBottom:`1px solid ${C.border}` }}>
         <div className="relative">
-          <Avatar name={targetUser.name} size={34} ring />
+          <Avatar name={targetUser.name} size={36} ring />
           <StatusDot status="online" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-bold text-white/85">{targetUser.name}</p>
-          <div className="flex items-center gap-2">
-            <Shield className="h-2.5 w-2.5" style={{color:C.green}} strokeWidth={2} />
-            <p className="text-[7px] font-mono text-white/30">END-TO-END ENCRYPTED CHANNEL</p>
-          </div>
+          <p className="text-sm font-bold text-white">{targetUser.name}</p>
+          <p className="text-[10px] text-white/35">Active now</p>
         </div>
-        <SignalBars quality={4} color={C.cyan} />
+        <div className="flex items-center gap-2">
+          <button type="button" title="Voice call"
+            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-white/10 transition-colors"
+            style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${C.border}` }}>
+            <Phone className="h-3.5 w-3.5 text-green-400" strokeWidth={1.8} />
+          </button>
+          <button type="button" title="Video call"
+            className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-white/10 transition-colors"
+            style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${C.border}` }}>
+            <Video className="h-3.5 w-3.5 text-white/50" strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages — Activity feed card style matching reference image */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
         style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(255,255,255,0.06) transparent" }}>
         {msgs.length===0 && (
-          <div className="flex flex-col items-center justify-center h-32 opacity-30 gap-2">
-            <MessageSquare className="h-6 w-6 text-white/20" strokeWidth={1} />
-            <p className="text-[9px] font-mono text-white/30">No messages yet</p>
+          <div className="flex flex-col items-center justify-center h-40 opacity-30 gap-3">
+            <MessageSquare className="h-8 w-8 text-white/20" strokeWidth={1} />
+            <p className="text-[11px] text-white/30">No messages yet — start a conversation</p>
           </div>
         )}
         {msgs.map(msg => {
           const mine = msg.senderId===myId;
           return (
-            <div key={msg.id} className="flex gap-2" style={{ justifyContent:mine?"flex-end":"flex-start", animation:"cy-slide-up 0.2s ease" }}>
-              {!mine && <Avatar name={msg.senderName} size={26} />}
-              <div style={{ maxWidth:"72%" }}>
-                {!mine && <p className="text-[7px] font-mono text-white/30 mb-0.5 ml-1">{msg.senderName}</p>}
-                <div className="rounded-2xl px-3.5 py-2.5"
-                  style={{
-                    background: mine
-                      ? `linear-gradient(135deg, ${C.crimson}28, ${C.purple}20)`
-                      : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${mine?C.crimson+"28":C.border}`,
-                    boxShadow: mine ? `0 2px 12px ${C.crimson}15` : "none",
-                  }}>
-                  <p className="text-[11.5px] text-white/80 leading-relaxed">{msg.content}</p>
+            /* Activity-feed style card: avatar + name/time + message + Reply */
+            <div key={msg.id} className="flex gap-3" style={{ animation:"cy-slide-up 0.2s ease" }}>
+              {/* Round avatar — always on left */}
+              <div className="relative shrink-0 mt-0.5">
+                <Avatar name={msg.senderName} size={36} />
+                {mine && (
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2"
+                    style={{ background:C.green, borderColor:"#1e1e24" }} />
+                )}
+              </div>
+              {/* Card body */}
+              <div className="flex-1 min-w-0 rounded-2xl px-4 py-3"
+                style={{
+                  background: mine ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${mine ? "rgba(124,58,237,0.22)" : C.border}`,
+                }}>
+                {/* Name + time row */}
+                <div className="flex items-baseline gap-2 mb-1.5">
+                  <p className="text-[12px] font-bold text-white/90 truncate">{msg.senderName}</p>
+                  <p className="text-[9px] text-white/30 shrink-0">{timeAgo(msg.createdAt)}</p>
                 </div>
-                <p className="text-[7px] font-mono text-white/20 mt-0.5 px-1">{timeAgo(msg.createdAt)}</p>
+                {/* Message text */}
+                <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p>
+                {/* Reply button — matches reference "Reply" link */}
+                {!mine && (
+                  <button type="button"
+                    onClick={()=>setInput(`@${msg.senderName} `)}
+                    className="mt-2 text-[10px] font-semibold text-white/35 hover:text-white/65 transition-colors">
+                    Reply
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -368,20 +422,20 @@ function ChatPanel({ myId, myName, targetUser }:
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="flex items-center gap-2.5 px-4 py-3 shrink-0"
-        style={{ borderTop:`1px solid ${C.border}` }}>
+      {/* Input — warm glassmorphism */}
+      <div className="flex items-center gap-2.5 px-5 py-3.5 shrink-0"
+        style={{ borderTop:`1px solid ${C.border}`, background:"rgba(28,28,34,0.6)" }}>
         <div className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-2.5"
-          style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}` }}>
+          style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
           <input type="text" value={input} onChange={e=>setInput(e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
-            placeholder="Type a secure message… (Enter to send)"
-            className="flex-1 bg-transparent text-[12px] text-white/80 placeholder:text-white/20 focus:outline-none" />
+            placeholder="Write a message…"
+            className="flex-1 bg-transparent text-[13px] text-white/80 placeholder:text-white/30 focus:outline-none" />
         </div>
         <button type="button" onClick={send} disabled={!input.trim()||sending}
-          className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-110 disabled:opacity-30"
-          style={{ background:`linear-gradient(135deg, ${C.crimson}, ${C.purple})`,
-            boxShadow: input.trim()?`0 4px 16px ${C.crimson}30`:"none" }}>
+          className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-105 disabled:opacity-30"
+          style={{ background:"linear-gradient(135deg, #7c3aed, #5b21b6)",
+            boxShadow: input.trim()?"0 4px 16px rgba(124,58,237,0.35)":"none" }}>
           <Send className="h-4 w-4 text-white" strokeWidth={2} />
         </button>
       </div>
@@ -1303,18 +1357,17 @@ export default function CommsHubPage() {
 
         {/* ══ HEADER ══════════════════════════════════════════ */}
         <header className="shrink-0 flex items-center gap-0 px-5"
-          style={{ height:52, background:"rgba(8,8,16,0.99)",
-            borderBottom:`1px solid ${C.crimson}15`,
-            boxShadow:"0 2px 32px rgba(0,0,0,0.7)" }}>
+          style={{ height:52, background:"rgba(28,28,34,0.97)",
+            borderBottom:`1px solid ${C.border}`,
+            boxShadow:"0 2px 16px rgba(0,0,0,0.3)" }}>
 
           {/* Brand */}
           <div className="flex items-center gap-2.5 mr-5 shrink-0">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{ background:`${C.crimson}18`, border:`1px solid ${C.crimson}35` }}>
-              <Radio className="h-4 w-4" style={{color:C.crimson}} strokeWidth={1.8} />
+              style={{ background:"linear-gradient(135deg, #7c3aed, #5b21b6)", boxShadow:"0 2px 8px rgba(124,58,237,0.4)" }}>
+              <Radio className="h-4 w-4 text-white" strokeWidth={1.8} />
             </div>
-            <p className="text-[11px] font-black text-white/65 tracking-[0.35em] uppercase"
-              style={{ fontFamily:"'Orbitron',system-ui" }}>COMMS HUB</p>
+            <p className="text-[11px] font-bold text-white/70 tracking-widest uppercase">COMMS HUB</p>
           </div>
 
           {/* Tabs */}
@@ -1324,13 +1377,12 @@ export default function CommsHubPage() {
               return (
                 <button key={id} type="button" onClick={()=>setActiveTab(id)}
                   className="flex items-center gap-2 rounded-xl px-3.5 py-2 transition-all duration-200 shrink-0"
-                  style={{ background:isActive?`${color}12`:"transparent",
-                    border:`1px solid ${isActive?color+"28":"transparent"}`,
-                    boxShadow:isActive?`0 0 12px ${color}12`:"none" }}>
+                  style={{ background:isActive?"rgba(255,255,255,0.1)":"transparent",
+                    border:`1px solid ${isActive?"rgba(255,255,255,0.16)":"transparent"}` }}>
                   <Icon className="h-3.5 w-3.5 shrink-0"
                     style={{color:isActive?color:"rgba(255,255,255,0.3)"}} strokeWidth={1.8} />
-                  <span className="text-[9px] font-black tracking-wide"
-                    style={{ color:isActive?color:"rgba(255,255,255,0.35)", fontFamily:"'Orbitron',system-ui" }}>
+                  <span className="text-[9px] font-semibold tracking-wide"
+                    style={{ color:isActive?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)" }}>
                     {label}
                   </span>
                 </button>
@@ -1340,20 +1392,17 @@ export default function CommsHubPage() {
 
           {/* Right status pills */}
           <div className="flex items-center gap-3 ml-4 shrink-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
+              style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${C.border}` }}>
               <span className="h-[5px] w-[5px] rounded-full"
-                style={{ background:isConnected?C.green:"#ef4444",
-                  boxShadow:`0 0 8px ${isConnected?C.green:"#ef4444"}`,
-                  animation:"cy-blink 3s ease-in-out infinite" }} />
-              <span className="text-[8px] font-mono text-white/30 uppercase">
-                {isConnected?"SECURE":"OFFLINE"}
+                style={{ background:isConnected?C.green:"#ef4444", animation:"cy-blink 3s ease-in-out infinite" }} />
+              <span className="text-[8px] font-medium text-white/40">
+                {isConnected?"Secure":"Offline"}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Antenna className="h-3 w-3" style={{color:C.cyan}} strokeWidth={1.8} />
-              <span className="text-[8px] font-mono text-white/30">{users.filter(u=>u.isOnline).length} ONLINE</span>
+              <span className="text-[8px] text-white/30">{users.filter(u=>u.isOnline).length} online</span>
             </div>
-            <SignalBars quality={isConnected?4:1} color={isConnected?C.green:"#ef4444"} />
           </div>
         </header>
 
@@ -1362,7 +1411,7 @@ export default function CommsHubPage() {
 
           {/* Users Rail */}
           <UsersRail
-            users={users} myId={myId}
+            users={users} myId={myId} myName={displayName}
             onCallVoice={handleCallVoice}
             onCallVideo={handleCallVideo}
             onMessage={handleMessage} />
@@ -1372,11 +1421,10 @@ export default function CommsHubPage() {
 
             {/* Sub-header: active tab info */}
             <div className="flex items-center gap-3 px-5 py-2.5 shrink-0"
-              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(8,8,18,0.6)" }}>
+              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(28,28,34,0.6)" }}>
               <tabCfg.icon className="h-3.5 w-3.5" style={{color:tabCfg.color}} strokeWidth={1.8} />
-              <span className="text-[9px] font-black tracking-[0.2em] text-white/50 uppercase"
-                style={{ fontFamily:"'Orbitron',system-ui", color:tabCfg.color }}>{tabCfg.label}</span>
-              <span className="text-[8px] font-mono text-white/20">{tabCfg.sub}</span>
+              <span className="text-[9px] font-semibold tracking-widest text-white/50 uppercase">{tabCfg.label}</span>
+              <span className="text-[8px] text-white/25">{tabCfg.sub}</span>
               {(activeTab==="chat"||activeTab==="vnote"||activeTab==="vidnote") && targetUser && (
                 <div className="ml-auto flex items-center gap-2">
                   <span className="text-[8px] font-mono text-white/25">CHANNEL:</span>
