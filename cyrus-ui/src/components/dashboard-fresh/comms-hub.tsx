@@ -554,7 +554,7 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
   const total       = conversations.length;
 
   return (
-    <div className="px-5 pt-5 pb-4 space-y-6">
+    <div className="px-5 pt-4 pb-3 space-y-4 h-full overflow-y-auto" style={{ scrollbarWidth: "none" }}>
       <style>{GAMING_CSS}</style>
 
       {/* ═══════════════════════════════════════════════════════
@@ -564,7 +564,7 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
         style={{
           background: "linear-gradient(135deg, #060608 0%, #1c0406 35%, #0c0c14 100%)",
           border: "1px solid rgba(225,29,72,0.28)",
-          minHeight: 230,
+          minHeight: 200,
           boxShadow: "0 24px 64px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.05)",
         }}>
 
@@ -591,13 +591,13 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
             </span>
             <span className="text-[8px] text-white/25 font-mono">Build 3.0 · OMEGA-TIER</span>
           </div>
-          <h2 className="text-[2.2rem] font-black text-white leading-[1.05] mb-3"
+          <h2 className="text-[1.85rem] font-black text-white leading-[1.05] mb-2.5"
             style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 60px rgba(225,29,72,0.4)" }}>
             GREAT NEW<br/>
             <span style={{ color: "#e11d48", textShadow: "0 0 30px rgba(225,29,72,0.9)" }}>AI SYSTEM</span><br/>
             SPOTLIGHT
           </h2>
-          <p className="text-[11px] text-white/40 mb-5 max-w-xs leading-relaxed">
+          <p className="text-[11px] text-white/40 mb-4 max-w-xs leading-relaxed">
             Explore the full power of CYRUS OMEGA-TIER — quantum intelligence, vision fusion, and autonomous research.
           </p>
           <div className="flex items-center gap-3">
@@ -621,39 +621,35 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
           </div>
         </div>
 
-        {/* ── RIGHT: 3 game-cover module tiles ── */}
-        <div className="relative z-10 flex items-center gap-3 pr-7 shrink-0">
-          {[
-            { label: "CYRUS PRIME",  Icon: Brain,    href: "/",            c1: "#7c3aed", c2: "#2e1065" },
-            { label: "INTELLIGENCE", Icon: BookOpen, href: "/intelligence", c1: "#2563eb", c2: "#1e3a8a" },
-            { label: "VISION CORE",  Icon: Camera,   href: "/scan",         c1: "#059669", c2: "#064e3b" },
-          ].map(({ label, Icon, href, c1, c2 }) => (
-            <Link key={label} href={href}>
-              <div className="relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300 hover:scale-[1.07] hover:-translate-y-2"
-                style={{
-                  width: 100, height: 148,
-                  background: `linear-gradient(165deg, ${c1} 0%, ${c2} 100%)`,
-                  boxShadow: `0 16px 40px ${c1}60, 0 0 0 1px ${c1}30`,
-                }}>
-                {/* Grid overlay */}
-                <div className="absolute inset-0 opacity-[0.07]" style={{
-                  backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent 9px,rgba(255,255,255,0.3) 9px,rgba(255,255,255,0.3) 10px),
-                                    repeating-linear-gradient(90deg,transparent,transparent 9px,rgba(255,255,255,0.3) 9px,rgba(255,255,255,0.3) 10px)`,
-                }} />
-                {/* Glow dot top-left */}
-                <span className="absolute top-2.5 left-2.5 h-1.5 w-1.5 rounded-full block animate-pulse" style={{ background: "rgba(255,255,255,0.5)" }} />
-                {/* Center icon */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Icon className="h-11 w-11 text-white/65" strokeWidth={0.9} />
-                </div>
-                {/* Bottom label */}
-                <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2.5"
-                  style={{ background: "linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%)" }}>
-                  <p className="text-[8px] font-black text-white/90 tracking-[0.12em]">{label}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
+        {/* ── RIGHT: Aggressive Black Jaguar — Demon Eyes ── */}
+        <div className="relative z-10 shrink-0 flex items-center pr-0 self-stretch"
+          style={{ width: 340 }}>
+          {/* Jaguar image fills the right column */}
+          <div className="relative w-full h-full overflow-hidden" style={{ minHeight: 200 }}>
+            <img
+              src="/jaguar-hero.png"
+              alt="Black Jaguar — Demon Eyes"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              style={{ filter: "contrast(1.18) saturate(1.15) brightness(0.92)" }}
+            />
+            {/* Left-edge gradient blend into card background */}
+            <div className="absolute inset-y-0 left-0 w-28 pointer-events-none"
+              style={{ background: "linear-gradient(90deg, #1c0406 0%, transparent 100%)" }} />
+            {/* Bottom edge fade */}
+            <div className="absolute bottom-0 left-0 right-0 h-14 pointer-events-none"
+              style={{ background: "linear-gradient(0deg, rgba(6,6,8,0.7) 0%, transparent 100%)" }} />
+            {/* Red demon-eye glow pulse overlay */}
+            <div className="absolute inset-0 pointer-events-none animate-pulse"
+              style={{ background: "radial-gradient(ellipse at 52% 38%, rgba(225,29,72,0.22) 0%, transparent 55%)", animationDuration: "2.4s" }} />
+            {/* Top-right corner crimson badge */}
+            <div className="absolute top-3 right-3 z-10">
+              <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1"
+                style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(225,29,72,0.5)" }}>
+                <span className="h-[5px] w-[5px] rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[7px] font-black tracking-[0.25em] text-red-400">APEX PREDATOR</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -679,7 +675,7 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
             <Link key={href + label} href={href}>
               <div className="relative overflow-hidden rounded-2xl shrink-0 cursor-pointer transition-all duration-300 hover:scale-[1.06] hover:-translate-y-2"
                 style={{
-                  width: 138, height: 178,
+                  width: 128, height: 152,
                   background: `linear-gradient(165deg, ${c1} 0%, ${c2} 100%)`,
                   boxShadow: `0 12px 36px ${c1}45, 0 0 0 1px ${c1}25`,
                 }}>
