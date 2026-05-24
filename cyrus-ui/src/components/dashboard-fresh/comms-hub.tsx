@@ -593,8 +593,8 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
           </div>
           <h2 className="text-[1.85rem] font-black text-white leading-[1.05] mb-2.5"
             style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 60px rgba(225,29,72,0.4)" }}>
-            GREAT NEW<br/>
-            <span style={{ color: "#e11d48", textShadow: "0 0 30px rgba(225,29,72,0.9)" }}>AI SYSTEM</span><br/>
+            CYRUS SQUAWK COMM<br/>
+            <span style={{ color: "#e11d48", textShadow: "0 0 30px rgba(225,29,72,0.9)" }}>SYSTEM</span><br/>
             SPOTLIGHT
           </h2>
           <p className="text-[11px] text-white/40 mb-4 max-w-xs leading-relaxed">
@@ -621,33 +621,66 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
           </div>
         </div>
 
-        {/* ── RIGHT: Aggressive Black Jaguar — Demon Eyes ── */}
+        {/* ── RIGHT: Cinematic Deep Space — Aggressive Red Treatment ── */}
         <div className="relative z-10 shrink-0 flex items-center pr-0 self-stretch"
-          style={{ width: 340 }}>
-          {/* Jaguar image fills the right column */}
+          style={{ width: 360 }}>
           <div className="relative w-full h-full overflow-hidden" style={{ minHeight: 200 }}>
+
+            {/* Base image — hue-shift toward crimson, ultra-sharp, max contrast */}
             <img
-              src="/jaguar-hero.png"
-              alt="Black Jaguar — Demon Eyes"
-              className="absolute inset-0 w-full h-full object-cover object-center"
-              style={{ filter: "contrast(1.18) saturate(1.15) brightness(0.92)" }}
+              src="/hero-space.jpg"
+              alt="CYRUS Deep Space Command"
+              className="absolute inset-0 w-full h-full object-cover object-top"
+              style={{
+                filter: "hue-rotate(-28deg) saturate(2.2) contrast(1.45) brightness(0.88)",
+                imageRendering: "crisp-edges",
+              }}
             />
-            {/* Left-edge gradient blend into card background */}
-            <div className="absolute inset-y-0 left-0 w-28 pointer-events-none"
+
+            {/* Aggressive blood-red galaxy-core overlay — pumps the gold into deep crimson */}
+            <div className="absolute inset-0 pointer-events-none"
+              style={{
+                background: "radial-gradient(ellipse at 62% 28%, rgba(180,10,10,0.55) 0%, rgba(120,0,0,0.28) 35%, transparent 70%)",
+                mixBlendMode: "multiply",
+              }} />
+
+            {/* Outer crimson vignette for aggression */}
+            <div className="absolute inset-0 pointer-events-none"
+              style={{
+                background: "radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(120,0,0,0.45) 100%)",
+              }} />
+
+            {/* Pulsing red energy ring around galaxy core */}
+            <div className="absolute pointer-events-none animate-pulse"
+              style={{
+                top: "14%", left: "38%", width: 160, height: 80,
+                background: "transparent",
+                border: "1px solid rgba(225,29,72,0.55)",
+                borderRadius: "50%",
+                boxShadow: "0 0 28px rgba(225,29,72,0.7), inset 0 0 28px rgba(225,29,72,0.2)",
+                animationDuration: "2s",
+              }} />
+
+            {/* Left-edge gradient — bleeds into hero card background */}
+            <div className="absolute inset-y-0 left-0 w-32 pointer-events-none"
               style={{ background: "linear-gradient(90deg, #1c0406 0%, transparent 100%)" }} />
-            {/* Bottom edge fade */}
-            <div className="absolute bottom-0 left-0 right-0 h-14 pointer-events-none"
-              style={{ background: "linear-gradient(0deg, rgba(6,6,8,0.7) 0%, transparent 100%)" }} />
-            {/* Red demon-eye glow pulse overlay */}
-            <div className="absolute inset-0 pointer-events-none animate-pulse"
-              style={{ background: "radial-gradient(ellipse at 52% 38%, rgba(225,29,72,0.22) 0%, transparent 55%)", animationDuration: "2.4s" }} />
-            {/* Top-right corner crimson badge */}
+
+            {/* Bottom fade */}
+            <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+              style={{ background: "linear-gradient(0deg, rgba(6,6,8,0.75) 0%, transparent 100%)" }} />
+
+            {/* Live comm badge — top-right */}
             <div className="absolute top-3 right-3 z-10">
               <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1"
-                style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(225,29,72,0.5)" }}>
+                style={{ background: "rgba(0,0,0,0.72)", border: "1px solid rgba(225,29,72,0.55)" }}>
                 <span className="h-[5px] w-[5px] rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[7px] font-black tracking-[0.25em] text-red-400">APEX PREDATOR</span>
+                <span className="text-[7px] font-black tracking-[0.25em] text-red-400">SQUAWK COMM</span>
               </span>
+            </div>
+
+            {/* Bottom-right resolution badge */}
+            <div className="absolute bottom-3 right-3 z-10">
+              <span className="text-[7px] font-black tracking-widest text-white/30 font-mono">8K · DEEP SPACE</span>
             </div>
           </div>
         </div>
