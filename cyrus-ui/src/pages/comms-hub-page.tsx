@@ -1,386 +1,362 @@
 /**
- * CYRUS COMMS HUB — Redesigned with crimson aerospace theme
+ * CYRUS COMMS HUB v3.0 — Crimson Aerospace Communications Suite
  * Tabs: CHAT · VOICE · VIDEO · GROUP · VOICE NOTE · VIDEO NOTE
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
-  MessageSquare,
-  Phone,
-  Video,
-  Users,
-  Mic,
-  Film,
-  MicOff,
-  VideoOff,
-  PhoneOff,
-  Send,
-  Search,
-  Circle,
-  Shield,
-  SignalHigh,
-  Radio,
-  Zap,
-  Camera,
-  StopCircle,
-  Play,
-  Trash2,
-  ChevronRight,
-  PhoneCall,
-  Wifi,
-  Lock,
+  MessageSquare, Phone, Video, Users, Mic, Film, MicOff, VideoOff,
+  PhoneOff, Send, Search, Shield, SignalHigh, Radio, Zap, Camera,
+  StopCircle, Trash2, ChevronRight, PhoneCall, Wifi, Lock, Volume2,
+  Monitor, Signal, Activity, Globe, Settings2, Antenna,
 } from "lucide-react";
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
 import { useCyrusGroupCall } from "../../../client/src/hooks/useCyrusGroupCall";
 import { CallView } from "../../../client/src/components/comms/CallView";
 import { systemFetch } from "@shared/cyrus-api-client";
 
-/* ══════════════════════════════════════════════════════════════════════
-   THEME CONSTANTS
-══════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════════════════════ */
 const C = {
-  crimson: "#e11d48",
-  cyan:    "#06b6d4",
-  purple:  "#7c3aed",
-  green:   "#22c55e",
-  orange:  "#f97316",
-  yellow:  "#eab308",
-  bg:      "rgba(8,8,16,0.97)",
-  card:    "rgba(12,12,28,0.95)",
-  border:  "rgba(255,255,255,0.06)",
+  crimson: "#e11d48", cyan: "#06b6d4", purple: "#7c3aed",
+  green: "#22c55e", orange: "#f97316", yellow: "#eab308",
+  bg: "rgba(8,8,16,0.99)", card: "rgba(10,10,24,0.97)",
+  border: "rgba(255,255,255,0.06)",
 } as const;
 
-/* ══════════════════════════════════════════════════════════════════════
-   TYPES
-══════════════════════════════════════════════════════════════════════ */
 type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote";
 
 interface OnlineUser {
-  id: string;
-  displayName: string;
+  id: string; displayName: string;
   status?: "online" | "offline" | "busy" | "in_call";
   isOnline?: boolean;
 }
-
 interface ChatMsg {
-  id: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  createdAt: string;
-  messageType?: string;
+  id: string; senderId: string; senderName: string;
+  content: string; createdAt: string; messageType?: string;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   HELPERS
-══════════════════════════════════════════════════════════════════════ */
-function initials(name: string) {
-  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
-}
-function colorForName(name: string) {
-  const cols = [C.crimson, C.cyan, C.purple, C.green, C.orange, C.yellow];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return cols[Math.abs(h) % cols.length];
-}
-function formatDur(s: number) {
-  const m = Math.floor(s / 60), sec = s % 60;
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
-function timeAgo(iso: string) {
-  const d = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(d / 60000);
-  if (m < 1) return "now";
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h`;
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   SHARED KEYFRAME STYLE
-══════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   CSS ANIMATIONS
+══════════════════════════════════════════════════════════════ */
 const ANIM_CSS = `
-@keyframes cy-orbit  { from { transform: rotate(0deg)  } to { transform: rotate(360deg)  } }
-@keyframes cy-orbit2 { from { transform: rotate(0deg)  } to { transform: rotate(-360deg) } }
-@keyframes cy-pulse-ring { 0%,100%{opacity:.12;transform:scale(1)} 50%{opacity:.3;transform:scale(1.06)} }
-@keyframes cy-bar1   { 0%,100%{height:4px}  50%{height:16px} }
-@keyframes cy-bar2   { 0%,100%{height:8px}  50%{height:20px} }
-@keyframes cy-bar3   { 0%,100%{height:6px}  50%{height:14px} }
-@keyframes cy-bar4   { 0%,100%{height:12px} 50%{height:24px} }
-@keyframes cy-scan   { 0%{opacity:0;transform:translateY(-100%)} 100%{opacity:.5;transform:translateY(100%)} }
-@keyframes cy-blink  { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes cy-orbit   { from{transform:rotate(0deg)}  to{transform:rotate(360deg)}  }
+@keyframes cy-orbit2  { from{transform:rotate(0deg)}  to{transform:rotate(-360deg)} }
+@keyframes cy-orbit3  { from{transform:rotate(45deg)} to{transform:rotate(405deg)}  }
+@keyframes cy-pulse   { 0%,100%{opacity:.12;transform:scale(1)} 50%{opacity:.35;transform:scale(1.08)} }
+@keyframes cy-pulse2  { 0%,100%{opacity:.06;transform:scale(1)} 50%{opacity:.2;transform:scale(1.12)}  }
+@keyframes cy-bar1    { 0%,100%{height:4px}  50%{height:18px} }
+@keyframes cy-bar2    { 0%,100%{height:9px}  50%{height:26px} }
+@keyframes cy-bar3    { 0%,100%{height:6px}  50%{height:20px} }
+@keyframes cy-bar4    { 0%,100%{height:13px} 50%{height:30px} }
+@keyframes cy-bar5    { 0%,100%{height:5px}  50%{height:22px} }
+@keyframes cy-scan    { 0%{opacity:0;transform:translateY(-100%)} 100%{opacity:.4;transform:translateY(100%)} }
+@keyframes cy-blink   { 0%,100%{opacity:1}   50%{opacity:.25} }
+@keyframes cy-float   { 0%,100%{transform:translateY(0)}  50%{transform:translateY(-6px)} }
+@keyframes cy-spin-slow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes cy-ripple  { 0%{transform:scale(0.8);opacity:.8} 100%{transform:scale(2.2);opacity:0} }
+@keyframes cy-glow    { 0%,100%{box-shadow:0 0 12px var(--glow)} 50%{box-shadow:0 0 28px var(--glow)} }
+@keyframes cy-slide-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes cy-particle { 0%{transform:translate(0,0);opacity:.7} 100%{transform:translate(var(--px),var(--py));opacity:0} }
 `;
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════ */
+function initials(n: string) { return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?"; }
+function colorForName(n: string) {
+  const c = [C.crimson,C.cyan,C.purple,C.green,C.orange,C.yellow];
+  let h = 0; for(let i=0;i<n.length;i++) h = n.charCodeAt(i)+((h<<5)-h);
+  return c[Math.abs(h)%c.length];
+}
+function fmtDur(s: number) { const m=Math.floor(s/60),sec=s%60; return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`; }
+function timeAgo(iso: string) {
+  const d = Date.now()-new Date(iso).getTime(), m=Math.floor(d/60000);
+  if(m<1) return "now"; if(m<60) return `${m}m`; return `${Math.floor(m/60)}h`;
+}
+
+/* ══════════════════════════════════════════════════════════════
    AVATAR
-══════════════════════════════════════════════════════════════════════ */
-function Avatar({ name, size = 36, ring = false }: { name: string; size?: number; ring?: boolean }) {
+══════════════════════════════════════════════════════════════ */
+function Avatar({ name, size=36, ring=false, speaking=false }:
+  { name:string; size?:number; ring?:boolean; speaking?:boolean }) {
   const c = colorForName(name);
   return (
-    <div
-      className="shrink-0 flex items-center justify-center rounded-full font-black text-white select-none"
-      style={{
-        width: size, height: size,
-        background: `${c}22`,
-        border: ring ? `2px solid ${c}` : `1px solid ${c}40`,
-        fontSize: Math.max(9, size * 0.33),
-        boxShadow: ring ? `0 0 14px ${c}50` : "none",
-      }}
-    >
+    <div className="relative shrink-0 flex items-center justify-center rounded-full font-black text-white select-none"
+      style={{ width:size, height:size, background:`${c}22`,
+        border: speaking ? `2px solid ${c}` : ring ? `2px solid ${c}80` : `1px solid ${c}40`,
+        fontSize: Math.max(9,size*0.33),
+        boxShadow: speaking ? `0 0 20px ${c}70, 0 0 40px ${c}30` : ring ? `0 0 14px ${c}50` : "none",
+        transition: "all 0.3s ease",
+      }}>
       {initials(name)}
+      {speaking && (
+        <div className="absolute inset-[-4px] rounded-full"
+          style={{ border:`2px solid ${c}40`, animation:"cy-ripple 1.5s ease-out infinite" }} />
+      )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   STATUS DOT
-══════════════════════════════════════════════════════════════════════ */
 function StatusDot({ status }: { status?: string }) {
-  const col = status === "online" ? C.green : status === "busy" ? C.orange : status === "in_call" ? C.crimson : "#555";
+  const col = status==="online"?C.green:status==="busy"?C.orange:status==="in_call"?C.crimson:"#555";
+  return <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2"
+    style={{ background:col, borderColor:"rgba(8,8,16,1)", boxShadow:`0 0 6px ${col}80` }} />;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   AUDIO BARS VISUALISER
+══════════════════════════════════════════════════════════════ */
+const BAR_ANIMS = ["cy-bar1","cy-bar2","cy-bar3","cy-bar4","cy-bar5","cy-bar3","cy-bar2","cy-bar1"];
+
+function AudioBars({ active=false, color=C.cyan, bars=8 }: { active?:boolean; color?:string; bars?:number }) {
+  if (!active) return (
+    <div className="flex items-end gap-[2px]" style={{ height:20 }}>
+      {Array.from({length:bars}).map((_,i) => (
+        <div key={i} className="w-[3px] rounded-full" style={{ height:3, background:`${color}30` }} />
+      ))}
+    </div>
+  );
   return (
-    <span
-      className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2"
-      style={{ background: col, borderColor: "rgba(8,8,16,1)" }}
-    />
+    <div className="flex items-end gap-[2px]" style={{ height:20 }}>
+      {Array.from({length:bars}).map((_,i) => (
+        <div key={i} className="w-[3px] rounded-full"
+          style={{ background:color, animation:`${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.6+(i%3)*0.15}s ease-in-out infinite`, animationDelay:`${i*55}ms` }} />
+      ))}
+    </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   ONLINE USERS RAIL
-══════════════════════════════════════════════════════════════════════ */
-function UsersRail({
-  users,
-  myId,
-  onCallVoice,
-  onCallVideo,
-  onMessage,
-}: {
-  users: OnlineUser[];
-  myId: string;
-  onCallVoice: (userId: string, name: string) => void;
-  onCallVideo: (userId: string, name: string) => void;
-  onMessage: (userId: string, name: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const filtered = users.filter(
-    (u) => u.id !== myId && u.displayName.toLowerCase().includes(search.toLowerCase()),
+/* ══════════════════════════════════════════════════════════════
+   SIGNAL QUALITY BARS
+══════════════════════════════════════════════════════════════ */
+function SignalBars({ quality=4, color=C.green }: { quality?:number; color?:string }) {
+  return (
+    <div className="flex items-end gap-[2px]">
+      {[3,5,8,11,14].map((h,i) => (
+        <div key={i} className="w-[3px] rounded-sm transition-all"
+          style={{ height:h, background: i<quality ? color : `${color}20` }} />
+      ))}
+    </div>
   );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HEXGRID BACKGROUND (group call)
+══════════════════════════════════════════════════════════════ */
+function HexGrid() {
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.03]"
+      style={{ overflow:"hidden" }}>
+      <defs>
+        <pattern id="hex" x="0" y="0" width="52" height="60" patternUnits="userSpaceOnUse">
+          <polygon points="26,2 50,15 50,45 26,58 2,45 2,15" fill="none" stroke={C.cyan} strokeWidth="0.8"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#hex)" />
+    </svg>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WAVEFORM — pre-calculated to avoid Math.random in render
+══════════════════════════════════════════════════════════════ */
+const WAVE_HEIGHTS = [12,22,8,30,16,26,10,20,28,6,18,24,14,32,10,22,16,28,8,20];
+
+function Waveform({ active=false, color=C.orange, bars=20 }: { active?:boolean; color?:string; bars?:number }) {
+  return (
+    <div className="flex items-end gap-1" style={{ height:40 }}>
+      {WAVE_HEIGHTS.slice(0,bars).map((h,i) => (
+        <div key={i} className="rounded-full transition-all"
+          style={{
+            width:6, minHeight:4,
+            background: active ? color : `${color}20`,
+            height: active ? h : 4,
+            animation: active ? `${BAR_ANIMS[i%BAR_ANIMS.length]} ${0.5+(i%4)*0.15}s ease-in-out infinite` : "none",
+            animationDelay:`${i*35}ms`,
+            transition: "background 0.3s, height 0.3s",
+          }} />
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STAT PILL
+══════════════════════════════════════════════════════════════ */
+function StatPill({ label, value, color=C.cyan }:
+  { label:string; value:string; color?:string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl px-3 py-2"
+      style={{ background:`${color}08`, border:`1px solid ${color}18` }}>
+      <span className="text-[7px] font-mono tracking-widest text-white/25 uppercase">{label}</span>
+      <span className="text-[11px] font-black tabular-nums" style={{ color, fontFamily:"'Orbitron',system-ui" }}>{value}</span>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   USERS RAIL
+══════════════════════════════════════════════════════════════ */
+function UsersRail({ users, myId, onCallVoice, onCallVideo, onMessage }:
+  { users:OnlineUser[]; myId:string; onCallVoice:(id:string,name:string)=>void;
+    onCallVideo:(id:string,name:string)=>void; onMessage:(id:string,name:string)=>void; }) {
+  const [search, setSearch] = useState("");
+  const filtered = users.filter(u => u.id!==myId && u.displayName.toLowerCase().includes(search.toLowerCase()));
+  const online = filtered.filter(u=>u.isOnline).length;
 
   return (
-    <aside
-      className="flex flex-col shrink-0"
-      style={{
-        width: 220,
-        borderRight: `1px solid ${C.border}`,
-        background: "rgba(8,8,18,0.85)",
-        height: "100%",
-      }}
-    >
-      {/* Search */}
-      <div className="p-3 shrink-0" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <div
-          className="flex items-center gap-2 rounded-xl px-3 py-2"
-          style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}
-        >
-          <Search className="h-3.5 w-3.5 text-white/25 shrink-0" strokeWidth={1.8} />
-          <input
-            type="text"
-            placeholder="Search operators…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none"
-          />
+    <aside className="flex flex-col shrink-0"
+      style={{ width:210, borderRight:`1px solid ${C.border}`, background:"rgba(6,6,16,0.92)" }}>
+      {/* Header */}
+      <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom:`1px solid ${C.border}` }}>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="h-[5px] w-[5px] rounded-full" style={{ background:C.green, boxShadow:`0 0 8px ${C.green}` }} />
+          <span className="text-[8px] font-black tracking-[0.3em] text-white/30 uppercase" style={{ fontFamily:"'Orbitron',system-ui" }}>
+            OPERATORS · {online}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+          style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}` }}>
+          <Search className="h-3 w-3 text-white/20 shrink-0" strokeWidth={1.8} />
+          <input type="text" placeholder="Search…" value={search}
+            onChange={e=>setSearch(e.target.value)}
+            className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none" />
         </div>
       </div>
 
-      {/* Label */}
-      <p
-        className="px-4 pt-3 pb-1 text-[8px] font-black tracking-[0.4em] text-white/20 uppercase shrink-0"
-        style={{ fontFamily: "'Orbitron', system-ui" }}
-      >
-        ONLINE · {filtered.filter((u) => u.isOnline).length}
-      </p>
-
-      {/* User list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: "none" }}>
-        {filtered.length === 0 ? (
-          <p className="text-center text-[10px] text-white/20 pt-6">No operators found</p>
-        ) : (
-          filtered.map((u) => (
-            <div
-              key={u.id}
-              className="group flex items-center gap-2.5 rounded-xl px-2 py-2.5 mb-1 cursor-pointer transition-all hover:bg-white/[0.04]"
-            >
-              <div className="relative shrink-0">
-                <Avatar name={u.displayName} size={32} />
-                <StatusDot status={u.status ?? (u.isOnline ? "online" : "offline")} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-white/75 truncate">{u.displayName}</p>
-                <p className="text-[8px] font-mono text-white/25 uppercase">
-                  {u.status === "in_call" ? "in call" : u.isOnline ? "online" : "offline"}
-                </p>
-              </div>
-              {/* Hover actions */}
-              <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onMessage(u.id, u.displayName)}
-                  className="rounded-lg p-1 hover:bg-white/10 transition-colors"
-                  title="Message"
-                >
-                  <MessageSquare className="h-3 w-3" style={{ color: C.cyan }} strokeWidth={1.8} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCallVoice(u.id, u.displayName)}
-                  className="rounded-lg p-1 hover:bg-white/10 transition-colors"
-                  title="Voice call"
-                >
-                  <Phone className="h-3 w-3" style={{ color: C.green }} strokeWidth={1.8} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCallVideo(u.id, u.displayName)}
-                  className="rounded-lg p-1 hover:bg-white/10 transition-colors"
-                  title="Video call"
-                >
-                  <Video className="h-3 w-3" style={{ color: C.crimson }} strokeWidth={1.8} />
-                </button>
-              </div>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ scrollbarWidth:"none" }}>
+        {filtered.length===0 ? (
+          <p className="text-center text-[10px] text-white/20 pt-8">No operators</p>
+        ) : filtered.map(u => (
+          <div key={u.id}
+            className="group flex items-center gap-2 rounded-xl px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.04]">
+            <div className="relative shrink-0">
+              <Avatar name={u.displayName} size={30} />
+              <StatusDot status={u.status??(u.isOnline?"online":"offline")} />
             </div>
-          ))
-        )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-white/75 truncate">{u.displayName}</p>
+              <p className="text-[7px] font-mono text-white/25 uppercase">
+                {u.status==="in_call"?"in call":u.isOnline?"online":"offline"}
+              </p>
+            </div>
+            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+              {[
+                { title:"Chat", icon:MessageSquare, color:C.cyan, fn:()=>onMessage(u.id,u.displayName) },
+                { title:"Voice", icon:Phone, color:C.green, fn:()=>onCallVoice(u.id,u.displayName) },
+                { title:"Video", icon:Video, color:C.crimson, fn:()=>onCallVideo(u.id,u.displayName) },
+              ].map(({title,icon:Icon,color,fn})=>(
+                <button key={title} type="button" onClick={fn}
+                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title={title}>
+                  <Icon className="h-2.5 w-2.5" style={{color}} strokeWidth={1.8} />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Encryption indicator */}
-      <div
-        className="flex items-center gap-2 px-4 py-3 shrink-0"
-        style={{ borderTop: `1px solid ${C.border}` }}
-      >
-        <Lock className="h-3 w-3 shrink-0" style={{ color: C.green }} strokeWidth={1.8} />
-        <p className="text-[7px] font-mono text-white/25 uppercase tracking-widest">
-          AES-256 ENCRYPTED
-        </p>
+      {/* Footer */}
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0"
+        style={{ borderTop:`1px solid ${C.border}` }}>
+        <Lock className="h-3 w-3 shrink-0" style={{ color:C.green }} strokeWidth={1.8} />
+        <p className="text-[6px] font-mono text-white/20 uppercase tracking-widest">AES-256-GCM ENCRYPTED</p>
       </div>
     </aside>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
    CHAT PANEL
-══════════════════════════════════════════════════════════════════════ */
-function ChatPanel({
-  myId,
-  myName,
-  targetUser,
-}: {
-  myId: string;
-  myName: string;
-  targetUser: { id: string; name: string } | null;
-}) {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+══════════════════════════════════════════════════════════════ */
+function ChatPanel({ myId, myName, targetUser }:
+  { myId:string; myName:string; targetUser:{id:string;name:string}|null }) {
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!targetUser) return;
-    systemFetch(`/api/comms/messages/${targetUser.id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const arr = Array.isArray(d) ? d : d?.messages ?? [];
-        setMessages(arr);
-      })
-      .catch(() => {});
-    const t = setInterval(() => {
+    const load = () =>
       systemFetch(`/api/comms/messages/${targetUser.id}`)
-        .then((r) => r.json())
-        .then((d) => {
-          const arr = Array.isArray(d) ? d : d?.messages ?? [];
-          setMessages(arr);
-        })
-        .catch(() => {});
-    }, 3000);
+        .then(r=>r.json()).then(d=>setMsgs(Array.isArray(d)?d:d?.messages??[])).catch(()=>{});
+    load();
+    const t = setInterval(load, 3000);
     return () => clearInterval(t);
   }, [targetUser?.id]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [msgs]);
 
   const send = async () => {
-    if (!input.trim() || !targetUser || sending) return;
+    if (!input.trim()||!targetUser||sending) return;
     setSending(true);
-    const text = input.trim();
-    setInput("");
-    const optimistic: ChatMsg = {
-      id: `opt-${Date.now()}`,
-      senderId: myId,
-      senderName: myName,
-      content: text,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, optimistic]);
+    const text = input.trim(); setInput("");
+    setMsgs(p=>[...p,{id:`opt-${Date.now()}`,senderId:myId,senderName:myName,content:text,createdAt:new Date().toISOString()}]);
     try {
-      await systemFetch("/api/comms/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientId: targetUser.id, content: text }),
-      });
-    } catch {/* silent */}
+      await systemFetch("/api/comms/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({recipientId:targetUser.id,content:text})});
+    } catch{/*silent*/}
     setSending(false);
   };
 
-  if (!targetUser) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 opacity-40">
-        <MessageSquare className="h-10 w-10" style={{ color: C.crimson }} strokeWidth={1} />
-        <p className="text-[11px] font-mono text-white/40">Select an operator to start messaging</p>
+  if (!targetUser) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 opacity-40">
+      <div className="h-14 w-14 flex items-center justify-center rounded-2xl"
+        style={{ background:`${C.cyan}12`, border:`1px solid ${C.cyan}25` }}>
+        <MessageSquare className="h-7 w-7" style={{color:C.cyan}} strokeWidth={1} />
       </div>
-    );
-  }
+      <p className="text-[11px] font-mono text-white/35">Select an operator to begin</p>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Chat header */}
-      <div
-        className="flex items-center gap-3 px-5 py-3 shrink-0"
-        style={{ borderBottom: `1px solid ${C.border}` }}
-      >
+      <div className="flex items-center gap-3 px-5 py-3 shrink-0"
+        style={{ borderBottom:`1px solid ${C.border}` }}>
         <div className="relative">
           <Avatar name={targetUser.name} size={34} ring />
           <StatusDot status="online" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-[12px] font-bold text-white/85">{targetUser.name}</p>
-          <div className="flex items-center gap-1.5">
-            <Shield className="h-2.5 w-2.5" style={{ color: C.green }} strokeWidth={2} />
-            <p className="text-[8px] font-mono text-white/30">ENCRYPTED · DIRECT</p>
+          <div className="flex items-center gap-2">
+            <Shield className="h-2.5 w-2.5" style={{color:C.green}} strokeWidth={2} />
+            <p className="text-[7px] font-mono text-white/30">END-TO-END ENCRYPTED CHANNEL</p>
           </div>
         </div>
+        <SignalBars quality={4} color={C.cyan} />
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
-        {messages.map((msg) => {
-          const isMine = msg.senderId === myId;
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+        style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(255,255,255,0.06) transparent" }}>
+        {msgs.length===0 && (
+          <div className="flex flex-col items-center justify-center h-32 opacity-30 gap-2">
+            <MessageSquare className="h-6 w-6 text-white/20" strokeWidth={1} />
+            <p className="text-[9px] font-mono text-white/30">No messages yet</p>
+          </div>
+        )}
+        {msgs.map(msg => {
+          const mine = msg.senderId===myId;
           return (
-            <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"} gap-2`}>
-              {!isMine && <Avatar name={msg.senderName} size={26} />}
-              <div style={{ maxWidth: "70%" }}>
-                {!isMine && (
-                  <p className="text-[8px] font-mono text-white/30 mb-0.5 ml-1">{msg.senderName}</p>
-                )}
-                <div
-                  className="rounded-2xl px-3.5 py-2"
+            <div key={msg.id} className="flex gap-2" style={{ justifyContent:mine?"flex-end":"flex-start", animation:"cy-slide-up 0.2s ease" }}>
+              {!mine && <Avatar name={msg.senderName} size={26} />}
+              <div style={{ maxWidth:"72%" }}>
+                {!mine && <p className="text-[7px] font-mono text-white/30 mb-0.5 ml-1">{msg.senderName}</p>}
+                <div className="rounded-2xl px-3.5 py-2.5"
                   style={{
-                    background: isMine
-                      ? `linear-gradient(135deg, ${C.crimson}22, ${C.purple}18)`
+                    background: mine
+                      ? `linear-gradient(135deg, ${C.crimson}28, ${C.purple}20)`
                       : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${isMine ? C.crimson + "30" : C.border}`,
-                  }}
-                >
-                  <p className="text-[11px] text-white/80 leading-relaxed">{msg.content}</p>
+                    border: `1px solid ${mine?C.crimson+"28":C.border}`,
+                    boxShadow: mine ? `0 2px 12px ${C.crimson}15` : "none",
+                  }}>
+                  <p className="text-[11.5px] text-white/80 leading-relaxed">{msg.content}</p>
                 </div>
                 <p className="text-[7px] font-mono text-white/20 mt-0.5 px-1">{timeAgo(msg.createdAt)}</p>
               </div>
@@ -391,30 +367,19 @@ function ChatPanel({
       </div>
 
       {/* Input */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 shrink-0"
-        style={{ borderTop: `1px solid ${C.border}` }}
-      >
-        <div
-          className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-2.5"
-          style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Type a message… (Enter to send)"
-            className="flex-1 bg-transparent text-[12px] text-white/80 placeholder:text-white/20 focus:outline-none"
-          />
+      <div className="flex items-center gap-2.5 px-4 py-3 shrink-0"
+        style={{ borderTop:`1px solid ${C.border}` }}>
+        <div className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-2.5"
+          style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}` }}>
+          <input type="text" value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
+            placeholder="Type a secure message… (Enter to send)"
+            className="flex-1 bg-transparent text-[12px] text-white/80 placeholder:text-white/20 focus:outline-none" />
         </div>
-        <button
-          type="button"
-          onClick={send}
-          disabled={!input.trim() || sending}
-          className="flex items-center justify-center h-9 w-9 rounded-xl transition-all hover:scale-110 disabled:opacity-30"
-          style={{ background: `linear-gradient(135deg, ${C.crimson}, ${C.purple})` }}
-        >
+        <button type="button" onClick={send} disabled={!input.trim()||sending}
+          className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-110 disabled:opacity-30"
+          style={{ background:`linear-gradient(135deg, ${C.crimson}, ${C.purple})`,
+            boxShadow: input.trim()?`0 4px 16px ${C.crimson}30`:"none" }}>
           <Send className="h-4 w-4 text-white" strokeWidth={2} />
         </button>
       </div>
@@ -422,559 +387,490 @@ function ChatPanel({
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   VOICE / VIDEO DIALER PANEL
-══════════════════════════════════════════════════════════════════════ */
-function DialerPanel({
-  mode,
-  users,
-  myId,
-  isConnected,
-  onCall,
-}: {
-  mode: "voice" | "video";
-  users: OnlineUser[];
-  myId: string;
-  isConnected: boolean;
-  onCall: (userId: string, name: string) => void;
-}) {
-  const online = users.filter((u) => u.id !== myId && u.isOnline);
-  const accent = mode === "video" ? C.crimson : C.green;
-  const Icon   = mode === "video" ? Video : Phone;
+/* ══════════════════════════════════════════════════════════════
+   DIALER PANEL (Voice / Video)
+══════════════════════════════════════════════════════════════ */
+function DialerPanel({ mode, users, myId, isConnected, onCall }:
+  { mode:"voice"|"video"; users:OnlineUser[]; myId:string;
+    isConnected:boolean; onCall:(id:string,name:string)=>void }) {
+  const online = users.filter(u=>u.id!==myId&&u.isOnline);
+  const accent = mode==="video"?C.crimson:C.green;
+  const Icon   = mode==="video"?Video:Phone;
+  const label  = mode==="video"?"VIDEO CALL":"VOICE CALL";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-5">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Status banner */}
-      <div
-        className="flex items-center gap-3 rounded-2xl px-5 py-4 mb-5 shrink-0"
-        style={{ background: `${accent}0c`, border: `1px solid ${accent}20` }}
-      >
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0"
-          style={{ background: `${accent}18`, border: `1px solid ${accent}30` }}
-        >
-          <Icon className="h-5 w-5" style={{ color: accent }} strokeWidth={1.8} />
+      <div className="mx-5 mt-5 mb-4 rounded-2xl px-5 py-4 shrink-0 flex items-center gap-4"
+        style={{ background:`${accent}0a`, border:`1px solid ${accent}1a` }}>
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl shrink-0"
+          style={{ background:`${accent}18`, border:`1px solid ${accent}30` }}>
+          <Icon className="h-5 w-5" style={{color:accent}} strokeWidth={1.8} />
         </div>
-        <div>
-          <p
-            className="text-[10px] font-black text-white/70 tracking-[0.3em] uppercase"
-            style={{ fontFamily: "'Orbitron', system-ui" }}
-          >
-            {mode === "video" ? "VIDEO CALL" : "VOICE CALL"}
-          </p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span
-              className="h-[5px] w-[5px] rounded-full"
-              style={{ background: isConnected ? C.green : "#ef4444", boxShadow: `0 0 6px ${isConnected ? C.green : "#ef4444"}` }}
-            />
-            <p className="text-[9px] font-mono text-white/35">
-              {isConnected ? "SIGNALING READY" : "CONNECTING…"}
+        <div className="flex-1">
+          <p className="text-[10px] font-black tracking-[0.3em] text-white/65 uppercase mb-1"
+            style={{ fontFamily:"'Orbitron',system-ui" }}>{label}</p>
+          <div className="flex items-center gap-2">
+            <span className="h-[5px] w-[5px] rounded-full"
+              style={{ background:isConnected?C.green:"#ef4444",
+                boxShadow:`0 0 8px ${isConnected?C.green:"#ef4444"}`,
+                animation:"cy-blink 2s ease-in-out infinite" }} />
+            <p className="text-[8px] font-mono text-white/30">
+              {isConnected?"SIGNALING READY — CLICK OPERATOR TO CALL":"CONNECTING TO SIGNAL SERVER…"}
             </p>
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <Shield className="h-3.5 w-3.5" style={{ color: C.green }} strokeWidth={1.8} />
-          <p className="text-[8px] font-mono text-white/30">AES-256</p>
+        <div className="flex items-center gap-4 shrink-0">
+          <StatPill label="LATENCY" value="<50ms" color={C.green} />
+          <StatPill label="CODEC" value={mode==="video"?"VP8":"OPUS"} color={C.cyan} />
+          <div className="flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" style={{color:C.green}} strokeWidth={1.8} />
+            <span className="text-[7px] font-mono text-white/30">DTLS-SRTP</span>
+          </div>
         </div>
       </div>
 
-      <p
-        className="text-[8px] font-black tracking-[0.4em] text-white/25 uppercase mb-3 shrink-0"
-        style={{ fontFamily: "'Orbitron', system-ui" }}
-      >
-        AVAILABLE OPERATORS · {online.length}
-      </p>
+      <div className="px-5 mb-3 shrink-0">
+        <p className="text-[8px] font-black tracking-[0.4em] text-white/20 uppercase"
+          style={{ fontFamily:"'Orbitron',system-ui" }}>
+          AVAILABLE OPERATORS · {online.length}
+        </p>
+      </div>
 
-      {online.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 opacity-40">
-          <Wifi className="h-8 w-8 text-white/20" strokeWidth={1} />
-          <p className="text-[11px] font-mono text-white/30">No operators online</p>
+      {online.length===0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 opacity-35">
+          <div className="h-16 w-16 flex items-center justify-center rounded-2xl"
+            style={{ background:`${accent}10`, border:`1px solid ${accent}20` }}>
+            <Wifi className="h-8 w-8" style={{color:accent}} strokeWidth={1} />
+          </div>
+          <p className="text-[11px] font-mono text-white/35">No operators online</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto grid gap-2" style={{ scrollbarWidth: "thin", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", alignContent: "start" }}>
-          {online.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => onCall(u.id, u.displayName)}
-              className="flex flex-col items-center gap-3 rounded-2xl p-4 transition-all duration-200 hover:scale-[1.03] hover:brightness-110"
-              style={{
-                background: `${accent}08`,
-                border: `1px solid ${accent}18`,
-              }}
-            >
-              <div className="relative">
-                <Avatar name={u.displayName} size={48} ring />
-                <StatusDot status="online" />
-              </div>
-              <div className="text-center">
-                <p className="text-[11px] font-bold text-white/80">{u.displayName}</p>
-                <p className="text-[8px] font-mono text-white/30 mt-0.5">ONLINE</p>
-              </div>
-              <div
-                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 mt-1"
-                style={{ background: `${accent}20`, border: `1px solid ${accent}35` }}
-              >
-                <Icon className="h-3 w-3" style={{ color: accent }} strokeWidth={2} />
-                <span className="text-[8px] font-black tracking-wide text-white/70" style={{ fontFamily: "'Orbitron', system-ui" }}>
-                  {mode === "video" ? "VIDEO CALL" : "VOICE CALL"}
-                </span>
-              </div>
-            </button>
-          ))}
+        <div className="flex-1 overflow-y-auto px-5 pb-5"
+          style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(255,255,255,0.06) transparent" }}>
+          <div className="grid gap-3" style={{ gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))", alignContent:"start" }}>
+            {online.map(u => (
+              <button key={u.id} type="button" onClick={()=>onCall(u.id,u.displayName)}
+                className="group flex flex-col items-center gap-3 rounded-2xl p-5 transition-all duration-200 hover:scale-[1.03]"
+                style={{ background:`${accent}07`, border:`1px solid ${accent}15`,
+                  boxShadow:`0 0 0 0 ${accent}00` }}
+                onMouseEnter={e=>(e.currentTarget.style.boxShadow=`0 0 24px ${accent}18`)}
+                onMouseLeave={e=>(e.currentTarget.style.boxShadow=`0 0 0 0 ${accent}00`)}>
+                <div className="relative">
+                  <Avatar name={u.displayName} size={52} ring />
+                  <StatusDot status="online" />
+                </div>
+                <div className="text-center">
+                  <p className="text-[11px] font-bold text-white/80">{u.displayName}</p>
+                  <p className="text-[7px] font-mono text-white/25 mt-0.5 uppercase">ONLINE</p>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-xl px-3 py-1.5"
+                  style={{ background:`${accent}18`, border:`1px solid ${accent}30` }}>
+                  <Icon className="h-3 w-3" style={{color:accent}} strokeWidth={2} />
+                  <span className="text-[8px] font-black tracking-wide text-white/70"
+                    style={{ fontFamily:"'Orbitron',system-ui" }}>{label}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   ANIMATED GROUP CALL HUB
-══════════════════════════════════════════════════════════════════════ */
-function AudioBars({ active = false, color = C.cyan }: { active?: boolean; color?: string }) {
-  if (!active) return <div className="flex items-end gap-0.5 h-5 opacity-20">{[1,2,3,4].map((i) => <div key={i} className="w-[3px] rounded-full" style={{ height: 4, background: color }} />)}</div>;
+/* ══════════════════════════════════════════════════════════════
+   GROUP CALL HUB
+══════════════════════════════════════════════════════════════ */
+function ParticleField({ color, count=12 }: { color:string; count?:number }) {
+  const particles = useMemo(() =>
+    Array.from({length:count}).map((_,i) => ({
+      id:i,
+      px: `${(Math.sin(i*2.1)*80)}px`,
+      py: `${(Math.cos(i*1.7)*80)}px`,
+      delay: `${i*0.3}s`,
+      dur: `${1.5+i*0.2}s`,
+    }))
+  ,[count]);
   return (
-    <div className="flex items-end gap-0.5 h-5">
-      {[
-        { anim: "cy-bar1", delay: "0ms" },
-        { anim: "cy-bar2", delay: "100ms" },
-        { anim: "cy-bar3", delay: "200ms" },
-        { anim: "cy-bar4", delay: "50ms" },
-      ].map(({ anim, delay }, i) => (
-        <div
-          key={i}
-          className="w-[3px] rounded-full"
+    <div className="absolute inset-0 pointer-events-none">
+      {particles.map(p=>(
+        <div key={p.id} className="absolute rounded-full"
           style={{
-            background: color,
-            animation: `${anim} 0.8s ease-in-out infinite`,
-            animationDelay: delay,
-          }}
-        />
+            width:3, height:3,
+            background:color,
+            top:"50%", left:"50%",
+            opacity:0,
+            ["--px" as any]:p.px,
+            ["--py" as any]:p.py,
+            animation:`cy-particle ${p.dur} ease-out infinite`,
+            animationDelay:p.delay,
+          }} />
       ))}
     </div>
   );
 }
 
 function GroupCallHub({
-  myUserId,
-  myName,
-  users,
-  sfuMode,
-  activeGroupCall,
-  incomingGroupCall,
-  onStartGroupCall,
-  onJoinByRoomId,
-  onAcceptGroupCall,
-  onDeclineGroupCall,
-  onEndGroupCall,
-  onToggleMute,
-  onToggleVideo,
-  isMuted,
-  isVideoEnabled,
+  myUserId, myName, users, sfuMode,
+  activeGroupCall, incomingGroupCall,
+  onStartGroupCall, onJoinByRoomId,
+  onAcceptGroupCall, onDeclineGroupCall, onEndGroupCall,
+  onToggleMute, onToggleVideo, isMuted, isVideoEnabled,
 }: {
-  myUserId: string;
-  myName: string;
-  users: OnlineUser[];
-  sfuMode: string;
-  activeGroupCall: any;
-  incomingGroupCall: any;
-  onStartGroupCall: (peerIds: string[], type: "audio" | "video") => void;
-  onJoinByRoomId: (roomId: string) => void;
-  onAcceptGroupCall: () => void;
-  onDeclineGroupCall: () => void;
-  onEndGroupCall: () => void;
-  onToggleMute: () => void;
-  onToggleVideo: () => void;
-  isMuted: boolean;
-  isVideoEnabled: boolean;
+  myUserId:string; myName:string; users:OnlineUser[]; sfuMode:string;
+  activeGroupCall:any; incomingGroupCall:any;
+  onStartGroupCall:(ids:string[],t:"audio"|"video")=>void;
+  onJoinByRoomId:(id:string)=>void;
+  onAcceptGroupCall:()=>void; onDeclineGroupCall:()=>void;
+  onEndGroupCall:()=>void; onToggleMute:()=>void; onToggleVideo:()=>void;
+  isMuted:boolean; isVideoEnabled:boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [callType, setCallType] = useState<"audio" | "video">("video");
+  const [callType, setCallType] = useState<"audio"|"video">("video");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [tick, setTick] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
+  useEffect(() => { const t=setInterval(()=>setTick(v=>v+1),700); return()=>clearInterval(t); },[]);
   useEffect(() => {
-    const t = setInterval(() => setTick((v) => v + 1), 800);
-    return () => clearInterval(t);
-  }, []);
+    if (!activeGroupCall) { setElapsed(0); return; }
+    const t = setInterval(()=>setElapsed(v=>v+1),1000);
+    return ()=>clearInterval(t);
+  },[activeGroupCall]);
 
-  const available = users.filter((u) => u.id !== myUserId && u.isOnline);
+  const available = users.filter(u=>u.id!==myUserId&&u.isOnline);
 
-  const togglePeer = (id: string) => {
-    setSelected((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-  };
-
-  /* ── INCOMING CALL OVERLAY ── */
+  /* ── INCOMING CALL ── */
   if (incomingGroupCall) {
-    const caller = incomingGroupCall.initiatorName ?? "Unknown";
+    const caller = incomingGroupCall.initiatorName??"Unknown";
     const c = colorForName(caller);
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 relative overflow-hidden">
-        {/* Orbit rings */}
-        {[140, 200, 260].map((r, i) => (
-          <div
-            key={r}
-            className="absolute rounded-full"
-            style={{
-              width: r, height: r,
-              border: `1px solid ${C.cyan}${i === 0 ? "35" : i === 1 ? "20" : "10"}`,
-              animation: `cy-pulse-ring ${1.2 + i * 0.4}s ease-in-out infinite`,
-            }}
-          />
+        <HexGrid />
+        {[160,220,290,360].map((r,i)=>(
+          <div key={r} className="absolute rounded-full"
+            style={{ width:r, height:r,
+              border:`1px solid ${C.cyan}${i===0?"40":i===1?"28":i===2?"16":"0a"}`,
+              animation:`cy-pulse ${1+i*0.4}s ease-in-out infinite`,
+              animationDelay:`${i*0.2}s` }} />
         ))}
-        <div className="relative">
-          <Avatar name={caller} size={80} ring />
-          <div
-            className="absolute -bottom-1 -right-1 flex items-center justify-center h-7 w-7 rounded-full"
-            style={{ background: C.purple, border: "2px solid rgba(8,8,16,1)" }}
-          >
+        <div className="relative" style={{ animation:"cy-float 3s ease-in-out infinite" }}>
+          <Avatar name={caller} size={88} ring speaking />
+          <div className="absolute -bottom-1 -right-1 flex items-center justify-center h-7 w-7 rounded-full"
+            style={{ background:C.purple, border:"2px solid rgba(8,8,16,1)" }}>
             <Users className="h-3.5 w-3.5 text-white" strokeWidth={2} />
           </div>
         </div>
-        <div className="text-center relative z-10">
-          <p className="text-[9px] font-mono tracking-[0.4em] text-white/30 uppercase mb-1">INCOMING GROUP CALL</p>
-          <p className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>{caller}</p>
-          <p className="text-[10px] text-white/40 mt-1">
-            {incomingGroupCall.participants?.length ?? 0} participant{(incomingGroupCall.participants?.length ?? 0) !== 1 ? "s" : ""} · {incomingGroupCall.callType ?? "video"}
+        <div className="text-center z-10">
+          <p className="text-[8px] font-mono tracking-[0.5em] text-white/30 uppercase mb-1.5">
+            INCOMING GROUP CALL
+          </p>
+          <p className="text-xl font-black text-white mb-1" style={{ fontFamily:"'Orbitron',system-ui" }}>
+            {caller}
+          </p>
+          <p className="text-[10px] text-white/40">
+            {incomingGroupCall.participants?.length??0} participant{(incomingGroupCall.participants?.length??0)!==1?"s":""} ·{" "}
+            {incomingGroupCall.callType??"video"}
           </p>
         </div>
-        <div className="flex gap-4 relative z-10">
-          <button
-            type="button"
-            onClick={onDeclineGroupCall}
-            className="flex items-center gap-2 rounded-2xl px-6 py-3 font-bold text-[11px] transition-all hover:scale-105"
-            style={{ background: "#ef444420", border: "1px solid #ef444435", color: "#ef4444", fontFamily: "'Orbitron', system-ui" }}
-          >
-            <PhoneOff className="h-4 w-4" strokeWidth={2} />
-            DECLINE
+        <AudioBars active bars={12} color={C.cyan} />
+        <div className="flex gap-4 z-10">
+          <button type="button" onClick={onDeclineGroupCall}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
+            style={{ background:"#ef444418", border:"1px solid #ef444430", color:"#ef4444", fontFamily:"'Orbitron',system-ui" }}>
+            <PhoneOff className="h-4 w-4" strokeWidth={2} />DECLINE
           </button>
-          <button
-            type="button"
-            onClick={onAcceptGroupCall}
-            className="flex items-center gap-2 rounded-2xl px-6 py-3 font-bold text-[11px] transition-all hover:scale-105"
-            style={{ background: `${C.green}20`, border: `1px solid ${C.green}35`, color: C.green, fontFamily: "'Orbitron', system-ui" }}
-          >
-            <PhoneCall className="h-4 w-4" strokeWidth={2} />
-            ACCEPT
+          <button type="button" onClick={onAcceptGroupCall}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
+            style={{ background:`${C.green}18`, border:`1px solid ${C.green}32`, color:C.green, fontFamily:"'Orbitron',system-ui" }}>
+            <PhoneCall className="h-4 w-4" strokeWidth={2} />ACCEPT
           </button>
         </div>
       </div>
     );
   }
 
-  /* ── ACTIVE GROUP CALL ── */
+  /* ── ACTIVE GROUP CALL ARENA ── */
   if (activeGroupCall) {
-    const participants: any[] = activeGroupCall.participants ?? [];
-    const allParticipants = [
-      { id: myUserId, displayName: myName, isSelf: true, isMuted, stream: null },
-      ...participants.map((p: any) => ({ ...p, isSelf: false })),
+    const parts: any[] = activeGroupCall.participants??[];
+    const allP = [
+      { id:myUserId, displayName:myName, isSelf:true, isMuted, stream:null },
+      ...parts.map((p:any)=>({...p, isSelf:false})),
     ];
-    const N = allParticipants.length;
-    const RADIUS = Math.min(180, 120 + N * 10);
+    const N = allP.length;
+    const RADIUS = Math.min(200, 100+N*22);
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Room info */}
-        <div
-          className="flex items-center gap-3 px-6 py-3 shrink-0"
-          style={{ borderBottom: `1px solid ${C.border}` }}
-        >
-          <div
-            className="flex items-center gap-1.5 rounded-full px-3 py-1"
-            style={{ background: `${C.green}10`, border: `1px solid ${C.green}22` }}
-          >
-            <span className="h-[5px] w-[5px] rounded-full animate-pulse" style={{ background: C.green }} />
-            <span className="text-[8px] font-mono text-white/40 uppercase">LIVE</span>
+        <HexGrid />
+
+        {/* Call header bar */}
+        <div className="flex items-center gap-4 px-6 py-3 shrink-0 z-10"
+          style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(8,8,16,0.8)" }}>
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5"
+            style={{ background:`${C.green}10`, border:`1px solid ${C.green}22` }}>
+            <span className="h-[5px] w-[5px] rounded-full" style={{ background:C.green, animation:"cy-blink 1.5s ease-in-out infinite" }} />
+            <span className="text-[7px] font-black font-mono tracking-[0.3em] text-white/50 uppercase">LIVE</span>
           </div>
-          <p className="text-[9px] font-mono text-white/30">ROOM: <span className="text-white/60">{activeGroupCall.roomId ?? "—"}</span></p>
-          <p className="text-[9px] font-mono text-white/30 ml-auto">{N} PARTICIPANT{N !== 1 ? "S" : ""} · {sfuMode?.toUpperCase()}</p>
+          <span className="text-[8px] font-mono text-white/30">
+            ROOM <span className="text-white/55">{activeGroupCall.roomId??"—"}</span>
+          </span>
+          <span className="text-[8px] font-mono text-white/30 font-black tabular-nums"
+            style={{ color:C.cyan }}>{fmtDur(elapsed)}</span>
+          <div className="ml-auto flex items-center gap-4">
+            <StatPill label="PARTICIPANTS" value={String(N)} color={C.purple} />
+            <StatPill label="MODE" value={sfuMode?.toUpperCase()??"P2P"} color={C.cyan} />
+            <SignalBars quality={4} color={C.green} />
+          </div>
         </div>
 
-        {/* Orbit arena */}
+        {/* ARENA */}
         <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-          {/* Rotating orbital rings */}
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: RADIUS * 2 + 60,
-              height: RADIUS * 2 + 60,
-              border: `1px solid ${C.cyan}12`,
-              animation: "cy-orbit 12s linear infinite",
-            }}
-          >
-            <div
-              className="absolute top-[-4px] left-1/2 -translate-x-1/2 h-2 w-2 rounded-full"
-              style={{ background: C.cyan, boxShadow: `0 0 8px ${C.cyan}` }}
-            />
+          {/* Multi-layer orbital rings */}
+          {[
+            { r:RADIUS*2+50, col:C.cyan,   dur:"10s", dir:1,  w:1 },
+            { r:RADIUS*2+90, col:C.purple, dur:"16s", dir:-1, w:1 },
+            { r:RADIUS*2+130,col:C.crimson,dur:"22s", dir:1,  w:1 },
+            { r:RADIUS*2+170,col:C.cyan,   dur:"30s", dir:-1, w:1 },
+          ].map(({r,col,dur,dir,w},i)=>(
+            <div key={i} className="absolute rounded-full"
+              style={{ width:r, height:r, border:`${w}px solid ${col}${i===0?"20":i===1?"15":i===2?"10":"07"}`,
+                animation:`${dir>0?"cy-orbit":"cy-orbit2"} ${dur} linear infinite` }}>
+              <div className="absolute rounded-full"
+                style={{ width:6, height:6, background:col, boxShadow:`0 0 12px ${col}`,
+                  top:i%2===0?"-3px":"auto", bottom:i%2===1?"-3px":"auto",
+                  left:"50%", transform:"translateX(-50%)" }} />
+            </div>
+          ))}
+
+          {/* Centre glow */}
+          <div className="absolute rounded-full"
+            style={{ width:80, height:80,
+              background:`radial-gradient(circle, ${C.crimson}25, ${C.purple}12, transparent)`,
+              animation:"cy-pulse 2.5s ease-in-out infinite",
+              filter:"blur(8px)" }} />
+          <div className="absolute rounded-full"
+            style={{ width:40, height:40,
+              background:`radial-gradient(circle, ${C.crimson}40, transparent)`,
+              animation:"cy-pulse2 2s ease-in-out infinite" }} />
+
+          {/* Scanning line */}
+          <div className="absolute rounded-full overflow-hidden"
+            style={{ width:RADIUS*2+40, height:RADIUS*2+40, opacity:0.3 }}>
+            <div style={{ position:"absolute", top:0, left:0, right:0, height:"2px",
+              background:`linear-gradient(90deg, transparent, ${C.cyan}, transparent)`,
+              animation:"cy-scan 3s linear infinite" }} />
           </div>
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: RADIUS * 2 + 110,
-              height: RADIUS * 2 + 110,
-              border: `1px solid ${C.purple}10`,
-              animation: "cy-orbit2 18s linear infinite",
-            }}
-          >
-            <div
-              className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full"
-              style={{ background: C.purple, boxShadow: `0 0 6px ${C.purple}` }}
-            />
-          </div>
 
-          {/* Centre pulse */}
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: 60, height: 60,
-              background: `radial-gradient(circle, ${C.crimson}18, transparent)`,
-              animation: "cy-pulse-ring 2s ease-in-out infinite",
-            }}
-          />
+          {/* Particle field */}
+          <ParticleField color={C.cyan} count={10} />
 
-          {/* Participants in a circle */}
-          {allParticipants.map((p, i) => {
-            const angle = (i / N) * Math.PI * 2 - Math.PI / 2;
-            const x = Math.cos(angle) * RADIUS;
-            const y = Math.sin(angle) * RADIUS;
-            const speaking = !p.isMuted && ((tick + i) % 3 !== 0); // simulate
-            const c = p.isSelf ? C.crimson : colorForName(p.displayName);
-
+          {/* Participants circle */}
+          {allP.map((p,i)=>{
+            const angle = (i/N)*Math.PI*2-Math.PI/2;
+            const x = Math.cos(angle)*RADIUS;
+            const y = Math.sin(angle)*RADIUS;
+            const speaking = !p.isMuted && ((tick+i)%4!==0);
+            const c = p.isSelf?C.crimson:colorForName(p.displayName);
             return (
-              <div
-                key={p.id}
-                className="absolute flex flex-col items-center gap-1.5 transition-all"
-                style={{ transform: `translate(${x}px, ${y}px)` }}
-              >
-                {/* Speaking ring */}
+              <div key={p.id} className="absolute flex flex-col items-center gap-2 transition-all duration-500"
+                style={{ transform:`translate(${x}px,${y}px)` }}>
+                {/* Speaking halo */}
                 {speaking && (
-                  <div
-                    className="absolute rounded-full"
-                    style={{
-                      width: 56, height: 56,
-                      border: `2px solid ${c}`,
-                      boxShadow: `0 0 16px ${c}50`,
-                      animation: "cy-pulse-ring 0.9s ease-in-out infinite",
-                    }}
-                  />
+                  <>
+                    <div className="absolute rounded-full"
+                      style={{ width:62, height:62, border:`2px solid ${c}60`,
+                        animation:"cy-ripple 1.2s ease-out infinite" }} />
+                    <div className="absolute rounded-full"
+                      style={{ width:62, height:62, border:`1px solid ${c}30`,
+                        animation:"cy-ripple 1.2s ease-out infinite", animationDelay:"0.4s" }} />
+                  </>
                 )}
-                <Avatar name={p.displayName} size={44} ring={speaking} />
-                <p className="text-[7px] font-bold text-white/60 text-center max-w-[64px] truncate leading-tight">
-                  {p.isSelf ? "YOU" : p.displayName}
-                </p>
-                <AudioBars active={speaking} color={c} />
-                {p.isMuted && <MicOff className="h-2.5 w-2.5 text-white/30" strokeWidth={2} />}
+                <Avatar name={p.displayName} size={50} ring={!speaking} speaking={speaking} />
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-[8px] font-black text-white/70 text-center max-w-[70px] truncate leading-tight"
+                    style={{ fontFamily:"'Orbitron',system-ui", color:p.isSelf?C.crimson:"rgba(255,255,255,0.7)" }}>
+                    {p.isSelf?"YOU":p.displayName}
+                  </p>
+                  <AudioBars active={speaking} color={c} bars={6} />
+                  {p.isMuted && <MicOff className="h-2.5 w-2.5 text-white/25" strokeWidth={2} />}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Controls */}
-        <div
-          className="flex items-center justify-center gap-4 px-6 py-4 shrink-0"
-          style={{ borderTop: `1px solid ${C.border}` }}
-        >
-          <button
-            type="button"
-            onClick={onToggleMute}
-            className="flex flex-col items-center gap-1.5 rounded-2xl p-3 transition-all hover:scale-110"
-            style={{
-              background: isMuted ? `${C.crimson}20` : "rgba(255,255,255,0.06)",
-              border: `1px solid ${isMuted ? C.crimson + "35" : C.border}`,
-              minWidth: 60,
-            }}
-          >
-            {isMuted ? <MicOff className="h-5 w-5 text-rose-400" strokeWidth={1.8} /> : <Mic className="h-5 w-5 text-white/60" strokeWidth={1.8} />}
-            <span className="text-[7px] font-mono text-white/30">{isMuted ? "UNMUTE" : "MUTE"}</span>
-          </button>
+        {/* CALL CONTROLS */}
+        <div className="flex items-center justify-center gap-3 px-6 py-5 shrink-0 z-10"
+          style={{ borderTop:`1px solid ${C.border}`, background:"rgba(8,8,16,0.85)" }}>
+          {[
+            { label:isMuted?"UNMUTE":"MUTE", icon:isMuted?MicOff:Mic,
+              color:isMuted?C.crimson:C.cyan, active:isMuted, fn:onToggleMute },
+            { label:isVideoEnabled?"STOP VID":"START VID", icon:isVideoEnabled?VideoOff:Video,
+              color:isVideoEnabled?C.orange:C.cyan, active:!isVideoEnabled, fn:onToggleVideo },
+            { label:"SHARE SCREEN", icon:Monitor, color:C.purple, active:false, fn:()=>{} },
+          ].map(({label,icon:Icon,color,active,fn})=>(
+            <button key={label} type="button" onClick={fn}
+              className="flex flex-col items-center gap-1.5 rounded-2xl px-4 py-3 transition-all hover:scale-110"
+              style={{ background:active?`${color}18`:"rgba(255,255,255,0.05)",
+                border:`1px solid ${active?color+"30":C.border}`, minWidth:72 }}>
+              <Icon className="h-5 w-5" style={{color:active?color:"rgba(255,255,255,0.5)"}} strokeWidth={1.8} />
+              <span className="text-[6px] font-black font-mono tracking-widest text-white/30 uppercase">{label}</span>
+            </button>
+          ))}
 
-          <button
-            type="button"
-            onClick={onToggleVideo}
-            className="flex flex-col items-center gap-1.5 rounded-2xl p-3 transition-all hover:scale-110"
-            style={{
-              background: !isVideoEnabled ? `${C.orange}20` : "rgba(255,255,255,0.06)",
-              border: `1px solid ${!isVideoEnabled ? C.orange + "35" : C.border}`,
-              minWidth: 60,
-            }}
-          >
-            {!isVideoEnabled ? <VideoOff className="h-5 w-5 text-orange-400" strokeWidth={1.8} /> : <Video className="h-5 w-5 text-white/60" strokeWidth={1.8} />}
-            <span className="text-[7px] font-mono text-white/30">{!isVideoEnabled ? "ENABLE" : "DISABLE"}</span>
-          </button>
+          <div className="h-8 w-px mx-2" style={{ background:C.border }} />
 
-          <button
-            type="button"
-            onClick={onEndGroupCall}
-            className="flex flex-col items-center gap-1.5 rounded-2xl px-5 py-3 transition-all hover:scale-105"
-            style={{ background: `${C.crimson}20`, border: `1px solid ${C.crimson}35` }}
-          >
-            <PhoneOff className="h-6 w-6 text-rose-400" strokeWidth={2} />
-            <span className="text-[7px] font-mono text-rose-400">END CALL</span>
+          <button type="button" onClick={onEndGroupCall}
+            className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105"
+            style={{ background:`${C.crimson}20`, border:`1px solid ${C.crimson}35`,
+              color:C.crimson, fontFamily:"'Orbitron',system-ui",
+              boxShadow:`0 0 20px ${C.crimson}20` }}>
+            <PhoneOff className="h-4 w-4" strokeWidth={2} />
+            LEAVE CALL
           </button>
         </div>
       </div>
     );
   }
 
-  /* ── SETUP SCREEN ── */
+  /* ── LOBBY ── */
   return (
-    <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4">
-      {/* Header card */}
-      <div
-        className="flex items-center gap-4 rounded-2xl p-4 shrink-0"
-        style={{ background: `${C.purple}0c`, border: `1px solid ${C.purple}20` }}
-      >
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0"
-          style={{ background: `${C.purple}18`, border: `1px solid ${C.purple}30` }}
-        >
-          <Users className="h-5 w-5" style={{ color: C.purple }} strokeWidth={1.8} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black text-white/65 tracking-[0.3em] uppercase" style={{ fontFamily: "'Orbitron', system-ui" }}>
-            GROUP CALL HUB
-          </p>
-          <p className="text-[9px] text-white/30 mt-0.5">
-            Multi-party {sfuMode === "mediasoup" ? "SFU" : "star relay"} · up to 50 participants
-          </p>
-        </div>
-        <div
-          className="flex items-center gap-1.5 rounded-full px-2.5 py-1 shrink-0"
-          style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}
-        >
-          <Zap className="h-2.5 w-2.5" style={{ color: C.yellow }} strokeWidth={2} />
-          <span className="text-[7px] font-mono text-white/35">{sfuMode?.toUpperCase()}</span>
+    <div className="flex-1 flex flex-col overflow-hidden relative">
+      <HexGrid />
+
+      {/* Header */}
+      <div className="px-6 pt-5 pb-4 shrink-0">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="h-8 w-8 flex items-center justify-center rounded-xl"
+            style={{ background:`${C.purple}18`, border:`1px solid ${C.purple}30` }}>
+            <Users className="h-4 w-4" style={{color:C.purple}} strokeWidth={1.8} />
+          </div>
+          <div>
+            <p className="text-[11px] font-black tracking-[0.3em] text-white/65 uppercase"
+              style={{ fontFamily:"'Orbitron',system-ui" }}>GROUP CALL HUB</p>
+            <p className="text-[7px] font-mono text-white/25">
+              MODE: {sfuMode?.toUpperCase()??"P2P"} · {available.length} OPERATORS AVAILABLE
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex gap-4 min-h-0">
-        {/* Left: peer selection */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0">
-          {/* Call type */}
-          <div className="flex gap-2 shrink-0">
-            {(["audio", "video"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setCallType(t)}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-[9px] font-black tracking-wide transition-all"
-                style={{
-                  background: callType === t ? (t === "video" ? `${C.crimson}18` : `${C.green}18`) : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${callType === t ? (t === "video" ? C.crimson + "35" : C.green + "35") : C.border}`,
-                  color: callType === t ? "#fff" : "rgba(255,255,255,0.35)",
-                  fontFamily: "'Orbitron', system-ui",
-                }}
-              >
-                {t === "audio" ? <Phone className="h-3 w-3" /> : <Video className="h-3 w-3" />}
-                {t.toUpperCase()}
+      <div className="flex-1 flex gap-4 px-5 pb-5 overflow-hidden">
+        {/* Left: operator selector */}
+        <div className="flex-1 flex flex-col gap-3 overflow-hidden">
+          {/* Call type toggle */}
+          <div className="flex items-center gap-2 p-1 rounded-xl shrink-0"
+            style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}` }}>
+            {(["audio","video"] as const).map(t=>(
+              <button key={t} type="button" onClick={()=>setCallType(t)}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg py-2 transition-all font-black text-[9px] uppercase"
+                style={{ fontFamily:"'Orbitron',system-ui",
+                  background:callType===t?`${t==="video"?C.crimson:C.green}18`:"transparent",
+                  border:callType===t?`1px solid ${t==="video"?C.crimson:C.green}30`:"1px solid transparent",
+                  color:callType===t?(t==="video"?C.crimson:C.green):"rgba(255,255,255,0.3)" }}>
+                {t==="video"?<Video className="h-3.5 w-3.5" strokeWidth={2}/>:<Phone className="h-3.5 w-3.5" strokeWidth={2}/>}
+                {t==="video"?"VIDEO CALL":"VOICE CALL"}
               </button>
             ))}
           </div>
 
-          <p className="text-[8px] font-black tracking-[0.35em] text-white/20 uppercase shrink-0" style={{ fontFamily: "'Orbitron', system-ui" }}>
-            SELECT PARTICIPANTS — {selected.size} SELECTED
+          <p className="text-[7px] font-black tracking-[0.4em] text-white/20 uppercase shrink-0"
+            style={{ fontFamily:"'Orbitron',system-ui" }}>
+            SELECT PARTICIPANTS ({selected.size} selected)
           </p>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5" style={{ scrollbarWidth: "thin" }}>
-            {available.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 opacity-40">
-                <Users className="h-8 w-8 text-white/20" strokeWidth={1} />
-                <p className="text-[10px] font-mono text-white/30">No operators online</p>
+          <div className="flex-1 overflow-y-auto rounded-xl" style={{ scrollbarWidth:"none" }}>
+            {available.length===0 ? (
+              <div className="flex flex-col items-center justify-center h-32 gap-2 opacity-30">
+                <Users className="h-6 w-6 text-white/20" strokeWidth={1} />
+                <p className="text-[9px] font-mono text-white/25">No operators online</p>
               </div>
             ) : (
-              available.map((u) => {
-                const sel = selected.has(u.id);
-                const c = colorForName(u.displayName);
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => togglePeer(u.id)}
-                    className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-150"
-                    style={{
-                      background: sel ? `${c}12` : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${sel ? c + "30" : C.border}`,
-                    }}
-                  >
-                    <div className="flex h-4 w-4 items-center justify-center rounded shrink-0" style={{ background: sel ? c : "rgba(255,255,255,0.06)", border: `1px solid ${sel ? c : C.border}` }}>
-                      {sel && <span className="text-[8px] text-white font-black">✓</span>}
-                    </div>
-                    <div className="relative shrink-0">
-                      <Avatar name={u.displayName} size={30} />
-                      <StatusDot status="online" />
-                    </div>
-                    <p className="text-[11px] font-bold text-white/75 truncate">{u.displayName}</p>
-                    {sel && (
-                      <div className="ml-auto h-1.5 w-1.5 rounded-full shrink-0" style={{ background: c }} />
-                    )}
-                  </button>
-                );
-              })
+              <div className="space-y-1">
+                {available.map(u=>{
+                  const sel = selected.has(u.id);
+                  const c = colorForName(u.displayName);
+                  return (
+                    <button key={u.id} type="button"
+                      onClick={()=>setSelected(p=>{const n=new Set(p);n.has(u.id)?n.delete(u.id):n.add(u.id);return n;})}
+                      className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all"
+                      style={{ background:sel?`${c}0d`:"rgba(255,255,255,0.02)",
+                        border:`1px solid ${sel?c+"25":C.border}` }}>
+                      <div className="flex h-4 w-4 items-center justify-center rounded shrink-0"
+                        style={{ background:sel?c:"rgba(255,255,255,0.06)", border:`1px solid ${sel?c:C.border}` }}>
+                        {sel && <span className="text-[8px] text-white font-black">✓</span>}
+                      </div>
+                      <div className="relative shrink-0">
+                        <Avatar name={u.displayName} size={28} />
+                        <StatusDot status="online" />
+                      </div>
+                      <p className="text-[11px] font-bold text-white/70 truncate flex-1">{u.displayName}</p>
+                      {sel && <div className="h-2 w-2 rounded-full shrink-0" style={{ background:c }} />}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <button
-            type="button"
-            disabled={selected.size === 0}
-            onClick={() => { onStartGroupCall(Array.from(selected), callType); setSelected(new Set()); }}
-            className="flex items-center justify-center gap-2 rounded-2xl py-3 font-black text-[10px] transition-all hover:scale-[1.02] disabled:opacity-30 shrink-0"
-            style={{
-              background: `linear-gradient(135deg, ${C.crimson}, ${C.purple})`,
-              boxShadow: selected.size > 0 ? `0 4px 24px ${C.crimson}30` : "none",
-              fontFamily: "'Orbitron', system-ui",
-            }}
-          >
-            {callType === "video" ? <Video className="h-4 w-4 text-white" strokeWidth={2} /> : <Phone className="h-4 w-4 text-white" strokeWidth={2} />}
-            START {callType.toUpperCase()} CALL · {selected.size}
+          <button type="button" disabled={selected.size===0}
+            onClick={()=>{onStartGroupCall(Array.from(selected),callType);setSelected(new Set());}}
+            className="flex items-center justify-center gap-2 rounded-2xl py-3.5 font-black text-[10px] transition-all hover:scale-[1.02] disabled:opacity-30 shrink-0"
+            style={{ background:`linear-gradient(135deg, ${C.crimson}, ${C.purple})`,
+              boxShadow:selected.size>0?`0 6px 28px ${C.crimson}35`:"none",
+              fontFamily:"'Orbitron',system-ui" }}>
+            {callType==="video"?<Video className="h-4 w-4 text-white" strokeWidth={2}/>:<Phone className="h-4 w-4 text-white" strokeWidth={2}/>}
+            LAUNCH {callType.toUpperCase()} CALL · {selected.size} OPERATOR{selected.size!==1?"S":""}
           </button>
         </div>
 
-        {/* Right: join by room ID */}
-        <div
-          className="shrink-0 flex flex-col gap-3 rounded-2xl p-4"
-          style={{ width: 200, background: "rgba(255,255,255,0.025)", border: `1px solid ${C.border}` }}
-        >
-          <p className="text-[8px] font-black tracking-[0.35em] text-white/25 uppercase" style={{ fontFamily: "'Orbitron', system-ui" }}>JOIN BY ROOM ID</p>
-          <input
-            type="text"
-            value={joinRoomId}
-            onChange={(e) => setJoinRoomId(e.target.value)}
-            placeholder="Enter room ID…"
-            className="rounded-xl px-3 py-2 text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none"
-            style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && joinRoomId.trim()) {
-                onJoinByRoomId(joinRoomId.trim());
-                setJoinRoomId("");
-              }
-            }}
-          />
-          <button
-            type="button"
-            disabled={!joinRoomId.trim()}
-            onClick={() => { onJoinByRoomId(joinRoomId.trim()); setJoinRoomId(""); }}
-            className="flex items-center justify-center gap-2 rounded-xl py-2 text-[8px] font-black transition-all hover:scale-105 disabled:opacity-30"
-            style={{
-              background: `${C.cyan}15`,
-              border: `1px solid ${C.cyan}28`,
-              color: C.cyan,
-              fontFamily: "'Orbitron', system-ui",
-            }}
-          >
-            <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
-            JOIN ROOM
-          </button>
-          <div className="flex-1" />
-          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-            <p className="text-[7px] font-mono text-white/20 leading-relaxed">
-              Host: <span className="text-white/40">{myName}</span>
-              <br />
-              Mode: <span className="text-white/40">{sfuMode}</span>
-            </p>
+        {/* Right: join by room + info panel */}
+        <div className="flex flex-col gap-3 shrink-0" style={{ width:210 }}>
+          {/* Join by ID */}
+          <div className="rounded-2xl p-4" style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${C.border}` }}>
+            <p className="text-[7px] font-black tracking-[0.35em] text-white/25 uppercase mb-3"
+              style={{ fontFamily:"'Orbitron',system-ui" }}>JOIN BY ROOM ID</p>
+            <input type="text" value={joinRoomId}
+              onChange={e=>setJoinRoomId(e.target.value)}
+              placeholder="Enter room ID…"
+              className="w-full rounded-xl px-3 py-2 text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none mb-2"
+              style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.border}` }}
+              onKeyDown={e=>{if(e.key==="Enter"&&joinRoomId.trim()){onJoinByRoomId(joinRoomId.trim());setJoinRoomId("");}}} />
+            <button type="button" disabled={!joinRoomId.trim()}
+              onClick={()=>{onJoinByRoomId(joinRoomId.trim());setJoinRoomId("");}}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-2 text-[8px] font-black transition-all hover:scale-105 disabled:opacity-30"
+              style={{ background:`${C.cyan}15`, border:`1px solid ${C.cyan}28`, color:C.cyan, fontFamily:"'Orbitron',system-ui" }}>
+              <ChevronRight className="h-3 w-3" strokeWidth={2.5} />JOIN ROOM
+            </button>
+          </div>
+
+          {/* Network info */}
+          <div className="flex-1 rounded-2xl p-4" style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${C.border}` }}>
+            <p className="text-[7px] font-black tracking-[0.35em] text-white/25 uppercase mb-3"
+              style={{ fontFamily:"'Orbitron',system-ui" }}>NETWORK INFO</p>
+            <div className="space-y-2.5">
+              {[
+                { label:"Host", value:myName.slice(0,16), color:C.cyan },
+                { label:"Protocol", value:sfuMode?.toUpperCase()??"P2P", color:C.purple },
+                { label:"Encryption", value:"DTLS-SRTP", color:C.green },
+                { label:"Max peers", value:"16", color:C.orange },
+              ].map(({label,value,color})=>(
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-white/25 uppercase">{label}</span>
+                  <span className="text-[8px] font-bold" style={{color}}>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mini visualiser */}
+          <div className="rounded-2xl p-4 flex flex-col items-center gap-2"
+            style={{ background:`${C.purple}08`, border:`1px solid ${C.purple}18` }}>
+            <p className="text-[7px] font-mono tracking-widest text-white/20 uppercase">SIGNAL</p>
+            <AudioBars active bars={10} color={C.purple} />
+            <SignalBars quality={5} color={C.green} />
           </div>
         </div>
       </div>
@@ -982,564 +878,552 @@ function GroupCallHub({
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
    VOICE NOTE PANEL
-══════════════════════════════════════════════════════════════════════ */
-function VoiceNotePanel({ targetUser }: { targetUser: { id: string; name: string } | null }) {
+══════════════════════════════════════════════════════════════ */
+function VoiceNotePanel({ targetUser }: { targetUser:{id:string;name:string}|null }) {
   const [recording, setRecording] = useState(false);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
-  const [duration, setDuration] = useState(0);
+  const [blob, setBlob] = useState<Blob|null>(null);
+  const [url, setUrl] = useState<string|null>(null);
+  const [dur, setDur] = useState(0);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const mediaRef = useRef<MediaRecorder | null>(null);
+  const mrRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
   const startRec = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.ondataavailable = e => { if(e.data.size>0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        setRecordedBlob(blob);
-        setRecordedUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach((t) => t.stop());
+        const b = new Blob(chunksRef.current,{type:"audio/webm"});
+        setBlob(b); setUrl(URL.createObjectURL(b));
+        stream.getTracks().forEach(t=>t.stop());
       };
-      mr.start();
-      mediaRef.current = mr;
-      setRecording(true);
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    } catch (e) {
-      console.warn("Mic access denied", e);
-    }
+      mr.start(); mrRef.current=mr;
+      setRecording(true); setDur(0);
+      timerRef.current = setInterval(()=>setDur(d=>d+1),1000);
+    } catch(e) { console.warn("Mic denied",e); }
   };
-
-  const stopRec = () => {
-    mediaRef.current?.stop();
-    setRecording(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
-  const discard = () => { setRecordedBlob(null); setRecordedUrl(null); setDuration(0); setSent(false); };
-
-  const sendNote = async () => {
-    if (!recordedBlob || !targetUser || sending) return;
+  const stopRec = () => { mrRef.current?.stop(); setRecording(false); if(timerRef.current) clearInterval(timerRef.current); };
+  const discard = () => { setBlob(null); setUrl(null); setDur(0); setSent(false); };
+  const send = async () => {
+    if(!blob||!targetUser||sending) return;
     setSending(true);
     try {
       const fd = new FormData();
-      fd.append("file", recordedBlob, "voice-note.webm");
-      fd.append("recipientId", targetUser.id);
-      fd.append("messageType", "voice-note");
-      await systemFetch("/api/comms/upload", { method: "POST", body: fd });
-      setSent(true);
-      setTimeout(discard, 2000);
-    } catch {/* silent */}
+      fd.append("file",blob,"voice-note.webm");
+      fd.append("recipientId",targetUser.id);
+      fd.append("messageType","voice-note");
+      await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      setSent(true); setTimeout(discard,2500);
+    } catch{/*silent*/}
     setSending(false);
   };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
-      <div
-        className="flex h-12 w-12 items-center justify-center rounded-2xl"
-        style={{ background: `${C.orange}15`, border: `1px solid ${C.orange}28` }}
-      >
-        <Mic className="h-6 w-6" style={{ color: C.orange }} strokeWidth={1.8} />
+      <div className="relative">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl"
+          style={{ background:`${C.orange}15`, border:`1px solid ${C.orange}28` }}>
+          <Mic className="h-8 w-8" style={{color:C.orange}} strokeWidth={1.8} />
+        </div>
+        {recording && (
+          <div className="absolute inset-[-6px] rounded-2xl"
+            style={{ border:`2px solid ${C.orange}40`, animation:"cy-ripple 1.5s ease-out infinite" }} />
+        )}
       </div>
 
-      <p className="text-[10px] font-black tracking-[0.4em] text-white/40 uppercase" style={{ fontFamily: "'Orbitron', system-ui" }}>
-        VOICE NOTE {targetUser ? `→ ${targetUser.name}` : ""}
-      </p>
-
-      {/* Waveform visual */}
-      <div className="flex items-end gap-1 h-12">
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={i}
-            className="w-1.5 rounded-full transition-all"
-            style={{
-              background: recording ? C.orange : "rgba(255,255,255,0.1)",
-              height: recording ? `${Math.max(8, Math.random() * 40 + 4)}px` : "8px",
-              animation: recording ? `cy-bar${(i % 4) + 1} ${0.6 + (i % 3) * 0.2}s ease-in-out infinite` : "none",
-              animationDelay: `${i * 40}ms`,
-            }}
-          />
-        ))}
-      </div>
-
-      {recording && (
-        <p className="text-2xl font-black tabular-nums" style={{ color: C.orange, fontFamily: "'Orbitron', system-ui" }}>
-          {formatDur(duration)}
+      <div className="text-center">
+        <p className="text-[10px] font-black tracking-[0.4em] text-white/40 uppercase"
+          style={{ fontFamily:"'Orbitron',system-ui" }}>
+          VOICE NOTE {targetUser?`→ ${targetUser.name}`:""}
         </p>
-      )}
+        {recording && (
+          <p className="text-3xl font-black tabular-nums mt-2" style={{ color:C.orange, fontFamily:"'Orbitron',system-ui" }}>
+            {fmtDur(dur)}
+          </p>
+        )}
+      </div>
 
-      {recordedUrl && !sent && (
-        <audio src={recordedUrl} controls className="w-full max-w-xs rounded-xl" />
+      <Waveform active={recording} color={C.orange} bars={20} />
+
+      {url && !sent && (
+        <audio src={url} controls className="w-full max-w-sm rounded-xl" />
       )}
-      {sent && <p className="text-[11px] font-mono" style={{ color: C.green }}>✓ VOICE NOTE SENT</p>}
+      {sent && (
+        <div className="flex items-center gap-2 rounded-xl px-4 py-2"
+          style={{ background:`${C.green}12`, border:`1px solid ${C.green}25` }}>
+          <span style={{color:C.green}}>✓</span>
+          <span className="text-[10px] font-mono" style={{color:C.green}}>VOICE NOTE TRANSMITTED</span>
+        </div>
+      )}
 
       <div className="flex gap-3">
-        {!recording && !recordedBlob && (
-          <button type="button" onClick={startRec} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: `${C.orange}20`, border: `1px solid ${C.orange}35`, color: C.orange, fontFamily: "'Orbitron', system-ui" }}>
+        {!recording&&!blob && (
+          <button type="button" onClick={startRec}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+            style={{ background:`${C.orange}18`, border:`1px solid ${C.orange}32`, color:C.orange, fontFamily:"'Orbitron',system-ui" }}>
             <Mic className="h-4 w-4" strokeWidth={2} />RECORD
           </button>
         )}
         {recording && (
-          <button type="button" onClick={stopRec} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: `${C.crimson}20`, border: `1px solid ${C.crimson}35`, color: C.crimson, fontFamily: "'Orbitron', system-ui" }}>
+          <button type="button" onClick={stopRec}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+            style={{ background:`${C.crimson}18`, border:`1px solid ${C.crimson}32`, color:C.crimson, fontFamily:"'Orbitron',system-ui" }}>
             <StopCircle className="h-4 w-4" strokeWidth={2} />STOP
           </button>
         )}
-        {recordedBlob && !sent && (
+        {blob&&!sent && (
           <>
-            <button type="button" onClick={discard} className="flex items-center gap-2 rounded-2xl px-4 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, color: "rgba(255,255,255,0.4)", fontFamily: "'Orbitron', system-ui" }}>
+            <button type="button" onClick={discard}
+              className="flex items-center gap-2 rounded-2xl px-5 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, color:"rgba(255,255,255,0.4)", fontFamily:"'Orbitron',system-ui" }}>
               <Trash2 className="h-4 w-4" strokeWidth={2} />DISCARD
             </button>
-            <button type="button" onClick={sendNote} disabled={!targetUser || sending} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105 disabled:opacity-30" style={{ background: `${C.green}20`, border: `1px solid ${C.green}35`, color: C.green, fontFamily: "'Orbitron', system-ui" }}>
-              <Send className="h-4 w-4" strokeWidth={2} />{sending ? "SENDING…" : "SEND"}
+            <button type="button" onClick={send} disabled={!targetUser||sending}
+              className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105 disabled:opacity-30"
+              style={{ background:`${C.green}18`, border:`1px solid ${C.green}32`, color:C.green, fontFamily:"'Orbitron',system-ui" }}>
+              <Send className="h-4 w-4" strokeWidth={2} />{sending?"SENDING…":"TRANSMIT"}
             </button>
           </>
         )}
       </div>
-      {!targetUser && <p className="text-[9px] font-mono text-white/25">Select an operator from the sidebar to send</p>}
+      {!targetUser && (
+        <p className="text-[9px] font-mono text-white/25">Select an operator from the sidebar to send</p>
+      )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
    VIDEO NOTE PANEL
-══════════════════════════════════════════════════════════════════════ */
-function VideoNotePanel({ targetUser }: { targetUser: { id: string; name: string } | null }) {
+══════════════════════════════════════════════════════════════ */
+function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|null }) {
   const [recording, setRecording] = useState(false);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
-  const [duration, setDuration] = useState(0);
+  const [blob, setBlob] = useState<Blob|null>(null);
+  const [url, setUrl] = useState<string|null>(null);
+  const [dur, setDur] = useState(0);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const mrRef = useRef<MediaRecorder|null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
   const playbackRef = useRef<HTMLVideoElement>(null);
-  const mediaRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const startRec = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      streamRef.current = stream;
-      if (previewRef.current) { previewRef.current.srcObject = stream; previewRef.current.play(); }
+      const stream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+      if(previewRef.current) { previewRef.current.srcObject=stream; previewRef.current.play(); }
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.ondataavailable = e => { if(e.data.size>0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        setRecordedBlob(blob);
-        setRecordedUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach((t) => t.stop());
-        if (previewRef.current) previewRef.current.srcObject = null;
+        const b = new Blob(chunksRef.current,{type:"video/webm"});
+        setBlob(b); setUrl(URL.createObjectURL(b));
+        if(previewRef.current) previewRef.current.srcObject=null;
+        stream.getTracks().forEach(t=>t.stop());
       };
-      mr.start();
-      mediaRef.current = mr;
-      setRecording(true);
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    } catch (e) {
-      console.warn("Camera access denied", e);
-    }
+      mr.start(); mrRef.current=mr;
+      setRecording(true); setDur(0);
+      timerRef.current = setInterval(()=>setDur(d=>d+1),1000);
+    } catch(e) { console.warn("Camera denied",e); }
   };
-
-  const stopRec = () => {
-    mediaRef.current?.stop();
-    setRecording(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
-  const discard = () => {
-    setRecordedBlob(null);
-    setRecordedUrl(null);
-    setDuration(0);
-    setSent(false);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-  };
-
-  const sendNote = async () => {
-    if (!recordedBlob || !targetUser || sending) return;
+  const stopRec = () => { mrRef.current?.stop(); setRecording(false); if(timerRef.current) clearInterval(timerRef.current); };
+  const discard = () => { setBlob(null); setUrl(null); setDur(0); setSent(false); };
+  const send = async () => {
+    if(!blob||!targetUser||sending) return;
     setSending(true);
     try {
       const fd = new FormData();
-      fd.append("file", recordedBlob, "video-note.webm");
-      fd.append("recipientId", targetUser.id);
-      fd.append("messageType", "video-note");
-      await systemFetch("/api/comms/upload", { method: "POST", body: fd });
-      setSent(true);
-      setTimeout(discard, 2000);
-    } catch {/* silent */}
+      fd.append("file",blob,"video-note.webm");
+      fd.append("recipientId",targetUser.id);
+      fd.append("messageType","video-note");
+      await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      setSent(true); setTimeout(discard,2500);
+    } catch{/*silent*/}
     setSending(false);
   };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8">
-      <div
-        className="flex h-12 w-12 items-center justify-center rounded-2xl"
-        style={{ background: `${C.purple}15`, border: `1px solid ${C.purple}28` }}
-      >
-        <Film className="h-6 w-6" style={{ color: C.purple }} strokeWidth={1.8} />
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl"
+        style={{ background:`${C.purple}15`, border:`1px solid ${C.purple}28` }}>
+        <Film className="h-6 w-6" style={{color:C.purple}} strokeWidth={1.8} />
       </div>
 
-      <p className="text-[10px] font-black tracking-[0.4em] text-white/40 uppercase" style={{ fontFamily: "'Orbitron', system-ui" }}>
-        VIDEO NOTE {targetUser ? `→ ${targetUser.name}` : ""}
+      <p className="text-[10px] font-black tracking-[0.4em] text-white/40 uppercase"
+        style={{ fontFamily:"'Orbitron',system-ui" }}>
+        VIDEO NOTE {targetUser?`→ ${targetUser.name}`:""}
       </p>
 
-      {/* Preview */}
-      <div
-        className="rounded-2xl overflow-hidden relative"
-        style={{ width: 280, height: 160, background: "rgba(0,0,0,0.6)", border: `1px solid ${C.purple}25` }}
-      >
-        <video ref={previewRef} className="w-full h-full object-cover" muted playsInline style={{ display: recording ? "block" : "none" }} />
-        {recordedUrl && !sent && (
-          <video ref={playbackRef} src={recordedUrl} controls className="w-full h-full object-cover" />
+      {/* Camera preview */}
+      <div className="relative rounded-2xl overflow-hidden w-full max-w-sm"
+        style={{ height:200, background:"rgba(0,0,0,0.5)", border:`1px solid ${C.border}` }}>
+        <video ref={previewRef} className="w-full h-full object-cover" muted playsInline
+          style={{ display:recording?"block":"none" }} />
+        {url&&!sent && (
+          <video ref={playbackRef} src={url} controls className="w-full h-full object-cover" />
         )}
-        {!recording && !recordedUrl && (
+        {!recording&&!url && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <Camera className="h-8 w-8 text-white/15" strokeWidth={1} />
-            <p className="text-[9px] font-mono text-white/20">Camera preview</p>
+            <Camera className="h-8 w-8 text-white/12" strokeWidth={1} />
+            <p className="text-[9px] font-mono text-white/18">Camera preview</p>
           </div>
         )}
         {recording && (
-          <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full px-2 py-1" style={{ background: `${C.crimson}cc` }}>
-            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[8px] font-mono text-white">{formatDur(duration)}</span>
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-full px-2.5 py-1"
+            style={{ background:`${C.crimson}dd` }}>
+            <span className="h-1.5 w-1.5 rounded-full bg-white" style={{animation:"cy-blink 1s ease-in-out infinite"}} />
+            <span className="text-[8px] font-mono text-white">{fmtDur(dur)}</span>
           </div>
         )}
       </div>
 
-      {sent && <p className="text-[11px] font-mono" style={{ color: C.green }}>✓ VIDEO NOTE SENT</p>}
+      {sent && (
+        <div className="flex items-center gap-2 rounded-xl px-4 py-2"
+          style={{ background:`${C.green}12`, border:`1px solid ${C.green}25` }}>
+          <span style={{color:C.green}}>✓</span>
+          <span className="text-[10px] font-mono" style={{color:C.green}}>VIDEO NOTE TRANSMITTED</span>
+        </div>
+      )}
 
       <div className="flex gap-3">
-        {!recording && !recordedBlob && (
-          <button type="button" onClick={startRec} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: `${C.purple}20`, border: `1px solid ${C.purple}35`, color: C.purple, fontFamily: "'Orbitron', system-ui" }}>
+        {!recording&&!blob && (
+          <button type="button" onClick={startRec}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+            style={{ background:`${C.purple}18`, border:`1px solid ${C.purple}32`, color:C.purple, fontFamily:"'Orbitron',system-ui" }}>
             <Camera className="h-4 w-4" strokeWidth={2} />RECORD
           </button>
         )}
         {recording && (
-          <button type="button" onClick={stopRec} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: `${C.crimson}20`, border: `1px solid ${C.crimson}35`, color: C.crimson, fontFamily: "'Orbitron', system-ui" }}>
+          <button type="button" onClick={stopRec}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+            style={{ background:`${C.crimson}18`, border:`1px solid ${C.crimson}32`, color:C.crimson, fontFamily:"'Orbitron',system-ui" }}>
             <StopCircle className="h-4 w-4" strokeWidth={2} />STOP
           </button>
         )}
-        {recordedBlob && !sent && (
+        {blob&&!sent && (
           <>
-            <button type="button" onClick={discard} className="flex items-center gap-2 rounded-2xl px-4 py-3 font-black text-[10px] transition-all hover:scale-105" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, color: "rgba(255,255,255,0.4)", fontFamily: "'Orbitron', system-ui" }}>
+            <button type="button" onClick={discard}
+              className="flex items-center gap-2 rounded-2xl px-5 py-3.5 font-black text-[10px] transition-all hover:scale-105"
+              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, color:"rgba(255,255,255,0.4)", fontFamily:"'Orbitron',system-ui" }}>
               <Trash2 className="h-4 w-4" strokeWidth={2} />DISCARD
             </button>
-            <button type="button" onClick={sendNote} disabled={!targetUser || sending} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px] transition-all hover:scale-105 disabled:opacity-30" style={{ background: `${C.green}20`, border: `1px solid ${C.green}35`, color: C.green, fontFamily: "'Orbitron', system-ui" }}>
-              <Send className="h-4 w-4" strokeWidth={2} />{sending ? "SENDING…" : "SEND"}
+            <button type="button" onClick={send} disabled={!targetUser||sending}
+              className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105 disabled:opacity-30"
+              style={{ background:`${C.green}18`, border:`1px solid ${C.green}32`, color:C.green, fontFamily:"'Orbitron',system-ui" }}>
+              <Send className="h-4 w-4" strokeWidth={2} />{sending?"SENDING…":"TRANSMIT"}
             </button>
           </>
         )}
       </div>
-      {!targetUser && <p className="text-[9px] font-mono text-white/25">Select an operator from the sidebar to send</p>}
+      {!targetUser && (
+        <p className="text-[9px] font-mono text-white/25">Select an operator from the sidebar to send</p>
+      )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
+   INCOMING P2P CALL OVERLAY
+══════════════════════════════════════════════════════════════ */
+function IncomingCallOverlay({ call, onAccept, onDecline }:
+  { call:any; onAccept:()=>void; onDecline:()=>void }) {
+  const c = colorForName(call.callerName??"Unknown");
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background:"rgba(8,8,16,0.88)", backdropFilter:"blur(8px)" }}>
+      <div className="flex flex-col items-center gap-6 rounded-3xl p-10"
+        style={{ background:C.card, border:`1px solid ${c}30`,
+          boxShadow:`0 0 60px ${c}20, 0 0 0 1px ${c}15` }}>
+        {[120,180,240].map((r,i)=>(
+          <div key={r} className="absolute rounded-full"
+            style={{ width:r, height:r,
+              border:`1px solid ${C.cyan}${i===0?"35":i===1?"20":"10"}`,
+              animation:`cy-pulse ${1.2+i*0.5}s ease-in-out infinite`, animationDelay:`${i*0.3}s` }} />
+        ))}
+        <p className="text-[8px] font-mono tracking-[0.5em] text-white/30 uppercase z-10">
+          INCOMING {call.callType?.toUpperCase()??"VOICE"} CALL
+        </p>
+        <div className="z-10" style={{ animation:"cy-float 3s ease-in-out infinite" }}>
+          <Avatar name={call.callerName??"Unknown"} size={80} ring speaking />
+        </div>
+        <div className="text-center z-10">
+          <p className="text-xl font-black text-white" style={{ fontFamily:"'Orbitron',system-ui" }}>
+            {call.callerName??"Unknown"}
+          </p>
+          <p className="text-[9px] font-mono text-white/35 mt-1">Requesting secure connection</p>
+        </div>
+        <div className="flex gap-4 z-10">
+          <button type="button" onClick={onDecline}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
+            style={{ background:"#ef444418", border:"1px solid #ef444430", color:"#ef4444", fontFamily:"'Orbitron',system-ui" }}>
+            <PhoneOff className="h-4 w-4" strokeWidth={2} />DECLINE
+          </button>
+          <button type="button" onClick={onAccept}
+            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
+            style={{ background:`${C.green}18`, border:`1px solid ${C.green}32`, color:C.green, fontFamily:"'Orbitron',system-ui" }}>
+            <PhoneCall className="h-4 w-4" strokeWidth={2} />ACCEPT
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    TAB CONFIG
-══════════════════════════════════════════════════════════════════════ */
-const TABS: Array<{ id: CommsTab; label: string; icon: typeof MessageSquare; color: string }> = [
-  { id: "chat",    label: "CHAT",       icon: MessageSquare, color: C.cyan    },
-  { id: "voice",   label: "VOICE",      icon: Phone,         color: C.green   },
-  { id: "video",   label: "VIDEO",      icon: Video,         color: C.crimson },
-  { id: "group",   label: "GROUP",      icon: Users,         color: C.purple  },
-  { id: "vnote",   label: "VOICE NOTE", icon: Mic,           color: C.orange  },
-  { id: "vidnote", label: "VIDEO NOTE", icon: Film,          color: "#f43f5e" },
+══════════════════════════════════════════════════════════════ */
+const TABS: Array<{ id:CommsTab; label:string; icon:typeof MessageSquare; color:string; sub:string }> = [
+  { id:"chat",    label:"CHAT",       icon:MessageSquare, color:C.cyan,   sub:"Secure messaging"  },
+  { id:"voice",   label:"VOICE",      icon:Phone,         color:C.green,  sub:"P2P audio call"    },
+  { id:"video",   label:"VIDEO",      icon:Video,         color:C.crimson,sub:"P2P video call"    },
+  { id:"group",   label:"GROUP",      icon:Users,         color:C.purple, sub:"Multi-party call"  },
+  { id:"vnote",   label:"VOICE NOTE", icon:Mic,           color:C.orange, sub:"Audio message"     },
+  { id:"vidnote", label:"VIDEO NOTE", icon:Film,          color:"#f43f5e",sub:"Video message"     },
 ];
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
    MAIN PAGE
-══════════════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════════════ */
 export default function CommsHubPage() {
-  const displayName = (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "CYRUS OPERATOR";
+  const displayName =
+    (typeof window!=="undefined" && localStorage.getItem("cyrus-display-name")) ||
+    "CYRUS OPERATOR";
 
   const {
-    onlineUsers,
-    isConnected,
-    myUserId,
-    incomingCall,
-    activeCall,
-    localStream,
-    remoteStream,
-    callDuration,
-    connectPresence,
-    callUser,
-    acceptCall,
-    declineCall,
-    endCall,
-    toggleMute: toggleP2PMute,
-    toggleVideo: toggleP2PVideo,
-    mediaControls,
-    wsRef,
-    isScreenSharing,
-    screenShareStream,
-    remoteScreenSharerName,
-    startScreenShare,
-    stopScreenShare,
+    onlineUsers, isConnected, myUserId, incomingCall, activeCall,
+    localStream, remoteStream, callDuration, connectPresence,
+    callUser, acceptCall, declineCall, endCall,
+    toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
+    mediaControls, wsRef, isScreenSharing, screenShareStream,
+    remoteScreenSharerName, startScreenShare, stopScreenShare,
     sendCallChatMessage,
   } = usePresence();
 
   const myId = myUserId || `local-${Date.now()}`;
 
   const {
-    sfuStatus,
-    incomingGroupCall,
-    activeGroupCall,
-    isMuted: groupMuted,
-    isVideoEnabled: groupVideoEnabled,
-    createGroupCall,
-    joinGroupCall,
-    acceptIncomingGroupCall,
-    declineIncomingGroupCall,
-    endGroupCall,
-    toggleMute: toggleGroupMute,
-    toggleVideo: toggleGroupVideo,
-  } = useCyrusGroupCall({ socketRef: wsRef, selfId: myId, displayName, isConnected });
+    sfuStatus, incomingGroupCall, activeGroupCall,
+    isMuted: groupMuted, isVideoEnabled: groupVideoEnabled,
+    createGroupCall, joinGroupCall,
+    acceptIncomingGroupCall, declineIncomingGroupCall,
+    endGroupCall, toggleMute: toggleGroupMute, toggleVideo: toggleGroupVideo,
+  } = useCyrusGroupCall({ socketRef:wsRef, selfId:myId, displayName, isConnected });
 
-  /* URL tab routing */
+  /* Tab state — support URL query param */
   const [activeTab, setActiveTab] = useState<CommsTab>(() => {
-    if (typeof window === "undefined") return "chat";
-    const p = new URLSearchParams(window.location.search);
-    const t = p.get("tab");
-    if (t === "video") return "video";
-    if (t === "voice") return "voice";
-    if (t === "vnote") return "vnote";
-    if (t === "vidnote") return "vidnote";
-    if (t === "p2p") return "voice";
+    if(typeof window==="undefined") return "chat";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if(t==="video") return "video";
+    if(t==="voice"||t==="p2p") return "voice";
+    if(t==="vnote") return "vnote";
+    if(t==="vidnote") return "vidnote";
+    if(t==="group") return "group";
     return "chat";
   });
 
-  const [targetUser, setTargetUser] = useState<{ id: string; name: string } | null>(null);
-  const [callChatMessages, setCallChatMessages] = useState<any[]>([]);
+  const [targetUser, setTargetUser] = useState<{id:string;name:string}|null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
   useEffect(() => { connectPresence(displayName); }, [displayName]);
 
-  const handleCallVoice = (userId: string, name: string) => {
-    setActiveTab("voice");
-    callUser(userId, name, "audio");
-  };
-  const handleCallVideo = (userId: string, name: string) => {
-    setActiveTab("video");
-    callUser(userId, name, "video");
-  };
-  const handleMessage = (userId: string, name: string) => {
-    setTargetUser({ id: userId, name });
-    setActiveTab("chat");
-  };
+  const handleCallVoice = useCallback((userId:string, name:string) => {
+    setActiveTab("voice"); callUser(userId, name, "audio");
+  }, [callUser]);
 
-  const handleToggleMute = () => {
-    toggleP2PMute();
-    setIsMuted((v) => !v);
-  };
-  const handleToggleVideo = () => {
-    toggleP2PVideo();
-    setIsVideoOff((v) => !v);
-  };
+  const handleCallVideo = useCallback((userId:string, name:string) => {
+    setActiveTab("video"); callUser(userId, name, "video");
+  }, [callUser]);
 
-  const users: OnlineUser[] = (onlineUsers ?? []).map((u: any) => ({
-    id: u.userId ?? u.id,
-    displayName: u.displayName ?? u.name ?? "Operator",
-    status: u.status ?? (u.isOnline ? "online" : "offline"),
-    isOnline: u.isOnline ?? true,
-  }));
+  const handleMessage = useCallback((userId:string, name:string) => {
+    setTargetUser({id:userId, name}); setActiveTab("chat");
+  }, []);
 
-  /* Active P2P call overlay */
-  const showP2PCall = Boolean(activeCall);
-  /* Incoming P2P call */
-  const showIncomingP2P = Boolean(incomingCall && !activeCall);
+  const handleToggleMute = useCallback(() => { toggleP2PMute(); setIsMuted(v=>!v); }, [toggleP2PMute]);
+  const handleToggleVideo = useCallback(() => { toggleP2PVideo(); setIsVideoOff(v=>!v); }, [toggleP2PVideo]);
+
+  const users: OnlineUser[] = useMemo(()=>
+    (onlineUsers??[]).map((u:any)=>({
+      id: u.userId??u.id,
+      displayName: u.displayName??u.name??"Operator",
+      status: u.status??(u.isOnline?"online":"offline"),
+      isOnline: u.isOnline??true,
+    }))
+  ,[onlineUsers]);
+
+  const sfuMode: string = (sfuStatus as any) ?? "p2p";
+
+  const tabCfg = TABS.find(t=>t.id===activeTab)!;
 
   return (
     <>
       <style>{ANIM_CSS}</style>
 
-      <div className="flex flex-col overflow-hidden text-white" style={{ height: "100vh", background: C.bg }}>
+      {/* Incoming P2P call overlay */}
+      {incomingCall && !activeCall && (
+        <IncomingCallOverlay
+          call={incomingCall}
+          onAccept={()=>acceptCall()}
+          onDecline={()=>declineCall()} />
+      )}
 
-        {/* ══ HEADER ══════════════════════════════════════════════════ */}
-        <header
-          className="shrink-0 flex items-center gap-0 px-5"
-          style={{
-            height: 52,
-            background: "rgba(8,8,16,0.98)",
-            borderBottom: `1px solid ${C.crimson}18`,
-            boxShadow: "0 2px 24px rgba(0,0,0,0.6)",
-          }}
-        >
-          {/* Logo */}
-          <div className="flex items-center gap-2.5 mr-6 shrink-0">
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
-              style={{ background: `${C.crimson}18`, border: `1px solid ${C.crimson}35` }}
-            >
-              <Radio className="h-4 w-4" style={{ color: C.crimson }} strokeWidth={1.8} />
+      {/* Active P2P call overlay */}
+      {activeCall && (
+        <CallView
+          roomId={activeCall.roomId}
+          callType={activeCall.callType}
+          participants={[{ id: activeCall.peerId, displayName: activeCall.peerName, isMuted: false, isVideoEnabled: activeCall.callType==="video" }]}
+          localStream={localStream??null}
+          currentUserId={myId}
+          currentUserName={displayName}
+          isMuted={isMuted}
+          isVideoEnabled={!isVideoOff}
+          callDuration={callDuration}
+          onEndCall={endCall}
+          onToggleMute={handleToggleMute}
+          onToggleVideo={handleToggleVideo}
+          isScreenSharing={isScreenSharing}
+          screenShareStream={screenShareStream??null}
+          screenSharerName={remoteScreenSharerName??undefined}
+          onStartScreenShare={startScreenShare}
+          onStopScreenShare={stopScreenShare}
+          onSendChatMessage={(msg:string)=>sendCallChatMessage({message:msg,messageType:"text"})}
+        />
+      )}
+
+      <div className="flex flex-col overflow-hidden text-white"
+        style={{ height:"100vh", background:C.bg }}>
+
+        {/* ══ HEADER ══════════════════════════════════════════ */}
+        <header className="shrink-0 flex items-center gap-0 px-5"
+          style={{ height:52, background:"rgba(8,8,16,0.99)",
+            borderBottom:`1px solid ${C.crimson}15`,
+            boxShadow:"0 2px 32px rgba(0,0,0,0.7)" }}>
+
+          {/* Brand */}
+          <div className="flex items-center gap-2.5 mr-5 shrink-0">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ background:`${C.crimson}18`, border:`1px solid ${C.crimson}35` }}>
+              <Radio className="h-4 w-4" style={{color:C.crimson}} strokeWidth={1.8} />
             </div>
-            <p
-              className="text-[11px] font-black text-white/70 tracking-[0.3em] uppercase"
-              style={{ fontFamily: "'Orbitron', system-ui" }}
-            >
-              COMMS
-            </p>
+            <p className="text-[11px] font-black text-white/65 tracking-[0.35em] uppercase"
+              style={{ fontFamily:"'Orbitron',system-ui" }}>COMMS HUB</p>
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center gap-1 flex-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            {TABS.map(({ id, label, icon: Icon, color }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className="flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[9px] font-black tracking-wide transition-all duration-200 whitespace-nowrap shrink-0"
-                style={{
-                  background:  activeTab === id ? `${color}18` : "transparent",
-                  border:      activeTab === id ? `1px solid ${color}35` : "1px solid transparent",
-                  color:       activeTab === id ? "#fff" : "rgba(255,255,255,0.35)",
-                  boxShadow:   activeTab === id ? `0 0 12px ${color}20` : "none",
-                  fontFamily: "'Orbitron', system-ui",
-                }}
-              >
-                <Icon className="h-3 w-3" style={{ color: activeTab === id ? color : undefined }} strokeWidth={2} />
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-1 flex-1 overflow-x-auto" style={{ scrollbarWidth:"none" }}>
+            {TABS.map(({id,label,icon:Icon,color})=>{
+              const isActive = activeTab===id;
+              return (
+                <button key={id} type="button" onClick={()=>setActiveTab(id)}
+                  className="flex items-center gap-2 rounded-xl px-3.5 py-2 transition-all duration-200 shrink-0"
+                  style={{ background:isActive?`${color}12`:"transparent",
+                    border:`1px solid ${isActive?color+"28":"transparent"}`,
+                    boxShadow:isActive?`0 0 12px ${color}12`:"none" }}>
+                  <Icon className="h-3.5 w-3.5 shrink-0"
+                    style={{color:isActive?color:"rgba(255,255,255,0.3)"}} strokeWidth={1.8} />
+                  <span className="text-[9px] font-black tracking-wide"
+                    style={{ color:isActive?color:"rgba(255,255,255,0.35)", fontFamily:"'Orbitron',system-ui" }}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Status */}
-          <div className="flex items-center gap-2 ml-4 shrink-0">
-            <div
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ background: isConnected ? `${C.green}10` : "rgba(255,255,255,0.05)", border: `1px solid ${isConnected ? C.green + "22" : C.border}` }}
-            >
-              <span className={`h-[4px] w-[4px] rounded-full ${isConnected ? "animate-pulse" : ""}`} style={{ background: isConnected ? C.green : "#555" }} />
-              <span className="text-[7px] font-mono text-white/30 uppercase">{isConnected ? "CONNECTED" : "OFFLINE"}</span>
+          {/* Right status pills */}
+          <div className="flex items-center gap-3 ml-4 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="h-[5px] w-[5px] rounded-full"
+                style={{ background:isConnected?C.green:"#ef4444",
+                  boxShadow:`0 0 8px ${isConnected?C.green:"#ef4444"}`,
+                  animation:"cy-blink 3s ease-in-out infinite" }} />
+              <span className="text-[8px] font-mono text-white/30 uppercase">
+                {isConnected?"SECURE":"OFFLINE"}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: `${C.cyan}08`, border: `1px solid ${C.cyan}15` }}>
-              <SignalHigh className="h-2.5 w-2.5" style={{ color: C.cyan }} strokeWidth={2} />
-              <span className="text-[7px] font-mono" style={{ color: C.cyan }}>ENCRYPTED</span>
+            <div className="flex items-center gap-1.5">
+              <Antenna className="h-3 w-3" style={{color:C.cyan}} strokeWidth={1.8} />
+              <span className="text-[8px] font-mono text-white/30">{users.filter(u=>u.isOnline).length} ONLINE</span>
             </div>
+            <SignalBars quality={isConnected?4:1} color={isConnected?C.green:"#ef4444"} />
           </div>
         </header>
 
-        {/* ══ BODY ════════════════════════════════════════════════════ */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ══ BODY ══════════════════════════════════════════ */}
+        <div className="flex flex-1 overflow-hidden">
 
-          {/* Users rail */}
+          {/* Users Rail */}
           <UsersRail
-            users={users}
-            myId={myId}
+            users={users} myId={myId}
             onCallVoice={handleCallVoice}
             onCallVideo={handleCallVideo}
-            onMessage={handleMessage}
-          />
+            onMessage={handleMessage} />
 
           {/* Main content */}
-          <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <main className="flex-1 flex flex-col overflow-hidden">
 
-            {activeTab === "chat" && (
-              <ChatPanel myId={myId} myName={displayName} targetUser={targetUser} />
-            )}
+            {/* Sub-header: active tab info */}
+            <div className="flex items-center gap-3 px-5 py-2.5 shrink-0"
+              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(8,8,18,0.6)" }}>
+              <tabCfg.icon className="h-3.5 w-3.5" style={{color:tabCfg.color}} strokeWidth={1.8} />
+              <span className="text-[9px] font-black tracking-[0.2em] text-white/50 uppercase"
+                style={{ fontFamily:"'Orbitron',system-ui", color:tabCfg.color }}>{tabCfg.label}</span>
+              <span className="text-[8px] font-mono text-white/20">{tabCfg.sub}</span>
+              {(activeTab==="chat"||activeTab==="vnote"||activeTab==="vidnote") && targetUser && (
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[8px] font-mono text-white/25">CHANNEL:</span>
+                  <Avatar name={targetUser.name} size={18} />
+                  <span className="text-[9px] font-bold text-white/55">{targetUser.name}</span>
+                </div>
+              )}
+            </div>
 
-            {activeTab === "voice" && (
-              <DialerPanel mode="voice" users={users} myId={myId} isConnected={isConnected} onCall={handleCallVoice} />
-            )}
-
-            {activeTab === "video" && (
-              <DialerPanel mode="video" users={users} myId={myId} isConnected={isConnected} onCall={handleCallVideo} />
-            )}
-
-            {activeTab === "group" && (
-              <GroupCallHub
-                myUserId={myId}
-                myName={displayName}
-                users={users}
-                sfuMode={typeof sfuStatus === "string" ? sfuStatus : "star"}
-                activeGroupCall={activeGroupCall}
-                incomingGroupCall={incomingGroupCall}
-                onStartGroupCall={createGroupCall}
-                onJoinByRoomId={joinGroupCall}
-                onAcceptGroupCall={acceptIncomingGroupCall}
-                onDeclineGroupCall={declineIncomingGroupCall}
-                onEndGroupCall={endGroupCall}
-                onToggleMute={toggleGroupMute}
-                onToggleVideo={toggleGroupVideo}
-                isMuted={groupMuted}
-                isVideoEnabled={groupVideoEnabled}
-              />
-            )}
-
-            {activeTab === "vnote" && <VoiceNotePanel targetUser={targetUser} />}
-            {activeTab === "vidnote" && <VideoNotePanel targetUser={targetUser} />}
+            {/* Panel content */}
+            <div className="flex-1 flex overflow-hidden">
+              {activeTab==="chat" && (
+                <ChatPanel myId={myId} myName={displayName} targetUser={targetUser} />
+              )}
+              {activeTab==="voice" && (
+                <DialerPanel mode="voice" users={users} myId={myId}
+                  isConnected={isConnected} onCall={handleCallVoice} />
+              )}
+              {activeTab==="video" && (
+                <DialerPanel mode="video" users={users} myId={myId}
+                  isConnected={isConnected} onCall={handleCallVideo} />
+              )}
+              {activeTab==="group" && (
+                <GroupCallHub
+                  myUserId={myId} myName={displayName} users={users}
+                  sfuMode={sfuMode}
+                  activeGroupCall={activeGroupCall}
+                  incomingGroupCall={incomingGroupCall}
+                  onStartGroupCall={createGroupCall}
+                  onJoinByRoomId={joinGroupCall}
+                  onAcceptGroupCall={acceptIncomingGroupCall}
+                  onDeclineGroupCall={declineIncomingGroupCall}
+                  onEndGroupCall={endGroupCall}
+                  onToggleMute={toggleGroupMute}
+                  onToggleVideo={toggleGroupVideo}
+                  isMuted={groupMuted}
+                  isVideoEnabled={groupVideoEnabled} />
+              )}
+              {activeTab==="vnote" && (
+                <VoiceNotePanel targetUser={targetUser} />
+              )}
+              {activeTab==="vidnote" && (
+                <VideoNotePanel targetUser={targetUser} />
+              )}
+            </div>
           </main>
         </div>
-
-        {/* ══ INCOMING P2P CALL OVERLAY ═══════════════════════════════ */}
-        {showIncomingP2P && incomingCall && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)" }}>
-            <div
-              className="flex flex-col items-center gap-5 rounded-3xl p-10"
-              style={{ background: C.card, border: `1px solid ${C.border}`, boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}
-            >
-              {[100, 140, 180].map((r, i) => (
-                <div key={r} className="absolute rounded-full" style={{ width: r, height: r, border: `1px solid ${C.green}${i === 0 ? "40" : "20"}`, animation: `cy-pulse-ring ${1 + i * 0.5}s ease-in-out infinite` }} />
-              ))}
-              <div className="relative z-10">
-                <Avatar name={incomingCall.callerName ?? "Caller"} size={72} ring />
-              </div>
-              <div className="text-center relative z-10">
-                <p className="text-[9px] font-mono text-white/30 uppercase tracking-widest mb-1">
-                  INCOMING {incomingCall.callType?.toUpperCase() ?? "CALL"}
-                </p>
-                <p className="text-xl font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>
-                  {incomingCall.callerName ?? "Unknown"}
-                </p>
-              </div>
-              <div className="flex gap-5 relative z-10">
-                <button type="button" onClick={declineCall} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px]" style={{ background: "#ef444420", border: "1px solid #ef444435", color: "#ef4444", fontFamily: "'Orbitron', system-ui" }}>
-                  <PhoneOff className="h-4 w-4" strokeWidth={2} />DECLINE
-                </button>
-                <button type="button" onClick={acceptCall} className="flex items-center gap-2 rounded-2xl px-6 py-3 font-black text-[10px]" style={{ background: `${C.green}20`, border: `1px solid ${C.green}35`, color: C.green, fontFamily: "'Orbitron', system-ui" }}>
-                  <Phone className="h-4 w-4" strokeWidth={2} />ACCEPT
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══ ACTIVE P2P CALL OVERLAY ═════════════════════════════════ */}
-        {showP2PCall && activeCall && (
-          <div className="fixed inset-0 z-[200]">
-            <CallView
-              roomId={activeCall.roomId ?? ""}
-              callType={activeCall.callType ?? "audio"}
-              participants={[]}
-              localStream={localStream}
-              currentUserId={myId}
-              currentUserName={displayName}
-              isMuted={isMuted}
-              isVideoEnabled={!isVideoOff}
-              callDuration={callDuration}
-              isScreenSharing={isScreenSharing}
-              screenShareStream={screenShareStream}
-              screenSharerName={remoteScreenSharerName ?? undefined}
-              onToggleMute={handleToggleMute}
-              onToggleVideo={handleToggleVideo}
-              onEndCall={endCall}
-              onStartScreenShare={startScreenShare}
-              onStopScreenShare={stopScreenShare}
-              onSendChatMessage={(msg) => sendCallChatMessage?.({ message: msg, messageType: "text" })}
-              chatMessages={callChatMessages}
-            />
-          </div>
-        )}
       </div>
     </>
   );
