@@ -18,7 +18,7 @@ const NavigationPage = lazy(() =>
   import("../../client/src/pages/NavigationPage").then((m) => ({ default: m.NavigationPage })),
 );
 const CommsPage = lazy(() =>
-  import("../../client/src/pages/CommsPage").then((m) => ({ default: m.CommsPage })),
+  import("./pages/comms-hub-page").then((m) => ({ default: m.default })),
 );
 const DeviceControlPage = lazy(() =>
   import("../../client/src/pages/DeviceControlPage").then((m) => ({ default: m.DeviceControlPage })),
