@@ -1,5 +1,18 @@
 import { useState } from "react";
-import { LayoutGrid, TerminalSquare, ChevronUp, ChevronDown, Grid3x3 } from "lucide-react";
+import {
+  LayoutGrid,
+  TerminalSquare,
+  Grid3x3,
+  Camera,
+  FileText,
+  Video,
+  Phone,
+  MessageSquare,
+  Mic,
+  Film,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Link } from "wouter";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
 import {
@@ -24,66 +37,130 @@ import { useConversations } from "@/hooks/use-conversations";
 
 type AdminTab = "modules" | "console";
 
-/* ── MODULES BOX — single compact grid of all modules ───────────────── */
-function AllModulesBox({ modules }: { modules: Array<{ href: string; icon?: any; label?: string; color?: string }> }) {
+/* ══════════════════════════════════════════════════════════════════════
+   QUICK ACTION STRIP — 7 instant-access features
+══════════════════════════════════════════════════════════════════════ */
+const QUICK_ACTIONS = [
+  { label: "Vision Scan", icon: Camera,       href: "/scan",             color: "#06b6d4" },
+  { label: "Build Docs",  icon: FileText,      href: "/document-builder", color: "#7c3aed" },
+  { label: "Video Call",  icon: Video,         href: "/comms?tab=video",  color: "#e11d48" },
+  { label: "Voice Call",  icon: Phone,         href: "/comms?tab=voice",  color: "#22c55e" },
+  { label: "Text",        icon: MessageSquare, href: "/comms?tab=text",   color: "#f97316" },
+  { label: "Voice Note",  icon: Mic,           href: "/comms?tab=vnote",  color: "#eab308" },
+  { label: "Video Note",  icon: Film,          href: "/comms?tab=vidnote",color: "#f43f5e" },
+];
+
+function QuickActionStrip() {
+  return (
+    <div
+      className="flex items-center gap-2 px-4 shrink-0"
+      style={{
+        height: 46,
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        background: "rgba(8,8,18,0.6)",
+      }}
+    >
+      <span
+        className="text-[7px] font-black tracking-[0.4em] text-white/20 uppercase shrink-0 mr-1"
+        style={{ fontFamily: "'Orbitron', system-ui" }}
+      >
+        QUICK
+      </span>
+      {QUICK_ACTIONS.map(({ label, icon: Icon, href, color }) => (
+        <Link key={label} href={href}>
+          <div
+            className="group flex items-center gap-1.5 rounded-xl px-3 h-[30px] cursor-pointer transition-all duration-150 hover:scale-[1.04] hover:brightness-110 shrink-0"
+            style={{
+              background: `${color}10`,
+              border: `1px solid ${color}22`,
+            }}
+          >
+            <Icon
+              className="h-3 w-3 shrink-0 transition-colors"
+              style={{ color }}
+              strokeWidth={1.8}
+            />
+            <span
+              className="text-[8px] font-bold tracking-wide text-white/55 group-hover:text-white/80 transition-colors whitespace-nowrap"
+              style={{ fontFamily: "'Orbitron', system-ui" }}
+            >
+              {label.toUpperCase()}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODULES BOX — all modules in one compact auto-grid
+══════════════════════════════════════════════════════════════════════ */
+function AllModulesBox({
+  modules,
+}: {
+  modules: Array<{ href: string; icon?: any; label?: string; color?: string }>;
+}) {
   if (modules.length === 0) return null;
   return (
     <div
-      className="mx-5 mb-4 rounded-2xl overflow-hidden"
+      className="mx-3 mb-2 rounded-xl overflow-hidden shrink-0"
       style={{
         background: "rgba(12,12,26,0.95)",
-        border: "1px solid rgba(255,255,255,0.07)",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+        border: "1px solid rgba(255,255,255,0.06)",
       }}
     >
       {/* Header */}
       <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        className="flex items-center gap-2.5 px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
       >
         <div
-          className="flex h-6 w-6 items-center justify-center rounded-lg"
+          className="flex h-5 w-5 items-center justify-center rounded-lg"
           style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.28)" }}
         >
-          <Grid3x3 className="h-3.5 w-3.5 text-rose-400" strokeWidth={1.8} />
+          <Grid3x3 className="h-3 w-3 text-rose-400" strokeWidth={1.8} />
         </div>
         <p
-          className="text-[10px] font-black text-white/70 tracking-[0.3em] uppercase"
+          className="text-[9px] font-black text-white/60 tracking-[0.3em] uppercase"
           style={{ fontFamily: "'Orbitron', system-ui" }}
         >
           MODULES
         </p>
         <span
-          className="text-[8px] font-mono px-1.5 py-0.5 rounded"
-          style={{ background: "rgba(225,29,72,0.1)", color: "#e11d48", border: "1px solid rgba(225,29,72,0.2)" }}
+          className="text-[7px] font-mono px-1.5 py-0.5 rounded"
+          style={{
+            background: "rgba(225,29,72,0.1)",
+            color: "#e11d48",
+            border: "1px solid rgba(225,29,72,0.2)",
+          }}
         >
           {modules.length}
         </span>
       </div>
-
       {/* Grid */}
-      <div className="p-3 grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}>
+      <div
+        className="p-2 grid gap-1"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(62px, 1fr))" }}
+      >
         {modules.map((m) => {
           const IconComp = m.icon;
           const accent = m.color ?? "#7c3aed";
           return (
             <Link key={m.href} href={m.href}>
               <div
-                className="group flex flex-col items-center gap-1.5 rounded-xl py-2.5 px-1 cursor-pointer transition-all duration-200 hover:scale-[1.05] hover:-translate-y-0.5"
-                style={{ background: `${accent}0e`, border: `1px solid ${accent}18` }}
+                className="group flex flex-col items-center gap-1 rounded-lg py-2 px-1 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
+                style={{ background: `${accent}0d`, border: `1px solid ${accent}16` }}
               >
                 {IconComp && (
                   <div
-                    className="flex h-7 w-7 items-center justify-center rounded-lg transition-all group-hover:scale-110"
-                    style={{ background: `${accent}18`, border: `1px solid ${accent}28` }}
+                    className="flex h-6 w-6 items-center justify-center rounded-md transition-all group-hover:scale-110"
+                    style={{ background: `${accent}18`, border: `1px solid ${accent}25` }}
                   >
-                    <IconComp className="h-3.5 w-3.5" style={{ color: accent }} strokeWidth={1.7} />
+                    <IconComp className="h-3 w-3" style={{ color: accent }} strokeWidth={1.7} />
                   </div>
                 )}
-                <p
-                  className="text-[8px] font-mono text-white/45 group-hover:text-white/70 transition-colors text-center leading-tight truncate w-full px-0.5"
-                  style={{ maxWidth: "100%" }}
-                >
+                <p className="text-[7px] font-mono text-white/40 group-hover:text-white/65 transition-colors text-center leading-tight truncate w-full px-0.5">
                   {m.label ?? m.href.replace("/", "")}
                 </p>
               </div>
@@ -95,63 +172,59 @@ function AllModulesBox({ modules }: { modules: Array<{ href: string; icon?: any;
   );
 }
 
-/* ── NEWS DOCK — fixed bottom, same position as the old command console */
-const NEWS_DOCK_HEIGHT_OPEN   = 340;
-const NEWS_DOCK_HEIGHT_CLOSED = 44;
+/* ══════════════════════════════════════════════════════════════════════
+   INLINE NETWORK FEED PANEL — fills remaining center space
+══════════════════════════════════════════════════════════════════════ */
+function NetworkFeedPanel() {
+  const [collapsed, setCollapsed] = useState(false);
 
-function NewsDock() {
-  const [open, setOpen] = useState(true);
   return (
     <div
-      className="fixed bottom-0 right-0 z-40 transition-all duration-300"
+      className="flex flex-col mx-3 mb-2 rounded-xl overflow-hidden"
       style={{
-        /* left offset = game sidebar (240px) */
-        left: 240,
-        height: open ? NEWS_DOCK_HEIGHT_OPEN : NEWS_DOCK_HEIGHT_CLOSED,
-        background: "rgba(8,8,18,0.97)",
-        borderTop: "1px solid rgba(225,29,72,0.18)",
-        boxShadow: "0 -8px 48px rgba(0,0,0,0.7)",
-        backdropFilter: "blur(24px)",
+        flex: collapsed ? "0 0 36px" : "1 1 0",
+        minHeight: 0,
+        background: "rgba(8,8,20,0.98)",
+        border: "1px solid rgba(225,29,72,0.16)",
+        boxShadow: "0 -2px 24px rgba(0,0,0,0.5)",
+        transition: "flex 0.25s ease",
       }}
     >
-      {/* Drag handle / title bar */}
+      {/* Title bar */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 w-full px-5 h-[44px] transition-colors hover:bg-white/[0.03]"
-        style={{ borderBottom: open ? "1px solid rgba(255,255,255,0.05)" : "none" }}
+        onClick={() => setCollapsed((v) => !v)}
+        className="flex items-center gap-3 px-4 shrink-0 w-full transition-colors hover:bg-white/[0.02]"
+        style={{
+          height: 36,
+          borderBottom: collapsed ? "none" : "1px solid rgba(255,255,255,0.04)",
+        }}
       >
-        {/* Left: label */}
-        <div className="h-[2px] w-4 rounded-full" style={{ background: "#e11d48" }} />
+        <div className="h-[2px] w-4 rounded-full shrink-0" style={{ background: "#e11d48" }} />
         <p
-          className="text-[9px] font-black text-white/60 tracking-[0.4em] uppercase"
+          className="text-[8px] font-black text-white/55 tracking-[0.45em] uppercase"
           style={{ fontFamily: "'Orbitron', system-ui" }}
         >
           NETWORK FEED
         </p>
         <div
-          className="flex items-center gap-1.5 rounded-full px-2 py-0.5 ml-1"
-          style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)" }}
+          className="flex items-center gap-1 rounded-full px-2 py-0.5 ml-1"
+          style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.18)" }}
         >
-          <span className="h-[4px] w-[4px] rounded-full bg-orange-400 animate-pulse" />
-          <span className="text-[7px] font-mono text-orange-400/80">LIVE</span>
+          <span className="h-[3px] w-[3px] rounded-full bg-orange-400 animate-pulse" />
+          <span className="text-[6px] font-mono text-orange-400/80">LIVE</span>
         </div>
-
-        {/* Right: chevron */}
-        <div className="ml-auto flex items-center gap-2">
-          {open
-            ? <ChevronDown className="h-3.5 w-3.5 text-white/30" strokeWidth={2} />
-            : <ChevronUp   className="h-3.5 w-3.5 text-white/30" strokeWidth={2} />
+        <div className="ml-auto">
+          {collapsed
+            ? <ChevronUp   className="h-3 w-3 text-white/25" strokeWidth={2} />
+            : <ChevronDown className="h-3 w-3 text-white/25" strokeWidth={2} />
           }
         </div>
       </button>
 
-      {/* Content — scrollable */}
-      {open && (
-        <div
-          className="overflow-y-auto"
-          style={{ height: NEWS_DOCK_HEIGHT_OPEN - 44, scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}
-        >
+      {/* Content */}
+      {!collapsed && (
+        <div className="flex-1 min-h-0 overflow-hidden">
           <NewsTrendFeed compact />
         </div>
       )}
@@ -160,15 +233,16 @@ function NewsDock() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   PAGE
+   PAGE — h-screen, no scroll, everything flex-fitted
 ══════════════════════════════════════════════════════════════════════ */
 export default function DashboardFresh() {
-  const role      = useUserRole();
-  const isAdmin   = role === "admin";
-  const displayName = (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "OPERATOR";
+  const role        = useUserRole();
+  const isAdmin     = role === "admin";
+  const displayName =
+    (typeof window !== "undefined" && localStorage.getItem("cyrus-display-name")) || "OPERATOR";
 
-  const [adminTab, setAdminTab] = useState<AdminTab>("modules");
-  const adminConsole = isAdmin && adminTab === "console";
+  const [adminTab, setAdminTab]   = useState<AdminTab>("modules");
+  const adminConsole              = isAdmin && adminTab === "console";
 
   const {
     stackSummary,
@@ -181,33 +255,31 @@ export default function DashboardFresh() {
     totalEngines,
     healthPercent,
   } = useDashboardFreshData("all", {
-    enableStackSummary: true,
+    enableStackSummary:    true,
     enableOrchestratorData: true,
   });
 
   const { data: conversations = [] } = useConversations(undefined, 100);
-
   const showHub = !adminConsole;
   const sharedPanelProps = { healthPercent, onlineEngines, totalEngines, degradedEngines, offlineEngines };
 
   return (
-    <div
-      className="relative text-white"
-      /* bottom padding = dock height so content never sits under the dock */
-      style={{ minHeight: "100vh", paddingBottom: NEWS_DOCK_HEIGHT_OPEN }}
-    >
+    /* Root: fills the whole viewport, NO page scroll */
+    <div className="flex flex-col text-white overflow-hidden" style={{ height: "100vh" }}>
 
-      {/* ══ Sticky header ══════════════════════════════════════════════ */}
+      {/* ══ HEADER — 52px fixed row ════════════════════════════════════ */}
       <header
-        className="sticky top-0 z-30"
+        className="shrink-0 z-30"
         style={{
+          height: 52,
           background: "rgba(8,8,16,0.96)",
           borderBottom: "1px solid rgba(225,29,72,0.1)",
           backdropFilter: "blur(24px)",
           boxShadow: "0 4px 32px rgba(0,0,0,0.7)",
         }}
       >
-        <div className="flex items-center justify-between gap-3 px-5 h-[52px]">
+        <div className="flex items-center justify-between gap-3 px-5 h-full">
+          {/* Left */}
           <div className="flex items-center gap-3 min-w-0">
             <HeaderTitle variant={showHub ? "operator" : "default"} />
             {isAdmin && (
@@ -225,10 +297,10 @@ export default function DashboardFresh() {
                     onClick={() => setAdminTab(id)}
                     className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-[10px] font-semibold tracking-wide transition-all duration-200"
                     style={{
-                      background: adminTab === id ? `${color}18` : "transparent",
-                      border: adminTab === id ? `1px solid ${color}35` : "1px solid transparent",
-                      color: adminTab === id ? "#fff" : "rgba(255,255,255,0.35)",
-                      boxShadow: adminTab === id ? `0 0 12px ${color}20` : "none",
+                      background:  adminTab === id ? `${color}18` : "transparent",
+                      border:      adminTab === id ? `1px solid ${color}35` : "1px solid transparent",
+                      color:       adminTab === id ? "#fff" : "rgba(255,255,255,0.35)",
+                      boxShadow:   adminTab === id ? `0 0 12px ${color}20` : "none",
                       fontFamily: "'Orbitron', system-ui",
                     }}
                   >
@@ -240,11 +312,12 @@ export default function DashboardFresh() {
             )}
           </div>
 
+          {/* Centre status pills */}
           <div className="hidden md:flex items-center gap-2">
             {[
-              { label: "SYSTEM",  value: "ACTIVE",                          color: "#22c55e", pulse: true  },
-              { label: "ENGINES", value: `${onlineEngines}/${totalEngines}`, color: "#06b6d4", pulse: false },
-              { label: "COMMS",   value: "READY",                           color: "#7c3aed", pulse: false },
+              { label: "SYSTEM",  value: "ACTIVE",                           color: "#22c55e", pulse: true  },
+              { label: "ENGINES", value: `${onlineEngines}/${totalEngines}`,  color: "#06b6d4", pulse: false },
+              { label: "COMMS",   value: "READY",                            color: "#7c3aed", pulse: false },
             ].map(({ label, value, color, pulse }) => (
               <div
                 key={label}
@@ -261,6 +334,7 @@ export default function DashboardFresh() {
             ))}
           </div>
 
+          {/* Right */}
           <div className="flex items-center gap-2 shrink-0">
             {isAdmin && <HeaderBadge livePort={(stackSummary as any)?.stack?.fused?.livePort} />}
             <FieldDateTimeHud />
@@ -268,86 +342,100 @@ export default function DashboardFresh() {
         </div>
       </header>
 
-      {/* ══ Hub layout ═════════════════════════════════════════════════ */}
-      {showHub && (
-        <div className="flex">
+      {/* ══ BODY — fills remaining height, no overflow ═════════════════ */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
-          {/* LEFT: social panel */}
-          <aside
-            className="sticky top-[52px] hidden lg:block shrink-0 overflow-y-auto"
-            style={{
-              width: "210px",
-              height: "calc(100vh - 52px)",
-              borderRight: "1px solid rgba(255,255,255,0.05)",
-              background: "rgba(8,8,18,0.7)",
-              scrollbarWidth: "none",
-            }}
-          >
-            <SocialLeftPanel displayName={displayName} />
-          </aside>
+        {/* ── LEFT sidebar ─────────────────────────────────────────────── */}
+        <aside
+          className="hidden lg:flex flex-col shrink-0 overflow-y-auto"
+          style={{
+            width: 210,
+            borderRight: "1px solid rgba(255,255,255,0.05)",
+            background: "rgba(8,8,18,0.7)",
+            scrollbarWidth: "none",
+          }}
+        >
+          <SocialLeftPanel displayName={displayName} />
+        </aside>
 
-          {/* CENTER */}
-          <main className="flex-1 min-w-0">
-            <CommsBentoGrid displayName={displayName} />
-            <ResearchSnapshot conversations={conversations} />
-            <AllModulesBox modules={visibleModules} />
-          </main>
+        {/* ── CENTER — hub or admin console ────────────────────────────── */}
+        {showHub ? (
+          <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
-          {/* RIGHT: activity feed */}
-          <aside
-            className="sticky top-[52px] hidden xl:block shrink-0 overflow-y-auto"
-            style={{
-              width: "248px",
-              height: "calc(100vh - 52px)",
-              borderLeft: "1px solid rgba(255,255,255,0.05)",
-              background: "rgba(8,8,18,0.7)",
-              scrollbarWidth: "none",
-            }}
-          >
-            <ActivityFeedPanel stackSummary={stackSummary} />
-          </aside>
-        </div>
-      )}
+            {/* Quick-action strip */}
+            <QuickActionStrip />
 
-      {/* ══ Admin console ══════════════════════════════════════════════ */}
-      {adminConsole && (
-        <div className="mx-auto w-full max-w-[1400px] px-5 py-6 space-y-5 lg:px-8">
-          <section
-            className="relative overflow-hidden rounded-2xl p-5"
-            style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
-          >
-            <div className="pointer-events-none absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(6,182,212,0.5), transparent)" }} />
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)" }}>
-                <TerminalSquare className="h-5 w-5 text-cyan-400" />
-              </div>
-              <div>
-                <p className="text-[9px] font-mono tracking-[0.4em] text-cyan-400/50 uppercase mb-1">Command & Diagnostics</p>
-                <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
-                <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
-              </div>
+            {/* Comms bento + research (compact, scrollable internally if needed) */}
+            <div
+              className="shrink-0 overflow-y-auto"
+              style={{ maxHeight: "calc(100% - 46px - 36px - 140px)", scrollbarWidth: "none" }}
+            >
+              <CommsBentoGrid displayName={displayName} />
+              <ResearchSnapshot conversations={conversations} />
+              <AllModulesBox modules={visibleModules} />
             </div>
-          </section>
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <HeroSection />
-            <HealthRail {...sharedPanelProps} />
-          </section>
-          <MetricsSection
-            stackSummary={stackSummary}
-            onlineEngines={onlineEngines}
-            totalEngines={totalEngines}
-            degradedEngines={degradedEngines}
-          />
-          <EngineMatrixSection
-            modules={orchestratorModules?.modules ?? []}
-            navLabelByRoute={navLabelByRoute}
-          />
-          <BottomPanels hints={(stackSummary as any)?.stack?.hints ?? ["Waiting for stack hints…"]} />
-        </div>
-      )}
 
-      {/* ══ Fixed bottom news dock ══════════════════════════════════════ */}
-      <NewsDock />
+            {/* Network feed — takes ALL remaining vertical space */}
+            <NetworkFeedPanel />
+          </main>
+        ) : (
+          /* Admin console — own internal scroll */
+          <main className="flex-1 min-w-0 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1400px] px-5 py-6 space-y-5 lg:px-8">
+              <section
+                className="relative overflow-hidden rounded-2xl p-5"
+                style={{ background: "rgba(13,13,30,0.95)", border: "1px solid rgba(6,182,212,0.15)" }}
+              >
+                <div
+                  className="pointer-events-none absolute top-0 left-0 right-0 h-px"
+                  style={{ background: "linear-gradient(90deg,transparent,rgba(6,182,212,0.5),transparent)" }}
+                />
+                <div className="flex items-start gap-4">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(6,182,212,0.12)", border: "1px solid rgba(6,182,212,0.25)" }}
+                  >
+                    <TerminalSquare className="h-5 w-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-mono tracking-[0.4em] text-cyan-400/50 uppercase mb-1">Command & Diagnostics</p>
+                    <h2 className="text-lg font-black text-white" style={{ fontFamily: "'Orbitron', system-ui" }}>Mission Console</h2>
+                    <p className="text-xs text-white/40 mt-1">Stack health, engine matrix, and operational hints.</p>
+                  </div>
+                </div>
+              </section>
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <HeroSection />
+                <HealthRail {...sharedPanelProps} />
+              </section>
+              <MetricsSection
+                stackSummary={stackSummary}
+                onlineEngines={onlineEngines}
+                totalEngines={totalEngines}
+                degradedEngines={degradedEngines}
+              />
+              <EngineMatrixSection
+                modules={orchestratorModules?.modules ?? []}
+                navLabelByRoute={navLabelByRoute}
+              />
+              <BottomPanels hints={(stackSummary as any)?.stack?.hints ?? ["Waiting for stack hints…"]} />
+            </div>
+          </main>
+        )}
+
+        {/* ── RIGHT sidebar ────────────────────────────────────────────── */}
+        <aside
+          className="hidden xl:flex flex-col shrink-0 overflow-y-auto"
+          style={{
+            width: 248,
+            borderLeft: "1px solid rgba(255,255,255,0.05)",
+            background: "rgba(8,8,18,0.7)",
+            scrollbarWidth: "none",
+          }}
+        >
+          <ActivityFeedPanel stackSummary={stackSummary} />
+        </aside>
+      </div>
     </div>
   );
 }
