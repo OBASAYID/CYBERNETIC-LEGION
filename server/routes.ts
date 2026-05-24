@@ -1436,17 +1436,19 @@ export async function registerRoutes(
     res.json({ reminders: listReminders() });
   });
 
-  // Free RSS news feed — no API key required (BBC News)
+  // Free RSS news feed — no API key required (BBC News, 7 categories, with images)
   app.get("/api/news/rss", async (_req, res) => {
     try {
       const feeds = [
-        { url: "https://feeds.bbci.co.uk/news/world/rss.xml",      category: "World" },
-        { url: "https://feeds.bbci.co.uk/news/technology/rss.xml", category: "Technology" },
-        { url: "https://feeds.bbci.co.uk/news/business/rss.xml",   category: "Finance" },
+        { url: "https://feeds.bbci.co.uk/news/world/rss.xml",                   category: "World" },
+        { url: "https://feeds.bbci.co.uk/news/technology/rss.xml",              category: "Technology" },
+        { url: "https://feeds.bbci.co.uk/news/business/rss.xml",                category: "Finance" },
         { url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", category: "Science" },
+        { url: "https://feeds.bbci.co.uk/news/health/rss.xml",                  category: "Health" },
+        { url: "https://feeds.bbci.co.uk/news/politics/rss.xml",                category: "Politics" },
+        { url: "https://feeds.bbci.co.uk/sport/rss.xml",                        category: "Sport" },
       ];
 
-      // Handles both <![CDATA[...]]> and plain text content
       const extract = (block: string, tag: string): string => {
         const cdata = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i"));
         if (cdata) return cdata[1].trim();
@@ -1454,35 +1456,74 @@ export async function registerRoutes(
         return plain ? plain[1].trim() : "";
       };
 
+      const extractImage = (block: string): string => {
+        // BBC RSS provides media:thumbnail url="..." — upgrade to higher res
+        const m = block.match(/media:thumbnail[^>]*url="([^"]+)"/i);
+        return m ? m[1].replace(/standard\/\d+/g, "standard/624") : "";
+      };
+
       const items: any[] = [];
-      for (const feed of feeds) {
+      const fetchJobs = feeds.map(async (feed) => {
         try {
           const r = await fetch(feed.url, { signal: AbortSignal.timeout(6000) });
-          if (!r.ok) continue;
+          if (!r.ok) return;
           const xml = await r.text();
-          // Split on <item> tags — BBC wraps each story in <item>\n...
-          const rawItems = xml.split(/<item>/i).slice(1, 5);
+          const rawItems = xml.split(/<item>/i).slice(1, 4);
           for (const block of rawItems) {
-            const title   = extract(block, "title");
-            const link    = extract(block, "link");
-            const desc    = extract(block, "description").replace(/<[^>]+>/g, "").trim();
-            const pubDate = extract(block, "pubDate");
+            const title    = extract(block, "title");
+            const link     = extract(block, "link");
+            const desc     = extract(block, "description").replace(/<[^>]+>/g, "").trim();
+            const pubDate  = extract(block, "pubDate");
+            const imageUrl = extractImage(block);
             if (!title || title.length < 5) continue;
             items.push({
-              id:          `${feed.category}-${items.length}`,
+              id:          `${feed.category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
               title,
-              summary:     desc.slice(0, 200),
+              summary:     desc.slice(0, 350),
               source:      "BBC News",
               category:    feed.category,
               url:         link,
+              imageUrl:    imageUrl || undefined,
               publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
             });
           }
         } catch { /* skip failing feed */ }
-      }
-      res.json({ items: items.slice(0, 8) });
+      });
+
+      await Promise.all(fetchJobs);
+      items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      res.json({ items: items.slice(0, 16) });
     } catch (err: any) {
       res.status(500).json({ error: "RSS fetch failed", detail: err?.message });
+    }
+  });
+
+  // In-app article reader — expands headline + summary into full readable article via OpenAI
+  app.post("/api/news/article", async (req: any, res) => {
+    const { title, summary, category } = req.body || {};
+    if (!title) return res.status(400).json({ error: "title required" });
+    try {
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) return res.json({ article: summary || "No expanded content available." });
+      const { OpenAI } = await import("openai");
+      const client = new OpenAI({ apiKey: openaiKey });
+      const completion = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content: "You are a BBC-style news journalist. Write an engaging, factual news article (3–4 paragraphs) based on the headline and summary below. Do NOT fabricate quotes or unconfirmed facts. Use a clear, professional journalistic tone. Provide real context and background for the story.",
+          },
+          {
+            role: "user",
+            content: `Category: ${category || "General"}\nHeadline: ${title}\nSummary: ${summary || "(no summary)"}\n\nWrite the full article:`,
+          },
+        ],
+      });
+      res.json({ article: completion.choices[0]?.message?.content || summary });
+    } catch (err: any) {
+      res.status(500).json({ error: "Article generation failed", article: summary });
     }
   });
 

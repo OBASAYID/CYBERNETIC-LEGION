@@ -28,6 +28,12 @@ import {
   Radio,
   Play,
   ChevronRight,
+  X,
+  BookOpen,
+  Loader2,
+  ExternalLink,
+  Newspaper,
+  RefreshCw,
 } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { useConversations } from "@/hooks/use-conversations";
@@ -537,6 +543,7 @@ interface LiveNewsItem {
   source?: string;
   category?: string;
   url?: string;
+  imageUrl?: string;
   publishedAt?: string;
 }
 
@@ -556,41 +563,11 @@ function newsCategoryTheme(cat?: string): { c1: string; c2: string; accent: stri
 
 /* ── Seed articles shown while RSS loads ─────────────────────────── */
 const SEED_BROADCAST: LiveNewsItem[] = [
-  {
-    id: "s1",
-    title: "Global Leaders Meet in Geneva for Emergency Climate Summit",
-    summary: "World leaders convene amid record-breaking temperatures across three continents, with new emissions targets expected.",
-    source: "BBC News", category: "World",
-    publishedAt: new Date(Date.now() - 1800000).toISOString(), url: "#",
-  },
-  {
-    id: "s2",
-    title: "AI Chip War: US and China Race to Dominate Next-Generation Processors",
-    summary: "Semiconductor rivalry intensifies as both nations pour billions into domestic chip manufacturing and advanced AI silicon.",
-    source: "BBC News", category: "Technology",
-    publishedAt: new Date(Date.now() - 3600000).toISOString(), url: "#",
-  },
-  {
-    id: "s3",
-    title: "Federal Reserve Signals Rate Hold Amid Mixed Economic Signals",
-    summary: "Officials cite resilient employment data but remain cautious about persistent inflation in services and energy sectors.",
-    source: "BBC News", category: "Finance",
-    publishedAt: new Date(Date.now() - 5400000).toISOString(), url: "#",
-  },
-  {
-    id: "s4",
-    title: "Mars Sample Return Mission Gets Revised Launch Window",
-    summary: "NASA and ESA confirm an updated timeline for the historic mission designed to bring Martian soil to Earth.",
-    source: "BBC News", category: "Science",
-    publishedAt: new Date(Date.now() - 7200000).toISOString(), url: "#",
-  },
-  {
-    id: "s5",
-    title: "Tensions Rise as Disputed Maritime Zones Draw Naval Deployments",
-    summary: "Multiple nations scramble vessels to contested waters as diplomatic efforts stall in back-channel negotiations.",
-    source: "BBC News", category: "World",
-    publishedAt: new Date(Date.now() - 9000000).toISOString(), url: "#",
-  },
+  { id: "s1", title: "Global Leaders Meet for Emergency Climate Summit", summary: "World leaders convene amid record-breaking temperatures across three continents, with new emissions targets expected.", source: "BBC News", category: "World", publishedAt: new Date(Date.now() - 1800000).toISOString(), url: "#" },
+  { id: "s2", title: "AI Chip War: US and China Race to Dominate Next-Gen Processors", summary: "Semiconductor rivalry intensifies as both nations pour billions into domestic chip manufacturing and advanced AI silicon.", source: "BBC News", category: "Technology", publishedAt: new Date(Date.now() - 3600000).toISOString(), url: "#" },
+  { id: "s3", title: "Federal Reserve Signals Rate Hold Amid Mixed Economic Data", summary: "Officials cite resilient employment data but remain cautious about persistent inflation in services and energy sectors.", source: "BBC News", category: "Finance", publishedAt: new Date(Date.now() - 5400000).toISOString(), url: "#" },
+  { id: "s4", title: "Mars Sample Return Mission Gets Revised Launch Window", summary: "NASA and ESA confirm an updated timeline for the historic mission designed to bring Martian soil to Earth.", source: "BBC News", category: "Science", publishedAt: new Date(Date.now() - 7200000).toISOString(), url: "#" },
+  { id: "s5", title: "Tensions Rise as Disputed Maritime Zones Draw Naval Deployments", summary: "Multiple nations scramble vessels to contested waters as diplomatic efforts stall in back-channel negotiations.", source: "BBC News", category: "World", publishedAt: new Date(Date.now() - 9000000).toISOString(), url: "#" },
 ];
 
 /* ── timeAgo helper ───────────────────────────────────────────────── */
@@ -605,31 +582,179 @@ function broadcastTimeAgo(iso?: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   IN-APP NEWS READER MODAL
+══════════════════════════════════════════════════════════════════════ */
+function NewsReaderModal({ item, onClose }: { item: LiveNewsItem; onClose: () => void }) {
+  const [article, setArticle] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const theme = newsCategoryTheme(item.category);
+
+  useEffect(() => {
+    setLoading(true);
+    setArticle("");
+    fetch("/api/news/article", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ title: item.title, summary: item.summary, category: item.category }),
+    })
+      .then((r) => r.ok ? r.json() : { article: item.summary ?? "" })
+      .then((d) => { setArticle(d.article ?? item.summary ?? ""); setLoading(false); })
+      .catch(() => { setArticle(item.summary ?? ""); setLoading(false); });
+  }, [item.id]);
+
+  const paragraphs = article.split(/\n+/).filter(Boolean);
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(16px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col rounded-3xl"
+        style={{
+          background: `linear-gradient(160deg, ${theme.c2}ee 0%, #09090f 60%)`,
+          border: `1px solid ${theme.c1}40`,
+          boxShadow: `0 32px 80px rgba(0,0,0,0.8), 0 0 60px ${theme.c1}20`,
+        }}
+      >
+        {/* Hero image */}
+        {item.imageUrl && (
+          <div className="relative shrink-0 overflow-hidden" style={{ height: 220 }}>
+            <img
+              src={item.imageUrl}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              style={{ filter: "brightness(0.75) contrast(1.1)" }}
+            />
+            {/* Gradient fade into content */}
+            <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent 30%, ${theme.c2}ee 100%)` }} />
+            {/* Top accent line */}
+            <div className="absolute top-0 left-0 right-0 h-[2px]"
+              style={{ background: `linear-gradient(90deg, ${theme.c1}, ${theme.accent}80, transparent)` }} />
+            {/* Category + source overlay */}
+            <div className="absolute bottom-3 left-4 flex items-center gap-2">
+              <span className="text-[8px] font-black tracking-[0.3em] px-2 py-0.5 rounded-full uppercase"
+                style={{ background: `${theme.c1}cc`, color: "#fff", border: `1px solid ${theme.c1}` }}>
+                {item.category}
+              </span>
+              <span className="text-[9px] text-white/50 font-mono">{item.source}</span>
+              <span className="text-[8px] text-white/30 font-mono">{broadcastTimeAgo(item.publishedAt)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Header when no image */}
+        {!item.imageUrl && (
+          <div className="shrink-0 px-6 pt-6 pb-0 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl"
+              style={{ background: `${theme.c1}25`, border: `1px solid ${theme.c1}40` }}>
+              <Newspaper className="h-5 w-5" style={{ color: theme.accent }} strokeWidth={1.5} />
+            </div>
+            <div>
+              <span className="text-[8px] font-black tracking-[0.3em] uppercase" style={{ color: theme.accent }}>{item.category}</span>
+              <p className="text-[9px] text-white/30 font-mono">{item.source} · {broadcastTimeAgo(item.publishedAt)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-5" style={{ scrollbarWidth: "thin" }}>
+          <h2
+            className="text-xl font-black text-white leading-snug mb-4"
+            style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 30px ${theme.c1}60` }}
+          >
+            {item.title}
+          </h2>
+
+          {loading ? (
+            <div className="flex items-center gap-3 py-8">
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: theme.accent }} />
+              <span className="text-sm text-white/40 font-mono tracking-wider">CYRUS GENERATING ARTICLE…</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {paragraphs.map((p, i) => (
+                <p key={i} className="text-[13px] text-white/75 leading-relaxed">{p}</p>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t"
+          style={{ borderColor: `${theme.c1}20`, background: "rgba(0,0,0,0.3)" }}>
+          <div className="flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" style={{ color: theme.accent }} />
+            <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">CYRUS News Reader</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {item.url && item.url !== "#" && (
+              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                <div className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 cursor-pointer transition-all hover:scale-105"
+                  style={{ background: `${theme.c1}20`, border: `1px solid ${theme.c1}35`, color: theme.accent }}>
+                  <ExternalLink className="h-3 w-3" />
+                  <span className="text-[9px] font-bold">VIEW SOURCE</span>
+                </div>
+              </a>
+            )}
+            <button type="button" onClick={onClose}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 transition-all hover:bg-white/10"
+              style={{ border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)" }}>
+              <X className="h-3.5 w-3.5" />
+              <span className="text-[9px] font-bold">CLOSE</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Close X corner */}
+        <button type="button" onClick={onClose}
+          className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full transition-all hover:bg-white/15 hover:scale-110"
+          style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.12)" }}>
+          <X className="h-4 w-4 text-white/60" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   APPLE TV-STYLE NEWS FEED
+══════════════════════════════════════════════════════════════════════ */
 function AppleTVNewsFeed() {
   const [items, setItems]       = useState<LiveNewsItem[]>(SEED_BROADCAST);
   const [active, setActive]     = useState(0);
   const [fading, setFading]     = useState(false);
   const [progress, setProgress] = useState(0);
+  const [reader, setReader]     = useState<LiveNewsItem | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const intervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef             = useRef<ReturnType<typeof setInterval> | null>(null);
-  const DURATION                = 6500;
+  const DURATION                = 7000;
 
-  /* ── Fetch real news from BBC RSS via server proxy ── */
-  useEffect(() => {
-    let alive = true;
+  const loadNews = (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     fetch("/api/news/rss")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
-        if (alive && d?.items?.length >= 3) {
+        if (d?.items?.length >= 3) {
           setItems(d.items);
           setActive(0);
         }
       })
-      .catch(() => {/* stay on seed */});
-    return () => { alive = false; };
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  };
+
+  /* ── Fetch on mount + auto-refresh every 5 min ── */
+  useEffect(() => {
+    loadNews();
+    const refreshTimer = setInterval(() => loadNews(true), 5 * 60 * 1000);
+    return () => clearInterval(refreshTimer);
   }, []);
 
-  /* ── Auto-advance ── */
   const advance = (next: number) => {
     setFading(true);
     setTimeout(() => { setActive(next); setFading(false); setProgress(0); }, 350);
@@ -644,147 +769,193 @@ function AppleTVNewsFeed() {
     };
   }, [active, items.length]);
 
-  const item = items[active] ?? items[0];
-  const theme = newsCategoryTheme(item.category);
+  const item  = items[active] ?? items[0];
+  const theme = newsCategoryTheme(item?.category);
+
+  if (!item) return null;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
-          <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>LIVE BROADCAST</p>
-          <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[7px] font-mono font-bold text-red-400 tracking-widest"
-            style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.3)" }}>
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
-            NEWS FEED
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {items.map((_, i) => (
-            <button key={i} type="button" onClick={() => advance(i)}
-              className="transition-all duration-300"
-              style={{
-                width: i === active ? 20 : 6, height: 4, borderRadius: 2,
-                background: i === active ? "#e11d48" : "rgba(255,255,255,0.2)",
-                border: "none", cursor: "pointer",
-              }} />
-          ))}
-        </div>
-      </div>
+    <>
+      {/* ── In-app reader modal ── */}
+      {reader && <NewsReaderModal item={reader} onClose={() => setReader(null)} />}
 
-      {/* Main cinematic card */}
-      <div
-        className="relative overflow-hidden rounded-2xl"
-        style={{
-          background: `linear-gradient(135deg, ${theme.c1}33 0%, ${theme.c2}cc 100%)`,
-          border: `1px solid ${theme.c1}55`,
-          boxShadow: `0 8px 40px ${theme.c1}35`,
-          minHeight: 132,
-          opacity: fading ? 0 : 1,
-          transition: "opacity 0.35s ease",
-        }}
-      >
-        {/* Background gradient wash */}
-        <div className="absolute inset-0"
-          style={{ background: `radial-gradient(ellipse at 80% 40%, ${theme.c1}28 0%, transparent 65%)` }} />
-        {/* Subtle scan line */}
-        <div className="absolute inset-0 opacity-[0.03]"
-          style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 4px)" }} />
-
-        <div className="relative z-10 flex gap-4 p-4">
-          {/* Category badge column */}
-          <div className="shrink-0 flex flex-col items-center gap-2 pt-1">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
-              style={{
-                background: `${theme.c1}30`,
-                border: `1px solid ${theme.c1}55`,
-                boxShadow: `0 0 24px ${theme.c1}40`,
-              }}>
-              <Radio className="h-7 w-7" style={{ color: theme.accent }} strokeWidth={1.3} />
-            </div>
-            <span className="text-[7px] font-black tracking-widest px-1.5 py-0.5 rounded text-center"
-              style={{ background: `${theme.c1}40`, color: theme.accent, border: `1px solid ${theme.c1}50` }}>
-              {(item.category ?? "NEWS").toUpperCase()}
+      <div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-6 w-1 rounded-full" style={{ background: "linear-gradient(180deg, #e11d48, #9f1239)" }} />
+            <p className="text-sm font-black text-white tracking-wide" style={{ fontFamily: "'Orbitron', system-ui" }}>LIVE BROADCAST</p>
+            <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[7px] font-mono font-bold text-red-400 tracking-widest"
+              style={{ background: "rgba(225,29,72,0.12)", border: "1px solid rgba(225,29,72,0.3)" }}>
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+              NEWS FEED
             </span>
           </div>
-
-          {/* Content column */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-[8px] font-black tracking-[0.25em] px-2 py-0.5 rounded-md"
-                style={{ background: "#e11d4833", color: "#fb7185", border: "1px solid #e11d4855" }}>
-                BREAKING
-              </span>
-              {item.source && (
-                <span className="text-[8px] text-white/35 font-mono tracking-wider">{item.source}</span>
-              )}
-              {item.publishedAt && (
-                <span className="text-[7px] text-white/20 font-mono">{broadcastTimeAgo(item.publishedAt)}</span>
-              )}
-            </div>
-            <h3 className="text-sm font-black text-white leading-tight mb-1.5 line-clamp-2"
-              style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${theme.c1}80` }}>
-              {item.title}
-            </h3>
-            {item.summary && (
-              <p className="text-[10px] text-white/50 leading-relaxed mb-3 line-clamp-2">{item.summary}</p>
-            )}
-            <div className="flex items-center gap-2">
-              <a
-                href={item.url && item.url !== "#" ? item.url : undefined}
-                target={item.url && item.url !== "#" ? "_blank" : undefined}
-                rel="noopener noreferrer"
-              >
-                <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 cursor-pointer transition-all hover:scale-105"
-                  style={{ background: theme.c1, boxShadow: `0 4px 16px ${theme.c1}50` }}>
-                  <Play className="h-3 w-3 text-white" strokeWidth={2.5} fill="white" />
-                  <span className="text-[9px] font-black text-white tracking-wide">READ NOW</span>
-                </div>
-              </a>
-              <button
-                type="button"
-                onClick={() => advance((active + 1) % items.length)}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 cursor-pointer transition-all hover:bg-white/10"
-                style={{ border: "1px solid rgba(255,255,255,0.14)" }}
-              >
-                <span className="text-[9px] font-medium text-white/45">Next</span>
-                <ChevronRight className="h-2.5 w-2.5 text-white/30" />
-              </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => loadNews()}
+              className="transition-all hover:scale-110"
+              title="Refresh news">
+              <RefreshCw className={`h-3 w-3 text-white/20 hover:text-white/50 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            <div className="flex items-center gap-1.5">
+              {items.slice(0, 12).map((_, i) => (
+                <button key={i} type="button" onClick={() => advance(i)}
+                  className="transition-all duration-300"
+                  style={{
+                    width: i === active ? 18 : 5, height: 4, borderRadius: 2,
+                    background: i === active ? "#e11d48" : "rgba(255,255,255,0.18)",
+                    border: "none", cursor: "pointer",
+                  }} />
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: "rgba(255,255,255,0.08)" }}>
-          <div className="h-full transition-none" style={{ width: `${progress}%`, background: theme.accent }} />
+        {/* Main cinematic card */}
+        <div
+          className="relative overflow-hidden rounded-2xl cursor-pointer group"
+          style={{
+            background: item.imageUrl
+              ? "transparent"
+              : `linear-gradient(135deg, ${theme.c1}33 0%, ${theme.c2}cc 100%)`,
+            border: `1px solid ${theme.c1}50`,
+            boxShadow: `0 8px 40px ${theme.c1}30`,
+            minHeight: 148,
+            opacity: fading ? 0 : 1,
+            transition: "opacity 0.35s ease",
+          }}
+          onClick={() => setReader(item)}
+        >
+          {/* Hero image background */}
+          {item.imageUrl && (
+            <>
+              <img
+                src={item.imageUrl}
+                alt={item.title}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ filter: "brightness(0.45) contrast(1.1) saturate(1.2)" }}
+              />
+              <div className="absolute inset-0"
+                style={{ background: `linear-gradient(135deg, ${theme.c1}55 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.85) 100%)` }} />
+            </>
+          )}
+
+          {/* Colour wash when no image */}
+          {!item.imageUrl && (
+            <div className="absolute inset-0"
+              style={{ background: `radial-gradient(ellipse at 80% 40%, ${theme.c1}28 0%, transparent 65%)` }} />
+          )}
+
+          {/* Scanlines */}
+          <div className="absolute inset-0 opacity-[0.025]"
+            style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 4px)" }} />
+
+          {/* Hover glow hint */}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ background: "rgba(255,255,255,0.03)" }} />
+
+          <div className="relative z-10 flex gap-3 p-4">
+            {/* Image thumbnail OR category icon */}
+            <div className="shrink-0 flex flex-col items-center gap-2 pt-0.5">
+              {item.imageUrl ? (
+                <div className="flex h-14 w-14 overflow-hidden rounded-xl border"
+                  style={{ border: `1px solid ${theme.c1}60` }}>
+                  <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{ background: `${theme.c1}30`, border: `1px solid ${theme.c1}55`, boxShadow: `0 0 24px ${theme.c1}40` }}>
+                  <Radio className="h-7 w-7" style={{ color: theme.accent }} strokeWidth={1.3} />
+                </div>
+              )}
+              <span className="text-[7px] font-black tracking-widest px-1.5 py-0.5 rounded text-center"
+                style={{ background: `${theme.c1}50`, color: theme.accent, border: `1px solid ${theme.c1}60` }}>
+                {(item.category ?? "NEWS").toUpperCase()}
+              </span>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-[8px] font-black tracking-[0.25em] px-2 py-0.5 rounded-md"
+                  style={{ background: "#e11d4833", color: "#fb7185", border: "1px solid #e11d4855" }}>
+                  BREAKING
+                </span>
+                {item.source && <span className="text-[8px] text-white/35 font-mono">{item.source}</span>}
+                {item.publishedAt && <span className="text-[7px] text-white/20 font-mono">{broadcastTimeAgo(item.publishedAt)}</span>}
+              </div>
+              <h3 className="text-sm font-black text-white leading-tight mb-1.5 line-clamp-2"
+                style={{ fontFamily: "'Orbitron', system-ui", textShadow: `0 0 20px ${theme.c1}80` }}>
+                {item.title}
+              </h3>
+              {item.summary && (
+                <p className="text-[10px] text-white/50 leading-relaxed mb-3 line-clamp-2">{item.summary}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 rounded-lg px-3 py-1.5"
+                  style={{ background: theme.c1, boxShadow: `0 4px 16px ${theme.c1}50` }}
+                  onClick={(e) => { e.stopPropagation(); setReader(item); }}>
+                  <BookOpen className="h-3 w-3 text-white" strokeWidth={2} />
+                  <span className="text-[9px] font-black text-white tracking-wide">READ IN APP</span>
+                </div>
+                <button type="button"
+                  onClick={(e) => { e.stopPropagation(); advance((active + 1) % items.length); }}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition-all hover:bg-white/10"
+                  style={{ border: "1px solid rgba(255,255,255,0.14)" }}>
+                  <span className="text-[9px] font-medium text-white/45">Next</span>
+                  <ChevronRight className="h-2.5 w-2.5 text-white/30" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div className="h-full transition-none" style={{ width: `${progress}%`, background: theme.accent }} />
+          </div>
+        </div>
+
+        {/* Thumbnail strip */}
+        <div className="flex gap-1.5 mt-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+          {items.map((it, i) => {
+            const t = newsCategoryTheme(it.category);
+            return (
+              <button key={it.id} type="button" onClick={() => advance(i)}
+                className="shrink-0 relative overflow-hidden flex flex-col items-center gap-0.5 rounded-xl cursor-pointer transition-all duration-200 hover:scale-[1.06]"
+                style={{
+                  background: i === active ? `${t.c1}25` : "rgba(255,255,255,0.03)",
+                  border: i === active ? `1px solid ${t.c1}55` : "1px solid rgba(255,255,255,0.06)",
+                  minWidth: it.imageUrl ? 52 : 44,
+                  height: 48,
+                  padding: 0,
+                }}>
+                {it.imageUrl ? (
+                  <>
+                    <img src={it.imageUrl} alt="" className="w-full h-full object-cover"
+                      style={{ filter: i === active ? "brightness(0.8)" : "brightness(0.45) grayscale(0.4)" }} />
+                    <div className="absolute inset-0" style={{ background: i === active ? `${t.c1}40` : "rgba(0,0,0,0.2)" }} />
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-0.5 px-2">
+                    <span className="text-[8px] font-black" style={{ color: i === active ? t.accent : "rgba(255,255,255,0.25)" }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="text-[6px] font-mono uppercase tracking-wide"
+                      style={{ color: i === active ? t.accent : "rgba(255,255,255,0.2)" }}>
+                      {(it.category ?? "news").slice(0, 4)}
+                    </span>
+                  </div>
+                )}
+                {/* Active indicator */}
+                {i === active && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: t.accent }} />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
-
-      {/* Thumbnail strip — news index dots + category labels */}
-      <div className="flex gap-1.5 mt-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
-        {items.map((it, i) => {
-          const t = newsCategoryTheme(it.category);
-          return (
-            <button key={it.id} type="button" onClick={() => advance(i)}
-              className="shrink-0 flex flex-col items-center gap-1 rounded-xl py-1.5 px-2 cursor-pointer transition-all duration-200 hover:scale-[1.05]"
-              style={{
-                background: i === active ? `${t.c1}25` : "rgba(255,255,255,0.03)",
-                border: i === active ? `1px solid ${t.c1}55` : "1px solid rgba(255,255,255,0.06)",
-                minWidth: 44,
-              }}>
-              <span className="text-[8px] font-black" style={{ color: i === active ? t.accent : "rgba(255,255,255,0.25)" }}>
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="text-[6px] font-mono uppercase tracking-wide text-center leading-tight"
-                style={{ color: i === active ? t.accent : "rgba(255,255,255,0.2)" }}>
-                {(it.category ?? "news").slice(0, 4)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    </>
   );
 }
 
