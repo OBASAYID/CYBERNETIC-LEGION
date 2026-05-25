@@ -17,7 +17,7 @@ import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-co
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
+import { MODULE_RIBBON_LIGHT_URL, TSODILO_HILLS_SIGNS_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -55,6 +55,10 @@ export default function DashboardFresh() {
       <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.28] mix-blend-screen"
+        style={{ backgroundImage: `url(${TSODILO_HILLS_SIGNS_URL})` }}
+      />
       <div className="pointer-events-none fixed inset-0">
         <div
           className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"

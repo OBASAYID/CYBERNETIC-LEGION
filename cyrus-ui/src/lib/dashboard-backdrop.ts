@@ -15,3 +15,8 @@ export const MODULE_FOLDER_TILE_URL = "/module-folder-tile.png";
  */
 export const MODULE_FOLDER_ICON_FILTER =
   "hue-rotate(198deg) saturate(1.18) brightness(1.04) contrast(1.26) drop-shadow(0 0 14px rgba(34,211,238,0.38)) drop-shadow(0 0 4px rgba(186,230,253,0.55)) drop-shadow(0 1px 0 rgba(255,255,255,0.22))";
+
+/** Tsodilo spiritual dance artwork used in System Spotlight hero card. */
+export const TSODILO_SPIRITUAL_DANCE_URL = "/tsodilo-spiritual-dance.svg";
+/** Tsodilo hills vectors + symbolic signs for dashboard atmospheric layers. */
+export const TSODILO_HILLS_SIGNS_URL = "/tsodilo-hills-signs.svg";

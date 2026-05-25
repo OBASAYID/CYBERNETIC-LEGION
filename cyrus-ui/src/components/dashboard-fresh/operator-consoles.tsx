@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Activity, Radio, Sparkles, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
+import { TSODILO_SPIRITUAL_DANCE_URL } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
 function ConsoleShell({
@@ -75,6 +76,13 @@ export function SystemSpotlightConsole({
 
   return (
     <ConsoleShell title="System spotlight" kicker="Priority surface" icon={Sparkles} accent="amber">
+      <div className="mb-3 overflow-hidden rounded-xl border border-amber-400/20 bg-black/30">
+        <img
+          src={TSODILO_SPIRITUAL_DANCE_URL}
+          alt="Tsodilo spiritual dance"
+          className="h-36 w-full object-cover"
+        />
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.08] p-3">
           <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/55">Stack health</p>
