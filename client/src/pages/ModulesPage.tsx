@@ -161,7 +161,7 @@ export function ModulesPage() {
         </button>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-cyrus-page space-y-6">
         <section
           className="rounded-xl border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] overflow-hidden"
           aria-label="Module console"

@@ -129,7 +129,9 @@ function App() {
                         isAuthenticated,
                       }}
                     >
-                      <AppRoutes />
+                      <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
+                        <AppRoutes />
+                      </div>
                     </CallProvider>
                   </AppErrorBoundary>
                   <PwaInstallPrompt />

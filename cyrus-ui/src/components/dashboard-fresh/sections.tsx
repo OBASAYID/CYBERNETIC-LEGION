@@ -33,7 +33,7 @@ export function HeroSection() {
       >
         Unified control for modules, engines, and stack health
       </h2>
-      <p className="relative mt-2 max-w-3xl text-sm leading-relaxed text-white/75">
+      <p className="relative mt-2 max-w-cyrus-narrow text-sm leading-relaxed text-white/75">
         Mission console: launch orchestration, monitor engine state, and verify fused stack readiness.
       </p>
       <div className="relative mt-4 flex flex-wrap gap-2">
@@ -194,7 +194,7 @@ export function ModuleWorkspaceSection({
           >
             Module workspace
           </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
+          <p className="mt-1 max-w-cyrus-narrow text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
             Open a module channel below—each tile uses the same icon as Command Center navigation, plus a short mission
             readout.
           </p>

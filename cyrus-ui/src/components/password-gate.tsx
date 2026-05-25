@@ -259,7 +259,7 @@ export function PasswordGate({
         </div>
       </div>
 
-      <div className="relative z-20 w-full max-w-md isolate">
+      <div className="relative z-20 w-full max-w-cyrus-gate isolate">
         <div className="text-center mb-10">
           <div className="relative inline-block mb-8 isolate">
             <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/20 via-transparent to-orange-500/20 rounded-full blur-2xl animate-pulse pointer-events-none" />

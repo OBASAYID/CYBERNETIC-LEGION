@@ -64,7 +64,7 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
         <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400/5 via-cyan-300/4 to-sky-400/5 blur-3xl" />
         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-slate-950/35 to-transparent" />
       </div>
-      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-4xl cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
+      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
         {children}
       </div>
     </div>

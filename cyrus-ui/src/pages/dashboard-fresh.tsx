@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
-import {
-  ModuleCommandConsole,
-  ModuleCommandConsoleDock,
-} from "@/components/command-center/module-command-console";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
+import { DashboardCommandSideRail } from "@/components/command-center/command-console-popup";
 import {
   BottomPanels,
   EngineMatrixSection,
@@ -16,6 +13,8 @@ import {
   MetricsSection,
   ModuleWorkspaceSection,
 } from "@/components/dashboard-fresh/sections";
+import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
+import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-consoles";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
 import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
@@ -27,9 +26,10 @@ export default function DashboardFresh() {
   const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
   const [adminTab, setAdminTab] = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
+  const headerOperator = !isAdmin || adminTab === "modules";
 
-  const loadStack = isAdmin;
-  const loadOrchestrator = adminConsole;
+  const loadStack = headerOperator || isAdmin;
+  const loadOrchestrator = headerOperator || adminConsole;
 
   const {
     stackSummary,
@@ -50,8 +50,6 @@ export default function DashboardFresh() {
     clearAuthSessionStorage();
     window.location.reload();
   };
-
-  const headerOperator = !isAdmin || adminTab === "modules";
 
   return (
     <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-transparent text-white">
@@ -144,9 +142,9 @@ export default function DashboardFresh() {
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-full flex-col gap-5 px-4 py-6 pb-[28rem] sm:px-5 sm:pb-[30rem] lg:px-8 xl:px-10">
+        <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10">
         {!isAdmin && (
-          <p className="max-w-2xl rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
+          <p className="max-w-cyrus-prose rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
             <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>
             Choose a module to open. System diagnostics and command tooling are available to
             administrators only.
@@ -154,11 +152,22 @@ export default function DashboardFresh() {
         )}
 
         {(headerOperator || !isAdmin) && (
-          <ModuleWorkspaceSection
-            modules={visibleModules}
-            moduleFilter={moduleFilter}
-            setModuleFilter={setModuleFilter}
-          />
+          <>
+            <OperatorConsoleCluster
+              stackSummary={stackSummary}
+              healthPercent={healthPercent}
+              onlineEngines={onlineEngines}
+              totalEngines={totalEngines}
+              degradedEngines={degradedEngines}
+              offlineEngines={offlineEngines}
+            />
+            <ModuleWorkspaceSection
+              modules={visibleModules}
+              moduleFilter={moduleFilter}
+              setModuleFilter={setModuleFilter}
+            />
+            <NewsTrendFeed />
+          </>
         )}
 
         {adminConsole && (
@@ -167,7 +176,7 @@ export default function DashboardFresh() {
               className="pointer-events-none absolute left-1/2 top-[52%] z-0 w-[min(76rem,108vw)] -translate-x-1/2 -translate-y-1/2"
               aria-hidden
             >
-              <div className="mx-auto h-80 max-w-5xl rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
+              <div className="mx-auto h-80 max-w-cyrus-module rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
               <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
               <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
             </div>
@@ -233,9 +242,7 @@ export default function DashboardFresh() {
         )}
       </main>
 
-        <ModuleCommandConsoleDock>
-          <ModuleCommandConsole pageContext="Command Center — home / module workspace" />
-        </ModuleCommandConsoleDock>
+        <DashboardCommandSideRail pageContext="Command Center — home / module workspace" />
       </div>
     </div>
   );

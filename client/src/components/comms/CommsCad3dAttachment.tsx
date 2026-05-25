@@ -127,7 +127,7 @@ export function CommsCad3dAttachment({
       {card}
       {expanded && canPreview && previewFormat ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="relative flex h-[min(88vh,720px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-cyan-400/35 bg-slate-950 shadow-2xl">
+          <div className="relative flex h-[min(88vh,720px)] w-full max-w-cyrus-console flex-col overflow-hidden rounded-2xl border border-cyan-400/35 bg-slate-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-cyan-500/20 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-white">{fileName || "3D model"}</p>

@@ -61,7 +61,7 @@ export function DeviceControlPage() {
         </label>
       }
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-cyrus-wide">
           <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="bg-gray-900/60 backdrop-blur-sm border border-gray-800/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">

@@ -34,7 +34,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen min-h-dvh bg-black text-white flex flex-col items-center justify-center gap-6 p-8">
-          <div className="text-center space-y-2 max-w-2xl w-full">
+          <div className="text-center space-y-2 max-w-cyrus-prose w-full">
             <h1 className="text-lg font-mono text-red-400 tracking-wider">UI SURFACE FAULT</h1>
             <p className="text-sm text-white/80 break-words">{this.state.message}</p>
             {this.state.stack && (

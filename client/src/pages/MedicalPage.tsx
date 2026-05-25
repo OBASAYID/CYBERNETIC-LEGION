@@ -685,7 +685,7 @@ export function MedicalPage() {
         </>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-cyrus-page space-y-6">
         <div className="rounded-xl border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">

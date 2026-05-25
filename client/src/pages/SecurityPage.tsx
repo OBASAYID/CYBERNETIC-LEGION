@@ -191,7 +191,7 @@ export function SecurityPage() {
       commandHandoffText={commandHandoffText}
       commandHandoffSource="security-encryption"
     >
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-cyrus-wide space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">

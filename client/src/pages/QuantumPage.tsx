@@ -132,7 +132,7 @@ export function QuantumPage() {
       subtitle="Quantum circuit simulation and processing"
       icon={Atom}
     >
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-cyrus-wide space-y-6">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
