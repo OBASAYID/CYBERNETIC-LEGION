@@ -102,6 +102,8 @@ export type ChatOutboundPayload = {
 interface PresenceContextType {
   isConnected: boolean;
   myUserId: string | null;
+  /** Live socket count from server (includes this device). */
+  presenceTotal: number;
   onlineUsers: OnlineUser[];
   incomingCall: IncomingCall | null;
   activeCall: ActiveCallState | null;
@@ -152,6 +154,7 @@ function generateNotificationId(): string {
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
+  const [presenceTotal, setPresenceTotal] = useState(0);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
@@ -750,14 +753,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     console.log("[Presence] connectPresence called, displayName:", displayName);
     displayNameRef.current = displayName;
 
-    if (socketRef.current?.connected) {
+    const existing = socketRef.current;
+    if (existing?.connected) {
       console.log("[Presence] Already connected — refreshing identity + re-register");
-      void refreshIdentityAndRegister(socketRef.current, true);
+      void refreshIdentityAndRegister(existing, true);
+      return;
+    }
+    if (existing && !existing.disconnected) {
+      console.log("[Presence] Socket connect in progress — skipping duplicate connectPresence");
       return;
     }
 
-    if (socketRef.current) {
-      socketRef.current.disconnect();
+    if (existing) {
+      existing.removeAllListeners();
+      existing.disconnect();
       socketRef.current = null;
     }
 
@@ -808,6 +817,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         console.log("[Presence] Registered successfully:", data);
         setMyUserId(data.userId);
         currentUserIdRef.current = data.userId;
+        setPresenceTotal(data.totalOnline);
         setIsConnected(true);
         const { sent, remaining } = flushOutboundQueue((_conversationId, body) => {
           socket.emit("send-message", body);
@@ -828,7 +838,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       const currentId = currentUserIdRef.current;
       const otherUsers = data.users.filter((u) => u.id !== currentId);
       console.log(`[Presence] Online: ${data.total} total, ${otherUsers.length} others`);
+      setPresenceTotal(data.total);
       setOnlineUsers(otherUsers);
+      if (socket.connected) setIsConnected(true);
     });
 
     socket.on('incoming-call', (data: IncomingCall) => {
@@ -991,6 +1003,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
     }
     setIsConnected(false);
+    setPresenceTotal(0);
     setOnlineUsers([]);
     setMyUserId(null);
     setActiveCall(null);
@@ -1391,6 +1404,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       value={{
         isConnected,
         myUserId,
+        presenceTotal,
         onlineUsers,
         incomingCall,
         activeCall,

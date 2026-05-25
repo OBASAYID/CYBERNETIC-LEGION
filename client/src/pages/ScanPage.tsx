@@ -206,7 +206,7 @@ export function ScanPage() {
         </>
       }
     >
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-cyrus-page">
           <div className="mb-5 rounded-2xl border border-emerald-500/25 bg-emerald-950/20 p-4 sm:p-5">
             <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-emerald-200">
               <Globe className="h-4 w-4 text-emerald-400" aria-hidden />

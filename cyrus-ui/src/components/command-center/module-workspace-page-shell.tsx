@@ -97,7 +97,7 @@ export function ModuleWorkspacePageShell({
 
   if (mode === "page") {
     return (
-      <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+      <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
         {!hidePageBackdrop ? <ModuleWorkspaceBackdrop /> : null}
         <div className="relative z-10 min-h-0 w-full min-w-0">{children}</div>
       </div>
@@ -106,7 +106,7 @@ export function ModuleWorkspacePageShell({
 
   if (!title?.trim() || !Icon) {
     return (
-      <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+      <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
         <ModuleWorkspaceBackdrop />
         <div className="relative z-10 min-h-0 w-full min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">{children}</div>
       </div>
@@ -134,11 +134,11 @@ export function ModuleWorkspacePageShell({
   const showCommandBar = commandBarNode != null;
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+    <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
       <ModuleWorkspaceBackdrop />
       <div
         className={cn(
-          "relative z-10 mx-auto w-full max-w-screen-2xl px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
+          "relative z-10 mx-auto w-full max-w-cyrus-shell px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
           showCommandBar &&
             (commandConsole === true && commandConsoleMinimized
               ? "pb-24 sm:pb-28"
@@ -201,6 +201,7 @@ export function ModuleWorkspacePageShell({
                   >
                     {title}
                   </h1>
+                  {subtitle ? <p className="mt-1 max-w-cyrus-prose text-sm text-white/70">{subtitle}</p> : null}
                   {subtitle ? <p className="mt-1 max-w-2xl text-sm text-white/55">{subtitle}</p> : null}
                 </div>
               </div>

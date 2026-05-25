@@ -18,8 +18,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "pwa-icon.svg"],
+      includeAssets: ["favicon.svg", "pwa-icon.svg", "pwa-icon-192.png", "pwa-icon-512.png", "apple-touch-icon.png"],
       manifest: {
+        id: "/",
         name: "CYRUS AI — Super-Intelligence Assistant",
         short_name: "CYRUS",
         description: "CYRUS fused stack: dashboard, Command Center modules, and real-time comms.",
@@ -35,7 +36,33 @@ export default defineConfig({
             src: "/pwa-icon.svg",
             sizes: "any",
             type: "image/svg+xml",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
             purpose: "any maskable",
+          },
+        ],
+        shortcuts: [
+          {
+            name: "Dashboard",
+            short_name: "Home",
+            url: "/",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
+          },
+          {
+            name: "Comms",
+            short_name: "Comms",
+            url: "/comms",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
           },
         ],
       },

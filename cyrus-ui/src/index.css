@@ -32,6 +32,18 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+
+  /** Global UI width scale — 0.6 ≈ 40% narrower than default Tailwind max-widths. */
+  --cyrus-ui-width-scale: 0.6;
+  --max-width-cyrus-shell: min(100%, calc(96rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-page: min(100%, calc(80rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-wide: min(100%, calc(72rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-module: min(100%, calc(64rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-console: min(100%, calc(56rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-narrow: min(100%, calc(48rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-prose: min(100%, calc(42rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-gate: min(100%, calc(28rem * var(--cyrus-ui-width-scale)));
+  --max-width-cyrus-comms: min(100%, calc(120rem * var(--cyrus-ui-width-scale)));
   
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
@@ -215,14 +227,34 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    height: 100%;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
     background: #080810;
   }
 
   /* Keep compositing stable: backdrop-filter + video/canvas under one subtree can flicker on Safari. */
   #root {
     isolation: isolate;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Minimum 44px touch targets on coarse pointers (phones/tablets). */
+  @media (pointer: coarse) {
+    button:not([class*="min-h-"]),
+    [role="button"]:not([class*="min-h-"]) {
+      min-height: 2.75rem;
+    }
   }
 
   /* Hide scrollbars globally for gaming cleanliness */
@@ -240,6 +272,36 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(225,29,72,0.6);
   }
+}
+
+/** Safe-area helpers for fixed chrome (notch / home indicator). */
+.cyrus-safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+}
+.cyrus-safe-right {
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+.cyrus-safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+.cyrus-safe-left {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+.cyrus-safe-x {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+.cyrus-safe-fixed-top {
+  top: max(1rem, env(safe-area-inset-top, 0px));
+}
+.cyrus-safe-fixed-bottom {
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+/** Align fixed side chrome with the centered CYRUS shell column. */
+.cyrus-rail-inset-right {
+  right: max(0.25rem, calc((100vw - min(100vw, calc(96rem * var(--cyrus-ui-width-scale)))) / 2));
+  padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
 }
 
 /**

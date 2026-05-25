@@ -81,7 +81,8 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
 
   return (
     <div
-      className="fixed top-4 right-4 z-[200] w-80 rounded-2xl border border-primary/40 bg-slate-900/95 shadow-2xl shadow-primary/20 backdrop-blur-md animate-in slide-in-from-top-4 duration-300"
+      className="fixed z-[200] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-primary/40 bg-slate-900/95 shadow-2xl shadow-primary/20 backdrop-blur-md animate-in slide-in-from-top-4 duration-300 cyrus-safe-fixed-top"
+      style={{ right: "max(1rem, env(safe-area-inset-right, 0px))" }}
       role="alertdialog"
       aria-label={`Incoming ${isVideo ? "video" : "audio"} call from ${call.callerName}`}
     >

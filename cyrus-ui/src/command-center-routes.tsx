@@ -68,11 +68,11 @@ function RouteLoadingFallback() {
   }, []);
 
   if (!visible) {
-    return <div className="min-h-screen bg-transparent" aria-hidden="true" />;
+    return <div className="min-h-screen min-h-dvh bg-transparent" aria-hidden="true" />;
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-3 overflow-x-hidden bg-transparent bg-gradient-to-b from-slate-950/35 via-slate-900/25 to-slate-950/40 font-mono text-sm tracking-widest text-cyan-400/90">
+    <div className="relative flex min-h-screen min-h-dvh flex-col items-center justify-center gap-3 overflow-x-hidden bg-transparent bg-gradient-to-b from-slate-950/35 via-slate-900/25 to-slate-950/40 font-mono text-sm tracking-widest text-cyan-400/90">
       <div className="h-8 w-8 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin" />
       LOADING MODULE…
     </div>

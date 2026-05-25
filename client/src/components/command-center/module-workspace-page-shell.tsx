@@ -137,7 +137,7 @@ export function ModuleWorkspacePageShell({
       <ModuleWorkspaceBackdrop />
       <div
         className={cn(
-          "relative z-10 mx-auto w-full max-w-screen-2xl px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
+          "relative z-10 mx-auto w-full max-w-cyrus-shell px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
           showCommandBar &&
             (commandConsole === true && commandConsoleMinimized
               ? "pb-24 sm:pb-28"
@@ -186,7 +186,7 @@ export function ModuleWorkspacePageShell({
                   >
                     {title}
                   </h1>
-                  {subtitle ? <p className="mt-1 max-w-2xl text-sm text-white/70">{subtitle}</p> : null}
+                  {subtitle ? <p className="mt-1 max-w-cyrus-prose text-sm text-white/70">{subtitle}</p> : null}
                 </div>
               </div>
               {headerEnd ? (

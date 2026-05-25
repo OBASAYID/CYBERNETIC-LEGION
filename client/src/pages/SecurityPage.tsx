@@ -162,7 +162,7 @@ export function SecurityPage() {
       commandHandoffText={commandHandoffText}
       commandHandoffSource="security-encryption"
     >
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-cyrus-wide space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left column */}
           <div className="space-y-6">

@@ -133,7 +133,7 @@ export function IntelligenceHubPage() {
         </div>
       }
     >
-      <div className="max-w-6xl space-y-6 overflow-y-auto pb-8">
+      <div className="max-w-cyrus-wide space-y-6 overflow-y-auto pb-8">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Assets" value={assetTotal.toLocaleString()} hint="Images + 3D models" />
           <StatCard label="Knowledge" value={kbEntries.toLocaleString()} hint="Local KB entries" />

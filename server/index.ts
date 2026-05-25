@@ -33,8 +33,17 @@ function validateEnvironment(): string[] {
 }
 
 function warnOptionalEnv(): void {
+  const warnings: string[] = [];
   if (!process.env.OPENAI_API_KEY && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
-    console.warn('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+    warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+    warnings.push('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+  }
+  if (!process.env.DATABASE_URL) {
+    warnings.push('⚠️ DATABASE_URL not set. Comms persistence and session store may fall back to in-memory mode.');
+  }
+  if (warnings.length > 0) {
+    warnings.forEach((w) => console.warn(`[Environment] ${w}`));
+    warnings.forEach(w => console.warn(`[Environment] ${w}`));
   }
 }
 

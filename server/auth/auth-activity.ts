@@ -67,7 +67,7 @@ export async function getActivityLog(limit = 50): Promise<ActivityEntry[]> {
      LIMIT $1`,
     [limit],
   );
-  return res.rows.map((r) => ({
+  return res.rows.map((r: Record<string, unknown>) => ({
     id: r.id,
     username: r.username,
     eventType: r.event_type as EventType,
@@ -156,7 +156,7 @@ export async function getActiveSessions(): Promise<SessionEntry[]> {
      ORDER BY last_seen_at DESC
      LIMIT 200`,
   );
-  return res.rows.map((r) => ({
+  return res.rows.map((r: Record<string, unknown>) => ({
     tokenHash: r.token_hash,
     username: r.username,
     role: r.role,
