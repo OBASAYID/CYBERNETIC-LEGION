@@ -34,6 +34,10 @@ function validateEnvironment(): string[] {
     warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
   }
 
+  if (!process.env.DATABASE_URL) {
+    warnings.push('⚠️ DATABASE_URL not set. Comms persistence and session store may fall back to in-memory mode.');
+  }
+
   if (warnings.length > 0) {
     warnings.forEach(w => console.warn(`[Environment] ${w}`));
   }

@@ -88,10 +88,14 @@ Optional hardening:
 ## Railway service setup
 
 1. Connect your Git repository.
-2. Branch: `main` (or your active deploy branch).
+2. Branch: `main-push` (active deploy branch; Replit/Railway sync target).
 3. Ensure the service root is the repository root (where `railway.toml` and `Dockerfile.railway` live).
 4. Confirm Railway uses `railway.toml` (`builder = "dockerfile"`, `dockerfilePath = "Dockerfile.railway"`).
 5. Deploy and verify:
    - `GET /health/live` returns 200
    - Optionally `GET /health/ready` returns 200 when DB is up
    - App loads and login works with your access code
+
+## GitHub Actions CLI deploy (optional)
+
+`.github/workflows/railway.yml` runs `railway up --ci` on pushes to `main-push` or manual **workflow_dispatch**. Set repository secret **`RAILWAY_TOKEN`** (Railway dashboard → Account → Tokens). Prefer Railway’s native GitHub integration when both are configured; disable one path to avoid double deploys.
