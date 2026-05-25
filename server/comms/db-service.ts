@@ -1,7 +1,7 @@
 /**
  * DB Service — wraps every database operation used by the communication engine
- * with try-catch, exponential-backoff retry logic, and an in-memory fallback
- * store so the comms module keeps working when PostgreSQL is unavailable.
+ * with try-catch, exponential-backoff retry logic, and a bounded in-memory
+ * fallback store (LRU eviction) so comms keeps working when PostgreSQL is down.
  *
  * Each public method returns a typed result object:
  *   { success: true,  data: T }
@@ -19,6 +19,18 @@ import {
 import { eq, or, and, asc } from "drizzle-orm";
 import { EventEmitter } from "events";
 
+const CONFIG = {
+  MAX_FALLBACK_MESSAGES: 5_000,
+  MAX_FALLBACK_CALLS: 1_000,
+  MAX_FALLBACK_ROOMS: 500,
+  MAX_FALLBACK_USERS: 10_000,
+  MAX_FALLBACK_GROUPS: 1_000,
+  CIRCUIT_OPEN_THRESHOLD: 3,
+  CIRCUIT_HALF_OPEN_AFTER: 30_000,
+  MEMORY_CHECK_INTERVAL: 60_000,
+  MEMORY_WARNING_THRESHOLD: 500_000_000,
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -33,15 +45,59 @@ type MeetingRoomRow   = typeof meetingRooms.$inferSelect;
 type OnlineUserRow    = typeof onlineUsers.$inferSelect;
 type GroupChatRow     = typeof groupChats.$inferSelect;
 
+export interface FallbackStoreStats {
+  messages: { size: number; limit: number; ratio: number };
+  calls: { size: number; limit: number; ratio: number };
+  rooms: { size: number; limit: number; ratio: number };
+  users: { size: number; limit: number; ratio: number };
+  groups: { size: number; limit: number; ratio: number };
+  totalSize: number;
+  estimatedMemoryMB: number;
+}
+
+class LRUMap<K, V> extends Map<K, V> {
+  private accessOrder: K[] = [];
+
+  set(key: K, value: V): this {
+    const idx = this.accessOrder.indexOf(key);
+    if (idx !== -1) this.accessOrder.splice(idx, 1);
+    this.accessOrder.push(key);
+    return super.set(key, value);
+  }
+
+  evictOldest(): boolean {
+    if (this.accessOrder.length === 0) return false;
+    const oldest = this.accessOrder.shift()!;
+    this.delete(oldest);
+    return true;
+  }
+
+  clear(): void {
+    super.clear();
+    this.accessOrder = [];
+  }
+}
+
+function ensureMapSize<K, V>(map: LRUMap<K, V>, limit: number, name: string): void {
+  if (map.size <= limit) return;
+  const excess = map.size - limit;
+  console.warn(
+    `[DbService] ${name} fallback store at capacity (${map.size}/${limit}). Evicting ${excess} oldest entries…`
+  );
+  for (let i = 0; i < excess; i++) map.evictOldest();
+}
+
 // ---------------------------------------------------------------------------
 // In-memory fallback stores
 // ---------------------------------------------------------------------------
 
-const fallbackMessages: Map<string, DirectMessageRow>  = new Map();
-const fallbackCalls:    Map<string, CallHistoryRow>    = new Map();
-const fallbackRooms:    Map<string, MeetingRoomRow>    = new Map();
-const fallbackUsers:    Map<string, OnlineUserRow>     = new Map();
-const fallbackGroups:   Map<string, GroupChatRow>      = new Map();
+const fallbackMessages = new LRUMap<string, DirectMessageRow>();
+const fallbackCalls = new LRUMap<string, CallHistoryRow>();
+const fallbackRooms = new LRUMap<string, MeetingRoomRow>();
+const fallbackUsers = new LRUMap<string, OnlineUserRow>();
+const fallbackGroups = new LRUMap<string, GroupChatRow>();
+
+let memoryCheckInterval: NodeJS.Timeout | null = null;
 
 // ---------------------------------------------------------------------------
 // Circuit-breaker / health state
@@ -53,6 +109,7 @@ interface DbHealthState {
   lastErrorAt: Date | null;
   lastError: string | null;
   consecutiveFailures: number;
+  errorCategory?: string;
 }
 
 const healthState: DbHealthState = {
@@ -63,26 +120,30 @@ const healthState: DbHealthState = {
   consecutiveFailures: 0,
 };
 
-/** Emits "db:up" / "db:down" when connectivity changes. */
+/** Emits "db:up" / "db:down" / "memory:warning" when connectivity changes. */
 export const dbEvents = new EventEmitter();
-
-const CIRCUIT_OPEN_THRESHOLD = 3;   // failures before we stop trying
-const CIRCUIT_HALF_OPEN_AFTER = 30_000; // ms before we probe again
 
 let circuitOpenSince: number | null = null;
 
 function isCircuitOpen(): boolean {
-  if (healthState.consecutiveFailures < CIRCUIT_OPEN_THRESHOLD) return false;
+  if (healthState.consecutiveFailures < CONFIG.CIRCUIT_OPEN_THRESHOLD) return false;
   if (circuitOpenSince === null) {
     circuitOpenSince = Date.now();
     return true;
   }
-  // Allow a single probe after the half-open window
-  if (Date.now() - circuitOpenSince >= CIRCUIT_HALF_OPEN_AFTER) {
-    circuitOpenSince = null; // reset so the next call is a probe
+  if (Date.now() - circuitOpenSince >= CONFIG.CIRCUIT_HALF_OPEN_AFTER) {
+    circuitOpenSince = null;
     return false;
   }
   return true;
+}
+
+function categorizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("ECONNREFUSED") || msg.includes("connection")) return "connection";
+  if (msg.includes("timeout") || msg.includes("ETIMEDOUT")) return "timeout";
+  if (msg.includes("constraint") || msg.includes("UNIQUE") || msg.includes("FOREIGN")) return "constraint";
+  return "unknown";
 }
 
 function recordSuccess(): void {
@@ -104,6 +165,7 @@ function recordFailure(err: unknown): void {
   healthState.consecutiveFailures++;
   healthState.lastErrorAt = new Date();
   healthState.lastError = msg;
+  healthState.errorCategory = categorizeError(err);
   healthState.lastCheckedAt = new Date();
   console.error(
     `[DbService] DB error (consecutive=${healthState.consecutiveFailures}): ${msg}`
@@ -165,6 +227,70 @@ export function getDbHealthState(): DbHealthState & { circuitOpen: boolean } {
   return { ...healthState, circuitOpen: isCircuitOpen() };
 }
 
+function estimateObjectSize(obj: unknown): number {
+  if (!obj) return 0;
+  return JSON.stringify(obj).length + 128;
+}
+
+export function getFallbackStoreStats(): FallbackStoreStats {
+  const msgSize = Array.from(fallbackMessages.values()).reduce((sum, m) => sum + estimateObjectSize(m), 0);
+  const callSize = Array.from(fallbackCalls.values()).reduce((sum, c) => sum + estimateObjectSize(c), 0);
+  const roomSize = Array.from(fallbackRooms.values()).reduce((sum, r) => sum + estimateObjectSize(r), 0);
+  const userSize = Array.from(fallbackUsers.values()).reduce((sum, u) => sum + estimateObjectSize(u), 0);
+  const groupSize = Array.from(fallbackGroups.values()).reduce((sum, g) => sum + estimateObjectSize(g), 0);
+  const totalSize = msgSize + callSize + roomSize + userSize + groupSize;
+
+  return {
+    messages: {
+      size: fallbackMessages.size,
+      limit: CONFIG.MAX_FALLBACK_MESSAGES,
+      ratio: fallbackMessages.size / CONFIG.MAX_FALLBACK_MESSAGES,
+    },
+    calls: {
+      size: fallbackCalls.size,
+      limit: CONFIG.MAX_FALLBACK_CALLS,
+      ratio: fallbackCalls.size / CONFIG.MAX_FALLBACK_CALLS,
+    },
+    rooms: {
+      size: fallbackRooms.size,
+      limit: CONFIG.MAX_FALLBACK_ROOMS,
+      ratio: fallbackRooms.size / CONFIG.MAX_FALLBACK_ROOMS,
+    },
+    users: {
+      size: fallbackUsers.size,
+      limit: CONFIG.MAX_FALLBACK_USERS,
+      ratio: fallbackUsers.size / CONFIG.MAX_FALLBACK_USERS,
+    },
+    groups: {
+      size: fallbackGroups.size,
+      limit: CONFIG.MAX_FALLBACK_GROUPS,
+      ratio: fallbackGroups.size / CONFIG.MAX_FALLBACK_GROUPS,
+    },
+    totalSize,
+    estimatedMemoryMB: totalSize / 1_000_000,
+  };
+}
+
+function startMemoryMonitoring(): void {
+  if (memoryCheckInterval) return;
+  memoryCheckInterval = setInterval(() => {
+    const stats = getFallbackStoreStats();
+    if (stats.estimatedMemoryMB > CONFIG.MEMORY_WARNING_THRESHOLD / 1_000_000) {
+      console.warn(
+        `[DbService] Memory usage high: ${stats.estimatedMemoryMB.toFixed(2)}MB (threshold: ${(CONFIG.MEMORY_WARNING_THRESHOLD / 1_000_000).toFixed(2)}MB)`
+      );
+      dbEvents.emit("memory:warning", stats);
+    }
+    if (stats.messages.ratio > 0.8 || stats.calls.ratio > 0.8) {
+      console.log(
+        `[DbService] Fallback stores near capacity: msgs ${(stats.messages.ratio * 100).toFixed(1)}%, calls ${(stats.calls.ratio * 100).toFixed(1)}%`
+      );
+    }
+  }, CONFIG.MEMORY_CHECK_INTERVAL);
+}
+
+startMemoryMonitoring();
+
 // ---------------------------------------------------------------------------
 // Direct Messages
 // ---------------------------------------------------------------------------
@@ -175,6 +301,7 @@ export async function dbInsertMessage(
   if (isCircuitOpen()) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date(), isRead: false, readAt: null, reactions: null } as DirectMessageRow;
     fallbackMessages.set(fallback.id, fallback);
+    ensureMapSize(fallbackMessages, CONFIG.MAX_FALLBACK_MESSAGES, "messages");
     console.log(`[DbService] Circuit open — message stored in fallback (id=${fallback.id})`);
     return { success: true, data: fallback };
   }
@@ -186,6 +313,7 @@ export async function dbInsertMessage(
   } catch (err) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date(), isRead: false, readAt: null, reactions: null } as DirectMessageRow;
     fallbackMessages.set(fallback.id, fallback);
+    ensureMapSize(fallbackMessages, CONFIG.MAX_FALLBACK_MESSAGES, "messages");
     console.warn(`[DbService] insertMessage failed — stored in fallback (id=${fallback.id})`);
     return { success: true, data: fallback };
   }
@@ -323,6 +451,7 @@ export async function dbInsertGroupChat(
   if (isCircuitOpen()) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date() } as GroupChatRow;
     fallbackGroups.set(fallback.id, fallback);
+    ensureMapSize(fallbackGroups, CONFIG.MAX_FALLBACK_GROUPS, "groups");
     return { success: true, data: fallback };
   }
   try {
@@ -333,6 +462,7 @@ export async function dbInsertGroupChat(
   } catch (err) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date() } as GroupChatRow;
     fallbackGroups.set(fallback.id, fallback);
+    ensureMapSize(fallbackGroups, CONFIG.MAX_FALLBACK_GROUPS, "groups");
     return { success: true, data: fallback };
   }
 }
@@ -361,6 +491,7 @@ export async function dbInsertCall(
   if (isCircuitOpen()) {
     const fallback = { ...values, id: `fb_${Date.now()}`, startedAt: new Date(), endedAt: null, duration: null, isRecording: false, recordingUrl: null, callQuality: "1.0", bandwidthKbps: "0", missedBy: null, declinedBy: null } as CallHistoryRow;
     fallbackCalls.set(fallback.id, fallback);
+    ensureMapSize(fallbackCalls, CONFIG.MAX_FALLBACK_CALLS, "calls");
     return { success: true, data: fallback };
   }
   try {
@@ -371,6 +502,7 @@ export async function dbInsertCall(
   } catch (err) {
     const fallback = { ...values, id: `fb_${Date.now()}`, startedAt: new Date(), endedAt: null, duration: null, isRecording: false, recordingUrl: null, callQuality: "1.0", bandwidthKbps: "0", missedBy: null, declinedBy: null } as CallHistoryRow;
     fallbackCalls.set(fallback.id, fallback);
+    ensureMapSize(fallbackCalls, CONFIG.MAX_FALLBACK_CALLS, "calls");
     return { success: true, data: fallback };
   }
 }
@@ -412,6 +544,7 @@ export async function dbInsertMeetingRoom(
   if (isCircuitOpen()) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date(), isActive: true, endedAt: null, duration: null, isRecording: false, recordingUrl: null, screenSharingBy: null } as MeetingRoomRow;
     fallbackRooms.set(fallback.id, fallback);
+    ensureMapSize(fallbackRooms, CONFIG.MAX_FALLBACK_ROOMS, "rooms");
     return { success: true, data: fallback };
   }
   try {
@@ -422,6 +555,7 @@ export async function dbInsertMeetingRoom(
   } catch (err) {
     const fallback = { ...values, id: `fb_${Date.now()}`, createdAt: new Date(), isActive: true, endedAt: null, duration: null, isRecording: false, recordingUrl: null, screenSharingBy: null } as MeetingRoomRow;
     fallbackRooms.set(fallback.id, fallback);
+    ensureMapSize(fallbackRooms, CONFIG.MAX_FALLBACK_ROOMS, "rooms");
     return { success: true, data: fallback };
   }
 }
@@ -462,6 +596,7 @@ export async function dbUpsertOnlineUser(
 ): Promise<DbResult<void>> {
   if (isCircuitOpen()) {
     fallbackUsers.set(values.id, { ...values, lastSeen: new Date(), isOnline: values.isOnline ?? true } as OnlineUserRow);
+    ensureMapSize(fallbackUsers, CONFIG.MAX_FALLBACK_USERS, "users");
     return { success: true, data: undefined };
   }
   try {
@@ -482,6 +617,7 @@ export async function dbUpsertOnlineUser(
     return { success: true, data: undefined };
   } catch (err) {
     fallbackUsers.set(values.id, { ...values, lastSeen: new Date(), isOnline: values.isOnline ?? true } as OnlineUserRow);
+    ensureMapSize(fallbackUsers, CONFIG.MAX_FALLBACK_USERS, "users");
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -573,11 +709,20 @@ export async function flushFallbackData(): Promise<{
 }
 
 export function getFallbackStoreSizes() {
+  const stats = getFallbackStoreStats();
   return {
-    messages: fallbackMessages.size,
-    calls: fallbackCalls.size,
-    rooms: fallbackRooms.size,
-    users: fallbackUsers.size,
-    groups: fallbackGroups.size,
+    messages: stats.messages.size,
+    calls: stats.calls.size,
+    rooms: stats.rooms.size,
+    users: stats.users.size,
+    groups: stats.groups.size,
+    limits: {
+      messages: stats.messages.limit,
+      calls: stats.calls.limit,
+      rooms: stats.rooms.limit,
+      users: stats.users.limit,
+      groups: stats.groups.limit,
+    },
+    estimatedMemoryMB: stats.estimatedMemoryMB,
   };
 }

@@ -112,7 +112,7 @@ export function AlgorithmsPage() {
         </div>
       }
     >
-      <div className="max-w-5xl space-y-8 overflow-y-auto">
+      <div className="max-w-cyrus-module space-y-8 overflow-y-auto">
         {isLoading && <p className="text-sm text-white/45">Loading catalog…</p>}
         {error && <p className="text-sm text-rose-300">{(error as Error).message}</p>}
 

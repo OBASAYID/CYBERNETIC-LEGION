@@ -949,7 +949,7 @@ export function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4 max-w-2xl mx-auto">
+            <div className="space-y-4 max-w-cyrus-prose mx-auto">
               {sortedMessages.map((msg) => (
                 <div
                   key={msg.id}

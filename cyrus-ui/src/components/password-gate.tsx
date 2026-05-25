@@ -150,6 +150,18 @@ export function PasswordGate({
   };
 
   return (
+    <div className="min-h-screen min-h-dvh flex items-center justify-center p-4 relative overflow-hidden bg-transparent text-white">
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80 pointer-events-none" />
+
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/5 rounded-full blur-3xl" />
+
+        <div className="absolute top-4 left-4 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-xs text-green-500/80 font-mono tracking-wider">SYSTEM ACTIVE</span>
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden" style={{ background: "#080810" }}>
       {/* Gaming background effects */}
       <div className="pointer-events-none absolute inset-0">
@@ -182,6 +194,25 @@ export function PasswordGate({
         </div>
       </div>
 
+      <div className="relative z-20 w-full max-w-cyrus-gate isolate">
+        <div className="text-center mb-10">
+          <div className="relative inline-block mb-8 isolate">
+            <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/20 via-transparent to-orange-500/20 rounded-full blur-2xl animate-pulse pointer-events-none" />
+            <div className="absolute -inset-8 border border-cyan-500/10 rounded-full pointer-events-none" />
+            <div className="absolute -inset-12 border border-orange-500/5 rounded-full pointer-events-none" />
+            <div className="relative w-52 h-52 mx-auto">
+              <img
+                src="/images/cyrus-logo.png"
+                alt="CYRUS"
+                className="w-full h-full object-cover drop-shadow-[0_0_30px_rgba(34,211,238,0.7)] scale-125"
+                style={{ clipPath: "circle(42% at center)" }}
+              />
+              <div className="absolute -left-8 top-1/2 -translate-y-1/2 pointer-events-none">
+                <div className="w-12 h-14 border-l-2 border-t-2 border-b-2 border-cyan-500/70 rounded-l-lg" />
+              </div>
+              <div className="absolute -right-8 top-1/2 -translate-y-1/2 pointer-events-none">
+                <div className="w-12 h-14 border-r-2 border-t-2 border-b-2 border-cyan-500/70 rounded-r-lg" />
+              </div>
       {/* Login panel */}
       <div className="relative z-20 w-full max-w-[420px]">
         {/* Logo section */}

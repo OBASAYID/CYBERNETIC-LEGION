@@ -135,7 +135,7 @@ export function CommsNexusWorkspace({
         aria-hidden
       />
 
-      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[100%] flex-1 flex-col px-1.5 pb-2 pt-1.5 sm:px-3 sm:pb-3 sm:pt-2 lg:mx-auto lg:max-w-[min(1920px,100%)] lg:px-5">
+      <div className="relative z-[2] mx-auto flex min-h-0 w-full max-w-[100%] flex-1 flex-col px-1.5 pb-2 pt-1.5 sm:px-3 sm:pb-3 sm:pt-2 lg:mx-auto lg:max-w-cyrus-comms lg:px-5">
         {handoff}
 
         {/* Micro HUD bar — minimal chrome */}

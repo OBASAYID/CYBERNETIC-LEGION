@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
+import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import { useState, useRef, useEffect } from "react";
 import {
   LayoutGrid,
@@ -12,6 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
+import { DashboardCommandSideRail } from "@/components/command-center/command-console-popup";
 import {
   BottomPanels,
   EngineMatrixSection,
@@ -21,6 +25,8 @@ import {
   HeroSection,
   MetricsSection,
 } from "@/components/dashboard-fresh/sections";
+import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
+import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-consoles";
 import {
   PSharePanel,
   CommsBentoGrid,
@@ -674,6 +680,15 @@ function QuickActionStrip() {
    PAGE — h-screen, no scroll, everything flex-fitted
 ══════════════════════════════════════════════════════════════════════ */
 export default function DashboardFresh() {
+  const role = useUserRole();
+  const isAdmin = role === "admin";
+  const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
+  const [adminTab, setAdminTab] = useState<AdminTab>("modules");
+  const adminConsole = isAdmin && adminTab === "console";
+  const headerOperator = !isAdmin || adminTab === "modules";
+
+  const loadStack = headerOperator || isAdmin;
+  const loadOrchestrator = headerOperator || adminConsole;
   const role        = useUserRole();
   const isAdmin     = role === "admin";
   const displayName =
@@ -696,6 +711,44 @@ export default function DashboardFresh() {
     enableOrchestratorData: true,
   });
 
+  const handleLogout = () => {
+    clearAuthSessionStorage();
+    window.location.reload();
+  };
+
+  return (
+    <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-transparent text-white">
+      {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
+      <div className="pointer-events-none fixed inset-0">
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(0.8px)" }}
+        />
+        <div
+          className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
+          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
+        />
+        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/45 to-transparent" />
+        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
+        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-amber-300/[0.1] blur-3xl" />
+        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(251,191,36,0.22),rgba(120,53,15,0.08)_56%,transparent_78%)] blur-2xl" />
+        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
+        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
+      </div>
+      <div className="relative z-10">
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5">
+            {/* Status + field clock — own row so nothing stacks under fixed HUD */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
+                <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
+              </div>
+              <FieldDateTimeHud className="shrink-0" />
+            </div>
   const showHub = !adminConsole;
   const sharedPanelProps = { healthPercent, onlineEngines, totalEngines, degradedEngines, offlineEngines };
 
@@ -773,6 +826,56 @@ export default function DashboardFresh() {
               </div>
             ))}
           </div>
+        </header>
+
+        <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10">
+        {!isAdmin && (
+          <p className="max-w-cyrus-prose rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>
+            Choose a module to open. System diagnostics and command tooling are available to
+            administrators only.
+          </p>
+        )}
+
+        {(headerOperator || !isAdmin) && (
+          <>
+            <OperatorConsoleCluster
+              stackSummary={stackSummary}
+              healthPercent={healthPercent}
+              onlineEngines={onlineEngines}
+              totalEngines={totalEngines}
+              degradedEngines={degradedEngines}
+              offlineEngines={offlineEngines}
+            />
+            <ModuleWorkspaceSection
+              modules={visibleModules}
+              moduleFilter={moduleFilter}
+              setModuleFilter={setModuleFilter}
+            />
+            <NewsTrendFeed />
+          </>
+        )}
+
+        {adminConsole && (
+          <div className="relative w-full">
+            <div
+              className="pointer-events-none absolute left-1/2 top-[52%] z-0 w-[min(76rem,108vw)] -translate-x-1/2 -translate-y-1/2"
+              aria-hidden
+            >
+              <div className="mx-auto h-80 max-w-cyrus-module rounded-[2.5rem] bg-emerald-400/9 blur-3xl" />
+              <div className="absolute left-1/2 top-1/2 h-72 w-[min(58rem,95vw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/7 blur-3xl" />
+              <div className="absolute bottom-0 left-1/2 h-56 w-[min(42rem,90vw)] -translate-x-1/2 translate-y-1/3 rounded-full bg-blue-600/6 blur-2xl" />
+            </div>
+          <section className="relative z-10 overflow-hidden rounded-3xl bg-slate-950/60 p-1 shadow-[0_0_48px_-22px_rgba(34,211,238,0.18),0_12px_40px_rgba(0,0,0,0.4)]">
+            <div className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950" aria-hidden />
+            <div
+              className="pointer-events-none absolute inset-0 z-[1] opacity-[0.12]"
+              style={{
+                backgroundImage: `radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.4) 1px, transparent 0)`,
+                backgroundSize: "24px 24px",
+              }}
+            />
+            <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-cyan-500/5 via-transparent to-orange-500/10" />
 
           {/* Right */}
           <div className="flex items-center gap-2 shrink-0">
@@ -838,6 +941,7 @@ export default function DashboardFresh() {
           </main>
         )}
 
+        <DashboardCommandSideRail pageContext="Command Center — home / module workspace" />
         {/* ── RIGHT sidebar ────────────────────────────────────────────── */}
         <aside
           className="hidden xl:flex flex-col shrink-0 overflow-y-auto"

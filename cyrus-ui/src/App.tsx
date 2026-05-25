@@ -13,6 +13,27 @@ import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+
+function ReturnHomeButton() {
+  const [location] = useLocation();
+  if (location === "/") return null;
+
+  return (
+    <div className="fixed left-0 top-0 z-[100] cyrus-safe-left cyrus-safe-top">
+      <Link href="/">
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/20 bg-black/70 px-4 py-2 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-black/85 touch-manipulation"
+          data-testid="button-return-home"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Return Home
+        </button>
+      </Link>
+    </div>
+  );
+}
 import { GameSidebar } from "@/components/game-sidebar";
 import { Menu } from "lucide-react";
 
@@ -91,6 +112,11 @@ function App() {
     <ThemeProvider>
       <AppErrorBoundary>
         <QueryClientProvider client={queryClient}>
+          <div className="relative isolate min-h-screen min-h-dvh overflow-x-hidden bg-black text-white">
+            <AtmosphericSmokeBackground />
+            <div className="relative z-10 min-h-screen min-h-dvh">
+              <ReturnHomeButton />
+              {!isAuthenticated ? (
           <div className="relative isolate min-h-screen overflow-x-hidden text-white" style={{ background: "#080810" }}>
             <AtmosphericSmokeBackground />
             {!isAuthenticated ? (
@@ -147,6 +173,16 @@ function App() {
                       className="relative z-10 min-h-screen transition-all duration-300"
                       style={{ marginLeft: sidebarW }}
                     >
+                      <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
+                        <AppRoutes />
+                      </div>
+                    </CallProvider>
+                  </AppErrorBoundary>
+                  <PwaInstallPrompt />
+                  <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
+                </TooltipProvider>
+              )}
+            </div>
                       <AppRoutes />
                     </div>
                   </CallProvider>

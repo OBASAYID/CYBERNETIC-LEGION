@@ -143,6 +143,7 @@ export function CommsPage() {
   const {
     onlineUsers,
     isConnected,
+    presenceTotal,
     myUserId,
     incomingCall,
     activeCall,
@@ -150,7 +151,6 @@ export function CommsPage() {
     remoteStream,
     mediaControls,
     callDuration,
-    connectPresence,
     callUser,
     acceptCall,
     declineCall,
@@ -293,10 +293,6 @@ export function CommsPage() {
   useEffect(() => {
     const savedName = localStorage.getItem("cyrus-display-name") || "CYRUS User";
     setDisplayName(savedName);
-    // Always ask Presence to connect on mount; it no-ops if already connected (avoids stale
-    // `isConnected` from a previous mount under React Strict Mode leaving the socket disconnected).
-    connectPresence(savedName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap; connectPresence is stable enough for first paint
   }, []);
 
   useEffect(() => {
@@ -612,9 +608,12 @@ export function CommsPage() {
       id: u.id,
       displayName: u.displayName,
       profileImageUrl: commsAssetUrl(liveProfile.get(u.id) ?? u.profileImageUrl) ?? null,
-      isOnline: on.has(u.id) || Boolean(u.isOnline),
+      isOnline:
+        on.has(u.id) ||
+        Boolean(u.isOnline) ||
+        (isConnected && !!myId && u.id === myId),
     }));
-  }, [allUsers, onlineUsers]);
+  }, [allUsers, onlineUsers, isConnected, myId]);
 
   const avatarByUserId = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -1341,7 +1340,7 @@ export function CommsPage() {
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         displayName={displayName}
         isConnected={isConnected}
-        onlineUsersLength={onlineUsers.length}
+        onlineUsersLength={presenceTotal || (isConnected ? onlineUsers.length + 1 : onlineUsers.length)}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         tabs={tabConfig.map((t) => ({ ...t, subtitle: MODULE_SECTOR_SUBTITLE[t.id] }))}

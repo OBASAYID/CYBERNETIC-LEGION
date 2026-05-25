@@ -128,7 +128,7 @@ export function BiologyPage() {
       commandHandoffText={commandHandoffText}
       commandHandoffSource="biology-lab"
     >
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-cyrus-wide space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* DNA Analysis */}
           <div className="space-y-6">

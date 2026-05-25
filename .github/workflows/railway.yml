@@ -1,18 +1,26 @@
 name: Deploy to Railway
 
 on:
+  push:
+    branches: [main-push]
   workflow_dispatch:
 
 jobs:
-  deploy_disabled_notice:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Deployment strategy notice
-        run: |
-          echo "Automatic CLI deploy from GitHub Actions is disabled."
-          echo "Reason: this workflow can drift service manifest/build strategy."
-          echo "Railway is configured to deploy from the connected GitHub repo directly."
-          echo "Use Railway dashboard redeploy when needed."
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --ci

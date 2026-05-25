@@ -31,7 +31,7 @@ function OperationsPageContent() {
         </div>
       }
     >
-      <div className="mx-auto max-w-4xl space-y-5">
+      <div className="mx-auto max-w-cyrus-console space-y-5">
         <PlatformIntelligencePanel />
         <p className="text-sm text-white/50 text-center">
           For missions, asset search, and MCP status, open the{" "}

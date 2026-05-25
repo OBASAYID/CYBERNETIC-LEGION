@@ -98,6 +98,16 @@ function GameTile({ href, label }: { href: string; label: string }) {
           flexShrink: 0,
         }}
       >
+        Unified control for modules, engines, and stack health
+      </h2>
+      <p className="relative mt-2 max-w-cyrus-narrow text-sm leading-relaxed text-white/75">
+        Mission console: launch orchestration, monitor engine state, and verify fused stack readiness.
+      </p>
+      <div className="relative mt-4 flex flex-wrap gap-2">
+        <Link href="/modules">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-400/45 bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-50 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/30"
         {/* Hover glow ring */}
         <div
           className="pointer-events-none absolute inset-0 rounded-[14px] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -756,6 +766,17 @@ export function ModuleWorkspaceSection({
     <section className="w-full">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-amber-200/65">Field access</p>
+          <h2
+            className="mt-0.5 bg-gradient-to-r from-amber-100 via-yellow-50 to-orange-200/90 bg-clip-text text-lg font-bold tracking-tight text-transparent"
+            style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+          >
+            Module workspace
+          </h2>
+          <p className="mt-1 max-w-cyrus-narrow text-xs leading-relaxed text-white/72 antialiased lg:text-sm">
+            Open a module channel below—each tile uses the same icon as Command Center navigation, plus a short mission
+            readout.
+          </p>
           <p className="text-[9px] font-mono tracking-[0.4em] text-[#e11d48]/70 uppercase mb-1">COMMAND CENTER</p>
           <h2 className="text-xl font-black tracking-wide text-white" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>Mission Modules</h2>
         </div>

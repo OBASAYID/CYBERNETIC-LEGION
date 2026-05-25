@@ -667,6 +667,7 @@ class CommunicationEngine {
       circuitOpen: dbHealth.circuitOpen,
       consecutiveFailures: dbHealth.consecutiveFailures,
       lastError: dbHealth.lastError,
+      errorCategory: dbHealth.errorCategory ?? null,
       lastCheckedAt: dbHealth.lastCheckedAt?.toISOString() ?? null,
       queue: {
         size: queueMetrics.queueSize,
