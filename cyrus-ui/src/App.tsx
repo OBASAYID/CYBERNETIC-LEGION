@@ -10,12 +10,13 @@ import { PasswordGate, type GateProfile, readStoredDisplayName } from "@/compone
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { GameSidebar } from "@/components/game-sidebar";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
@@ -48,7 +49,22 @@ function App() {
   );
   const prevAuthenticatedRef = useRef<boolean | null>(null);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const { isConfigured: apiKeyConfigured } = useApiKey();
+  useApiKey();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false,
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setMobileSidebarOpen(false);
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
@@ -95,6 +111,8 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
+  const sidebarW = isMobile ? 0 : (sidebarCollapsed ? 72 : 240);
+
   return (
     <ThemeProvider>
       <AppErrorBoundary>
@@ -129,8 +147,29 @@ function App() {
                         isAuthenticated,
                       }}
                     >
-                      <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
-                        <AppRoutes />
+                      <GameSidebar
+                        collapsed={sidebarCollapsed}
+                        onToggle={() => setSidebarCollapsed((v) => !v)}
+                        displayName={callDisplayName}
+                        mobileOpen={mobileSidebarOpen}
+                        onMobileClose={() => setMobileSidebarOpen(false)}
+                      />
+
+                      {isMobile && !mobileSidebarOpen && (
+                        <button
+                          type="button"
+                          onClick={() => setMobileSidebarOpen(true)}
+                          aria-label="Open navigation"
+                          className="fixed left-2 top-2 z-[200] flex h-10 w-10 items-center justify-center rounded-xl border border-rose-500/45 bg-rose-500/15 text-rose-400 md:hidden"
+                        >
+                          <Menu className="h-4 w-4" />
+                        </button>
+                      )}
+
+                      <div className="relative z-10 min-h-screen transition-all duration-300" style={{ marginLeft: sidebarW }}>
+                        <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
+                          <AppRoutes />
+                        </div>
                       </div>
                     </CallProvider>
                   </AppErrorBoundary>
