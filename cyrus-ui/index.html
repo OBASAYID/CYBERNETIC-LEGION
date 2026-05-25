@@ -31,6 +31,20 @@
     />
     <title>CYRUS AI — Super-Intelligence Assistant</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="application-name" content="CYRUS" />
+    <meta name="description" content="CYRUS v3.0 — OMEGA-TIER Quantum AI Humanoid System" />
+    <meta property="og:title" content="CYRUS AI" />
+    <meta property="og:description" content="OMEGA-TIER Sovereign AI Intelligence System" />
+    <meta property="og:image" content="/opengraph.jpg" />
+    <meta property="og:type" content="website" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function(){});
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

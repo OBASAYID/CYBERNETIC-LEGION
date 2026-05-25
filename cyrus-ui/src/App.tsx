@@ -14,6 +14,7 @@ import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { GameSidebar } from "@/components/game-sidebar";
+import { Menu } from "lucide-react";
 
 function App() {
   const { isAuthenticated, onAuthenticated } = useAuthSession();
@@ -27,6 +28,20 @@ function App() {
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const { isConfigured: apiKeyConfigured } = useApiKey();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setMobileSidebarOpen(false);
+    };
+    window.addEventListener("resize", handleResize, { passive: true });
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
@@ -70,7 +85,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
-  const sidebarW = sidebarCollapsed ? 72 : 240;
+  const sidebarW = isMobile ? 0 : (sidebarCollapsed ? 72 : 240);
 
   return (
     <ThemeProvider>
@@ -100,13 +115,34 @@ function App() {
                   <CallProvider
                     webRTCOptions={{ userId: callUserId, userName: callDisplayName, isAuthenticated }}
                   >
-                    {/* Sidebar */}
+                    {/* Sidebar — overlay on mobile, push on desktop */}
                     <GameSidebar
                       collapsed={sidebarCollapsed}
                       onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
                       displayName={callDisplayName}
+                      mobileOpen={mobileSidebarOpen}
+                      onMobileClose={() => setMobileSidebarOpen(false)}
                     />
-                    {/* Main content shifted right by sidebar width */}
+
+                    {/* Mobile hamburger — only visible when sidebar is closed on mobile */}
+                    {isMobile && !mobileSidebarOpen && (
+                      <button
+                        onClick={() => setMobileSidebarOpen(true)}
+                        aria-label="Open navigation"
+                        style={{
+                          position: "fixed", top: 10, left: 10, zIndex: 200,
+                          width: 38, height: 38, borderRadius: 10,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "rgba(225,29,72,0.14)",
+                          border: "1px solid rgba(225,29,72,0.45)",
+                          cursor: "pointer", WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        <Menu style={{ width: 18, height: 18, color: "#e11d48" }} />
+                      </button>
+                    )}
+
+                    {/* Main content — pushed right on desktop, full-width on mobile */}
                     <div
                       className="relative z-10 min-h-screen transition-all duration-300"
                       style={{ marginLeft: sidebarW }}

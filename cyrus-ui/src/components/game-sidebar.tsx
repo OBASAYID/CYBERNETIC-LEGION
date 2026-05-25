@@ -10,6 +10,8 @@ interface GameSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   displayName?: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const NAV_GROUPS = [
@@ -20,7 +22,7 @@ const NAV_GROUPS = [
   { label: "ADMIN",       paths: ["/settings"] },
 ];
 
-export function GameSidebar({ collapsed, onToggle, displayName }: GameSidebarProps) {
+export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMobileClose }: GameSidebarProps) {
   const [location] = useLocation();
   const role = useUserRole();
 
@@ -32,11 +34,24 @@ export function GameSidebar({ collapsed, onToggle, displayName }: GameSidebarPro
   const navByPath = Object.fromEntries(COMMAND_CENTER_NAV.map((n) => [n.path, n]));
 
   return (
+    <>
+      {/* Mobile backdrop — tap to close */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-[99] md:hidden"
+          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+
     <aside
       className={cn(
         "fixed left-0 top-0 h-screen z-[100] flex flex-col select-none",
         "transition-all duration-300 ease-in-out overflow-hidden",
         collapsed ? "w-[72px]" : "w-[240px]",
+        /* Mobile: slide off-screen unless mobileOpen; desktop: always visible */
+        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
       )}
       style={{
         background: "linear-gradient(175deg, #0f080f 0%, #090610 45%, #0b0810 100%)",
@@ -137,7 +152,7 @@ export function GameSidebar({ collapsed, onToggle, displayName }: GameSidebarPro
               {items.map((item) => {
                 const isActive = location === item.path;
                 return (
-                  <Link key={item.path} href={item.path}>
+                  <Link key={item.path} href={item.path} onClick={() => onMobileClose?.()}>
                     <div
                       className={cn(
                         "relative flex items-center cursor-pointer group transition-all duration-200 my-0.5",
@@ -295,5 +310,6 @@ export function GameSidebar({ collapsed, onToggle, displayName }: GameSidebarPro
         </button>
       </div>
     </aside>
+    </>
   );
 }
