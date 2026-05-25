@@ -52,9 +52,9 @@ function TsodiloRockArtOverlay() {
     const sr = () => { _s = (_s * 1664525 + 1013904223) & 0x7fffffff; return _s / 0x7fffffff; };
 
     /* ── Warm earth-tone helpers ── */
-    const oc  = (a: number) => `rgba(195, 105, 28, ${a})`;
-    const si  = (a: number) => `rgba(150,  60, 10, ${a})`;
-    const amb = (a: number) => `rgba(220, 142, 48, ${a})`;
+    const oc  = (a: number) => `rgba(218, 130, 42, ${a})`;
+    const si  = (a: number) => `rgba(180,  78, 18, ${a})`;
+    const amb = (a: number) => `rgba(245, 162, 58, ${a})`;
 
     /* ════════════════════════════════════════════════════
        MOTIF DRAWING FUNCTIONS
@@ -505,9 +505,9 @@ function TsodiloRockArtOverlay() {
             const mx = bx + cw * 0.10 + sr() * cw * 0.80;
             const my = by + ch * 0.10 + sr() * ch * 0.80;
             const motif = Math.floor(sr() * 10);   /* 0-9 */
-            const sz    = 28 + sr() * 62;           /* 28–90 px */
+            const sz    = 44 + sr() * 86;           /* 44–130 px */
             const flip  = sr() > 0.5;
-            const alpha = 0.035 + sr() * 0.065;     /* 0.035–0.100 */
+            const alpha = 0.10 + sr() * 0.16;      /* 0.10–0.26 */
             const rot   = (sr() - 0.5) * 0.28;
 
             ctx.save();
@@ -534,15 +534,15 @@ function TsodiloRockArtOverlay() {
 
       /* ── Extra large anchor pieces at screen edges (dramatic) ── */
       const anchors = [
-        { x: W*0.08, y: H*0.28, sz: 95, motif: "bull",     flip: false, a: 0.065 },
-        { x: W*0.92, y: H*0.55, sz: 88, motif: "eland",    flip: true,  a: 0.058 },
-        { x: W*0.50, y: H*0.15, sz: 78, motif: "giraffe",  flip: false, a: 0.048 },
-        { x: W*0.22, y: H*0.75, sz: 85, motif: "hunt",     flip: true,  a: 0.060 },
-        { x: W*0.78, y: H*0.20, sz: 80, motif: "archer",   flip: false, a: 0.055 },
-        { x: W*0.65, y: H*0.85, sz: 70, motif: "antelope", flip: true,  a: 0.050 },
-        { x: W*0.35, y: H*0.50, sz: 65, motif: "dancer",   flip: false, a: 0.045 },
-        { x: W*0.88, y: H*0.82, sz: 75, motif: "bull",     flip: true,  a: 0.052 },
-        { x: W*0.12, y: H*0.62, sz: 70, motif: "hand",     flip: false, a: 0.068 },
+        { x: W*0.08, y: H*0.28, sz: 135, motif: "bull",     flip: false, a: 0.22 },
+        { x: W*0.92, y: H*0.55, sz: 120, motif: "eland",    flip: true,  a: 0.20 },
+        { x: W*0.50, y: H*0.12, sz: 110, motif: "giraffe",  flip: false, a: 0.17 },
+        { x: W*0.22, y: H*0.78, sz: 118, motif: "hunt",     flip: true,  a: 0.21 },
+        { x: W*0.78, y: H*0.20, sz: 112, motif: "archer",   flip: false, a: 0.19 },
+        { x: W*0.65, y: H*0.88, sz:  98, motif: "antelope", flip: true,  a: 0.18 },
+        { x: W*0.35, y: H*0.52, sz:  92, motif: "dancer",   flip: false, a: 0.16 },
+        { x: W*0.88, y: H*0.84, sz: 108, motif: "bull",     flip: true,  a: 0.20 },
+        { x: W*0.12, y: H*0.65, sz:  95, motif: "hand",     flip: false, a: 0.24 },
       ];
       anchors.forEach(({ x, y, sz, motif, flip, a }) => {
         switch(motif) {
@@ -564,17 +564,17 @@ function TsodiloRockArtOverlay() {
         const gCount = 8 + Math.floor(sr() * 6);
         for (let gi = 0; gi < gCount; gi++) {
           const gx = W * 0.06 + (W * 0.88 / gCount) * (gi + sr() * 0.5);
-          const gsz = 14 + sr() * 20;
-          const ga = 0.030 + sr() * 0.042;
+          const gsz = 18 + sr() * 26;
+          const ga = 0.09 + sr() * 0.13;
           drawGlyph(gx, gy, gsz, Math.floor(sr() * 14), ga);
         }
       }
     };
 
-    /* ── Sizing and resize ── */
+    /* ── Sizing and resize — draw at 120% to allow drift bleed ── */
     const applySize = () => {
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const W = window.innerWidth  * 1.2;
+      const H = window.innerHeight * 1.2;
       canvas.width  = W * devicePixelRatio;
       canvas.height = H * devicePixelRatio;
       canvas.style.width  = `${W}px`;
@@ -588,25 +588,29 @@ function TsodiloRockArtOverlay() {
   }, []);
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 2,
-        pointerEvents: "none", overflow: "hidden",
-        animation: "tsodilo-breathe 12s ease-in-out infinite",
-      }}
-    >
+    <div style={{ position: "fixed", inset: 0, zIndex: 2, pointerEvents: "none", overflow: "hidden" }}>
       <canvas
         ref={canvasRef}
         style={{
-          position: "absolute", inset: 0,
-          width: "100%", height: "100%",
+          position: "absolute",
+          left: "-10%", top: "-10%",
+          width: "120%", height: "120%",
           mixBlendMode: "screen",
+          animation: "tsodilo-drift 55s ease-in-out infinite alternate, tsodilo-breathe 14s ease-in-out infinite",
         }}
       />
       <style>{`
+        @keyframes tsodilo-drift {
+          0%   { transform: translate(0px, 0px) rotate(0deg); }
+          20%  { transform: translate(-18px, -14px) rotate(0.12deg); }
+          40%  { transform: translate(-8px, 20px) rotate(-0.08deg); }
+          60%  { transform: translate(16px, 10px) rotate(0.10deg); }
+          80%  { transform: translate(22px, -16px) rotate(-0.06deg); }
+          100% { transform: translate(6px, -20px) rotate(0.05deg); }
+        }
         @keyframes tsodilo-breathe {
-          0%,100% { opacity: 0.80; }
-          50%      { opacity: 1.00; }
+          0%,100% { opacity: 0.72; }
+          50%     { opacity: 1.00; }
         }
       `}</style>
     </div>

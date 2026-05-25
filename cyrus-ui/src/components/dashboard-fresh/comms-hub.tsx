@@ -1048,66 +1048,83 @@ export function CommsBentoGrid({ displayName }: { displayName?: string }) {
           </div>
         </div>
 
-        {/* ── RIGHT: Cinematic Deep Space — Aggressive Red Treatment ── */}
+        {/* ── RIGHT: Tsodilo Ancestral Vision — Warriors around the fire ── */}
         <div className="relative z-10 shrink-0 flex items-center pr-0 self-stretch"
-          style={{ width: 360 }}>
+          style={{ width: "60%" }}>
           <div className="relative w-full h-full overflow-hidden" style={{ minHeight: 200 }}>
 
-            {/* Base image — hue-shift toward crimson, ultra-sharp, max contrast */}
+            {/* Base image — Tsodilo warriors, fire, red planet sky */}
             <img
-              src="/hero-space.jpg"
-              alt="CYRUS Deep Space Command"
-              className="absolute inset-0 w-full h-full object-cover object-top"
+              src="/tsodilo-warriors.png"
+              alt="CYRUS Ancestral Vision — Tsodilo Warriors"
+              className="absolute inset-0 w-full h-full object-cover object-center"
               style={{
-                filter: "hue-rotate(-28deg) saturate(2.2) contrast(1.45) brightness(0.88)",
-                imageRendering: "crisp-edges",
+                filter: "saturate(1.25) contrast(1.15) brightness(0.82)",
               }}
             />
 
-            {/* Aggressive blood-red galaxy-core overlay — pumps the gold into deep crimson */}
+            {/* Warm fire-core radial overlay — amplifies the central flame */}
             <div className="absolute inset-0 pointer-events-none"
               style={{
-                background: "radial-gradient(ellipse at 62% 28%, rgba(180,10,10,0.55) 0%, rgba(120,0,0,0.28) 35%, transparent 70%)",
-                mixBlendMode: "multiply",
+                background: "radial-gradient(ellipse at 52% 72%, rgba(255,100,10,0.28) 0%, rgba(180,40,0,0.15) 40%, transparent 70%)",
+                mixBlendMode: "screen",
               }} />
 
-            {/* Outer crimson vignette for aggression */}
+            {/* Dark cinematic vignette — frames the scene */}
             <div className="absolute inset-0 pointer-events-none"
               style={{
-                background: "radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(120,0,0,0.45) 100%)",
+                background: "radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(4,2,0,0.55) 100%)",
               }} />
 
-            {/* Pulsing red energy ring around galaxy core */}
+            {/* Pulsing fire-glow ring centred on the campfire */}
             <div className="absolute pointer-events-none animate-pulse"
               style={{
-                top: "14%", left: "38%", width: 160, height: 80,
+                top: "56%", left: "36%", width: 120, height: 60,
                 background: "transparent",
-                border: "1px solid rgba(225,29,72,0.55)",
+                border: "1px solid rgba(255,120,20,0.55)",
                 borderRadius: "50%",
-                boxShadow: "0 0 28px rgba(225,29,72,0.7), inset 0 0 28px rgba(225,29,72,0.2)",
-                animationDuration: "2s",
+                boxShadow: "0 0 32px rgba(255,110,10,0.65), inset 0 0 20px rgba(255,80,0,0.18)",
+                animationDuration: "1.8s",
+              }} />
+
+            {/* Ochre scan line — links to rock-art dashboard aesthetic */}
+            <div className="pointer-events-none absolute left-0 right-0 h-[1px] z-10"
+              style={{
+                top: "38%",
+                background: "linear-gradient(90deg, transparent, rgba(218,130,42,0.38), transparent)",
+                animation: "gm-scan 8s ease-in-out infinite",
               }} />
 
             {/* Left-edge gradient — bleeds into hero card background */}
-            <div className="absolute inset-y-0 left-0 w-32 pointer-events-none"
-              style={{ background: "linear-gradient(90deg, #1c0406 0%, transparent 100%)" }} />
+            <div className="absolute inset-y-0 left-0 w-28 pointer-events-none"
+              style={{ background: "linear-gradient(90deg, #060608 0%, transparent 100%)" }} />
 
             {/* Bottom fade */}
             <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-              style={{ background: "linear-gradient(0deg, rgba(6,6,8,0.75) 0%, transparent 100%)" }} />
+              style={{ background: "linear-gradient(0deg, rgba(4,2,0,0.80) 0%, transparent 100%)" }} />
 
-            {/* Live comm badge — top-right */}
+            {/* Top fade */}
+            <div className="absolute top-0 left-0 right-0 h-12 pointer-events-none"
+              style={{ background: "linear-gradient(180deg, rgba(4,2,0,0.55) 0%, transparent 100%)" }} />
+
+            {/* Live origin badge — top-right */}
             <div className="absolute top-3 right-3 z-10">
               <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1"
-                style={{ background: "rgba(0,0,0,0.72)", border: "1px solid rgba(225,29,72,0.55)" }}>
-                <span className="h-[5px] w-[5px] rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[7px] font-black tracking-[0.25em] text-red-400">SQUAWK COMM</span>
+                style={{ background: "rgba(0,0,0,0.75)", border: "1px solid rgba(218,130,42,0.55)" }}>
+                <span className="h-[5px] w-[5px] rounded-full animate-pulse"
+                  style={{ background: "#da8230" }} />
+                <span className="text-[7px] font-black tracking-[0.25em]" style={{ color: "#da8230" }}>
+                  TSODILO · LIVE
+                </span>
               </span>
             </div>
 
-            {/* Bottom-right resolution badge */}
+            {/* Bottom-right provenance badge */}
             <div className="absolute bottom-3 right-3 z-10">
-              <span className="text-[7px] font-black tracking-widest text-white/30 font-mono">8K · DEEP SPACE</span>
+              <span className="text-[7px] font-black tracking-widest font-mono"
+                style={{ color: "rgba(218,130,42,0.45)" }}>
+                OMEGA TRIBE · ANCESTRAL FIRE
+              </span>
             </div>
           </div>
         </div>
