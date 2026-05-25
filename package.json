@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.server.json",
     "typecheck:ui": "tsc --noEmit -p cyrus-ui/tsconfig.json",
     "typecheck:all": "npm run typecheck && npm run typecheck:ui",
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "lint": "npm run typecheck",
     "test": "npm run typecheck:all && bash scripts/integration-smoke.sh",
     "build:original-ui": "CYRUS_UI_ROOT=original-cyrus-ui-extracted/client tsc -p tsconfig.server.json && CYRUS_UI_ROOT=original-cyrus-ui-extracted/client vite build",

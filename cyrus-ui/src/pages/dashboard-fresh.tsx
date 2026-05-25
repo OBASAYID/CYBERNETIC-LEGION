@@ -54,7 +54,7 @@ export default function DashboardFresh() {
   const headerOperator = !isAdmin || adminTab === "modules";
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-transparent text-white">
+    <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-transparent text-white">
       {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
       <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />

@@ -54,7 +54,7 @@ export type ModuleCommandConsoleProps = {
 };
 
 /**
- * Pinned to the bottom of the viewport, matching module workspace max width so the bar is always visible on long pages.
+ * Pinned to the bottom of the viewport; narrower than the workspace so the command bar stays compact and centered.
  */
 export function ModuleCommandConsoleDock({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -72,7 +72,7 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
         <div className="absolute bottom-0 left-1/2 h-36 w-[min(36rem,88vw)] -translate-x-1/2 rounded-full bg-blue-600/3 blur-2xl" />
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-950/95 to-transparent" />
       </div>
-      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-screen-2xl px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
+      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-4xl cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
         {children}
       </div>
     </div>

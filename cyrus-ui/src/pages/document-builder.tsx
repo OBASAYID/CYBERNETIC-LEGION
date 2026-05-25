@@ -67,7 +67,7 @@ export default function DocumentBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-white p-6">
+    <div className="min-h-screen min-h-dvh bg-transparent text-white p-6">
       <div className="max-w-5xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">Document Builder</h1>
         <Card className="bg-slate-900 border-slate-800">

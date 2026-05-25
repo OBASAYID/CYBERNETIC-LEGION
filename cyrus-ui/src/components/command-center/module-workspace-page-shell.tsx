@@ -109,7 +109,7 @@ export function ModuleWorkspacePageShell({
 
   if (mode === "page") {
     return (
-      <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+      <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
         {!hidePageBackdrop ? <ModuleWorkspaceBackdrop /> : null}
         <div className="relative z-10 min-h-0 w-full min-w-0">{children}</div>
       </div>
@@ -118,7 +118,7 @@ export function ModuleWorkspacePageShell({
 
   if (!title?.trim() || !Icon) {
     return (
-      <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+      <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
         <ModuleWorkspaceBackdrop />
         <div className="relative z-10 min-h-0 w-full min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">{children}</div>
       </div>
@@ -146,7 +146,7 @@ export function ModuleWorkspacePageShell({
   const showCommandBar = commandBarNode != null;
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden text-white">
+    <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
       <ModuleWorkspaceBackdrop />
       <div
         className={cn(

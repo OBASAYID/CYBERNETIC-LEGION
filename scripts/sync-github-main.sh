@@ -24,6 +24,9 @@ else
   exit 1
 fi
 
+echo "==> Patch news-trend-feed NewsItem.color (if present)…"
+bash "$ROOT/scripts/fix-news-trend-feed-color.sh"
+
 echo "==> Typecheck…"
 npm run typecheck:all
 
