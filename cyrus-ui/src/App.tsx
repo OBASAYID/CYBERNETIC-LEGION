@@ -131,44 +131,6 @@ function App() {
                     >
                       <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
                         <AppRoutes />
-                    <CallProvider
-                      webRTCOptions={{ userId: callUserId, userName: callDisplayName, isAuthenticated }}
-                    >
-                      {/* Sidebar — overlay on mobile, push on desktop */}
-                      <GameSidebar
-                        collapsed={sidebarCollapsed}
-                        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-                        displayName={callDisplayName}
-                        mobileOpen={mobileSidebarOpen}
-                        onMobileClose={() => setMobileSidebarOpen(false)}
-                      />
-
-                      {/* Mobile hamburger — only visible when sidebar is closed on mobile */}
-                      {isMobile && !mobileSidebarOpen && (
-                        <button
-                          onClick={() => setMobileSidebarOpen(true)}
-                          aria-label="Open navigation"
-                          style={{
-                            position: "fixed", top: 10, left: 10, zIndex: 200,
-                            width: 38, height: 38, borderRadius: 10,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "rgba(225,29,72,0.14)",
-                            border: "1px solid rgba(225,29,72,0.45)",
-                            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-                          }}
-                        >
-                          <Menu style={{ width: 18, height: 18, color: "#e11d48" }} />
-                        </button>
-                      )}
-
-                      {/* Main content — pushed right on desktop, full-width on mobile */}
-                      <div
-                        className="relative z-10 min-h-screen transition-all duration-300"
-                        style={{ marginLeft: sidebarW }}
-                      >
-                        <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
-                          <AppRoutes />
-                        </div>
                       </div>
                     </CallProvider>
                   </AppErrorBoundary>
