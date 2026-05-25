@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,6 +10,7 @@ import { PasswordGate, type GateProfile, readStoredDisplayName } from "@/compone
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
+import { ArrowLeft } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
@@ -34,11 +36,10 @@ function ReturnHomeButton() {
     </div>
   );
 }
-import { GameSidebar } from "@/components/game-sidebar";
-import { Menu } from "lucide-react";
 
 function App() {
   const { isAuthenticated, onAuthenticated } = useAuthSession();
+  /** Lifted from `PasswordGate`; `sessionStorage` survives full `App` remounts (HMR) in the same tab. */
   const [gateUsername, setGateUsername] = useState(
     () => readGateDraft(readStoredDisplayName()).username,
   );
@@ -48,25 +49,12 @@ function App() {
   const prevAuthenticatedRef = useRef<boolean | null>(null);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const { isConfigured: apiKeyConfigured } = useApiKey();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
-  );
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (!mobile) setMobileSidebarOpen(false);
-    };
-    window.addEventListener("resize", handleResize, { passive: true });
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   useEffect(() => {
     console.log("[CYRUS] App mounted. isAuthenticated:", isAuthenticated);
-    return () => { console.log("[CYRUS] App unmounted."); };
+    return () => {
+      console.log("[CYRUS] App unmounted.");
+    };
   }, []);
 
   useEffect(() => {
@@ -88,12 +76,13 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
+  // Derive a stable userId from localStorage device ID (same key used by PresenceContext)
   const callUserId =
     (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
     (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
     `device_${Math.random().toString(36).substr(2, 9)}`;
   const callDisplayName = gateUsername || readStoredDisplayName() || "User";
-
+  // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
   useEffect(() => {
     if (!isAuthenticated) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -106,8 +95,6 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
-  const sidebarW = isMobile ? 0 : (sidebarCollapsed ? 72 : 240);
-
   return (
     <ThemeProvider>
       <AppErrorBoundary>
@@ -117,10 +104,6 @@ function App() {
             <div className="relative z-10 min-h-screen min-h-dvh">
               <ReturnHomeButton />
               {!isAuthenticated ? (
-          <div className="relative isolate min-h-screen overflow-x-hidden text-white" style={{ background: "#080810" }}>
-            <AtmosphericSmokeBackground />
-            {!isAuthenticated ? (
-              <div className="relative z-10 min-h-screen">
                 <PasswordGate
                   key="cyrus-password-gate"
                   username={gateUsername}
@@ -133,45 +116,18 @@ function App() {
                     onAuthenticated(sessionToken, profile);
                   }}
                 />
-              </div>
-            ) : (
-              <TooltipProvider>
-                <Toaster />
-                <AppErrorBoundary>
-                  <CallProvider
-                    webRTCOptions={{ userId: callUserId, userName: callDisplayName, isAuthenticated }}
-                  >
-                    {/* Sidebar — overlay on mobile, push on desktop */}
-                    <GameSidebar
-                      collapsed={sidebarCollapsed}
-                      onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-                      displayName={callDisplayName}
-                      mobileOpen={mobileSidebarOpen}
-                      onMobileClose={() => setMobileSidebarOpen(false)}
-                    />
-
-                    {/* Mobile hamburger — only visible when sidebar is closed on mobile */}
-                    {isMobile && !mobileSidebarOpen && (
-                      <button
-                        onClick={() => setMobileSidebarOpen(true)}
-                        aria-label="Open navigation"
-                        style={{
-                          position: "fixed", top: 10, left: 10, zIndex: 200,
-                          width: 38, height: 38, borderRadius: 10,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "rgba(225,29,72,0.14)",
-                          border: "1px solid rgba(225,29,72,0.45)",
-                          cursor: "pointer", WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        <Menu style={{ width: 18, height: 18, color: "#e11d48" }} />
-                      </button>
-                    )}
-
-                    {/* Main content — pushed right on desktop, full-width on mobile */}
-                    <div
-                      className="relative z-10 min-h-screen transition-all duration-300"
-                      style={{ marginLeft: sidebarW }}
+              ) : (
+                <TooltipProvider>
+                  <Toaster />
+                  <AppErrorBoundary>
+                    {/* CallProvider wraps all authenticated routes so incoming/active
+                        call overlays are globally available regardless of current page. */}
+                    <CallProvider
+                      webRTCOptions={{
+                        userId: callUserId,
+                        userName: callDisplayName,
+                        isAuthenticated,
+                      }}
                     >
                       <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell">
                         <AppRoutes />
@@ -183,13 +139,6 @@ function App() {
                 </TooltipProvider>
               )}
             </div>
-                      <AppRoutes />
-                    </div>
-                  </CallProvider>
-                </AppErrorBoundary>
-                <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
-              </TooltipProvider>
-            )}
           </div>
         </QueryClientProvider>
       </AppErrorBoundary>

@@ -651,11 +651,11 @@ export function MedicalPage() {
       commandHandoffSource="medical-diagnostics"
       headerEnd={
         <>
-          <div className="flex items-center gap-2 rounded-lg border border-white/\[0.08\] bg-black/40 px-3 py-1.5">
+          <div className="flex items-center gap-2 rounded-lg border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] px-3 py-1.5">
             {connectedDeviceCount > 0 ? (
               <BluetoothConnected className="h-4 w-4 text-cyan-400" />
             ) : (
-              <Bluetooth className="h-4 w-4 text-white/40" />
+              <Bluetooth className="h-4 w-4 text-[rgba(235,235,245,0.4)]" />
             )}
             <span className="text-sm">{connectedDeviceCount} Devices</span>
           </div>
@@ -676,7 +676,7 @@ export function MedicalPage() {
             className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-all ${
               isAutoTracking
                 ? "border border-emerald-500/30 bg-emerald-500/20 text-emerald-400"
-                : "border border-white/\[0.08\] bg-white/\[0.05\] text-white/60"
+                : "border border-[rgba(84,84,88,0.65)] bg-[#2c2c2e] text-[rgba(235,235,245,0.6)]"
             }`}
           >
             {isAutoTracking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -687,8 +687,6 @@ export function MedicalPage() {
     >
       <div className="mx-auto max-w-cyrus-page space-y-6">
         <div className="rounded-xl border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] p-4">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-xl border border-white/\[0.08\] bg-black/40 p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Bluetooth className="w-5 h-5 text-cyan-400" />
@@ -716,8 +714,8 @@ export function MedicalPage() {
                     device.connected 
                       ? "bg-cyan-500/10 border-cyan-500/40" 
                       : device.oauthConfigured 
-                        ? "bg-white/\[0.05\] border-white/\[0.08\] hover:border-cyan-500/30"
-                        : "bg-black/60 border-white/\[0.08\] opacity-60"
+                        ? "bg-[#2c2c2e] border-[rgba(84,84,88,0.65)] hover:border-cyan-500/30"
+                        : "bg-[#1a1a1a] border-[rgba(84,84,88,0.35)] opacity-60"
                   }`}
                 >
                   {isConnecting && (
@@ -726,19 +724,19 @@ export function MedicalPage() {
                     </div>
                   )}
                   <div className="flex items-center justify-between mb-2">
-                    <DeviceIcon className={`w-5 h-5 ${device.connected ? "text-cyan-400" : "text-white/40"}`} />
+                    <DeviceIcon className={`w-5 h-5 ${device.connected ? "text-cyan-400" : "text-[rgba(235,235,245,0.4)]"}`} />
                     {device.connected ? (
                       <Signal className="w-3 h-3 text-emerald-400" />
                     ) : device.oauthConfigured ? (
-                      <Link2 className="w-3 h-3 text-white/30" />
+                      <Link2 className="w-3 h-3 text-[rgba(235,235,245,0.3)]" />
                     ) : null}
                   </div>
                   <p className="text-xs font-medium truncate">{device.name}</p>
                   <div className="flex items-center justify-between mt-1">
-                    {device.connected && <span className="text-[10px] text-white/40">{device.battery}%</span>}
+                    {device.connected && <span className="text-[10px] text-[rgba(235,235,245,0.4)]">{device.battery}%</span>}
                     <span className={`text-[10px] ${
                       device.connected ? "text-emerald-400" : 
-                      device.oauthConfigured ? "text-cyan-400" : "text-white/30"
+                      device.oauthConfigured ? "text-cyan-400" : "text-[rgba(235,235,245,0.3)]"
                     }`}>
                       {device.connected ? "Connected" : device.oauthConfigured ? "Connect" : "Setup Required"}
                     </span>
@@ -749,7 +747,7 @@ export function MedicalPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 border-b border-white/\[0.08\]">
+        <div className="flex gap-2 border-b border-[rgba(84,84,88,0.65)]">
           {[
             { key: "vitals", label: "Vital Signs", icon: Heart },
             { key: "behavioral", label: "Behavioral", icon: Footprints },
@@ -762,7 +760,7 @@ export function MedicalPage() {
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-[1px] ${
                 activeTab === tab.key 
                   ? "text-cyan-400 border-cyan-400" 
-                  : "text-white/50 border-transparent hover:text-white"
+                  : "text-[rgba(235,235,245,0.5)] border-transparent hover:text-white"
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -785,7 +783,7 @@ export function MedicalPage() {
                     const numValue = parseFloat(vital.value.toString());
                     const status = numValue < vital.range.low ? "low" : numValue > vital.range.high ? "high" : "normal";
                     return (
-                      <div key={vital.key} className="bg-black/40 border border-white/\[0.08\] rounded-xl p-4">
+                      <div key={vital.key} className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
                           <vital.icon className={`w-5 h-5 ${vital.color}`} />
                           {isAutoTracking && (
@@ -794,7 +792,7 @@ export function MedicalPage() {
                         </div>
                         <p className="text-2xl font-bold">{vital.value}</p>
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-white/50">{vital.label}</p>
+                          <p className="text-xs text-[rgba(235,235,245,0.5)]">{vital.label}</p>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${
                             status === "normal" ? "bg-emerald-500/20 text-emerald-400" :
                             status === "high" ? "bg-amber-500/20 text-amber-400" :
@@ -808,83 +806,83 @@ export function MedicalPage() {
                   })}
                 </div>
 
-                <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+                <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
                   <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-emerald-400" />
                     Complete Vital Signs
                     {isAutoTracking && <span className="text-xs text-emerald-400 ml-2">(Auto-updating)</span>}
                   </h2>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Heart className="w-4 h-4 text-red-400" />
-                        <span className="text-xs text-white/50">Heart Rate</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Heart Rate</span>
                       </div>
                       <p className="text-2xl font-bold">{Math.round(vitals.heartRate)}</p>
-                      <span className="text-xs text-white/40">BPM</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">BPM</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Activity className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs text-white/50">Blood Pressure</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Blood Pressure</span>
                       </div>
                       <p className="text-2xl font-bold">{vitals.bloodPressureSystolic}/{vitals.bloodPressureDiastolic}</p>
-                      <span className="text-xs text-white/40">mmHg</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">mmHg</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Thermometer className="w-4 h-4 text-orange-400" />
-                        <span className="text-xs text-white/50">Temperature</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Temperature</span>
                       </div>
                       <p className="text-2xl font-bold">{vitals.temperature.toFixed(1)}</p>
-                      <span className="text-xs text-white/40">°C</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">°C</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Wind className="w-4 h-4 text-cyan-400" />
-                        <span className="text-xs text-white/50">Respiratory</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Respiratory</span>
                       </div>
                       <p className="text-2xl font-bold">{Math.round(vitals.respiratoryRate)}</p>
-                      <span className="text-xs text-white/40">breaths/min</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">breaths/min</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Droplets className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs text-white/50">O₂ Saturation</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">O₂ Saturation</span>
                       </div>
                       <p className="text-2xl font-bold">{vitals.oxygenSaturation.toFixed(1)}</p>
-                      <span className="text-xs text-white/40">%</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">%</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Droplets className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs text-white/50">Blood Glucose</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Blood Glucose</span>
                       </div>
                       <p className="text-2xl font-bold">{vitals.bloodGlucose}</p>
-                      <span className="text-xs text-white/40">mg/dL</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">mg/dL</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Activity className="w-4 h-4 text-violet-400" />
-                        <span className="text-xs text-white/50">HRV</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">HRV</span>
                       </div>
                       <p className="text-2xl font-bold">{Math.round(vitals.hrv)}</p>
-                      <span className="text-xs text-white/40">ms</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">ms</span>
                     </div>
 
-                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                    <div className="bg-[#2c2c2e] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Zap className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs text-white/50">Stress Level</span>
+                        <span className="text-xs text-[rgba(235,235,245,0.5)]">Stress Level</span>
                       </div>
                       <p className="text-2xl font-bold">{Math.round(vitals.stress)}</p>
-                      <span className="text-xs text-white/40">%</span>
+                      <span className="text-xs text-[rgba(235,235,245,0.4)]">%</span>
                     </div>
                   </div>
                 </div>
@@ -892,88 +890,88 @@ export function MedicalPage() {
             )}
 
             {activeTab === "behavioral" && (
-              <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+              <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <Footprints className="w-5 h-5 text-cyan-400" />
                   Behavioral & Lifestyle Tracking
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Footprints className="w-5 h-5 text-emerald-400" />
                       <span className="text-sm">Daily Steps</span>
                     </div>
                     <p className="text-3xl font-bold text-emerald-400">{behavioral.steps.toLocaleString()}</p>
-                    <div className="mt-2 h-2 bg-black/40 rounded-full overflow-hidden">
+                    <div className="mt-2 h-2 bg-[#1c1c1e] rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (behavioral.steps / 10000) * 100)}%` }} />
                     </div>
-                    <p className="text-xs text-white/40 mt-1">Goal: 10,000</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)] mt-1">Goal: 10,000</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Dumbbell className="w-5 h-5 text-orange-400" />
                       <span className="text-sm">Active Minutes</span>
                     </div>
                     <p className="text-3xl font-bold text-orange-400">{Math.round(behavioral.activeMinutes)}</p>
-                    <div className="mt-2 h-2 bg-black/40 rounded-full overflow-hidden">
+                    <div className="mt-2 h-2 bg-[#1c1c1e] rounded-full overflow-hidden">
                       <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, (behavioral.activeMinutes / 60) * 100)}%` }} />
                     </div>
-                    <p className="text-xs text-white/40 mt-1">Goal: 60 min</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)] mt-1">Goal: 60 min</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Bed className="w-5 h-5 text-violet-400" />
                       <span className="text-sm">Sleep</span>
                     </div>
                     <p className="text-3xl font-bold text-violet-400">{behavioral.sleepHours.toFixed(1)}h</p>
-                    <div className="mt-2 h-2 bg-black/40 rounded-full overflow-hidden">
+                    <div className="mt-2 h-2 bg-[#1c1c1e] rounded-full overflow-hidden">
                       <div className="h-full bg-violet-500" style={{ width: `${Math.min(100, (behavioral.sleepHours / 8) * 100)}%` }} />
                     </div>
-                    <p className="text-xs text-white/40 mt-1">Quality: {behavioral.sleepQuality}%</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)] mt-1">Quality: {behavioral.sleepQuality}%</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Droplets className="w-5 h-5 text-blue-400" />
                       <span className="text-sm">Hydration</span>
                     </div>
                     <p className="text-3xl font-bold text-blue-400">{behavioral.hydration}%</p>
-                    <div className="mt-2 h-2 bg-black/40 rounded-full overflow-hidden">
+                    <div className="mt-2 h-2 bg-[#1c1c1e] rounded-full overflow-hidden">
                       <div className="h-full bg-blue-500" style={{ width: `${behavioral.hydration}%` }} />
                     </div>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Utensils className="w-5 h-5 text-amber-400" />
                       <span className="text-sm">Calories Burned</span>
                     </div>
                     <p className="text-3xl font-bold text-amber-400">{behavioral.caloriesBurned.toLocaleString()}</p>
-                    <p className="text-xs text-white/40 mt-2">kcal today</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)] mt-2">kcal today</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Brain className="w-5 h-5 text-pink-400" />
                       <span className="text-sm">Mood</span>
                     </div>
                     <p className="text-2xl font-bold text-pink-400 capitalize">{behavioral.mood}</p>
-                    <p className="text-xs text-white/40 mt-2">Stress: {behavioral.stressLevel}%</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)] mt-2">Stress: {behavioral.stressLevel}%</p>
                   </div>
                 </div>
               </div>
             )}
 
             {activeTab === "environmental" && (
-              <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+              <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <Sun className="w-5 h-5 text-amber-400" />
                   Environmental Conditions
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Thermometer className="w-5 h-5 text-orange-400" />
                       <span className="text-sm">Ambient Temp</span>
@@ -981,7 +979,7 @@ export function MedicalPage() {
                     <p className="text-3xl font-bold">{environmental.temperature}°C</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Droplets className="w-5 h-5 text-blue-400" />
                       <span className="text-sm">Humidity</span>
@@ -989,31 +987,31 @@ export function MedicalPage() {
                     <p className="text-3xl font-bold">{environmental.humidity}%</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <Wind className="w-5 h-5 text-white/50" />
+                      <Wind className="w-5 h-5 text-gray-400" />
                       <span className="text-sm">Air Quality (AQI)</span>
                     </div>
                     <p className={`text-3xl font-bold ${environmental.airQuality < 50 ? "text-emerald-400" : environmental.airQuality < 100 ? "text-amber-400" : "text-red-400"}`}>
                       {environmental.airQuality}
                     </p>
-                    <p className="text-xs text-white/40">
+                    <p className="text-xs text-[rgba(235,235,245,0.4)]">
                       {environmental.airQuality < 50 ? "Good" : environmental.airQuality < 100 ? "Moderate" : "Unhealthy"}
                     </p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Sun className="w-5 h-5 text-yellow-400" />
                       <span className="text-sm">UV Index</span>
                     </div>
                     <p className="text-3xl font-bold">{environmental.uvIndex}</p>
-                    <p className="text-xs text-white/40">
+                    <p className="text-xs text-[rgba(235,235,245,0.4)]">
                       {environmental.uvIndex < 3 ? "Low" : environmental.uvIndex < 6 ? "Moderate" : "High"}
                     </p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <MapPin className="w-5 h-5 text-emerald-400" />
                       <span className="text-sm">Altitude</span>
@@ -1021,13 +1019,13 @@ export function MedicalPage() {
                     <p className="text-3xl font-bold">{environmental.altitude}m</p>
                   </div>
 
-                  <div className="bg-white/\[0.05\] rounded-lg p-4">
+                  <div className="bg-[#2c2c2e] rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Gauge className="w-5 h-5 text-violet-400" />
                       <span className="text-sm">Barometric</span>
                     </div>
                     <p className="text-3xl font-bold">{environmental.barometric}</p>
-                    <p className="text-xs text-white/40">hPa</p>
+                    <p className="text-xs text-[rgba(235,235,245,0.4)]">hPa</p>
                   </div>
                 </div>
               </div>
@@ -1055,7 +1053,7 @@ export function MedicalPage() {
                       <div key={i} className={`border rounded-xl p-4 ${getInsightColor(insight.severity)}`}>
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <span className="text-xs text-white/50 uppercase tracking-wider">{insight.category}</span>
+                            <span className="text-xs text-[rgba(235,235,245,0.5)] uppercase tracking-wider">{insight.category}</span>
                             <h3 className="font-semibold">{insight.title}</h3>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1064,7 +1062,7 @@ export function MedicalPage() {
                             {insight.trend === "down" && <TrendingDown className="w-4 h-4 text-blue-400" />}
                           </div>
                         </div>
-                        <p className="text-sm text-white/70 mb-2">{insight.description}</p>
+                        <p className="text-sm text-[rgba(235,235,245,0.7)] mb-2">{insight.description}</p>
                         <div className="flex items-center gap-2 text-xs">
                           <ChevronRight className="w-3 h-3 text-cyan-400" />
                           <span className="text-cyan-400">{insight.recommendation}</span>
@@ -1073,9 +1071,9 @@ export function MedicalPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-8 text-center">
+                  <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-8 text-center">
                     <Brain className="w-12 h-12 text-violet-400 mx-auto mb-4" />
-                    <p className="text-white/50">Connect devices and start tracking to receive personalized health insights.</p>
+                    <p className="text-[rgba(235,235,245,0.5)]">Connect devices and start tracking to receive personalized health insights.</p>
                   </div>
                 )}
               </div>
@@ -1083,27 +1081,27 @@ export function MedicalPage() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+            <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-blue-400" />
                 Patient Profile
               </h2>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-xs text-white/50 mb-1">Age</label>
+                  <label className="block text-xs text-[rgba(235,235,245,0.5)] mb-1">Age</label>
                   <input
                     type="number"
                     value={patientAge}
                     onChange={(e) => setPatientAge(parseInt(e.target.value) || 0)}
-                    className="w-full bg-white/\[0.05\] border border-white/\[0.08\] rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-3 py-2 text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-white/50 mb-1">Gender</label>
+                  <label className="block text-xs text-[rgba(235,235,245,0.5)] mb-1">Gender</label>
                   <select
                     value={patientGender}
                     onChange={(e) => setPatientGender(e.target.value)}
-                    className="w-full bg-white/\[0.05\] border border-white/\[0.08\] rounded-lg px-3 py-2 text-white"
+                    className="w-full bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-3 py-2 text-white"
                   >
                     <option value="male">Male</option>
                     <option value="female">Female</option>
@@ -1113,7 +1111,7 @@ export function MedicalPage() {
               </div>
             </div>
 
-            <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+            <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-amber-400" />
                 Symptoms
@@ -1122,7 +1120,7 @@ export function MedicalPage() {
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
                 placeholder="Enter symptoms (optional with sensor data)"
-                className="w-full bg-white/\[0.05\] border border-white/\[0.08\] rounded-lg px-4 py-3 text-white placeholder-white/30 min-h-[80px] text-sm"
+                className="w-full bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-4 py-3 text-white placeholder-[rgba(235,235,245,0.3)] min-h-[80px] text-sm"
               />
               <button
                 onClick={() => analyzeMutation.mutate()}
@@ -1160,11 +1158,11 @@ export function MedicalPage() {
                   <p className="text-sm whitespace-pre-line">{diagnosis.summary}</p>
                 </div>
 
-                <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+                <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
                   <h2 className="text-lg font-semibold mb-4">Conditions</h2>
                   <div className="space-y-3">
                     {diagnosis.conditions.map((condition, i) => (
-                      <div key={i} className="bg-white/\[0.05\] rounded-lg p-3">
+                      <div key={i} className="bg-[#2c2c2e] rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">{condition.name}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -1176,13 +1174,13 @@ export function MedicalPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                          <div className="flex-1 h-1.5 bg-[#1c1c1e] rounded-full overflow-hidden">
                             <div
                               className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
                               style={{ width: `${condition.probability * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs text-white/50">
+                          <span className="text-xs text-[rgba(235,235,245,0.5)]">
                             {Math.round(condition.probability * 100)}%
                           </span>
                         </div>
@@ -1191,7 +1189,7 @@ export function MedicalPage() {
                   </div>
                 </div>
 
-                <div className="bg-black/40 border border-white/\[0.08\] rounded-xl p-5">
+                <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
                   <h2 className="text-lg font-semibold mb-4">Recommendations</h2>
                   <ul className="space-y-2">
                     {diagnosis.recommendations.map((rec, i) => (
@@ -1210,23 +1208,23 @@ export function MedicalPage() {
 
       {showScanModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-black/40 border border-white/\[0.08\] rounded-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-white/\[0.08\]">
+          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-[rgba(84,84,88,0.65)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isScanning ? "bg-cyan-500/20" : "bg-white/\[0.05\]"}`}>
-                    <Bluetooth className={`w-5 h-5 ${isScanning ? "text-cyan-400 animate-pulse" : "text-white/60"}`} />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isScanning ? "bg-cyan-500/20" : "bg-[#2c2c2e]"}`}>
+                    <Bluetooth className={`w-5 h-5 ${isScanning ? "text-cyan-400 animate-pulse" : "text-[rgba(235,235,245,0.6)]"}`} />
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold">Scan Devices</h2>
-                    <p className="text-sm text-white/50">
+                    <p className="text-sm text-[rgba(235,235,245,0.5)]">
                       {isScanning ? "Scanning nearby..." : `${discoveredDevices.length} devices found`}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowScanModal(false)}
-                  className="text-white/50 hover:text-white transition-colors"
+                  className="text-[rgba(235,235,245,0.5)] hover:text-white transition-colors"
                 >
                   ✕
                 </button>
@@ -1243,7 +1241,7 @@ export function MedicalPage() {
                       <Bluetooth className="w-8 h-8 text-cyan-400" />
                     </div>
                   </div>
-                  <p className="text-sm text-white/50 mt-4">Scanning for nearby devices...</p>
+                  <p className="text-sm text-[rgba(235,235,245,0.5)] mt-4">Scanning for nearby devices...</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1253,27 +1251,27 @@ export function MedicalPage() {
                       className={`p-4 rounded-xl border transition-all ${
                         device.paired 
                           ? "bg-emerald-500/10 border-emerald-500/30" 
-                          : "bg-white/\[0.05\] border-white/\[0.08\] hover:border-cyan-500/30"
+                          : "bg-[#2c2c2e] border-[rgba(84,84,88,0.65)] hover:border-cyan-500/30"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            device.type === "watch" ? "bg-cyan-500/20" : "bg-black/40"
+                            device.type === "watch" ? "bg-cyan-500/20" : "bg-[#1c1c1e]"
                           }`}>
                             {device.type === "watch" ? (
                               <Watch className="w-5 h-5 text-cyan-400" />
                             ) : device.type === "audio" ? (
                               <Activity className="w-5 h-5 text-purple-400" />
                             ) : (
-                              <Bluetooth className="w-5 h-5 text-white/40" />
+                              <Bluetooth className="w-5 h-5 text-[rgba(235,235,245,0.4)]" />
                             )}
                           </div>
                           <div>
                             <p className="font-medium text-sm">{device.name}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <Signal className={`w-3 h-3 ${device.signal > 70 ? "text-emerald-400" : device.signal > 40 ? "text-amber-400" : "text-red-400"}`} />
-                              <span className="text-xs text-white/40">{device.signal}%</span>
+                              <span className="text-xs text-[rgba(235,235,245,0.4)]">{device.signal}%</span>
                             </div>
                           </div>
                         </div>
@@ -1303,7 +1301,7 @@ export function MedicalPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-white/\[0.08\] flex items-center justify-between">
+            <div className="p-4 border-t border-[rgba(84,84,88,0.65)] flex items-center justify-between">
               <button
                 onClick={startBluetoothScan}
                 disabled={isScanning}
@@ -1314,7 +1312,7 @@ export function MedicalPage() {
               </button>
               <button
                 onClick={() => setShowScanModal(false)}
-                className="px-4 py-2 bg-white/\[0.05\] hover:bg-white/\[0.08\] text-white text-sm font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-[#2c2c2e] hover:bg-[#3c3c3e] text-white text-sm font-medium rounded-lg transition-colors"
               >
                 Done
               </button>
