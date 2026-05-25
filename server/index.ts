@@ -121,7 +121,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   let headersSent = false;
 
   const maybeInit = () => {
-    if (gz || headersSent) return;
+    if (gz || headersSent || res.headersSent) return;
     const ct = String(res.getHeader("content-type") ?? "");
     if (!compressible(ct)) return;
     headersSent = true;

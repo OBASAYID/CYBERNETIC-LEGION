@@ -36,6 +36,8 @@ type AdminTab = "modules" | "console";
    explosion debris: tumbling rock chunks, fire sparks, embers,
    flame clouds, and meteors scattered across the entire dashboard.
 ══════════════════════════════════════════════════════════════════════ */
+const SPHERE_D = 130;
+
 function DeepSpaceParticleOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starRef   = useRef<HTMLDivElement>(null);
@@ -44,10 +46,25 @@ function DeepSpaceParticleOverlay() {
     const canvas = canvasRef.current;
     const starEl  = starRef.current;
     if (!canvas || !starEl) return;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     let W = window.innerWidth;
     let H = window.innerHeight;
+
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+    const rgba = (r: number, g: number, b: number, a: number) => `rgba(${r},${g},${b},${a})`;
+
+    /* ═══ STAR FIELD — subtle, warm-tinted ═══ */
+    interface Star { x:number;y:number;r:number;br:number;tw:number;ph:number }
+    let stars: Star[] = [];
+    const seedStars = () => {
+      stars = Array.from({length:500}, () => ({
+        x:rnd(0,W), y:rnd(0,H),
+        r: Math.random()<0.04 ? rnd(0.9,2.0) : rnd(0.2,0.8),
+        br:rnd(0.15,0.7), tw:rnd(0.01,0.05), ph:rnd(0,Math.PI*2),
+      }));
+    };
 
     const applySize = () => {
       W = window.innerWidth; H = window.innerHeight;
@@ -63,24 +80,8 @@ function DeepSpaceParticleOverlay() {
     const onResize = applySize;
     window.addEventListener("resize", onResize);
 
-    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-    const rgba = (r: number, g: number, b: number, a: number) => `rgba(${r},${g},${b},${a})`;
-
-    /* ═══ STAR FIELD — subtle, warm-tinted ═══ */
-    interface Star { x:number;y:number;r:number;br:number;tw:number;ph:number }
-    let stars: Star[] = [];
-    const seedStars = () => {
-      stars = Array.from({length:500}, () => ({
-        x:rnd(0,W), y:rnd(0,H),
-        r: Math.random()<0.04 ? rnd(0.9,2.0) : rnd(0.2,0.8),
-        br:rnd(0.15,0.7), tw:rnd(0.01,0.05), ph:rnd(0,Math.PI*2),
-      }));
-    };
-    seedStars();
-
     /* ═══ ORBIT CONFIG ═══ */
     const orb = { angle: Math.PI*0.8, speed: 0.004 };
-    const SPHERE_D = 130;
 
     /* ═══ PARTICLE POOL ═══ */
     type PT = "rock"|"spark"|"ember"|"flame"|"meteor";
