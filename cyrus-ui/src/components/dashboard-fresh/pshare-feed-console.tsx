@@ -1,0 +1,153 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { Radio, Send, Share2 } from "lucide-react";
+import { systemFetch } from "@/lib/system-api";
+import { cn } from "@/lib/utils";
+
+type PsharePost = {
+  id: string;
+  authorName: string;
+  body: string;
+  createdAt?: string;
+};
+
+function timeAgo(iso?: string): string {
+  if (!iso) return "now";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 60_000) return "now";
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+export function PshareFeedConsole({ className }: { className?: string }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState("");
+  const postsQuery = useQuery<PsharePost[]>({
+    queryKey: ["/api/comms/pshare/posts", "dashboard-feed"],
+    queryFn: async () => {
+      const res = await systemFetch("/api/comms/pshare/posts");
+      if (!res.ok) throw new Error("Failed to load Pshare posts");
+      const data = await res.json();
+      return Array.isArray(data.posts) ? data.posts : [];
+    },
+    refetchInterval: 8_000,
+  });
+
+  const posts = (postsQuery.data ?? []).slice(0, 8);
+
+  const createPost = useMutation({
+    mutationFn: async (body: string) => {
+      const res = await systemFetch("/api/comms/pshare/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to post");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setDraft("");
+      void queryClient.invalidateQueries({ queryKey: ["/api/comms/pshare/posts", "dashboard-feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
+    },
+  });
+
+  const submitPost = () => {
+    const body = draft.trim();
+    if (!body || createPost.isPending) return;
+    createPost.mutate(body);
+  };
+
+  return (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-black/50 p-4 shadow-[0_0_40px_-18px_rgba(168,85,247,0.28)] backdrop-blur-sm",
+        className,
+      )}
+      aria-label="Pshare post feed console"
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/45 to-transparent" />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10">
+            <Share2 className="h-4 w-4 text-violet-200" aria-hidden />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-violet-200/55">Pshare channel</p>
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/12 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-violet-100/90">
+                <Radio className="h-3 w-3 text-violet-300" />
+                Live
+              </span>
+            </div>
+            <h2
+              className="text-sm font-semibold text-white/95"
+              style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+            >
+              Pshare post feeds console
+            </h2>
+          </div>
+        </div>
+
+        <Link href="/comms?tab=pshare">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-violet-400/35 hover:text-white"
+          >
+            Open Pshare
+          </button>
+        </Link>
+      </div>
+
+      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/35 p-2.5">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Broadcast to Pshare..."
+            rows={2}
+            className="min-h-11 flex-1 resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-violet-400/35"
+          />
+          <button
+            type="button"
+            onClick={submitPost}
+            disabled={!draft.trim() || createPost.isPending}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-violet-400/35 bg-violet-600/20 px-3 text-xs text-violet-100 transition hover:bg-violet-600/30 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Post
+          </button>
+        </div>
+      </div>
+
+      {postsQuery.isLoading ? (
+        <p className="text-xs text-white/55">Loading live Pshare posts…</p>
+      ) : postsQuery.isError ? (
+        <p className="text-xs text-amber-200/80">Pshare feed unavailable right now.</p>
+      ) : posts.length === 0 ? (
+        <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
+      ) : (
+        <ul className="max-h-[min(38vh,18rem)] space-y-2 overflow-y-auto pr-1">
+          {posts.map((post) => (
+            <li key={post.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="truncate text-[11px] font-semibold text-violet-100">{post.authorName || "Operator"}</span>
+                <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
+                  {timeAgo(post.createdAt)}
+                </span>
+              </div>
+              <p className="line-clamp-3 text-xs leading-relaxed text-white/72">{post.body || "Shared update"}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
