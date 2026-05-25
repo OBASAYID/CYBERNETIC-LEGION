@@ -137,6 +137,11 @@ export function getSocketUsers(): User[] {
   return Array.from(users.values());
 }
 
+/** Comms user ids with at least one live `/cyrus-io` socket (any device). */
+export function getLiveCommsUserIds(): Set<string> {
+  return new Set(Array.from(users.values()).map((u) => u.id));
+}
+
 export function getActiveCalls(): ActiveCall[] {
   return Array.from(activeCalls.values());
 }
@@ -257,16 +262,19 @@ export function initSocketSignaling(server: HttpServer) {
 
   setInterval(async () => {
     try {
-      const connectedDeviceIds = new Set(Array.from(users.values()).map(u => u.id));
+      const connectedCommsIds = getLiveCommsUserIds();
       const allOnline = await db.select().from(onlineUsers).where(eq(onlineUsers.isOnline, true));
       for (const record of allOnline) {
-        if (record.id !== 'cyrus-001' && !connectedDeviceIds.has(record.id)) {
-          await db.update(onlineUsers)
+        if (record.id !== "cyrus-001" && !connectedCommsIds.has(record.id)) {
+          await db
+            .update(onlineUsers)
             .set({ isOnline: false, status: "offline" })
             .where(eq(onlineUsers.id, record.id));
         }
       }
-    } catch { }
+    } catch {
+      /* non-fatal */
+    }
   }, 60000);
 
   io.on("connection", (socket: Socket) => {
@@ -1463,14 +1471,23 @@ export function initSocketSignaling(server: HttpServer) {
         const results = await db.select().from(onlineUsers)
           .where(ilike(onlineUsers.displayName, `%${data.query}%`));
 
-        const enriched = results.map(u => ({
-          id: u.id,
-          displayName: u.displayName,
-          isOnline: users.has(u.id),
-          status: users.get(u.id)?.status || (u.isOnline ? "online" : "offline"),
-          inCall: users.get(u.id)?.inCall || false,
-          lastSeen: u.lastSeen,
-        }));
+        const enriched = results.map((u) => {
+          const live = findUserByCommsId(u.id);
+          return {
+            id: u.id,
+            displayName: u.displayName,
+            isOnline: !!live || u.isOnline,
+            status: live
+              ? live.inCall
+                ? "in_call"
+                : live.status || "online"
+              : u.isOnline
+                ? "online"
+                : "offline",
+            inCall: live?.inCall || false,
+            lastSeen: u.lastSeen,
+          };
+        });
 
         socket.emit("search-results", { query: data.query, users: enriched });
       } catch (err) {
@@ -1504,10 +1521,10 @@ export function initSocketSignaling(server: HttpServer) {
     /** call:initiate — caller requests a call to targetUserId */
     socket.on("call:initiate", async (data: { targetUserId: string; callType: "audio" | "video" }) => {
       const callerId = (socket as any).userId;
-      const caller = users.get(callerId);
+      const caller = getSocketUser(socket) || findUserByCommsId(callerId);
       if (!caller) { socket.emit("call:failed", { reason: "not-registered" }); return; }
 
-      const target = users.get(data.targetUserId);
+      const target = findUserByCommsId(data.targetUserId);
       if (!target) { socket.emit("call:failed", { reason: "user-offline" }); return; }
 
       const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

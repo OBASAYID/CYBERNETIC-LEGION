@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { usePresence } from "../contexts/PresenceContext";
 import { clearAccountUserIdCache } from "../lib/cyrus-identity";
 import { CYRUS_SESSION_TOKEN_KEY } from "@shared/cyrus-identity";
+import { systemFetch } from "@shared/cyrus-api-client";
 
 /** Dispatched when login completes in the same tab (`persistAuthSession`). */
 export const CYRUS_AUTH_SESSION_CHANGED = "cyrus-auth-session-changed";
@@ -23,7 +24,20 @@ export function usePresenceBootstrap(enabled = true): void {
 
     const connect = () => connectPresence(readDisplayName());
 
-    connect();
+    const waitForReady = async () => {
+      for (let attempt = 0; attempt < 12; attempt++) {
+        try {
+          const res = await systemFetch("/api/ready", { cache: "no-store" });
+          if (res.ok) break;
+        } catch {
+          /* retry */
+        }
+        await new Promise((r) => setTimeout(r, 500 + attempt * 400));
+      }
+      connect();
+    };
+
+    void waitForReady();
 
     const retryMs = [1500, 4000, 10000, 20000];
     const timers = retryMs.map((ms) => window.setTimeout(connect, ms));

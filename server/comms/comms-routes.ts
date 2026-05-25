@@ -7,7 +7,7 @@ import { v4 as uuid } from "uuid";
 import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
 import { commsIntelligence } from "./comms-intelligence.js";
-import { refreshCommsUserAvatar } from "./socket-signaling.js";
+import { refreshCommsUserAvatar, getLiveCommsUserIds } from "./socket-signaling.js";
 import {
   parseDeviceInfo,
   mergeDeviceInfoForOnlineTransition,
@@ -248,7 +248,9 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     const userId = getUserId(req);
     const includeSelf = String(req.query.includeSelf) === "1" || String(req.query.includeSelf) === "true";
     const allUsers = await db.select().from(onlineUsers);
+    const liveCommsIds = getLiveCommsUserIds();
     const mapRow = (u: (typeof allUsers)[number]) => {
+      const live = liveCommsIds.has(u.id);
       const di = parseDeviceInfo(u.deviceInfo);
       const lastLocation =
         di.locationShareEnabled && di.lastLocation
@@ -262,10 +264,10 @@ router.get("/api/comms/users/all", async (req: any, res) => {
       return {
         id: u.id,
         displayName: u.displayName || "Unknown User",
-        isOnline: u.isOnline || false,
+        isOnline: live || u.isOnline || false,
         lastSeen: u.lastSeen?.toISOString() || null,
         profileImageUrl: u.profileImageUrl || null,
-        status: u.status || "offline",
+        status: live ? (u.status === "in_call" ? "in_call" : "online") : u.status || "offline",
         onlineSince: di.onlineSince || null,
         lastLocation,
         locationShareEnabled: !!di.locationShareEnabled,
