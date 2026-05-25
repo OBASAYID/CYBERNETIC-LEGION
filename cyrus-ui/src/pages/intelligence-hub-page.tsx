@@ -142,12 +142,12 @@ export function IntelligenceHubPage() {
         </div>
 
         {/* Mission */}
-        <section className="rounded-2xl border border-amber-400/15 bg-amber-950/20 p-5">
+        <section className="rounded-2xl p-5" style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.15)" }}>
           <div className="flex items-center gap-2 mb-3">
-            <Target className="h-5 w-5 text-amber-200" />
-            <h2 className="text-lg font-medium text-white">Mission planner</h2>
+            <Target className="h-5 w-5 text-[#e11d48]" />
+            <h2 className="text-lg font-bold text-white">Mission Planner</h2>
           </div>
-          <p className="text-xs text-white/50 mb-4">
+          <p className="text-xs text-white/45 mb-4">
             Route an objective through CYRUS domains. Auto-correct runs asset resume, mining, and MCP sync when confidence is low.
           </p>
           <div className="flex flex-wrap gap-2 mb-3">
@@ -156,11 +156,12 @@ export function IntelligenceHubPage() {
                 key={d.id}
                 type="button"
                 onClick={() => setMissionDomain(d.id)}
-                className={`rounded-full px-3 py-1 text-xs border ${
-                  missionDomain === d.id
-                    ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
-                    : "border-white/10 bg-black/30 text-white/60"
-                }`}
+                className="rounded-full px-3 py-1 text-xs transition-all"
+                style={{
+                  background: missionDomain === d.id ? "rgba(225,29,72,0.2)" : "rgba(255,255,255,0.04)",
+                  border: missionDomain === d.id ? "1px solid rgba(225,29,72,0.5)" : "1px solid rgba(255,255,255,0.08)",
+                  color: missionDomain === d.id ? "#fff" : "rgba(255,255,255,0.5)",
+                }}
               >
                 {d.label}
               </button>
@@ -332,9 +333,12 @@ export function IntelligenceHubPage() {
               {((mcp.data as any).servers as Array<Record<string, unknown>> | undefined)?.map((s) => (
                 <span
                   key={String(s.id)}
-                  className={`rounded-full px-3 py-1 text-[11px] border ${
-                    s.active ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200" : "border-amber-400/30 bg-amber-500/10 text-amber-200"
-                  }`}
+                  className="rounded-full px-3 py-1 text-[11px]"
+                  style={{
+                    background: s.active ? "rgba(34,197,94,0.1)" : "rgba(225,29,72,0.1)",
+                    border: s.active ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(225,29,72,0.3)",
+                    color: s.active ? "#86efac" : "#fca5a5",
+                  }}
                 >
                   {String(s.id)} {s.active ? "active" : "degraded"}
                 </span>

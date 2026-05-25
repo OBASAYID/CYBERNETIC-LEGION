@@ -1436,6 +1436,132 @@ export async function registerRoutes(
     res.json({ reminders: listReminders() });
   });
 
+  // Free RSS news feed — multi-source: BBC, NASA, Reuters, Space.com, Al Jazeera, Defense, TechCrunch
+  app.get("/api/news/rss", async (_req, res) => {
+    try {
+      const feeds = [
+        /* BBC News */
+        { url: "https://feeds.bbci.co.uk/news/world/rss.xml",                   category: "World",      source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/technology/rss.xml",              category: "Technology", source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/business/rss.xml",                category: "Finance",    source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", category: "Science",    source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/health/rss.xml",                  category: "Health",     source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/politics/rss.xml",                category: "Politics",   source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/sport/rss.xml",                        category: "Sport",      source: "BBC Sport"    },
+        /* NASA */
+        { url: "https://www.nasa.gov/rss/dyn/breaking_news.rss",                category: "NASA",       source: "NASA"         },
+        { url: "https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss",          category: "Space",      source: "NASA"         },
+        /* Space */
+        { url: "https://www.space.com/feeds/all",                               category: "Space",      source: "Space.com"    },
+        /* Current Affairs / Global */
+        { url: "https://www.aljazeera.com/xml/rss/all.xml",                     category: "World",      source: "Al Jazeera"   },
+        { url: "https://rss.dw.com/rss/rss-en-world",                           category: "World",      source: "DW News"      },
+        /* Technology */
+        { url: "https://feeds.feedburner.com/TechCrunch/",                      category: "Technology", source: "TechCrunch"   },
+        { url: "https://www.wired.com/feed/rss",                                category: "Technology", source: "WIRED"        },
+        /* Military & Defense */
+        { url: "https://www.defensenews.com/arc/outboundfeeds/rss/?hierarchy=news", category: "Military", source: "Defense News" },
+        { url: "https://breakingdefense.com/feed/",                             category: "Military",   source: "Breaking Defense" },
+        /* Finance */
+        { url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                category: "Finance",    source: "WSJ Markets"  },
+        /* Sport extras */
+        { url: "https://feeds.skysports.com/feeds/topstories/rss.xml",          category: "Sport",      source: "Sky Sports"   },
+      ];
+
+      const extract = (block: string, tag: string): string => {
+        const cdata = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i"));
+        if (cdata) return cdata[1].trim();
+        const plain = block.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`, "i"));
+        return plain ? plain[1].trim() : "";
+      };
+
+      const extractImage = (block: string): string => {
+        // 1. BBC media:thumbnail
+        const bbc = block.match(/media:thumbnail[^>]*url="([^"]+)"/i);
+        if (bbc) return bbc[1].replace(/standard\/\d+/g, "standard/624");
+        // 2. media:content url with image
+        const mc = block.match(/media:content[^>]*url="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
+        if (mc) return mc[1];
+        // 3. enclosure url (podcasts/news images)
+        const enc = block.match(/<enclosure[^>]*url="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
+        if (enc) return enc[1];
+        // 4. img tag in description
+        const img = block.match(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp)[^"']*)["']/i);
+        if (img) return img[1];
+        // 5. NASA image link
+        const nasaImg = block.match(/https:\/\/[^"'\s]+(?:jpg|jpeg|png|webp)/i);
+        if (nasaImg) return nasaImg[0];
+        return "";
+      };
+
+      const items: any[] = [];
+      const fetchJobs = feeds.map(async (feed) => {
+        try {
+          const r = await fetch(feed.url, {
+            signal: AbortSignal.timeout(7000),
+            headers: { "User-Agent": "CYRUS/3.0 NewsAggregator RSS-Reader/1.0" },
+          });
+          if (!r.ok) return;
+          const xml = await r.text();
+          const rawItems = xml.split(/<item[\s>]/i).slice(1, 4);
+          for (const block of rawItems) {
+            const title    = extract(block, "title");
+            const link     = extract(block, "link");
+            const desc     = extract(block, "description").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            const pubDate  = extract(block, "pubDate") || extract(block, "dc:date") || extract(block, "updated");
+            const imageUrl = extractImage(block);
+            if (!title || title.length < 5) continue;
+            items.push({
+              id:          `${feed.category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              title,
+              summary:     desc.slice(0, 350),
+              source:      feed.source,
+              category:    feed.category,
+              url:         link,
+              imageUrl:    imageUrl || undefined,
+              publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+            });
+          }
+        } catch { /* skip failing feed */ }
+      });
+
+      await Promise.all(fetchJobs);
+      items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      res.json({ items: items.slice(0, 30) });
+    } catch (err: any) {
+      res.status(500).json({ error: "RSS fetch failed", detail: err?.message });
+    }
+  });
+
+  // In-app article reader — expands headline + summary into full readable article via OpenAI
+  app.post("/api/news/article", async (req: any, res) => {
+    const { title, summary, category } = req.body || {};
+    if (!title) return res.status(400).json({ error: "title required" });
+    try {
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) return res.json({ article: summary || "No expanded content available." });
+      const { OpenAI } = await import("openai");
+      const client = new OpenAI({ apiKey: openaiKey });
+      const completion = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content: "You are a BBC-style news journalist. Write an engaging, factual news article (3–4 paragraphs) based on the headline and summary below. Do NOT fabricate quotes or unconfirmed facts. Use a clear, professional journalistic tone. Provide real context and background for the story.",
+          },
+          {
+            role: "user",
+            content: `Category: ${category || "General"}\nHeadline: ${title}\nSummary: ${summary || "(no summary)"}\n\nWrite the full article:`,
+          },
+        ],
+      });
+      res.json({ article: completion.choices[0]?.message?.content || summary });
+    } catch (err: any) {
+      res.status(500).json({ error: "Article generation failed", article: summary });
+    }
+  });
+
   // News fetch (server-side proxy)
   app.get("/api/news", async (req, res) => {
     const topics = (req.query.topics as string) || "general";
@@ -4338,6 +4464,25 @@ Return ONLY valid JSON.`
 
   // Use humanoid routes
   app.use("/api/humanoid", humanoidRoutes);
+
+  // ── PShare broadcast posts (in-memory, real-time for all active users) ──
+  const pSharePosts: Array<{
+    id: string; user: string; content: string; ts: string; avatar?: string;
+  }> = [];
+
+  app.get("/api/pshare/posts", (_req, res) => {
+    res.json(pSharePosts.slice(-60).reverse());
+  });
+
+  app.post("/api/pshare/posts", (req: any, res) => {
+    const user    = req.session?.user?.username ?? req.body?.user ?? "OPERATOR";
+    const content = (req.body?.content ?? "").trim().slice(0, 500);
+    if (!content) return res.status(400).json({ error: "empty" });
+    const post = { id: Date.now().toString(), user, content, ts: new Date().toISOString() };
+    pSharePosts.push(post);
+    if (pSharePosts.length > 200) pSharePosts.splice(0, pSharePosts.length - 200);
+    res.json(post);
+  });
 
   return httpServer;
 }

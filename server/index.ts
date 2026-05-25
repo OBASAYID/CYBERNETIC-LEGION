@@ -27,12 +27,10 @@ const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
   const missing: string[] = [];
-  const warnings: string[] = [];
-
-  // Optional but recommended
-  if (!process.env.OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
-    warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
-  }
+  // OPENAI_API_KEY check is deferred — key normalization runs at module top-level
+  // before this function is called, so the check happens after integration keys are resolved.
+  return missing;
+}
 
   if (!process.env.DATABASE_URL) {
     warnings.push('⚠️ DATABASE_URL not set. Comms persistence and session store may fall back to in-memory mode.');
@@ -40,9 +38,10 @@ function validateEnvironment(): string[] {
 
   if (warnings.length > 0) {
     warnings.forEach(w => console.warn(`[Environment] ${w}`));
+function warnOptionalEnv(): void {
+  if (!process.env.OPENAI_API_KEY && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
+    console.warn('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
   }
-
-  return missing;
 }
 
 // Keep both OpenAI key env names aligned to avoid stale-key mismatches across modules.
@@ -128,7 +127,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   let headersSent = false;
 
   const maybeInit = () => {
-    if (gz || headersSent) return;
+    if (gz || headersSent || res.headersSent) return;
     const ct = String(res.getHeader("content-type") ?? "");
     if (!compressible(ct)) return;
     headersSent = true;
@@ -528,6 +527,7 @@ async function bootstrapServer(): Promise<void> {
     console.error("[Environment] Critical environment variables missing:", envErrors);
     process.exit(1);
   }
+  warnOptionalEnv();
 
   try {
     await initializeSystem();
@@ -570,20 +570,14 @@ async function initializeSystem() {
   let isAuthenticatedMiddleware: any = null;
 
   // Auth setup — critical; failure here means API auth middleware is absent
+  // Always use standalone (access-code) auth — the frontend's PasswordGate posts
+  // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    if (process.env.REPL_ID) {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("./replit_integrations/auth");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Hosted environment auth initialized (Replit)");
-    } else {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Standalone Auth initialized");
-    }
+    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
+    await setupAuth(app);
+    registerAuthRoutes(app);
+    isAuthenticatedMiddleware = isAuthenticated;
+    log("Standalone Auth initialized");
   } catch (e) {
     console.error("[Init] Auth setup failed:", e);
   }

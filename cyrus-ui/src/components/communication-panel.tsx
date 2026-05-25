@@ -93,7 +93,7 @@ function getPeerPresenceLabelClass(status: OnlineUser["status"]) {
     case "online":
       return "text-sky-300";
     case "busy":
-      return "text-amber-200/90";
+      return "text-[#e11d48]/80";
     case "in_call":
       return "text-rose-400";
     default:
@@ -119,7 +119,7 @@ function PresenceDot(
           className={cn(
             "relative block h-2.5 w-2.5 rounded-full border-2 border-[#030712]",
             live && "bg-sky-400 shadow-[0_0_14px_rgba(56,189,248,0.95)]",
-            !live && reconnecting && "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.75)] animate-pulse",
+            !live && reconnecting && "bg-[#e11d48] shadow-[0_0_10px_rgba(225,29,72,0.75)] animate-pulse",
             !live && !reconnecting && "bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.9)]",
           )}
         />
@@ -141,7 +141,7 @@ function PresenceDot(
         className={cn(
           "relative block h-2.5 w-2.5 rounded-full border-2 border-[#0a1628]",
           live && "bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.9)]",
-          busy && "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]",
+          busy && "bg-[#e11d48] shadow-[0_0_8px_rgba(225,29,72,0.7)]",
           !live && !busy && "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.85)]",
         )}
       />
@@ -243,7 +243,7 @@ function CommAttachmentBubble({ attachment, isOwn }: { attachment: CommAttachmen
         rel="noopener noreferrer"
         className={`mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${border} hover:bg-sky-950/40`}
       >
-        <FileText className="h-4 w-4 shrink-0 text-amber-500" />
+        <FileText className="h-4 w-4 shrink-0 text-[#06b6d4]/80" />
         <span className="truncate font-medium">{fileName}</span>
         <Download className="h-4 w-4 shrink-0 opacity-60" />
       </a>
@@ -1034,8 +1034,8 @@ export function CommunicationPanel({
 
             {isReconnecting ? (
               <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                <span className="text-sm font-mono text-amber-300">RECONNECTING ({reconnectAttempt}/10)</span>
+                <RefreshCw className="w-4 h-4 animate-spin text-[#e11d48]" />
+                <span className="text-sm font-mono text-[#e11d48]/80">RECONNECTING ({reconnectAttempt}/10)</span>
               </div>
             ) : isConnected ? (
               <div className="flex items-center gap-2">

@@ -7,7 +7,6 @@ import {
   Atom,
   Activity,
   Play,
-  Pause,
   RotateCcw,
   Loader2,
   CheckCircle2,
@@ -30,6 +29,15 @@ interface QuantumState {
   coherenceLevel: number;
   processingPower: number;
 }
+
+const PANEL: React.CSSProperties = {
+  background: "rgba(13,13,30,0.75)",
+  backdropFilter: "blur(12px)",
+};
+
+const INNER: React.CSSProperties = {
+  background: "rgba(255,255,255,0.04)",
+};
 
 export function QuantumPage() {
   const [selectedCircuit, setSelectedCircuit] = useState<string | null>(null);
@@ -117,13 +125,13 @@ export function QuantumPage() {
   });
 
   const gateColors: Record<string, string> = {
-    H: "bg-blue-500",
-    X: "bg-red-500",
-    Y: "bg-green-500",
-    Z: "bg-purple-500",
-    CNOT: "bg-amber-500",
-    T: "bg-cyan-500",
-    S: "bg-pink-500",
+    H: "bg-violet-500/80",
+    X: "bg-[#e11d48]/80",
+    Y: "bg-emerald-500/80",
+    Z: "bg-purple-500/80",
+    CNOT: "bg-amber-500/80",
+    T: "bg-cyan-500/80",
+    S: "bg-pink-500/80",
   };
 
   return (
@@ -132,48 +140,30 @@ export function QuantumPage() {
       subtitle="Quantum circuit simulation and processing"
       icon={Atom}
     >
-      <div className="mx-auto max-w-cyrus-wide space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Stats row */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Cpu className="w-5 h-5 text-violet-400" />
-              <span className="text-sm text-[rgba(235,235,245,0.5)]">Total Qubits</span>
+          {[
+            { Icon: Cpu, label: "Total Qubits", value: quantumState?.totalQubits || 0, color: "text-violet-400", border: "border-violet-500/20", glow: "rgba(139,92,246,0.15)" },
+            { Icon: Layers, label: "Circuits", value: quantumState?.circuits?.length || 0, color: "text-[#06b6d4]", border: "border-cyan-500/20", glow: "rgba(6,182,212,0.15)" },
+            { Icon: Activity, label: "Coherence", value: `${((quantumState?.coherenceLevel || 0) * 100).toFixed(1)}%`, color: "text-[#06b6d4]", border: "border-cyan-500/20", glow: "rgba(6,182,212,0.1)" },
+            { Icon: Zap, label: "Accuracy", value: `${(quantumState?.processingPower || 0).toFixed(1)}%`, color: "text-emerald-400", border: "border-emerald-500/20", glow: "rgba(34,197,94,0.1)" },
+          ].map(({ Icon, label, value, color, border, glow }) => (
+            <div key={label} className={`rounded-xl border ${border} p-4`} style={{ ...PANEL, boxShadow: `0 0 20px ${glow}` }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className={`w-5 h-5 ${color}`} />
+                <span className="text-sm text-white/50">{label}</span>
+              </div>
+              <p className={`text-3xl font-bold ${color}`} style={{ fontFamily: "'Orbitron', system-ui" }}>{value}</p>
             </div>
-            <p className="text-3xl font-bold text-violet-400">{quantumState?.totalQubits || 0}</p>
-          </div>
-
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Layers className="w-5 h-5 text-blue-400" />
-              <span className="text-sm text-[rgba(235,235,245,0.5)]">Circuits</span>
-            </div>
-            <p className="text-3xl font-bold text-blue-400">{quantumState?.circuits?.length || 0}</p>
-          </div>
-
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-5 h-5 text-cyan-400" />
-              <span className="text-sm text-[rgba(235,235,245,0.5)]">Coherence</span>
-            </div>
-            <p className="text-3xl font-bold text-cyan-400">
-              {((quantumState?.coherenceLevel || 0) * 100).toFixed(1)}%
-            </p>
-          </div>
-
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-5 h-5 text-emerald-400" />
-              <span className="text-sm text-[rgba(235,235,245,0.5)]">Accuracy</span>
-            </div>
-            <p className="text-3xl font-bold text-emerald-400">
-              {(quantumState?.processingPower || 0).toFixed(1)}%
-            </p>
-          </div>
+          ))}
         </div>
 
+        {/* Main panels */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          {/* Circuit list */}
+          <div className="rounded-xl border border-white/[0.08] p-5" style={PANEL}>
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: "'Orbitron', system-ui" }}>
               <Layers className="w-5 h-5 text-violet-400" />
               Quantum Circuits
             </h2>
@@ -188,36 +178,32 @@ export function QuantumPage() {
                   <div
                     key={circuit.id}
                     onClick={() => setSelectedCircuit(circuit.id)}
-                    className={`bg-[#2c2c2e] rounded-lg p-4 cursor-pointer transition-all ${
-                      selectedCircuit === circuit.id ? "ring-2 ring-violet-500" : "hover:bg-[#3c3c3e]"
+                    className={`rounded-lg p-4 cursor-pointer transition-all border ${
+                      selectedCircuit === circuit.id
+                        ? "border-violet-500/50 bg-violet-500/10"
+                        : "border-white/[0.06] hover:border-white/[0.12]"
                     }`}
+                    style={selectedCircuit === circuit.id ? {} : INNER}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h3 className="font-medium">{circuit.name}</h3>
-                        <p className="text-xs text-[rgba(235,235,245,0.5)]">{circuit.qubits} qubits</p>
+                        <h3 className="font-medium text-white">{circuit.name}</h3>
+                        <p className="text-xs text-white/40">{circuit.qubits} qubits</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full">
-                          {(circuit.accuracy * 100).toFixed(1)}%
-                        </span>
-                      </div>
+                      <span className="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/20">
+                        {(circuit.accuracy * 100).toFixed(1)}%
+                      </span>
                     </div>
-
-                    <div className="flex gap-1 flex-wrap">
+                    <div className="flex gap-1 flex-wrap mb-3">
                       {circuit.gates.map((gate, i) => (
-                        <span
-                          key={i}
-                          className={`px-2 py-1 rounded text-xs font-mono ${gateColors[gate] || "bg-gray-500"} text-white`}
-                        >
+                        <span key={i} className={`px-2 py-1 rounded text-xs font-mono ${gateColors[gate] || "bg-white/10"} text-white`}>
                           {gate}
                         </span>
                       ))}
                     </div>
-
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-[rgba(235,235,245,0.4)]">Coherence:</span>
-                      <div className="flex-1 h-1.5 bg-[#1c1c1e] rounded-full overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/40">Coherence:</span>
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                         <div
                           className="h-full bg-gradient-to-r from-violet-500 to-purple-500"
                           style={{ width: `${circuit.coherence * 100}%` }}
@@ -230,7 +216,7 @@ export function QuantumPage() {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-[rgba(84,84,88,0.65)]">
+            <div className="mt-4 pt-4 border-t border-white/[0.06]">
               <div className="flex items-center gap-3">
                 <input
                   type="number"
@@ -238,32 +224,35 @@ export function QuantumPage() {
                   max={16}
                   value={newCircuitQubits}
                   onChange={(e) => setNewCircuitQubits(parseInt(e.target.value) || 2)}
-                  className="w-20 bg-[#2c2c2e] border border-[rgba(84,84,88,0.65)] rounded-lg px-3 py-2 text-white"
+                  className="w-20 rounded-lg px-3 py-2 text-white text-sm border border-white/[0.08] bg-white/[0.05] focus:outline-none focus:border-violet-500/40"
                 />
-                <span className="text-sm text-[rgba(235,235,245,0.5)]">qubits</span>
+                <span className="text-sm text-white/50">qubits</span>
                 <button
                   onClick={() => createCircuitMutation.mutate()}
                   disabled={createCircuitMutation.isPending}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-medium py-2 rounded-lg transition-all disabled:opacity-50"
                 >
-                  Create Circuit
+                  {createCircuitMutation.isPending ? (
+                    <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Creating…</span>
+                  ) : "Create Circuit"}
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="bg-[#1c1c1e] border border-[rgba(84,84,88,0.65)] rounded-xl p-5">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          {/* Simulation panel */}
+          <div className="rounded-xl border border-white/[0.08] p-5" style={PANEL}>
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ fontFamily: "'Orbitron', system-ui" }}>
               <Play className="w-5 h-5 text-emerald-400" />
               Quantum Simulation
             </h2>
 
             {selectedCircuit ? (
               <div className="space-y-4">
-                <div className="bg-[#2c2c2e] rounded-lg p-4">
+                <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-[rgba(235,235,245,0.5)]">Selected Circuit</span>
-                    <span className="text-sm font-medium">
+                    <span className="text-sm text-white/50">Selected Circuit</span>
+                    <span className="text-sm font-medium text-white">
                       {quantumState?.circuits?.find(c => c.id === selectedCircuit)?.name}
                     </span>
                   </div>
@@ -273,26 +262,20 @@ export function QuantumPage() {
                     className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                   >
                     {simulateMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Simulating...
-                      </>
+                      <><Loader2 className="w-5 h-5 animate-spin" />Simulating...</>
                     ) : (
-                      <>
-                        <Play className="w-5 h-5" />
-                        Run Simulation
-                      </>
+                      <><Play className="w-5 h-5" />Run Simulation</>
                     )}
                   </button>
                 </div>
 
                 {simulationResult && (
                   <div className="space-y-3">
-                    <div className="bg-[#2c2c2e] rounded-lg p-4">
-                      <h3 className="text-sm font-medium mb-3">State Vector</h3>
+                    <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
+                      <h3 className="text-sm font-medium mb-3 text-white/70">State Vector</h3>
                       <div className="flex flex-wrap gap-2">
                         {simulationResult.stateVector?.map((state: string, i: number) => (
-                          <span key={i} className="px-3 py-1 bg-violet-500/20 text-violet-300 rounded font-mono text-sm">
+                          <span key={i} className="px-3 py-1 bg-violet-500/20 text-violet-300 rounded font-mono text-sm border border-violet-500/20">
                             {state}
                           </span>
                         ))}
@@ -300,37 +283,33 @@ export function QuantumPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-[#2c2c2e] rounded-lg p-4">
-                        <p className="text-xs text-[rgba(235,235,245,0.5)] mb-1">Fidelity</p>
-                        <p className="text-2xl font-bold text-emerald-400">
+                      <div className="rounded-lg p-4 border border-emerald-500/20" style={{ ...INNER, boxShadow: "0 0 12px rgba(34,197,94,0.08)" }}>
+                        <p className="text-xs text-white/50 mb-1">Fidelity</p>
+                        <p className="text-2xl font-bold text-emerald-400" style={{ fontFamily: "'Orbitron', system-ui" }}>
                           {(simulationResult.fidelity * 100).toFixed(2)}%
                         </p>
                       </div>
-                      <div className="bg-[#2c2c2e] rounded-lg p-4">
-                        <p className="text-xs text-[rgba(235,235,245,0.5)] mb-1">Execution Time</p>
-                        <p className="text-2xl font-bold text-cyan-400">
+                      <div className="rounded-lg p-4 border border-cyan-500/20" style={{ ...INNER, boxShadow: "0 0 12px rgba(6,182,212,0.08)" }}>
+                        <p className="text-xs text-white/50 mb-1">Execution Time</p>
+                        <p className="text-2xl font-bold text-[#06b6d4]" style={{ fontFamily: "'Orbitron', system-ui" }}>
                           {simulationResult.executionTime?.toFixed(2)}ms
                         </p>
                       </div>
                     </div>
 
-                    <div className="bg-[#2c2c2e] rounded-lg p-4">
-                      <h3 className="text-sm font-medium mb-3">Measurement Probabilities</h3>
+                    <div className="rounded-lg p-4 border border-white/[0.06]" style={INNER}>
+                      <h3 className="text-sm font-medium mb-3 text-white/70">Measurement Probabilities</h3>
                       <div className="space-y-2">
                         {simulationResult.measurements?.slice(0, 4).map((prob: number, i: number) => (
                           <div key={i} className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-[rgba(235,235,245,0.5)] w-16">
-                              |{i.toString(2).padStart(2, "0")}⟩
-                            </span>
-                            <div className="flex-1 h-2 bg-[#1c1c1e] rounded-full overflow-hidden">
+                            <span className="text-xs font-mono text-white/40 w-16">|{i.toString(2).padStart(2, "0")}⟩</span>
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                               <div
                                 className="h-full bg-gradient-to-r from-violet-500 to-purple-500"
                                 style={{ width: `${prob * 100}%` }}
                               />
                             </div>
-                            <span className="text-xs text-violet-400 w-12 text-right">
-                              {(prob * 100).toFixed(1)}%
-                            </span>
+                            <span className="text-xs text-violet-400 w-12 text-right">{(prob * 100).toFixed(1)}%</span>
                           </div>
                         ))}
                       </div>
@@ -340,11 +319,11 @@ export function QuantumPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-16 h-16 bg-violet-500/20 rounded-xl flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-violet-500/10 rounded-xl flex items-center justify-center mb-4 border border-violet-500/20">
                   <Atom className="w-8 h-8 text-violet-400" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Select a Circuit</h3>
-                <p className="text-[rgba(235,235,245,0.5)] max-w-sm">
+                <p className="text-white/40 max-w-sm text-sm">
                   Choose a quantum circuit from the list to run simulations and view results.
                 </p>
               </div>

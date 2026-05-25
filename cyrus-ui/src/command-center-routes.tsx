@@ -18,7 +18,7 @@ const NavigationPage = lazy(() =>
   import("../../client/src/pages/NavigationPage").then((m) => ({ default: m.NavigationPage })),
 );
 const CommsPage = lazy(() =>
-  import("../../client/src/pages/CommsPage").then((m) => ({ default: m.CommsPage })),
+  import("./pages/comms-hub-page").then((m) => ({ default: m.default })),
 );
 const DeviceControlPage = lazy(() =>
   import("../../client/src/pages/DeviceControlPage").then((m) => ({ default: m.DeviceControlPage })),
@@ -44,6 +44,9 @@ const IntelligenceHubPage = lazy(() =>
 );
 const DocumentBuilder = lazy(() =>
   import("./pages/document-builder").then((m) => ({ default: m.default })),
+);
+const SettingsPage = lazy(() =>
+  import("./pages/settings-page").then((m) => ({ default: m.default })),
 );
 
 function SuspenseRoute({ path, C }: { path: string; C: React.LazyExoticComponent<ComponentType<unknown>> }) {
@@ -107,6 +110,7 @@ export function CommandCenterRoutes() {
       <SuspenseRoute path="/biology" C={BiologyPage} />
       <SuspenseRoute path="/quantum" C={QuantumPage} />
       <SuspenseRoute path="/ops" C={OperationsPage} />
+      <SuspenseRoute path="/settings" C={SettingsPage} />
     </>
   );
 }
