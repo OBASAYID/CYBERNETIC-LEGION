@@ -11,10 +11,10 @@ import {
   HealthRail,
   HeroSection,
   MetricsSection,
-  ModuleWorkspaceSection,
 } from "@/components/dashboard-fresh/sections";
 import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
 import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-consoles";
+import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
 import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
@@ -23,7 +23,6 @@ type AdminTab = "modules" | "console";
 export default function DashboardFresh() {
   const role = useUserRole();
   const isAdmin = role === "admin";
-  const [moduleFilter, setModuleFilter] = useState<"all" | "core">("all");
   const [adminTab, setAdminTab] = useState<AdminTab>("modules");
   const adminConsole = isAdmin && adminTab === "console";
   const headerOperator = !isAdmin || adminTab === "modules";
@@ -35,13 +34,12 @@ export default function DashboardFresh() {
     stackSummary,
     orchestratorModules,
     navLabelByRoute,
-    visibleModules,
     onlineEngines,
     degradedEngines,
     offlineEngines,
     totalEngines,
     healthPercent,
-  } = useDashboardFreshData(moduleFilter, {
+  } = useDashboardFreshData("all", {
     enableStackSummary: loadStack,
     enableOrchestratorData: loadOrchestrator,
   });
@@ -143,14 +141,6 @@ export default function DashboardFresh() {
         </header>
 
         <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10">
-        {!isAdmin && (
-          <p className="max-w-cyrus-prose rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100/75 shadow-inner">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-400/80">Access </span>
-            Choose a module to open. System diagnostics and command tooling are available to
-            administrators only.
-          </p>
-        )}
-
         {(headerOperator || !isAdmin) && (
           <>
             <OperatorConsoleCluster
@@ -161,11 +151,7 @@ export default function DashboardFresh() {
               degradedEngines={degradedEngines}
               offlineEngines={offlineEngines}
             />
-            <ModuleWorkspaceSection
-              modules={visibleModules}
-              moduleFilter={moduleFilter}
-              setModuleFilter={setModuleFilter}
-            />
+            <PshareFeedConsole />
             <NewsTrendFeed />
           </>
         )}
