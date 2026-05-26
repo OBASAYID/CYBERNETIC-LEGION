@@ -474,6 +474,8 @@ export function CommunicationPanel({
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const callContainerRef = useRef<HTMLDivElement>(null);
   const callTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const callConnectedAtRef = useRef<number | null>(null);
+  const accumulatedCallSecondsRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Stable user ID ────────────────────────────────────────────────────────
@@ -678,16 +680,69 @@ export function CommunicationPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── Call timer ─────────────────────────────────────────────────────────────
+  // ── Call timer (stable across reconnect states) ───────────────────────────
+  const recomputeCallDuration = useCallback(() => {
+    const liveSeconds =
+      callConnectedAtRef.current == null ? 0 : Math.floor((Date.now() - callConnectedAtRef.current) / 1000);
+    setCallDuration(accumulatedCallSecondsRef.current + liveSeconds);
+  }, []);
+
   useEffect(() => {
-    if (isInCall && !isCallConnecting) {
-      callTimerRef.current = setInterval(() => setCallDuration(p => p + 1), 1000);
-    } else {
+    if (!isInCall) {
       if (callTimerRef.current) clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+      callConnectedAtRef.current = null;
+      accumulatedCallSecondsRef.current = 0;
       setCallDuration(0);
+      return;
     }
-    return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
-  }, [isInCall, isCallConnecting]);
+
+    if (isCallConnecting) {
+      // Pause duration while connection is still being established/recovered.
+      if (callConnectedAtRef.current != null) {
+        accumulatedCallSecondsRef.current += Math.floor((Date.now() - callConnectedAtRef.current) / 1000);
+        callConnectedAtRef.current = null;
+      }
+      recomputeCallDuration();
+    } else if (callConnectedAtRef.current == null) {
+      // Start/resume duration once media path is active.
+      callConnectedAtRef.current = Date.now();
+      recomputeCallDuration();
+    }
+
+    if (callTimerRef.current) clearInterval(callTimerRef.current);
+    callTimerRef.current = setInterval(recomputeCallDuration, 1000);
+    return () => {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    };
+  }, [isInCall, isCallConnecting, recomputeCallDuration]);
+
+  // ── Group call stream sync / participant cleanup ──────────────────────────
+  useEffect(() => {
+    if (!isInCall || !isGroupCall) return;
+
+    const syncGroupStreams = () => {
+      const next = webRTCService.getGroupRemoteStreams();
+      setGroupRemoteStreams((prev) => {
+        if (prev.size === next.size) {
+          let identical = true;
+          for (const [peerId, stream] of next.entries()) {
+            if (prev.get(peerId) !== stream) {
+              identical = false;
+              break;
+            }
+          }
+          if (identical) return prev;
+        }
+        return new Map(next);
+      });
+    };
+
+    syncGroupStreams();
+    const interval = window.setInterval(syncGroupStreams, 1200);
+    return () => window.clearInterval(interval);
+  }, [isInCall, isGroupCall]);
 
   // ── Fullscreen change ──────────────────────────────────────────────────────
   useEffect(() => {
