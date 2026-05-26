@@ -90,24 +90,23 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-black/50 p-4 shadow-[0_0_40px_-18px_rgba(168,85,247,0.28)] backdrop-blur-sm cyrus-xs-pshare-console",
+        "relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-slate-800/65 via-slate-900/72 to-slate-950/80 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
-      <div className="pointer-events-none absolute inset-0 cyrus-console-accent-violet" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.18]" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/45 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10">
-            <Share2 className="h-4 w-4 text-violet-200" aria-hidden />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200/25 bg-sky-200/10">
+            <Share2 className="h-4 w-4 text-sky-100" aria-hidden />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-violet-200/55">Pshare channel</p>
-              <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/12 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-violet-100/90">
-                <Radio className="h-3 w-3 text-violet-300" />
+              <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-sky-100/55">Pshare channel</p>
+              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/30 bg-sky-200/12 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-sky-100/90">
+                <Radio className="h-3 w-3 text-sky-200" />
                 Live
               </span>
             </div>
@@ -128,27 +127,27 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <Link href="/comms?tab=pshare">
           <button
             type="button"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-violet-400/35 hover:text-white cyrus-xs-pshare-open"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-sky-300/35 hover:text-white cyrus-xs-pshare-open"
           >
             Open Pshare
           </button>
         </Link>
       </div>
 
-      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/35 p-2.5 cyrus-xs-pshare-compose-wrap">
+      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/40 p-2.5 cyrus-xs-pshare-compose-wrap">
         <div className="flex items-end gap-2 cyrus-xs-pshare-compose">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Broadcast to Pshare..."
             rows={2}
-            className="min-h-11 flex-1 resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-violet-400/35"
+            className="min-h-11 flex-1 resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-sky-300/35"
           />
           <button
             type="button"
             onClick={submitPost}
             disabled={!draft.trim() || createPost.isPending}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-violet-400/35 bg-violet-600/20 px-3 text-xs text-violet-100 transition hover:bg-violet-600/30 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-sky-200/35 bg-sky-500/20 px-3 text-xs text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
           >
             <Send className="h-3.5 w-3.5" />
             Post
@@ -169,7 +168,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
           aria-live="polite"
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] font-semibold text-violet-100">
+            <span className="truncate text-[11px] font-semibold text-sky-100">
               {posts[activeIndex]?.authorName || "Operator"}
             </span>
             <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
@@ -189,7 +188,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
                   className="h-1.5 rounded-full transition-all"
                   style={{
                     width: i === activeIndex ? 16 : 6,
-                    background: i === activeIndex ? "rgba(167,139,250,0.9)" : "rgba(255,255,255,0.22)",
+                    background: i === activeIndex ? "rgba(125,211,252,0.9)" : "rgba(255,255,255,0.22)",
                   }}
                   aria-label={`Show Pshare story ${i + 1}`}
                   title={`Story ${i + 1}`}
