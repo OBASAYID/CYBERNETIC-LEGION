@@ -59,27 +59,27 @@ export default function DashboardFresh() {
   return (
     <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-transparent text-white">
       {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
-      <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/38" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/22 via-slate-950/34 to-black/38" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.18] mix-blend-soft-light"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.12] mix-blend-soft-light"
         style={{ backgroundImage: `url(${TSODILO_ROCK_ART_WALL_URL})` }}
       />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.28] mix-blend-screen"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.2] mix-blend-screen"
         style={{ backgroundImage: `url(${TSODILO_HILLS_SIGNS_URL})` }}
       />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.16] mix-blend-overlay"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.11] mix-blend-overlay"
         style={{ backgroundImage: `url(${TSODILO_CAVE_DANCE_URL})` }}
       />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.14] mix-blend-soft-light"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.1] mix-blend-soft-light"
         style={{ backgroundImage: `url(${TSODILO_MARKINGS_CANVAS_URL})` }}
       />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.11] mix-blend-multiply"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.08] mix-blend-multiply"
         style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
       />
       <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep mix-blend-screen" />

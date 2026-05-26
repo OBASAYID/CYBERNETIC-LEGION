@@ -167,7 +167,7 @@ function App() {
                       )}
 
                       <div className="relative z-10 min-h-screen transition-all duration-300" style={{ marginLeft: sidebarW }}>
-                        <div className="relative mx-auto min-h-dvh w-full max-w-cyrus-shell px-1.5 sm:px-2.5 cyrus-xs-shell-inner">
+                        <div className="relative min-h-dvh w-full max-w-cyrus-shell pl-0 pr-1 sm:pr-2 cyrus-xs-shell-inner">
                           <AppRoutes />
                         </div>
                       </div>

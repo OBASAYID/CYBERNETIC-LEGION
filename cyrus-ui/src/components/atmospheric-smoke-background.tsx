@@ -14,11 +14,11 @@ export function AtmosphericSmokeBackground() {
       {/* Deep base */}
       <div className="absolute inset-0 bg-[#080810]" />
       <div
-        className="absolute inset-0 opacity-[0.14] mix-blend-soft-light"
+        className="absolute inset-0 opacity-[0.1] mix-blend-soft-light"
         style={{ backgroundImage: "url(/tsodilo-rock-art-wall.png)", backgroundSize: "cover", backgroundPosition: "center" }}
       />
       <div
-        className="absolute inset-0 opacity-[0.1] mix-blend-overlay"
+        className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
         style={{ backgroundImage: "url(/tsodilo-symbols-stele.png)", backgroundSize: "cover", backgroundPosition: "center" }}
       />
       <div className="absolute inset-0 cyrus-ceremonial-sweep mix-blend-screen" />
@@ -79,7 +79,7 @@ export function AtmosphericSmokeBackground() {
       />
 
       {/* Vignette frame */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_40%,rgba(0,0,0,0.85)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_36%,rgba(0,0,0,0.91)_100%)]" />
 
       {/* Top border glow */}
       <div
