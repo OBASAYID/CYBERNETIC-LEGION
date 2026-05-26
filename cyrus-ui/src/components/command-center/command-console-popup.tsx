@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Share2, Terminal } from "lucide-react";
+import { Activity, Radio, Share2, Terminal, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { ModuleCommandConsole } from "./module-command-console";
 
 const sideIconClass =
-  "flex h-11 w-11 items-center justify-center rounded-2xl border border-white/16 bg-gradient-to-b from-slate-700/54 via-slate-900/76 to-slate-950/88 text-white/88 shadow-[0_12px_24px_rgba(0,0,0,0.34)] backdrop-blur-md transition hover:border-sky-300/35 hover:bg-slate-900/95 hover:text-sky-100 touch-manipulation";
+  "group relative w-full overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm transition hover:border-white/22 hover:bg-gradient-to-b hover:from-slate-700/62 hover:via-slate-900/78 hover:to-slate-950/88 touch-manipulation";
 
 export function CommandConsolePopup({
   open,
@@ -52,31 +52,64 @@ export function DashboardCommandSideRail({
     <>
       <aside
         className={cn(
-          "fixed top-1/2 z-40 -translate-y-1/2 cyrus-rail-inset-right",
+          "fixed top-1/2 z-40 w-[15rem] -translate-y-1/2 cyrus-rail-inset-right",
           className,
         )}
         aria-label="Quick launch"
       >
-        <div className="relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/80 to-slate-950/90 px-2 py-2.5 shadow-[0_18px_36px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-white/14 bg-gradient-to-b from-slate-700/62 via-slate-900/78 to-slate-950/86 p-3.5 shadow-[0_20px_46px_rgba(0,0,0,0.42)] backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.12]" aria-hidden />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" aria-hidden />
-          <div className="relative flex flex-col items-center gap-2">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
+          <div className="mb-2.5 flex items-center justify-between border-b border-white/10 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/12">
+                <Users className="h-4 w-4 text-sky-300" aria-hidden />
+              </div>
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-sky-200/60">Live panel</p>
+                <h3 className="text-sm font-semibold text-white/95">Activity</h3>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono text-emerald-200/85">
+              <Radio className="h-3 w-3 animate-pulse" />
+              2
+            </span>
+          </div>
+
+          <div className="relative flex flex-col gap-2">
             <Link href="/comms?tab=pshare" title="Open Pshare timeline">
-              <button type="button" className={cn(sideIconClass, "border-sky-200/25")} aria-label="Pshare">
-                <Share2 className="h-5 w-5 text-sky-200" strokeWidth={1.75} />
+              <button type="button" className={sideIconClass} aria-label="Pshare">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-slate-100 text-slate-900">
+                    <Share2 className="h-4 w-4" strokeWidth={1.85} />
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="truncate text-xs font-semibold text-white/95">Pshare</p>
+                    <p className="text-[10px] text-slate-200/78">Open live timeline</p>
+                    <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">Reply</p>
+                  </div>
+                  <Activity className="h-3.5 w-3.5 text-slate-300/65" aria-hidden />
+                </div>
               </button>
             </Link>
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className={cn(
-                sideIconClass,
-                "border-amber-200/30 bg-gradient-to-b from-amber-100/[0.22] via-slate-900/72 to-slate-950/90 text-amber-100 hover:border-amber-100/45",
-              )}
+              className={sideIconClass}
               aria-label="Open CYRUS command console"
               title="CYRUS command"
             >
-              <Terminal className="h-5 w-5 text-amber-100" strokeWidth={1.75} />
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-slate-100 text-slate-900">
+                  <Terminal className="h-4 w-4" strokeWidth={1.85} />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-xs font-semibold text-white/95">CYRUS Command</p>
+                  <p className="text-[10px] text-slate-200/78">Launch AI console</p>
+                  <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">Standby</p>
+                </div>
+                <Activity className="h-3.5 w-3.5 text-slate-300/65" aria-hidden />
+              </div>
             </button>
           </div>
         </div>
