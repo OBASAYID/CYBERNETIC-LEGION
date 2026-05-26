@@ -230,7 +230,27 @@ router.get("/api/comms/users", async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const users = await db.select().from(onlineUsers).where(eq(onlineUsers.isOnline, true));
-    const filteredUsers = users.filter(u => u.id !== userId);
+    const wsConnectedUsers = getConnectedUsers();
+    const dbById = new Map(users.map((u) => [u.id, u]));
+
+    for (const wsUser of wsConnectedUsers) {
+      if (!dbById.has(wsUser.id)) {
+        dbById.set(wsUser.id, {
+          id: wsUser.id,
+          displayName: wsUser.displayName,
+          email: null,
+          profileImageUrl: null,
+          lastSeen: wsUser.lastActivity,
+          isOnline: true,
+          socketId: null,
+          status: wsUser.inCall ? "in_call" : "online",
+          location: null,
+          deviceInfo: null,
+        } as any);
+      }
+    }
+
+    const filteredUsers = Array.from(dbById.values()).filter((u) => u.id !== userId);
     res.json(filteredUsers);
   } catch (error: any) {
     const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
@@ -249,8 +269,12 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     const includeSelf = String(req.query.includeSelf) === "1" || String(req.query.includeSelf) === "true";
     const allUsers = await db.select().from(onlineUsers);
     const liveCommsIds = getLiveCommsUserIds();
+    const wsConnectedUsers = getConnectedUsers();
+    const wsLiveIds = new Set(wsConnectedUsers.map((u) => u.id));
+    const liveIds = new Set<string>([...Array.from(liveCommsIds), ...Array.from(wsLiveIds)]);
+
     const mapRow = (u: (typeof allUsers)[number]) => {
-      const live = liveCommsIds.has(u.id);
+      const live = liveIds.has(u.id);
       const di = parseDeviceInfo(u.deviceInfo);
       const lastLocation =
         di.locationShareEnabled && di.lastLocation
@@ -273,8 +297,25 @@ router.get("/api/comms/users/all", async (req: any, res) => {
         locationShareEnabled: !!di.locationShareEnabled,
       };
     };
-    const filteredUsers = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
-    res.json(filteredUsers);
+
+    const dbMapped = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
+    const seen = new Set(dbMapped.map((u) => u.id));
+    const wsOnly = wsConnectedUsers
+      .filter((u) => !seen.has(u.id))
+      .filter((u) => includeSelf || u.id !== userId)
+      .map((u) => ({
+        id: u.id,
+        displayName: u.displayName || "Unknown User",
+        isOnline: true,
+        lastSeen: u.lastActivity?.toISOString?.() || new Date().toISOString(),
+        profileImageUrl: null,
+        status: u.inCall ? "in_call" : "online",
+        onlineSince: null,
+        lastLocation: null,
+        locationShareEnabled: false,
+      }));
+
+    res.json([...dbMapped, ...wsOnly]);
   } catch (error: any) {
     const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
     if (isTableMissing) {
