@@ -76,6 +76,7 @@ export function OnlineUsersSidebar() {
       aria-label="Online users sidebar"
     >
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
+      <div className="pointer-events-none absolute -left-8 bottom-8 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
       <div className="mb-2.5 flex items-center justify-between border-b border-white/10 pb-2.5">
         <div className="flex items-center gap-2">
@@ -100,7 +101,7 @@ export function OnlineUsersSidebar() {
       ) : (
         <div className="max-h-[min(66vh,34rem)] space-y-2 overflow-y-auto pr-1">
           {users.map((u) => (
-            <div key={u.id} className="rounded-2xl border border-white/12 bg-gradient-to-b from-white/[0.13] via-white/[0.08] to-white/[0.06] px-3 py-2.5 text-slate-100 shadow-[0_10px_24px_rgba(0,0,0,0.32)] backdrop-blur-sm">
+            <div key={u.id} className="rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm">
               <div className="flex items-center gap-2">
               <div className="relative">
                 <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-slate-100 text-[11px] font-semibold text-slate-900">
@@ -116,6 +117,9 @@ export function OnlineUsersSidebar() {
                 <p className="truncate text-xs font-semibold text-white/95">{u.name}</p>
                 <p className="text-[10px] text-slate-200/78">
                   {u.live ? "Just joined the channel" : "Viewed updates"} · {seenAgo(u.lastSeen)}
+                </p>
+                <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">
+                  {u.live ? "Reply" : "Standby"}
                 </p>
               </div>
               {u.live ? (

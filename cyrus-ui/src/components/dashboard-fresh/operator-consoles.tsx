@@ -52,10 +52,11 @@ function ConsoleShell({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-700/60 via-slate-900/74 to-slate-950/86 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_18px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
+      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-700/58 via-slate-900/78 to-slate-950/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.11),0_22px_46px_rgba(0,0,0,0.4)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
     >
       <div className={`pointer-events-none absolute inset-0 ${accentAura}`} aria-hidden />
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.16]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.06] blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" aria-hidden />
       <div className="mb-3 flex items-center gap-2">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-white/[0.04]`}>
@@ -92,16 +93,20 @@ export function SystemSpotlightConsole({
 
   return (
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber">
-      <div className="mb-3 flex gap-3 rounded-2xl border border-white/10 bg-black/25 p-2.5 cyrus-xs-spotlight-hero">
+      <div className="mb-3 flex gap-3 rounded-2xl border border-white/12 bg-gradient-to-b from-white/[0.12] via-white/[0.08] to-white/[0.06] p-2.5 shadow-[0_12px_26px_rgba(0,0,0,0.3)] cyrus-xs-spotlight-hero">
         <img
           src={TSODILO_DANCE_HERO_URL}
           alt="Tsodilo spiritual dance"
-          className="h-36 w-28 shrink-0 rounded-xl border border-white/10 object-cover"
+          className="h-36 w-28 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.28em] text-white/50">CYRUS Chronicle</p>
+          <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
           <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
-          <p className="mt-1.5 text-[11px] text-white/65">Live command intelligence, activity stream, and deployment health in one dashboard surface.</p>
+          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence, activity stream, and deployment health in one dashboard surface.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Story mode</span>
+            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Live graphics</span>
+          </div>
         </div>
       </div>
       <div className="mb-3 grid grid-cols-3 gap-2 cyrus-xs-spotlight-grid">
@@ -167,7 +172,7 @@ export function MissionStatusConsole({
   return (
     <ConsoleShell title="CYRUS AI console" kicker="Unified mission control" icon={Activity} accent="emerald">
       <div className="space-y-3">
-        <div>
+        <div className="rounded-xl border border-white/12 bg-black/22 px-3 py-2.5">
           <div className="mb-1 flex items-center justify-between text-xs text-white/70">
             <span>Field readiness</span>
             <span className="font-mono text-emerald-200">{healthPercent}%</span>
@@ -193,13 +198,13 @@ export function MissionStatusConsole({
             <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Offline</p>
           </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5">
+        <div className="rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.1] via-white/[0.07] to-white/[0.05] px-3 py-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.3)]">
           <p className="text-[9px] uppercase tracking-[0.22em] text-white/50">CYRUS AI state</p>
           <div className="mt-1 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-white/90" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
               {aiState}
             </p>
-            <span className="rounded-full border border-white/15 bg-white/[0.07] px-2 py-0.5 text-[10px] font-mono text-white/70">
+            <span className="rounded-full border border-white/22 bg-black/20 px-2 py-0.5 text-[10px] font-mono text-white/78">
               {totalEngines} engines
             </span>
           </div>

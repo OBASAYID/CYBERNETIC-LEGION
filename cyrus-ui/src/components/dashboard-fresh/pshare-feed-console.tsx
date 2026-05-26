@@ -90,12 +90,13 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/62 via-slate-900/74 to-slate-950/86 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.36)] backdrop-blur-xl cyrus-xs-pshare-console",
+        "relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/60 via-slate-900/78 to-slate-950/90 p-4 shadow-[0_20px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
@@ -163,7 +164,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
       ) : (
         <article
-          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.1] via-white/[0.06] to-white/[0.04] p-3 cyrus-xs-pshare-item transition-opacity duration-200"
+          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-slate-700/45 via-slate-900/65 to-slate-950/82 p-3 shadow-[0_10px_22px_rgba(0,0,0,0.3)] cyrus-xs-pshare-item transition-opacity duration-200"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
         >
