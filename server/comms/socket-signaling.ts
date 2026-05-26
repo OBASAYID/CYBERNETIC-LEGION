@@ -392,7 +392,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("accept-call", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const pendingCall = pendingCalls.get(data.roomId);
 
       if (!pendingCall || !user) {
@@ -400,7 +400,7 @@ export function initSocketSignaling(server: HttpServer) {
         return;
       }
 
-      const caller = users.get(pendingCall.callerId);
+      const caller = findUserByCommsId(pendingCall.callerId);
 
       if (!caller) {
         socket.emit("call-failed", { reason: "caller-disconnected" });
@@ -489,7 +489,7 @@ export function initSocketSignaling(server: HttpServer) {
       const pendingCall = pendingCalls.get(data.roomId);
 
       if (pendingCall) {
-        const caller = users.get(pendingCall.callerId);
+        const caller = findUserByCommsId(pendingCall.callerId);
 
         if (caller) {
           caller.inCall = false;
@@ -1581,11 +1581,11 @@ export function initSocketSignaling(server: HttpServer) {
     /** call:accept — recipient accepts the call */
     socket.on("call:accept", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const pendingCall = pendingCalls.get(data.roomId);
       if (!pendingCall || !user) { socket.emit("call:failed", { reason: "call-not-found" }); return; }
 
-      const caller = users.get(pendingCall.callerId);
+      const caller = findUserByCommsId(pendingCall.callerId);
       if (!caller) { socket.emit("call:failed", { reason: "caller-disconnected" }); pendingCalls.delete(data.roomId); return; }
 
       user.inCall = true;
@@ -1640,7 +1640,7 @@ export function initSocketSignaling(server: HttpServer) {
       const pendingCall = pendingCalls.get(data.roomId);
 
       if (pendingCall) {
-        const caller = users.get(pendingCall.callerId);
+        const caller = findUserByCommsId(pendingCall.callerId);
         if (caller) {
           caller.inCall = false;
           caller.currentRoomId = undefined;
