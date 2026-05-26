@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Radio, Send, Share2 } from "lucide-react";
@@ -27,6 +27,8 @@ function timeAgo(iso?: string): string {
 export function PshareFeedConsole({ className }: { className?: string }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [fading, setFading] = useState(false);
   const postsQuery = useQuery<PsharePost[]>({
     queryKey: ["/api/comms/pshare/posts", "dashboard-feed"],
     queryFn: async () => {
@@ -39,6 +41,25 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   });
 
   const posts = (postsQuery.data ?? []).slice(0, 8);
+
+  useEffect(() => {
+    if (posts.length <= 1) {
+      setActiveIndex(0);
+      return;
+    }
+    const ticker = window.setInterval(() => {
+      setFading(true);
+      window.setTimeout(() => {
+        setActiveIndex((prev) => (prev + 1) % posts.length);
+        setFading(false);
+      }, 220);
+    }, 5200);
+    return () => window.clearInterval(ticker);
+  }, [posts.length]);
+
+  useEffect(() => {
+    if (activeIndex >= posts.length) setActiveIndex(0);
+  }, [activeIndex, posts.length]);
 
   const createPost = useMutation({
     mutationFn: async (body: string) => {
@@ -142,19 +163,41 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       ) : posts.length === 0 ? (
         <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
       ) : (
-        <ul className="max-h-[min(38vh,18rem)] space-y-2 overflow-y-auto pr-1 cyrus-xs-pshare-list">
-          {posts.map((post) => (
-            <li key={post.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 cyrus-xs-pshare-item">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className="truncate text-[11px] font-semibold text-violet-100">{post.authorName || "Operator"}</span>
-                <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
-                  {timeAgo(post.createdAt)}
-                </span>
-              </div>
-              <p className="line-clamp-3 text-xs leading-relaxed text-white/72">{post.body || "Shared update"}</p>
-            </li>
-          ))}
-        </ul>
+        <article
+          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/10 bg-slate-950/45 p-3 cyrus-xs-pshare-item transition-opacity duration-200"
+          style={{ opacity: fading ? 0.18 : 1 }}
+          aria-live="polite"
+        >
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="truncate text-[11px] font-semibold text-violet-100">
+              {posts[activeIndex]?.authorName || "Operator"}
+            </span>
+            <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
+              {timeAgo(posts[activeIndex]?.createdAt)}
+            </span>
+          </div>
+          <p className="line-clamp-4 text-xs leading-relaxed text-white/72">
+            {posts[activeIndex]?.body || "Shared update"}
+          </p>
+          {posts.length > 1 && (
+            <div className="mt-2.5 flex items-center gap-1.5">
+              {posts.map((post, i) => (
+                <button
+                  key={post.id}
+                  type="button"
+                  onClick={() => setActiveIndex(i)}
+                  className="h-1.5 rounded-full transition-all"
+                  style={{
+                    width: i === activeIndex ? 16 : 6,
+                    background: i === activeIndex ? "rgba(167,139,250,0.9)" : "rgba(255,255,255,0.22)",
+                  }}
+                  aria-label={`Show Pshare story ${i + 1}`}
+                  title={`Story ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </article>
       )}
     </section>
   );

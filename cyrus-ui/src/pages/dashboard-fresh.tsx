@@ -14,6 +14,7 @@ import {
 } from "@/components/dashboard-fresh/sections";
 import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
 import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-consoles";
+import { OnlineUsersSidebar } from "@/components/dashboard-fresh/online-users-sidebar";
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -177,18 +178,23 @@ export default function DashboardFresh() {
 
         <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10 cyrus-xs-main">
         {(headerOperator || !isAdmin) && (
-          <>
-            <OperatorConsoleCluster
-              stackSummary={stackSummary}
-              healthPercent={healthPercent}
-              onlineEngines={onlineEngines}
-              totalEngines={totalEngines}
-              degradedEngines={degradedEngines}
-              offlineEngines={offlineEngines}
-            />
-            <PshareFeedConsole />
-            <NewsTrendFeed />
-          </>
+          <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem]">
+            <div className="space-y-3">
+              <OperatorConsoleCluster
+                stackSummary={stackSummary}
+                healthPercent={healthPercent}
+                onlineEngines={onlineEngines}
+                totalEngines={totalEngines}
+                degradedEngines={degradedEngines}
+                offlineEngines={offlineEngines}
+              />
+              <PshareFeedConsole />
+              <NewsTrendFeed />
+            </div>
+            <div className="xl:sticky xl:top-[5.5rem] xl:h-[calc(100vh-7rem)]">
+              <OnlineUsersSidebar />
+            </div>
+          </section>
         )}
 
         {adminConsole && (
