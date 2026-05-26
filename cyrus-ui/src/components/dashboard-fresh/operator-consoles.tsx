@@ -3,7 +3,11 @@ import { Activity, Radio, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import {
+  BOTSWANA_BEEF_EXPORTS_URL,
+  BOTSWANA_TECHNOLOGY_URL,
+  BOTSWANA_TOURISM_WILDLIFE_URL,
   CYRUS_DIAMONDS_LEATHER_URL,
+  TSODILO_DANCE_HERO_URL,
 } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
@@ -87,24 +91,56 @@ export function SystemSpotlightConsole({
 }) {
   const origin = stackSummary?.stack?.fused?.liveOrigin ?? "Single-origin fused stack";
   const ai = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
+  const pillars = [
+    { title: "Tourism", sub: "Wildlife safari", image: BOTSWANA_TOURISM_WILDLIFE_URL },
+    { title: "Culture", sub: "Tsodilo heritage", image: TSODILO_DANCE_HERO_URL },
+    { title: "Mining", sub: "Diamond strength", image: CYRUS_DIAMONDS_LEATHER_URL },
+    { title: "Beef exports", sub: "Cattle economy", image: BOTSWANA_BEEF_EXPORTS_URL },
+    { title: "Technology", sub: "Digital growth", image: BOTSWANA_TECHNOLOGY_URL },
+  ] as const;
 
   return (
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber">
       <div className="mb-3 flex gap-3 rounded-2xl border border-white/12 bg-gradient-to-b from-white/[0.12] via-white/[0.08] to-white/[0.06] p-2.5 shadow-[0_12px_26px_rgba(0,0,0,0.3)] cyrus-xs-spotlight-hero">
         <img
-          src={CYRUS_DIAMONDS_LEATHER_URL}
-          alt="Diamonds on dark leather surface"
+          src={TSODILO_DANCE_HERO_URL}
+          alt="Tsodilo spiritual dance"
           className="h-36 w-28 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
         />
         <div className="min-w-0 flex-1">
           <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
-          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Diamond Signal Ledger</h3>
-          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence with the premium diamond texture now fused into the spotlight console.</p>
+          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
+          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence blending Tsodilo spiritual dance art with premium diamond texture in one spotlight surface.</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Story mode</span>
+            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Live graphics</span>
             <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Diamond render</span>
           </div>
         </div>
+        <img
+          src={CYRUS_DIAMONDS_LEATHER_URL}
+          alt="Diamonds on dark leather surface"
+          className="h-36 w-24 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
+        />
+      </div>
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {pillars.map((pillar) => (
+          <article
+            key={pillar.title}
+            className="group relative overflow-hidden rounded-xl border border-white/15 bg-slate-900/70 p-2 shadow-[0_10px_24px_rgba(0,0,0,0.32)]"
+          >
+            <img
+              src={pillar.image}
+              alt={pillar.title}
+              className="h-20 w-full rounded-lg object-cover brightness-[0.9] contrast-[1.08] saturate-[1.05] transition duration-300 group-hover:scale-[1.03]"
+            />
+            <div className="pointer-events-none absolute inset-x-2 top-2 h-20 rounded-lg bg-gradient-to-t from-black/72 via-black/25 to-transparent" />
+            <div className="mt-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/92">{pillar.title}</p>
+              <p className="text-[10px] text-slate-300/80">{pillar.sub}</p>
+            </div>
+          </article>
+        ))}
       </div>
       <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
         <div className="rounded-2xl border border-amber-300/35 bg-[#f6d669] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
