@@ -72,9 +72,12 @@ export function OnlineUsersSidebar() {
 
   return (
     <aside
-      className="h-full min-h-[26rem] overflow-hidden rounded-3xl border border-white/12 bg-gradient-to-b from-slate-800/65 via-slate-900/72 to-slate-950/80 p-3.5 shadow-[0_18px_42px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+      className="relative h-full min-h-[26rem] overflow-hidden rounded-3xl border border-white/14 bg-gradient-to-b from-slate-700/62 via-slate-900/78 to-slate-950/86 p-3.5 shadow-[0_20px_46px_rgba(0,0,0,0.42)] backdrop-blur-xl"
       aria-label="Online users sidebar"
     >
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
+      <div className="pointer-events-none absolute -left-8 bottom-8 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
       <div className="mb-2.5 flex items-center justify-between border-b border-white/10 pb-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/12">
@@ -98,10 +101,10 @@ export function OnlineUsersSidebar() {
       ) : (
         <div className="max-h-[min(66vh,34rem)] space-y-2 overflow-y-auto pr-1">
           {users.map((u) => (
-            <div key={u.id} className="rounded-2xl border border-white/10 bg-[#f4f5f8]/95 px-3 py-2.5 text-slate-900 shadow-[0_8px_20px_rgba(0,0,0,0.16)]">
+            <div key={u.id} className="rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm">
               <div className="flex items-center gap-2">
               <div className="relative">
-                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-300/70 bg-white text-[11px] font-semibold text-slate-900">
+                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-slate-100 text-[11px] font-semibold text-slate-900">
                   {u.profileImageUrl ? (
                     <img src={u.profileImageUrl} alt={u.name} className="h-full w-full object-cover" />
                   ) : (
@@ -111,16 +114,19 @@ export function OnlineUsersSidebar() {
                 <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white ${statusTone(u.status)}`} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-slate-900">{u.name}</p>
-                <p className="text-[10px] text-slate-700/85">
+                <p className="truncate text-xs font-semibold text-white/95">{u.name}</p>
+                <p className="text-[10px] text-slate-200/78">
                   {u.live ? "Just joined the channel" : "Viewed updates"} · {seenAgo(u.lastSeen)}
+                </p>
+                <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">
+                  {u.live ? "Reply" : "Standby"}
                 </p>
               </div>
               {u.live ? (
                 <Link href="/comms">
                   <button
                     type="button"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/24 bg-white/12 text-slate-100 transition hover:bg-white/20"
                     aria-label={`Contact ${u.name}`}
                     title="Open Comms"
                   >
@@ -128,7 +134,7 @@ export function OnlineUsersSidebar() {
                   </button>
                 </Link>
               ) : (
-                <Activity className="h-3.5 w-3.5 text-slate-500/70" aria-hidden />
+                <Activity className="h-3.5 w-3.5 text-slate-300/65" aria-hidden />
               )}
               </div>
             </div>

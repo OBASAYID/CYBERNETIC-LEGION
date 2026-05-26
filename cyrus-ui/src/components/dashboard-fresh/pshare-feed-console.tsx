@@ -90,12 +90,13 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-slate-800/65 via-slate-900/72 to-slate-950/80 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl cyrus-xs-pshare-console",
+        "relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/60 via-slate-900/78 to-slate-950/90 p-4 shadow-[0_20px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
@@ -134,7 +135,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/40 p-2.5 cyrus-xs-pshare-compose-wrap">
+      <div className="mb-3 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
         <div className="flex items-end gap-2 cyrus-xs-pshare-compose">
           <textarea
             value={draft}
@@ -163,19 +164,19 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
       ) : (
         <article
-          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/10 bg-slate-950/45 p-3 cyrus-xs-pshare-item transition-opacity duration-200"
+          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-slate-700/45 via-slate-900/65 to-slate-950/82 p-3 shadow-[0_10px_22px_rgba(0,0,0,0.3)] cyrus-xs-pshare-item transition-opacity duration-200"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] font-semibold text-sky-100">
+            <span className="truncate text-[11px] font-semibold text-white/95">
               {posts[activeIndex]?.authorName || "Operator"}
             </span>
             <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
               {timeAgo(posts[activeIndex]?.createdAt)}
             </span>
           </div>
-          <p className="line-clamp-4 text-xs leading-relaxed text-white/72">
+          <p className="line-clamp-4 text-xs leading-relaxed text-slate-100/80">
             {posts[activeIndex]?.body || "Shared update"}
           </p>
           {posts.length > 1 && (
