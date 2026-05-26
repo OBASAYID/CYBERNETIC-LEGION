@@ -217,6 +217,7 @@ export function ModuleWorkspacePageShell({
         className={cn(
           "relative z-10 mx-auto w-full max-w-cyrus-shell px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
           showCommandBar &&
+            !isDashboardTheme &&
             (commandConsole === true && commandConsoleMinimized
               ? "pb-24 sm:pb-28"
               : "pb-[28rem] sm:pb-[30rem]"),
@@ -307,7 +308,17 @@ export function ModuleWorkspacePageShell({
           </div>
         </section>
       </div>
-      {showCommandBar ? <ModuleCommandConsoleDock>{commandBarNode}</ModuleCommandConsoleDock> : null}
+      {showCommandBar ? (
+        isDashboardTheme ? (
+          <div className="relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-4 sm:px-6 lg:px-8">
+            {commandBarNode}
+          </div>
+        ) : (
+          <ModuleCommandConsoleDock showBackdropGlow={!isDashboardTheme}>
+            {commandBarNode}
+          </ModuleCommandConsoleDock>
+        )
+      ) : null}
     </div>
   );
 }

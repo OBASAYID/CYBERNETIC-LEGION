@@ -48,29 +48,38 @@ export type ModuleCommandConsoleProps = {
 /**
  * Pinned to the bottom of the viewport; narrower than the workspace so the command bar stays compact and centered.
  */
-export function ModuleCommandConsoleDock({ children, className }: { children: ReactNode; className?: string }) {
+export function ModuleCommandConsoleDock({
+  children,
+  className,
+  showBackdropGlow = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  showBackdropGlow?: boolean;
+}) {
   return (
     <div
       className={cn("pointer-events-none fixed bottom-0 left-0 right-0 z-30", className)}
       role="presentation"
     >
-      {/* Gaming crimson/cyan glow behind the command console */}
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 right-0 h-[min(26rem,58vh)] overflow-hidden"
-        aria-hidden
-      >
+      {showBackdropGlow ? (
         <div
-          className="absolute inset-x-0 bottom-0 h-full opacity-[0.14] mix-blend-soft-light"
-          style={{
-            backgroundImage: "url(/tsodilo-markings-canvas.png)",
-            backgroundPosition: "center bottom",
-            backgroundSize: "cover",
-          }}
-        />
-        <div className="absolute bottom-[-1.5rem] left-[18%] h-52 w-[min(28rem,72vw)] rounded-full blur-3xl" style={{ background: "rgba(225,29,72,0.05)" }} />
-        <div className="absolute bottom-[-0.5rem] right-[12%] h-48 w-[min(32rem,78vw)] rounded-full blur-3xl" style={{ background: "rgba(6,182,212,0.04)" }} />
-        <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full blur-3xl" style={{ background: "linear-gradient(90deg, rgba(225,29,72,0.04), rgba(6,182,212,0.04), rgba(124,58,237,0.03))" }} />
-      </div>
+          className="pointer-events-none absolute bottom-0 left-0 right-0 h-[min(26rem,58vh)] overflow-hidden"
+          aria-hidden
+        >
+          <div
+            className="absolute inset-x-0 bottom-0 h-full opacity-[0.14] mix-blend-soft-light"
+            style={{
+              backgroundImage: "url(/tsodilo-markings-canvas.png)",
+              backgroundPosition: "center bottom",
+              backgroundSize: "cover",
+            }}
+          />
+          <div className="absolute bottom-[-1.5rem] left-[18%] h-52 w-[min(28rem,72vw)] rounded-full blur-3xl" style={{ background: "rgba(225,29,72,0.05)" }} />
+          <div className="absolute bottom-[-0.5rem] right-[12%] h-48 w-[min(32rem,78vw)] rounded-full blur-3xl" style={{ background: "rgba(6,182,212,0.04)" }} />
+          <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full blur-3xl" style={{ background: "linear-gradient(90deg, rgba(225,29,72,0.04), rgba(6,182,212,0.04), rgba(124,58,237,0.03))" }} />
+        </div>
+      ) : null}
       <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
         {children}
       </div>
