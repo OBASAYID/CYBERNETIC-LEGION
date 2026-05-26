@@ -642,8 +642,13 @@ class WebRTCService {
   private createWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.socket) {
+        const oldSocket = this.socket;
+        oldSocket.onopen = null;
+        oldSocket.onclose = null;
+        oldSocket.onerror = null;
+        oldSocket.onmessage = null;
         try {
-          this.socket.close();
+          oldSocket.close(1000, "Socket refresh");
         } catch {
           /* ignore */
         }
@@ -659,23 +664,38 @@ class WebRTCService {
 
       console.log("[WebRTC] Connecting to signaling server:", wsUrl);
 
+      let socket: WebSocket;
       try {
-        this.socket = new WebSocket(wsUrl);
+        socket = new WebSocket(wsUrl);
+        this.socket = socket;
       } catch (error) {
         console.error("[WebRTC] Failed to create WebSocket:", error);
         reject(error);
         return;
       }
 
+      let settled = false;
+      const settle = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(connectionTimeout);
+        if (err) reject(err);
+        else resolve();
+      };
+
       const connectionTimeout = setTimeout(() => {
-        if (this.socket && this.socket.readyState !== WebSocket.OPEN) {
-          this.socket.close();
-          reject(new Error("Connection timeout"));
+        if (this.socket === socket && socket.readyState !== WebSocket.OPEN) {
+          try {
+            socket.close();
+          } catch {
+            /* ignore */
+          }
+          settle(new Error("Connection timeout"));
         }
       }, 10000);
 
-      this.socket.onopen = () => {
-        clearTimeout(connectionTimeout);
+      socket.onopen = () => {
+        if (this.socket !== socket) return;
         console.log("[WebRTC] Connected to signaling server");
 
         const wasReconnecting = this.reconnectAttempts > 0;
@@ -688,26 +708,42 @@ class WebRTCService {
           this.onReconnected();
         }
 
-        resolve();
+        settle();
       };
 
-      this.socket.onclose = (event) => {
-        clearTimeout(connectionTimeout);
+      socket.onclose = (event) => {
+        if (this.socket === socket) {
+          this.socket = null;
+        }
+        if (!settled) {
+          settle(new Error(`WebSocket closed (${event.code}) ${event.reason || "no reason"}`));
+        }
         console.log("[WebRTC] Disconnected from signaling server", event.code, event.reason);
         this.stopHeartbeat();
 
         if (this.onDisconnected) this.onDisconnected();
 
-        if (event.code !== 1000 && this.userId) {
+        const shouldReconnect =
+          !!this.userId &&
+          event.code !== 1000 &&
+          event.code !== 1008 && // policy violation (e.g., bad/missing token)
+          event.code !== 1002 && // protocol error
+          event.code !== 1003;   // unsupported payload
+        if (shouldReconnect) {
           this.attemptReconnect();
         }
       };
 
-      this.socket.onerror = (error) => {
+      socket.onerror = (error) => {
+        if (this.socket !== socket) return;
         console.error("[WebRTC] WebSocket error:", error);
+        if (!settled) {
+          settle(new Error("WebSocket error"));
+        }
       };
 
-      this.socket.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.socket !== socket) return;
         try {
           const message = JSON.parse(event.data);
           this.handleMessage(message);
@@ -723,6 +759,9 @@ class WebRTCService {
       console.log("[WebRTC] Max reconnection attempts reached");
       return;
     }
+    if (this.reconnectTimer) {
+      return;
+    }
 
     this.reconnectAttempts++;
     const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
@@ -732,6 +771,7 @@ class WebRTCService {
     if (this.onReconnecting) this.onReconnecting(this.reconnectAttempts);
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (this.userId && this.userName) {
         this.createWebSocket()
           .then(() => {
@@ -2086,6 +2126,7 @@ class WebRTCService {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.reconnectAttempts = 0;
 
     this.disposeGroupLocal(false);
     this.cleanupCall(true);
