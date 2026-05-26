@@ -287,8 +287,8 @@ export default function DocumentsIntelligence() {
       }
     >
         <div className="text-base">
-        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2 lg:max-h-[calc(100dvh-2.75rem)] lg:items-stretch lg:gap-6 lg:overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto sm:gap-5 lg:h-full lg:max-h-full">
+        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4 sm:gap-5">
           <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
             <h2
               className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-100 sm:text-lg"
@@ -571,7 +571,7 @@ export default function DocumentsIntelligence() {
           </div>
 
           <aside
-            className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm sm:min-h-[300px] lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0 lg:h-full lg:max-h-full"
+            className="flex min-h-[300px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm"
             aria-label="Output and generated documents"
           >
             <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">

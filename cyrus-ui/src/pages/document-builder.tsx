@@ -78,8 +78,8 @@ export default function DocumentBuilder() {
       subtitle="Structured drafting with professional output controls"
       icon={ScrollText}
     >
-      <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2 lg:max-h-[calc(100dvh-2.75rem)] lg:items-stretch lg:gap-6 lg:overflow-hidden">
-        <section className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
+      <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5">
+        <section className="flex min-h-0 min-w-0 flex-col gap-4 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
           <h2
             className="flex items-center gap-2.5 text-base font-semibold text-slate-100 sm:text-lg"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
@@ -167,7 +167,7 @@ export default function DocumentBuilder() {
           </div>
         </section>
 
-        <aside className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:min-h-[300px] lg:min-h-0 lg:h-full lg:max-h-full">
+        <aside className="flex min-h-[300px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)]">
           <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">
             <h2
               className="text-base font-semibold tracking-wide text-slate-100 sm:text-lg"
