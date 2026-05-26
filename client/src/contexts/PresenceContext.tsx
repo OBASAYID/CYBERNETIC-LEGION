@@ -781,7 +781,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         `[Presence] Connecting Socket.IO to: ${socketUrl} (account=${identity.accountUserId ?? "anon"}, device=${deviceId})`,
       );
 
-      const preferWebSocket = import.meta.env.VITE_RTC_SIGNALING_WS !== "false";
+      const wsEnv = String(import.meta.env.VITE_RTC_SIGNALING_WS || "").trim().toLowerCase();
+      const websocketOnly = wsEnv === "only";
+      const pollingOnly = wsEnv === "false" || wsEnv === "polling";
+      const transports: ("websocket" | "polling")[] = pollingOnly
+        ? ["polling"]
+        : websocketOnly
+          ? ["websocket"]
+          : ["polling", "websocket"];
+      const allowUpgrade = !pollingOnly;
       const socketQuery: Record<string, string> = {};
       const q = new URLSearchParams();
       appendCommSignalingTokenToSearchParams(q);
@@ -791,14 +799,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
       const socket = io(socketUrl, {
         path: "/cyrus-io",
-        transports: preferWebSocket ? ["websocket", "polling"] : ["polling"],
+        transports,
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 2000,
         reconnectionDelayMax: 10000,
         randomizationFactor: 0.5,
         timeout: 60_000,
-        upgrade: preferWebSocket,
+        upgrade: allowUpgrade,
         forceNew: true,
         withCredentials: true,
         autoConnect: true,
