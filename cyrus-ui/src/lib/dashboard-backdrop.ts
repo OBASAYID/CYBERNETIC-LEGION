@@ -20,3 +20,15 @@ export const MODULE_FOLDER_ICON_FILTER =
 export const TSODILO_SPIRITUAL_DANCE_URL = "/tsodilo-spiritual-dance.svg";
 /** Tsodilo hills vectors + symbolic signs for dashboard atmospheric layers. */
 export const TSODILO_HILLS_SIGNS_URL = "/tsodilo-hills-signs.svg";
+/** User-provided Tsodilo ceremonial dance hero art. */
+export const TSODILO_DANCE_HERO_URL = "/tsodilo-dance-hero.png";
+/** User-provided Tsodilo hunt symbol reference art. */
+export const TSODILO_HUNT_SYMBOLS_URL = "/tsodilo-hunt-symbols.png";
+/** User-provided Tsodilo rock wall painting texture. */
+export const TSODILO_ROCK_ART_WALL_URL = "/tsodilo-rock-art-wall.png";
+/** User-provided Tsodilo cave dance mural texture. */
+export const TSODILO_CAVE_DANCE_URL = "/tsodilo-cave-dance.png";
+/** User-provided Tsodilo marks pattern panel. */
+export const TSODILO_MARKINGS_CANVAS_URL = "/tsodilo-markings-canvas.png";
+/** User-provided ancient carved symbol plate texture. */
+export const TSODILO_SYMBOLS_STELE_URL = "/tsodilo-symbols-stele.png";

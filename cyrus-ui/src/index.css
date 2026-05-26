@@ -222,6 +222,341 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+@media (max-width: 1536px) {
+  :root {
+    --cyrus-ui-width-scale: 0.64;
+  }
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --cyrus-ui-width-scale: 0.7;
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --cyrus-ui-width-scale: 0.8;
+  }
+
+  .cyrus-ceremonial-sweep {
+    animation-duration: 30s;
+    opacity: 0.78;
+  }
+
+  .cyrus-ceremonial-sweep-soft {
+    animation-duration: 36s;
+    opacity: 0.68;
+  }
+
+  .cyrus-glyph-matrix {
+    opacity: 0.85;
+  }
+
+  .cyrus-xs-title-row {
+    gap: 0.65rem;
+  }
+
+  .cyrus-xs-admin-button {
+    padding: 0.32rem 0.55rem;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --cyrus-ui-width-scale: 1;
+  }
+
+  .cyrus-xs-main {
+    gap: 0.9rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 1rem;
+    padding-bottom: 2.2rem;
+  }
+
+  .cyrus-xs-console-shell,
+  .cyrus-xs-pshare-console {
+    padding: 0.85rem;
+  }
+
+  .cyrus-xs-command-console {
+    max-height: min(84vh, 36rem);
+  }
+
+  .cyrus-xs-command-console .cyrus-glyph-matrix {
+    opacity: 0.1;
+  }
+
+  .cyrus-xs-status-row {
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .cyrus-xs-title-row {
+    gap: 0.55rem;
+  }
+
+  .cyrus-xs-admin-tabs {
+    gap: 0.35rem;
+  }
+
+  .cyrus-xs-admin-button {
+    font-size: 10px;
+    padding: 0.28rem 0.48rem;
+  }
+
+  .cyrus-xs-logout-button {
+    padding: 0.3rem 0.6rem;
+    font-size: 11px;
+  }
+
+  .cyrus-xs-spotlight-hero img {
+    height: 7.4rem;
+  }
+
+  .cyrus-xs-spotlight-grid img {
+    height: 3.35rem;
+  }
+
+  .cyrus-xs-spotlight-stats {
+    gap: 0.5rem;
+  }
+
+  .cyrus-xs-spotlight-stat-card {
+    padding: 0.55rem;
+  }
+
+  .cyrus-xs-quick-grid {
+    gap: 0.45rem;
+  }
+
+  .cyrus-xs-quick-button {
+    min-height: 2.45rem;
+    padding: 0.35rem 0.4rem;
+  }
+
+  .cyrus-xs-pshare-header {
+    margin-bottom: 0.6rem;
+  }
+
+  .cyrus-xs-pshare-open {
+    min-height: 2.4rem;
+    padding: 0.2rem 0.6rem;
+  }
+
+  .cyrus-xs-pshare-compose-wrap {
+    margin-bottom: 0.55rem;
+    padding: 0.5rem;
+  }
+
+  .cyrus-xs-pshare-compose {
+    gap: 0.45rem;
+  }
+
+  .cyrus-xs-pshare-list {
+    max-height: min(34vh, 14.5rem);
+  }
+
+  .cyrus-xs-pshare-item {
+    padding: 0.55rem 0.65rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .cyrus-xs-shell-inner {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .cyrus-xs-header-wrap {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .cyrus-xs-main {
+    gap: 0.8rem;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+    padding-top: 0.9rem;
+    padding-bottom: 2rem;
+  }
+
+  .cyrus-xs-return-home {
+    min-height: 2.1rem;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.72rem;
+  }
+
+  .cyrus-xs-console-shell,
+  .cyrus-xs-pshare-console {
+    border-radius: 0.95rem;
+    padding: 0.75rem;
+  }
+
+  .cyrus-xs-console-shell h2,
+  .cyrus-xs-pshare-console h2 {
+    font-size: 0.82rem;
+    line-height: 1.2;
+  }
+
+  .cyrus-xs-pshare-console textarea {
+    min-height: 2.55rem;
+    font-size: 0.72rem;
+  }
+
+  .cyrus-xs-pshare-console button {
+    min-height: 2.45rem;
+  }
+
+  .cyrus-xs-command-console {
+    min-height: 21rem;
+    max-height: min(83vh, 35rem);
+  }
+
+  .cyrus-xs-voice-button {
+    height: 4.35rem;
+    width: 4.35rem;
+  }
+
+  .cyrus-xs-command-input {
+    font-size: 13px;
+  }
+
+  .cyrus-xs-spotlight-hero img {
+    height: 6.8rem;
+  }
+
+  .cyrus-xs-spotlight-grid img {
+    height: 2.9rem;
+  }
+
+  .cyrus-xs-admin-button {
+    font-size: 9.5px;
+  }
+}
+
+@media (max-width: 390px) {
+  .cyrus-xs-shell-inner {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  .cyrus-xs-mobile-nav {
+    top: 0.35rem;
+    left: 0.35rem;
+    height: 2.25rem;
+    width: 2.25rem;
+  }
+
+  .cyrus-xs-header-wrap {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .cyrus-xs-main {
+    gap: 0.7rem;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+    padding-top: 0.8rem;
+    padding-bottom: 1.8rem;
+  }
+
+  .cyrus-xs-console-cluster {
+    gap: 0.55rem;
+  }
+
+  .cyrus-xs-console-shell,
+  .cyrus-xs-pshare-console {
+    border-radius: 0.85rem;
+    padding: 0.7rem;
+  }
+
+  .cyrus-xs-command-console {
+    min-height: 20rem;
+    max-height: min(82vh, 34rem);
+  }
+
+  .cyrus-xs-command-console .cyrus-symbol-watermark {
+    display: none;
+  }
+
+  .cyrus-xs-command-console .cyrus-glyph-matrix {
+    opacity: 0.08;
+  }
+
+  .cyrus-xs-voice-button {
+    height: 4.1rem;
+    width: 4.1rem;
+  }
+
+  .cyrus-xs-pipeline {
+    gap: 0.3rem;
+    padding: 0.45rem 0.5rem;
+  }
+
+  .cyrus-xs-pipeline button {
+    padding: 0.3rem 0.45rem;
+    font-size: 10px;
+  }
+
+  .cyrus-xs-command-log {
+    font-size: 11px;
+    line-height: 1.35;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .cyrus-xs-command-input {
+    min-height: 2.6rem;
+    padding: 0.45rem 0.55rem;
+    font-size: 12px;
+  }
+
+  .cyrus-xs-send-button {
+    height: 2.6rem;
+    min-width: 2.85rem;
+    padding: 0 0.75rem;
+    font-size: 12px;
+  }
+
+  .cyrus-xs-title-row {
+    gap: 0.45rem;
+  }
+
+  .cyrus-xs-admin-tabs {
+    width: 100%;
+  }
+
+  .cyrus-xs-admin-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .cyrus-xs-logout-button {
+    min-height: 2rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 10px;
+  }
+
+  .cyrus-xs-quick-button {
+    min-height: 2.25rem;
+    font-size: 10px;
+  }
+
+  .cyrus-xs-pshare-open,
+  .cyrus-xs-pshare-post {
+    min-height: 2.2rem;
+  }
+
+  .cyrus-xs-pshare-item {
+    padding: 0.5rem 0.55rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -756,6 +1091,115 @@
   will-change: transform, opacity;
 }
 
+@keyframes cyrus-ceremonial-sweep {
+  0% {
+    transform: translate3d(-24%, -10%, 0) rotate(-9deg) scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate3d(12%, 5%, 0) rotate(-3deg) scale(1.04);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(30%, 12%, 0) rotate(8deg) scale(1.08);
+    opacity: 0.2;
+  }
+}
+
+@keyframes cyrus-symbol-orbit {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate3d(0, -2%, 0) rotate(180deg) scale(1.06);
+    opacity: 0.28;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(360deg) scale(1);
+    opacity: 0.2;
+  }
+}
+
+@keyframes cyrus-glyph-drift {
+  0%,
+  100% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      0% 0%;
+    opacity: 0.2;
+  }
+  50% {
+    background-position:
+      20% 14%,
+      76% 18%,
+      0% 0%;
+    opacity: 0.34;
+  }
+}
+
+.cyrus-ceremonial-sweep {
+  background:
+    linear-gradient(
+      122deg,
+      transparent 18%,
+      rgba(251, 191, 36, 0.08) 35%,
+      rgba(125, 211, 252, 0.06) 49%,
+      rgba(217, 119, 6, 0.1) 63%,
+      transparent 82%
+    );
+  filter: blur(14px) saturate(1.06);
+  animation: cyrus-ceremonial-sweep 24s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.cyrus-ceremonial-sweep-soft {
+  background:
+    linear-gradient(
+      112deg,
+      transparent 12%,
+      rgba(148, 163, 184, 0.05) 33%,
+      rgba(59, 130, 246, 0.05) 50%,
+      rgba(251, 146, 60, 0.06) 67%,
+      transparent 90%
+    );
+  filter: blur(22px);
+  animation: cyrus-ceremonial-sweep 30s ease-in-out infinite reverse;
+  animation-delay: -7s;
+  will-change: transform, opacity;
+}
+
+.cyrus-symbol-watermark {
+  animation: cyrus-symbol-orbit 46s linear infinite;
+  will-change: transform, opacity;
+}
+
+.cyrus-glyph-matrix {
+  background-image:
+    radial-gradient(circle at 18% 30%, rgba(251, 191, 36, 0.28) 1px, transparent 1.5px),
+    radial-gradient(circle at 76% 72%, rgba(56, 189, 248, 0.24) 1px, transparent 1.5px),
+    linear-gradient(transparent, transparent);
+  background-size:
+    120px 120px,
+    146px 146px,
+    100% 100%;
+  animation: cyrus-glyph-drift 28s ease-in-out infinite;
+  will-change: background-position, opacity;
+}
+
+.cyrus-console-accent-amber {
+  background: radial-gradient(ellipse at 18% -8%, rgba(251, 191, 36, 0.2), transparent 62%);
+}
+
+.cyrus-console-accent-emerald {
+  background: radial-gradient(ellipse at 22% -6%, rgba(52, 211, 153, 0.18), transparent 64%);
+}
+
+.cyrus-console-accent-violet {
+  background: radial-gradient(ellipse at 16% -8%, rgba(167, 139, 250, 0.2), transparent 62%);
+}
+
 @keyframes cyrus-console-smoke-wisp-a {
   0%,
   100% {
@@ -835,6 +1279,12 @@
     animation: none !important;
   }
   .cyrus-module-folder-art {
+    animation: none !important;
+  }
+  .cyrus-ceremonial-sweep,
+  .cyrus-ceremonial-sweep-soft,
+  .cyrus-symbol-watermark,
+  .cyrus-glyph-matrix {
     animation: none !important;
   }
 }
