@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Activity, Radio, Sparkles, Zap } from "lucide-react";
+import { Activity, Radio, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -147,20 +147,24 @@ export function SystemSpotlightConsole({
 }
 
 export function MissionStatusConsole({
+  stackSummary,
   healthPercent,
   onlineEngines,
   totalEngines,
   degradedEngines,
   offlineEngines,
 }: {
+  stackSummary?: StackSummaryResponse;
   healthPercent: number;
   onlineEngines: number;
   totalEngines: number;
   degradedEngines: number;
   offlineEngines: number;
 }) {
+  const aiState = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
+
   return (
-    <ConsoleShell title="Mission status" kicker="Operational rail" icon={Activity} accent="emerald">
+    <ConsoleShell title="CYRUS AI console" kicker="Unified mission control" icon={Activity} accent="emerald">
       <div className="space-y-3">
         <div>
           <div className="mb-1 flex items-center justify-between text-xs text-white/70">
@@ -188,8 +192,32 @@ export function MissionStatusConsole({
             <p className="mt-0.5 text-[9px] uppercase tracking-wider text-red-200/70">Offline</p>
           </div>
         </div>
+        <div className="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5">
+          <p className="text-[9px] uppercase tracking-[0.22em] text-white/50">CYRUS AI state</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white/90" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
+              {aiState}
+            </p>
+            <span className="rounded-full border border-white/15 bg-white/[0.07] px-2 py-0.5 text-[10px] font-mono text-white/70">
+              {totalEngines} engines
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 cyrus-xs-quick-grid">
+          {QUICK_LINKS.map((link) => (
+            <Link key={link.href} href={link.href}>
+              <button
+                type="button"
+                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone}`}
+                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                {link.label}
+              </button>
+            </Link>
+          ))}
+        </div>
         <p className="text-[11px] text-white/60">
-          {totalEngines} orchestrated modules tracked · validate health before high-risk ops.
+          Mission status and quick actions are unified here for direct CYRUS AI operations.
         </p>
       </div>
     </ConsoleShell>
@@ -202,26 +230,6 @@ const QUICK_LINKS = [
   { href: "/modules", label: "Modules", tone: "border-cyan-400/35 bg-cyan-500/15 text-cyan-100" },
   { href: "/intelligence", label: "Intel", tone: "border-amber-400/35 bg-amber-500/15 text-amber-100" },
 ] as const;
-
-export function QuickActionsConsole() {
-  return (
-    <ConsoleShell title="Quick actions" kicker="Launch pad" icon={Zap} accent="violet">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 cyrus-xs-quick-grid">
-        {QUICK_LINKS.map((link) => (
-          <Link key={link.href} href={link.href}>
-            <button
-              type="button"
-              className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone}`}
-              style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-            >
-              {link.label}
-            </button>
-          </Link>
-        ))}
-      </div>
-    </ConsoleShell>
-  );
-}
 
 export function OperatorConsoleCluster({
   stackSummary,
@@ -246,16 +254,14 @@ export function OperatorConsoleCluster({
         onlineEngines={onlineEngines}
         totalEngines={totalEngines}
       />
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:gap-2.5">
-        <MissionStatusConsole
-          healthPercent={healthPercent}
-          onlineEngines={onlineEngines}
-          totalEngines={totalEngines}
-          degradedEngines={degradedEngines}
-          offlineEngines={offlineEngines}
-        />
-        <QuickActionsConsole />
-      </div>
+      <MissionStatusConsole
+        stackSummary={stackSummary}
+        healthPercent={healthPercent}
+        onlineEngines={onlineEngines}
+        totalEngines={totalEngines}
+        degradedEngines={degradedEngines}
+        offlineEngines={offlineEngines}
+      />
     </div>
   );
 }
