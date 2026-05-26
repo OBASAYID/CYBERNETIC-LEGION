@@ -249,6 +249,7 @@ export default function DocumentsIntelligence() {
 
   return (
     <ModuleWorkspacePageShell
+      theme="dashboard"
       kicker="Cyrus · Documents"
       title="Document intelligence"
       subtitle="Analysis and long-form output"
@@ -266,7 +267,7 @@ export default function DocumentsIntelligence() {
           <Button
             type="button"
             variant="outline"
-            className="text-xs border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/15"
+            className="border-white/18 bg-white/[0.07] text-xs text-slate-100 hover:bg-white/[0.13]"
             onClick={() => {
               const t = readCommandSearchShare()?.trim();
               if (!t) return;
@@ -276,7 +277,7 @@ export default function DocumentsIntelligence() {
           >
             Last command search
           </Button>
-          <Button type="button" variant="ghost" className="text-sm text-white/75" onClick={handleClearResults}>
+          <Button type="button" variant="ghost" className="text-sm text-slate-200/85 hover:bg-white/[0.08]" onClick={handleClearResults}>
             Clear
           </Button>
         </>
@@ -285,12 +286,12 @@ export default function DocumentsIntelligence() {
         <div className="text-base">
         <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2 lg:max-h-[calc(100dvh-2.75rem)] lg:items-stretch lg:gap-6 lg:overflow-hidden">
           <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto sm:gap-5 lg:h-full lg:max-h-full">
-          <section className="shrink-0 rounded-2xl border border-cyan-500/25 bg-slate-950/55 p-4 sm:p-5">
+          <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
             <h2
-              className="mb-3 flex items-center gap-2.5 text-base font-semibold text-cyan-100/90 sm:text-lg"
+              className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-100 sm:text-lg"
               style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
             >
-              <Brain className="h-5 w-5 text-cyan-400" />
+              <Brain className="h-5 w-5 text-sky-200" />
               Document analysis and examination
             </h2>
 
@@ -388,11 +389,11 @@ export default function DocumentsIntelligence() {
                     rows={3}
                     maxLength={8000}
                     placeholder="What should the analysis focus on?"
-                    className="w-full rounded-lg border border-cyan-500/25 bg-slate-900/85 px-3 py-2.5 text-base leading-relaxed text-white/95 shadow-inner placeholder:text-white/45"
+                    className="w-full rounded-lg border border-sky-300/25 bg-slate-950/70 px-3 py-2.5 text-base leading-relaxed text-white/95 shadow-inner placeholder:text-white/45"
                   />
                 </div>
 
-                <div className="rounded-xl border border-dashed border-cyan-500/30 bg-cyan-950/20 p-4">
+                <div className="rounded-xl border border-dashed border-sky-300/28 bg-slate-950/45 p-4">
                   <p className="mb-2 text-xs font-mono uppercase tracking-widest text-cyan-200/85">Source file</p>
                   <input
                     ref={analyseFileInputRef}
@@ -424,7 +425,7 @@ export default function DocumentsIntelligence() {
                 <div className="space-y-1.5">
                   <Button
                     type="button"
-                    className="h-11 w-full bg-gradient-to-r from-cyan-600 to-cyan-800 text-base text-white shadow-md shadow-cyan-900/25 disabled:opacity-50"
+                    className="h-11 w-full bg-gradient-to-r from-slate-300/25 to-sky-300/35 text-base text-white shadow-md shadow-black/25 disabled:opacity-50"
                     disabled={!stagedAnalyseFile || isSubmitting}
                     onClick={runStagedAnalyse}
                   >
@@ -445,12 +446,12 @@ export default function DocumentsIntelligence() {
               </div>
             </section>
 
-            <section className="shrink-0 rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-indigo-950/30 to-slate-950/55 p-4 sm:p-5">
+            <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
               <h2
-                className="mb-2 flex items-center gap-2 text-base font-semibold text-indigo-100/90 sm:text-lg"
+                className="mb-2 flex items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
-                <Wand2 className="h-5 w-5" />
+                <Wand2 className="h-5 w-5 text-sky-200" />
                 Generate long output
               </h2>
               <p className="mb-3 text-sm leading-relaxed text-white/60">
@@ -549,7 +550,7 @@ export default function DocumentsIntelligence() {
                 className="mt-2 w-full rounded-lg border border-white/12 bg-slate-900/70 px-3 py-2.5 text-base leading-relaxed text-white/95 placeholder:text-white/40"
               />
               <Button
-                className="mt-3 h-11 w-full bg-gradient-to-r from-indigo-600 to-indigo-800 text-base text-white"
+                className="mt-3 h-11 w-full bg-gradient-to-r from-slate-300/22 to-sky-300/33 text-base text-white"
                 type="button"
                 disabled={!genBody.trim() || genMut.isPending}
                 onClick={() => genMut.mutate()}
@@ -567,12 +568,12 @@ export default function DocumentsIntelligence() {
           </div>
 
           <aside
-            className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-2xl border border-indigo-500/30 bg-slate-950/70 shadow-[0_0_32px_-12px_rgba(99,102,241,0.32)] backdrop-blur-sm sm:min-h-[300px] lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0 lg:h-full lg:max-h-full"
+            className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm sm:min-h-[300px] lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0 lg:h-full lg:max-h-full"
             aria-label="Output and generated documents"
           >
             <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">
               <h2
-                className="text-base font-semibold tracking-wide text-indigo-100/95 sm:text-lg"
+                className="text-base font-semibold tracking-wide text-slate-100 sm:text-lg"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Output &amp; files
@@ -582,9 +583,9 @@ export default function DocumentsIntelligence() {
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
               {syncReport && (
-                <section className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-3.5 sm:p-4">
+                <section className="rounded-xl border border-sky-300/28 bg-slate-950/55 p-3.5 sm:p-4">
                   <h3
-                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-cyan-200"
+                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-sky-200"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
                     <Scale className="h-5 w-5" />
@@ -592,7 +593,7 @@ export default function DocumentsIntelligence() {
                   </h3>
                   <p className="text-sm text-white/75">{syncReport.sourceDescription}</p>
                   <div className="mt-2 text-base leading-relaxed text-white/90">{syncReport.extractedSummary}</div>
-                  <ul className="mt-3 list-inside list-disc text-sm text-cyan-100/85">
+                  <ul className="mt-3 list-inside list-disc text-sm text-sky-100/85">
                     {(syncReport.keyFindings || []).map((f, i) => (
                       <li key={i}>{f}</li>
                     ))}
@@ -611,7 +612,7 @@ export default function DocumentsIntelligence() {
               )}
 
               {job && !["completed", "failed"].includes(job.status) && (
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3.5 text-sm text-cyan-100/85">
+                <div className="rounded-xl border border-sky-300/24 bg-slate-950/50 p-3.5 text-sm text-sky-100/85">
                   <div className="mb-1 font-mono text-sm">Job {job.id}</div>
                   {job.stageLabel} — {job.progress}%
                 </div>
@@ -639,7 +640,7 @@ export default function DocumentsIntelligence() {
                     ))}
                   </ul>
                   {job.result.analysis.knowledgeApplied && job.result.analysis.knowledgeApplied.length > 0 && (
-                    <p className="mt-2 text-sm text-cyan-200/85">
+                    <p className="mt-2 text-sm text-sky-200/85">
                       Knowledge signals: {job.result.analysis.knowledgeApplied.join(" · ")}
                     </p>
                   )}
@@ -660,7 +661,7 @@ export default function DocumentsIntelligence() {
               )}
 
               {genMut.data && (
-                <section className="flex min-h-0 flex-col gap-2 rounded-xl border border-indigo-500/35 bg-slate-900/50 p-3.5 sm:p-4">
+                <section className="flex min-h-0 flex-col gap-2 rounded-xl border border-sky-300/25 bg-slate-950/55 p-3.5 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3
                       className="text-base font-medium text-indigo-100"

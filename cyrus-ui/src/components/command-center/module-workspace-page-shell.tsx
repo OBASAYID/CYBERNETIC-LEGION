@@ -12,6 +12,7 @@ import { ModuleCommandConsole, ModuleCommandConsoleDock } from "./module-command
 export type ModuleShellIcon = ComponentType<any>;
 
 type LayoutMode = "workspace" | "page";
+type ShellTheme = "omega" | "dashboard";
 
 export type ModuleWorkspacePageShellProps = {
   children: React.ReactNode;
@@ -44,6 +45,8 @@ export type ModuleWorkspacePageShellProps = {
   commandHandoffLargeRefs?: () => ModuleHandoffLargeRef[] | undefined;
   /** When `mode="page"`, skip the default field backdrop so the child can own the full scene (e.g. comms HUD). */
   hidePageBackdrop?: boolean;
+  /** Visual theme for workspace chrome. */
+  theme?: ShellTheme;
 };
 
 function ModuleWorkspaceBackdrop() {
@@ -92,6 +95,7 @@ export function ModuleWorkspacePageShell({
   commandHandoffAttachments,
   commandHandoffLargeRefs,
   hidePageBackdrop = false,
+  theme = "omega",
 }: ModuleWorkspacePageShellProps) {
   const [commandConsoleMinimized, setCommandConsoleMinimized] = useState(false);
 
@@ -103,6 +107,8 @@ export function ModuleWorkspacePageShell({
       </div>
     );
   }
+
+  const isDashboardTheme = theme === "dashboard";
 
   if (!title?.trim() || !Icon) {
     return (
@@ -153,8 +159,12 @@ export function ModuleWorkspacePageShell({
             frameClassName,
           )}
           style={{
-            background: "linear-gradient(135deg, rgba(225,29,72,0.3), rgba(6,182,212,0.15), rgba(225,29,72,0.1))",
-            boxShadow: "0 0 60px rgba(225,29,72,0.08), 0 0 120px rgba(225,29,72,0.04)",
+            background: isDashboardTheme
+              ? "linear-gradient(135deg, rgba(148,163,184,0.28), rgba(30,41,59,0.18), rgba(125,211,252,0.12))"
+              : "linear-gradient(135deg, rgba(225,29,72,0.3), rgba(6,182,212,0.15), rgba(225,29,72,0.1))",
+            boxShadow: isDashboardTheme
+              ? "0 0 56px rgba(15,23,42,0.3), 0 0 100px rgba(2,6,23,0.25)"
+              : "0 0 60px rgba(225,29,72,0.08), 0 0 120px rgba(225,29,72,0.04)",
           }}
         >
           {/* Dot grid inside frame */}
@@ -168,7 +178,10 @@ export function ModuleWorkspacePageShell({
           {/* Inner surface */}
           <div
             className="relative rounded-2xl p-4 sm:p-5"
-            style={{ background: "rgba(13,13,30,0.92)", backdropFilter: "blur(20px)" }}
+            style={{
+              background: isDashboardTheme ? "rgba(15,23,42,0.88)" : "rgba(13,13,30,0.92)",
+              backdropFilter: "blur(20px)",
+            }}
           >
             {/* Header */}
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -176,7 +189,12 @@ export function ModuleWorkspacePageShell({
                 <Link href={backHref}>
                   <button
                     type="button"
-                    className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-white/60 transition hover:border-[#e11d48]/40 hover:text-[#e11d48] hover:bg-[#e11d48]/10"
+                    className={cn(
+                      "shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-white/60 transition",
+                      isDashboardTheme
+                        ? "hover:border-sky-200/40 hover:text-sky-100 hover:bg-sky-100/10"
+                        : "hover:border-[#e11d48]/40 hover:text-[#e11d48] hover:bg-[#e11d48]/10",
+                    )}
                     aria-label="Back"
                   >
                     <ArrowLeft className="h-5 w-5" />
@@ -186,15 +204,20 @@ export function ModuleWorkspacePageShell({
                 <div
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border"
                   style={{
-                    borderColor: "rgba(225,29,72,0.4)",
-                    background: "rgba(225,29,72,0.12)",
-                    boxShadow: "0 0 20px rgba(225,29,72,0.2)",
+                    borderColor: isDashboardTheme ? "rgba(226,232,240,0.28)" : "rgba(225,29,72,0.4)",
+                    background: isDashboardTheme ? "rgba(148,163,184,0.14)" : "rgba(225,29,72,0.12)",
+                    boxShadow: isDashboardTheme ? "0 0 16px rgba(148,163,184,0.18)" : "0 0 20px rgba(225,29,72,0.2)",
                   }}
                 >
-                  <Icon className="h-5 w-5 text-[#e11d48]" />
+                  <Icon className={cn("h-5 w-5", isDashboardTheme ? "text-slate-100" : "text-[#e11d48]")} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-mono uppercase tracking-[0.35em]" style={{ color: "rgba(225,29,72,0.7)" }}>{kicker}</p>
+                  <p
+                    className="text-[10px] font-mono uppercase tracking-[0.35em]"
+                    style={{ color: isDashboardTheme ? "rgba(226,232,240,0.65)" : "rgba(225,29,72,0.7)" }}
+                  >
+                    {kicker}
+                  </p>
                   <h1
                     className="mt-0.5 text-xl font-bold tracking-tight text-white sm:text-2xl"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
