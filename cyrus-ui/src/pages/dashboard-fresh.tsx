@@ -17,7 +17,14 @@ import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-co
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import { MODULE_RIBBON_LIGHT_URL } from "@/lib/dashboard-backdrop";
+import {
+  MODULE_RIBBON_LIGHT_URL,
+  TSODILO_CAVE_DANCE_URL,
+  TSODILO_HILLS_SIGNS_URL,
+  TSODILO_MARKINGS_CANVAS_URL,
+  TSODILO_ROCK_ART_WALL_URL,
+  TSODILO_SYMBOLS_STELE_URL,
+} from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -55,6 +62,28 @@ export default function DashboardFresh() {
       <div className="pointer-events-none fixed inset-0 bg-slate-950/28" aria-hidden />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/24 via-slate-900/22 to-black/26" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.18] mix-blend-soft-light"
+        style={{ backgroundImage: `url(${TSODILO_ROCK_ART_WALL_URL})` }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.28] mix-blend-screen"
+        style={{ backgroundImage: `url(${TSODILO_HILLS_SIGNS_URL})` }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.16] mix-blend-overlay"
+        style={{ backgroundImage: `url(${TSODILO_CAVE_DANCE_URL})` }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.14] mix-blend-soft-light"
+        style={{ backgroundImage: `url(${TSODILO_MARKINGS_CANVAS_URL})` }}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.11] mix-blend-multiply"
+        style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
+      />
+      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep mix-blend-screen" />
+      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep-soft mix-blend-overlay" />
       <div className="pointer-events-none fixed inset-0">
         <div
           className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
@@ -72,10 +101,16 @@ export default function DashboardFresh() {
         <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
       </div>
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5">
+        <header className="relative sticky top-0 z-30 overflow-hidden border-b border-white/10 bg-slate-950/55 shadow-[0_4px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.22]" />
+          <div
+            className="pointer-events-none absolute right-[6%] top-1/2 hidden h-24 w-24 -translate-y-1/2 rounded-full border border-amber-300/25 bg-cover bg-center opacity-[0.26] mix-blend-screen sm:block cyrus-symbol-watermark"
+            style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
+            aria-hidden
+          />
+          <div className="mx-auto w-full max-w-full px-4 pb-3 pt-3 sm:px-6 sm:pb-3.5 sm:pt-3.5 cyrus-xs-header-wrap">
             {/* Status + field clock — own row so nothing stacks under fixed HUD */}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-white/10 pb-3 cyrus-xs-status-row">
               <div className="flex min-w-0 items-center gap-2">
                 <div className="h-2 w-2 shrink-0 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
                 <span className="text-[10px] font-mono tracking-wider text-green-500/90">SYSTEM ACTIVE</span>
@@ -84,14 +119,14 @@ export default function DashboardFresh() {
             </div>
 
             {/* Title row: admin toggles + branding | fused + logout */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 cyrus-xs-title-row">
               <div className="flex min-w-0 max-w-full flex-1 flex-wrap items-center gap-2 sm:min-w-[12rem] sm:gap-3">
                 {isAdmin ? (
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5 cyrus-xs-admin-tabs">
                     <button
                       type="button"
                       onClick={() => setAdminTab("modules")}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs cyrus-xs-admin-button ${
                         adminTab === "modules"
                           ? "border-cyan-400/50 bg-cyan-600/25 text-cyan-50 shadow-md shadow-cyan-500/15"
                           : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
@@ -105,7 +140,7 @@ export default function DashboardFresh() {
                     <button
                       type="button"
                       onClick={() => setAdminTab("console")}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs ${
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tracking-wide transition sm:text-xs cyrus-xs-admin-button ${
                         adminTab === "console"
                           ? "border-amber-400/50 bg-amber-600/20 text-amber-50 shadow-md shadow-amber-500/15"
                           : "border-white/10 bg-slate-950/50 text-white/65 hover:border-white/20 hover:text-white/90"
@@ -129,7 +164,7 @@ export default function DashboardFresh() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/18 bg-white/[0.08] px-3 py-1.5 text-xs text-white/92 shadow-inner transition hover:border-orange-500/30 hover:bg-white/[0.12] cyrus-xs-logout-button"
                   style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
                   <LogOut className="h-3.5 w-3.5 shrink-0" />
@@ -140,7 +175,7 @@ export default function DashboardFresh() {
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10">
+        <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10 cyrus-xs-main">
         {(headerOperator || !isAdmin) && (
           <>
             <OperatorConsoleCluster

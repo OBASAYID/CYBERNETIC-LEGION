@@ -13,7 +13,7 @@ import {
   type ModuleHandoffLargeRef,
 } from "@shared/module-handoff";
 import { getSpeechRecognitionConstructor, speakCyrusTts } from "@shared/command-console-voice";
-import { SMOKE_VORTEX_TEXTURE_URL } from "@/lib/dashboard-backdrop";
+import { TSODILO_SYMBOLS_STELE_URL } from "@/lib/dashboard-backdrop";
 import { systemFetch } from "@/lib/system-api";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +59,14 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
         className="pointer-events-none absolute bottom-0 left-0 right-0 h-[min(26rem,58vh)] overflow-hidden"
         aria-hidden
       >
+        <div
+          className="absolute inset-x-0 bottom-0 h-full opacity-[0.14] mix-blend-soft-light"
+          style={{
+            backgroundImage: "url(/tsodilo-markings-canvas.png)",
+            backgroundPosition: "center bottom",
+            backgroundSize: "cover",
+          }}
+        />
         <div className="absolute bottom-[-1.5rem] left-[18%] h-52 w-[min(28rem,72vw)] rounded-full blur-3xl" style={{ background: "rgba(225,29,72,0.05)" }} />
         <div className="absolute bottom-[-0.5rem] right-[12%] h-48 w-[min(32rem,78vw)] rounded-full blur-3xl" style={{ background: "rgba(6,182,212,0.04)" }} />
         <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full blur-3xl" style={{ background: "linear-gradient(90deg, rgba(225,29,72,0.04), rgba(6,182,212,0.04), rgba(124,58,237,0.03))" }} />
@@ -337,10 +345,17 @@ export function ModuleCommandConsole({
 
   return (
     <section
-      className={cn("relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-2xl p-px sm:min-h-[26rem]", className)}
+      className={cn("relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-2xl p-px sm:min-h-[26rem] cyrus-xs-command-console", className)}
       style={{ background: "rgba(13,13,30,0.97)", border: "1px solid rgba(225,29,72,0.2)", boxShadow: "0 0 60px rgba(225,29,72,0.06), 0 20px 60px rgba(0,0,0,0.6)" }}
       aria-label="CYRUS command console"
     >
+      <div className="pointer-events-none absolute inset-0 cyrus-console-accent-amber" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.12]" aria-hidden />
+      <div
+        className="pointer-events-none absolute right-3 top-3 h-10 w-10 rounded-full border border-amber-300/30 bg-cover bg-center opacity-[0.22] mix-blend-screen cyrus-symbol-watermark"
+        style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
+        aria-hidden
+      />
       {/* Dot grid */}
       <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.04]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(225,29,72,0.6) 1px, transparent 0)", backgroundSize: "24px 24px" }} />
       {/* Corner glow top-left */}
@@ -377,7 +392,7 @@ export function ModuleCommandConsole({
               aria-pressed={isListening}
               aria-label={isListening ? "Stop listening and send to CYRUS" : "Start voice input to CYRUS"}
               className={cn(
-                "relative flex h-[4.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-1.5 pb-1.5 pt-1.5 transition focus:outline-none disabled:opacity-50 sm:h-[5.25rem] sm:w-[5.25rem]",
+                "relative flex h-[4.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-1.5 pb-1.5 pt-1.5 transition focus:outline-none disabled:opacity-50 sm:h-[5.25rem] sm:w-[5.25rem] cyrus-xs-voice-button",
               )}
               style={{
                 border: isListening ? "2px solid rgba(6,182,212,0.6)" : "2px solid rgba(225,29,72,0.4)",
@@ -414,7 +429,7 @@ export function ModuleCommandConsole({
           </div>
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 sm:gap-2" style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.12)" }}>
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 sm:gap-2 cyrus-xs-pipeline" style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.12)" }}>
           <span className="w-full pl-0.5 text-[9px] font-mono uppercase tracking-[0.28em] text-[#e11d48]/50 sm:w-auto sm:pl-0">Pipeline</span>
           {pipelineTargets.map(({ id, path, title, labelOverride }) => {
             const nav = getCommandCenterNavByPath(path);
@@ -439,7 +454,7 @@ export function ModuleCommandConsole({
         </div>
         {handoffHint && <p className="mb-2 text-[11px] text-[#e11d48]/80">{handoffHint}</p>}
 
-        <div className="mb-3 min-h-0 flex-1 overflow-y-auto rounded-xl px-3 py-2.5 font-mono text-xs leading-relaxed text-white/85 sm:px-3 sm:py-2.5 sm:text-[13px]" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="mb-3 min-h-0 flex-1 overflow-y-auto rounded-xl px-3 py-2.5 font-mono text-xs leading-relaxed text-white/85 sm:px-3 sm:py-2.5 sm:text-[13px] cyrus-xs-command-log" style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
           {log.length === 0 && !send.isPending && (
             <p className="text-white/25">Prompt CYRUS — query, plan, or ask anything in this module.</p>
           )}
@@ -470,7 +485,7 @@ export function ModuleCommandConsole({
             }}
             placeholder="Message CYRUS…"
             rows={2}
-            className="min-h-[3rem] max-h-32 flex-1 resize-y rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none"
+            className="min-h-[3rem] max-h-32 flex-1 resize-y rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none cyrus-xs-command-input"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(225,29,72,0.2)" }}
             disabled={send.isPending}
           />
@@ -478,7 +493,7 @@ export function ModuleCommandConsole({
             type="button"
             onClick={submit}
             disabled={!input.trim() || send.isPending}
-            className="inline-flex h-12 min-w-[3.5rem] shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-30"
+            className="inline-flex h-12 min-w-[3.5rem] shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-30 cyrus-xs-send-button"
             style={{ background: "rgba(225,29,72,0.85)", border: "1px solid rgba(225,29,72,0.5)" }}
           >
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

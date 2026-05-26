@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { Radio, Send, Share2 } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { cn } from "@/lib/utils";
+import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 type PsharePost = {
   id: string;
@@ -68,13 +69,15 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-black/50 p-4 shadow-[0_0_40px_-18px_rgba(168,85,247,0.28)] backdrop-blur-sm",
+        "relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-black/50 p-4 shadow-[0_0_40px_-18px_rgba(168,85,247,0.28)] backdrop-blur-sm cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
+      <div className="pointer-events-none absolute inset-0 cyrus-console-accent-violet" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.18]" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/45 to-transparent" />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10">
             <Share2 className="h-4 w-4 text-violet-200" aria-hidden />
@@ -95,19 +98,24 @@ export function PshareFeedConsole({ className }: { className?: string }) {
             </h2>
           </div>
         </div>
+        <div
+          className="pointer-events-none hidden h-10 w-10 rounded-full border border-violet-300/30 bg-cover bg-center opacity-40 mix-blend-screen sm:block cyrus-symbol-watermark"
+          style={{ backgroundImage: `url(${TSODILO_HUNT_SYMBOLS_URL})` }}
+          aria-hidden
+        />
 
         <Link href="/comms?tab=pshare">
           <button
             type="button"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-violet-400/35 hover:text-white"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-violet-400/35 hover:text-white cyrus-xs-pshare-open"
           >
             Open Pshare
           </button>
         </Link>
       </div>
 
-      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/35 p-2.5">
-        <div className="flex items-end gap-2">
+      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/35 p-2.5 cyrus-xs-pshare-compose-wrap">
+        <div className="flex items-end gap-2 cyrus-xs-pshare-compose">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -119,7 +127,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
             type="button"
             onClick={submitPost}
             disabled={!draft.trim() || createPost.isPending}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-violet-400/35 bg-violet-600/20 px-3 text-xs text-violet-100 transition hover:bg-violet-600/30 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-violet-400/35 bg-violet-600/20 px-3 text-xs text-violet-100 transition hover:bg-violet-600/30 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
           >
             <Send className="h-3.5 w-3.5" />
             Post
@@ -134,9 +142,9 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       ) : posts.length === 0 ? (
         <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
       ) : (
-        <ul className="max-h-[min(38vh,18rem)] space-y-2 overflow-y-auto pr-1">
+        <ul className="max-h-[min(38vh,18rem)] space-y-2 overflow-y-auto pr-1 cyrus-xs-pshare-list">
           {posts.map((post) => (
-            <li key={post.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+            <li key={post.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 cyrus-xs-pshare-item">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="truncate text-[11px] font-semibold text-violet-100">{post.authorName || "Operator"}</span>
                 <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">

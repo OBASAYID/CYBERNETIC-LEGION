@@ -2,6 +2,12 @@ import type { ReactNode } from "react";
 import { Activity, Radio, Sparkles, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
+import {
+  TSODILO_CAVE_DANCE_URL,
+  TSODILO_DANCE_HERO_URL,
+  TSODILO_HUNT_SYMBOLS_URL,
+  TSODILO_MARKINGS_CANVAS_URL,
+} from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
 function ConsoleShell({
@@ -35,11 +41,21 @@ function ConsoleShell({
         : accent === "emerald"
           ? "text-emerald-300"
           : "text-cyan-300";
+  const accentAura =
+    accent === "amber"
+      ? "cyrus-console-accent-amber"
+      : accent === "violet"
+        ? "cyrus-console-accent-violet"
+        : accent === "emerald"
+          ? "cyrus-console-accent-emerald"
+          : "";
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-950/75 via-slate-950/55 to-black/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm ${className}`}
+      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-950/75 via-slate-950/55 to-black/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm cyrus-xs-console-shell ${className}`}
     >
+      <div className={`pointer-events-none absolute inset-0 ${accentAura}`} aria-hidden />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.16]" aria-hidden />
       <div className="mb-3 flex items-center gap-2">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-white/[0.04]`}>
           <Icon className={`h-4 w-4 ${iconTone}`} aria-hidden />
@@ -75,20 +91,44 @@ export function SystemSpotlightConsole({
 
   return (
     <ConsoleShell title="System spotlight" kicker="Priority surface" icon={Sparkles} accent="amber">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.08] p-3">
+      <div className="mb-3 overflow-hidden rounded-xl border border-amber-400/20 bg-black/30 cyrus-xs-spotlight-hero">
+        <img
+          src={TSODILO_DANCE_HERO_URL}
+          alt="Tsodilo spiritual dance"
+          className="h-36 w-full object-cover"
+        />
+      </div>
+      <div className="mb-3 grid grid-cols-3 gap-2 cyrus-xs-spotlight-grid">
+        <img
+          src={TSODILO_HUNT_SYMBOLS_URL}
+          alt="Tsodilo hunt symbols"
+          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
+        />
+        <img
+          src={TSODILO_CAVE_DANCE_URL}
+          alt="Tsodilo cave dance mural"
+          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
+        />
+        <img
+          src={TSODILO_MARKINGS_CANVAS_URL}
+          alt="Tsodilo symbolic markings"
+          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3 cyrus-xs-spotlight-stats">
+        <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
           <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/55">Stack health</p>
           <p className="mt-1 text-2xl font-bold text-amber-50">{healthPercent}%</p>
           <p className="mt-1 text-xs text-white/65">
             {onlineEngines}/{totalEngines} engines online
           </p>
         </div>
-        <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/[0.08] p-3">
+        <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
           <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-200/55">Fused origin</p>
           <p className="mt-1 truncate text-sm font-semibold text-cyan-50">{origin}</p>
           <p className="mt-1 text-xs text-white/65">Public app endpoint</p>
         </div>
-        <div className="rounded-xl border border-violet-400/20 bg-violet-500/[0.08] p-3">
+        <div className="rounded-xl border border-violet-400/20 bg-violet-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
           <p className="text-[10px] font-mono uppercase tracking-widest text-violet-200/55">CYRUS AI</p>
           <p className="mt-1 text-sm font-semibold text-violet-50">{ai}</p>
           <p className="mt-1 truncate text-xs text-white/65">
@@ -160,12 +200,12 @@ const QUICK_LINKS = [
 export function QuickActionsConsole() {
   return (
     <ConsoleShell title="Quick actions" kicker="Launch pad" icon={Zap} accent="violet">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 cyrus-xs-quick-grid">
         {QUICK_LINKS.map((link) => (
           <Link key={link.href} href={link.href}>
             <button
               type="button"
-              className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation ${link.tone}`}
+              className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone}`}
               style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
             >
               {link.label}
@@ -193,7 +233,7 @@ export function OperatorConsoleCluster({
   offlineEngines: number;
 }) {
   return (
-    <div className="flex flex-col gap-2 lg:gap-2.5">
+    <div className="flex flex-col gap-2 lg:gap-2.5 cyrus-xs-console-cluster">
       <SystemSpotlightConsole
         stackSummary={stackSummary}
         healthPercent={healthPercent}

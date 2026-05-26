@@ -13,6 +13,16 @@ export function AtmosphericSmokeBackground() {
     >
       {/* Deep base */}
       <div className="absolute inset-0 bg-[#080810]" />
+      <div
+        className="absolute inset-0 opacity-[0.14] mix-blend-soft-light"
+        style={{ backgroundImage: "url(/tsodilo-rock-art-wall.png)", backgroundSize: "cover", backgroundPosition: "center" }}
+      />
+      <div
+        className="absolute inset-0 opacity-[0.1] mix-blend-overlay"
+        style={{ backgroundImage: "url(/tsodilo-symbols-stele.png)", backgroundSize: "cover", backgroundPosition: "center" }}
+      />
+      <div className="absolute inset-0 cyrus-ceremonial-sweep mix-blend-screen" />
+      <div className="absolute inset-0 cyrus-ceremonial-sweep-soft mix-blend-overlay" />
 
       {/* Dot grid */}
       <div
