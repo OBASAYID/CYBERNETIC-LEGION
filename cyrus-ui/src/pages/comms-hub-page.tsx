@@ -37,6 +37,24 @@ interface ChatMsg {
   content: string; createdAt: string; messageType?: string;
 }
 
+function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { id: string; name: string } | null): ChatMsg {
+  const senderId = String(raw?.senderId ?? raw?.from ?? "");
+  const fallbackSender =
+    senderId && senderId === myId
+      ? myName
+      : senderId && targetUser && senderId === targetUser.id
+        ? targetUser.name
+        : "Operator";
+  return {
+    id: String(raw?.id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+    senderId,
+    senderName: String(raw?.senderName ?? raw?.displayName ?? raw?.name ?? fallbackSender),
+    content: String(raw?.content ?? raw?.message ?? ""),
+    createdAt: String(raw?.createdAt ?? raw?.timestamp ?? new Date().toISOString()),
+    messageType: typeof raw?.messageType === "string" ? raw.messageType : undefined,
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════
    CSS ANIMATIONS
 ══════════════════════════════════════════════════════════════ */
@@ -315,11 +333,16 @@ function ChatPanel({ myId, myName, targetUser }:
     if (!targetUser) return;
     const load = () =>
       systemFetch(`/api/comms/messages/${targetUser.id}`)
-        .then(r=>r.json()).then(d=>setMsgs(Array.isArray(d)?d:d?.messages??[])).catch(()=>{});
+        .then(r=>r.json())
+        .then(d => {
+          const list = Array.isArray(d) ? d : d?.messages ?? [];
+          setMsgs(list.map((m: any) => normalizeChatMsg(m, myId, myName, targetUser)));
+        })
+        .catch(()=>{});
     load();
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
-  }, [targetUser?.id]);
+  }, [targetUser?.id, myId, myName, targetUser]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [msgs]);
 
@@ -327,7 +350,12 @@ function ChatPanel({ myId, myName, targetUser }:
     if (!input.trim()||!targetUser||sending) return;
     setSending(true);
     const text = input.trim(); setInput("");
-    setMsgs(p=>[...p,{id:`opt-${Date.now()}`,senderId:myId,senderName:myName,content:text,createdAt:new Date().toISOString()}]);
+    setMsgs(p=>[...p, normalizeChatMsg(
+      { id: `opt-${Date.now()}`, senderId: myId, senderName: myName, content: text, createdAt: new Date().toISOString() },
+      myId,
+      myName,
+      targetUser
+    )]);
     try {
       await systemFetch("/api/comms/messages",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({recipientId:targetUser.id,content:text})});
@@ -382,13 +410,16 @@ function ChatPanel({ myId, myName, targetUser }:
           </div>
         )}
         {msgs.map(msg => {
+          const safeSenderName = msg.senderName || "Operator";
+          const safeCreatedAt = msg.createdAt || new Date().toISOString();
+          const safeContent = msg.content || "";
           const mine = msg.senderId===myId;
           return (
             /* Activity-feed style card: avatar + name/time + message + Reply */
             <div key={msg.id} className="flex gap-3" style={{ animation:"cy-slide-up 0.2s ease" }}>
               {/* Round avatar — always on left */}
               <div className="relative shrink-0 mt-0.5">
-                <Avatar name={msg.senderName} size={36} />
+                <Avatar name={safeSenderName} size={36} />
                 {mine && (
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2"
                     style={{ background:C.green, borderColor:"#1e1e24" }} />
@@ -402,15 +433,15 @@ function ChatPanel({ myId, myName, targetUser }:
                 }}>
                 {/* Name + time row */}
                 <div className="flex items-baseline gap-2 mb-1.5">
-                  <p className="text-[12px] font-bold text-white/90 truncate">{msg.senderName}</p>
-                  <p className="text-[9px] text-white/30 shrink-0">{timeAgo(msg.createdAt)}</p>
+                  <p className="text-[12px] font-bold text-white/90 truncate">{safeSenderName}</p>
+                  <p className="text-[9px] text-white/30 shrink-0">{timeAgo(safeCreatedAt)}</p>
                 </div>
                 {/* Message text */}
-                <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p>
+                <p className="text-[12px] text-white/70 leading-relaxed">{safeContent}</p>
                 {/* Reply button — matches reference "Reply" link */}
                 {!mine && (
                   <button type="button"
-                    onClick={()=>setInput(`@${msg.senderName} `)}
+                    onClick={()=>setInput(`@${safeSenderName} `)}
                     className="mt-2 text-[10px] font-semibold text-white/35 hover:text-white/65 transition-colors">
                     Reply
                   </button>
