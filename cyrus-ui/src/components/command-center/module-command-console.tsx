@@ -70,7 +70,6 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
         <div className="absolute bottom-[-1.5rem] left-[18%] h-52 w-[min(28rem,72vw)] rounded-full blur-3xl" style={{ background: "rgba(225,29,72,0.05)" }} />
         <div className="absolute bottom-[-0.5rem] right-[12%] h-48 w-[min(32rem,78vw)] rounded-full blur-3xl" style={{ background: "rgba(6,182,212,0.04)" }} />
         <div className="absolute bottom-0 left-1/2 h-40 w-[min(48rem,96vw)] -translate-x-1/2 rounded-full blur-3xl" style={{ background: "linear-gradient(90deg, rgba(225,29,72,0.04), rgba(6,182,212,0.04), rgba(124,58,237,0.03))" }} />
-        <div className="absolute bottom-0 left-0 right-0 h-20" style={{ background: "linear-gradient(to top, rgba(8,8,16,0.6), transparent)" }} />
       </div>
       <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
         {children}
