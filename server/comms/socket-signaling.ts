@@ -513,7 +513,7 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] WebRTC offer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-offer", {
             offer: data.offer,
@@ -531,7 +531,7 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] WebRTC answer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-answer", {
             answer: data.answer,
@@ -548,7 +548,7 @@ export function initSocketSignaling(server: HttpServer) {
       const fromPeerId = (socket as any).userId;
 
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-ice-candidate", {
             candidate: data.candidate,
@@ -570,7 +570,7 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] ICE restart relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc-ice-restart", {
             offer: data.offer,
@@ -596,7 +596,7 @@ export function initSocketSignaling(server: HttpServer) {
       restartAttempt?: number;
     }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       console.warn(
         `[Socket.IO] ICE diagnostic from ${user?.displayName || userId}: ` +
         `event=${data.event} iceGathering=${data.iceGatheringState} ` +
@@ -607,7 +607,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("end-call", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
 
       if (user) {
         user.inCall = false;
@@ -659,7 +659,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("send-message", async (data: EnhancedMessage) => {
       const senderId = (socket as any).userId;
-      const sender = users.get(senderId);
+      const sender = getSocketUser(socket) || findUserByCommsId(senderId);
 
       if (!sender) return;
 
@@ -691,7 +691,7 @@ export function initSocketSignaling(server: HttpServer) {
           socket.to(`group_${data.groupId}`).emit("new-message", outgoingPayload);
         }
       } else if (data.targetUserId) {
-        const target = users.get(data.targetUserId);
+        const target = findUserByCommsId(data.targetUserId);
         if (target) {
           io.to(target.socketId).emit("new-message", outgoingPayload);
         } else {
@@ -731,7 +731,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("create-group", async (data: { name: string; members: string[] }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -759,7 +759,7 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       for (const memberId of allMembers) {
-        const member = users.get(memberId);
+        const member = findUserByCommsId(memberId);
         if (member) {
           const memberSocket = io.sockets.sockets.get(member.socketId);
           memberSocket?.join(`group_${groupId}`);
@@ -778,7 +778,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("join-group", (data: { groupId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const room = groupRooms.get(data.groupId);
 
       if (!user || !room) {
@@ -807,7 +807,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("leave-group", (data: { groupId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const room = groupRooms.get(data.groupId);
 
       if (!room) return;
@@ -829,7 +829,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("group-call", async (data: { groupId: string; callType: "audio" | "video" }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const room = groupRooms.get(data.groupId);
 
       if (!user || !room) {
@@ -874,7 +874,7 @@ export function initSocketSignaling(server: HttpServer) {
 
       for (const memberId of room.members) {
         if (memberId === userId) continue;
-        const member = users.get(memberId);
+        const member = findUserByCommsId(memberId);
         if (member && !member.inCall) {
           io.to(member.socketId).emit("incoming-group-call", {
             callerId: userId,
@@ -908,7 +908,7 @@ export function initSocketSignaling(server: HttpServer) {
       roomId?: string;
     }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const allParticipants = Array.from(new Set([userId, ...data.participantIds]));
@@ -979,7 +979,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("join-group-call", (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       const activeCall = activeCalls.get(data.roomId);
 
       if (!user || !activeCall) {
@@ -1019,7 +1019,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("typing-start", (data: { targetUserId?: string; groupId?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const payload = { userId, displayName: user.displayName };
@@ -1027,7 +1027,7 @@ export function initSocketSignaling(server: HttpServer) {
       if (data.groupId) {
         socket.to(`group_${data.groupId}`).emit("typing-start", { ...payload, groupId: data.groupId });
       } else if (data.targetUserId) {
-        const target = users.get(data.targetUserId);
+        const target = findUserByCommsId(data.targetUserId);
         if (target) {
           io.to(target.socketId).emit("typing-start", payload);
         }
@@ -1036,7 +1036,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("typing-stop", (data: { targetUserId?: string; groupId?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const payload = { userId, displayName: user.displayName };
@@ -1044,7 +1044,7 @@ export function initSocketSignaling(server: HttpServer) {
       if (data.groupId) {
         socket.to(`group_${data.groupId}`).emit("typing-stop", { ...payload, groupId: data.groupId });
       } else if (data.targetUserId) {
-        const target = users.get(data.targetUserId);
+        const target = findUserByCommsId(data.targetUserId);
         if (target) {
           io.to(target.socketId).emit("typing-stop", payload);
         }
@@ -1062,7 +1062,7 @@ export function initSocketSignaling(server: HttpServer) {
       socket.to(data.roomId).emit("screen-share-started", {
         roomId: data.roomId,
         userId,
-        displayName: users.get(userId)?.displayName,
+        displayName: (getSocketUser(socket) || findUserByCommsId(userId))?.displayName,
       });
     });
 
@@ -1090,7 +1090,7 @@ export function initSocketSignaling(server: HttpServer) {
       fileMimeType?: string;
     }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const msgType = data.messageType || "text";
@@ -1125,7 +1125,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("send-private-message", async (data: { roomId: string; message: string; privateRecipients: string[]; mediaUrls?: string[]; messageType?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const msgType = data.messageType || "text";
@@ -1146,7 +1146,7 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       for (const recipientId of data.privateRecipients) {
-        const target = users.get(recipientId);
+        const target = findUserByCommsId(recipientId);
         if (target) {
           io.to(target.socketId).emit("private-message-received", {
             senderId: userId,
@@ -1163,7 +1163,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("send-reaction", (data: { roomId: string; emoji: string; x: number; y: number }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       io.to(data.roomId).emit("reaction-received", {
@@ -1180,7 +1180,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("share-location", (data: { roomId: string; latitude: number; longitude: number }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const activeCall = activeCalls.get(data.roomId);
@@ -1197,7 +1197,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("start-live-stream", async (data: { streamName: string; sourceType: string; sourceUrl?: string; roomId?: string; quality?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1256,7 +1256,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("join-live-stream", async (data: { streamId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       socket.join(`stream_${data.streamId}`);
@@ -1285,7 +1285,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("leave-live-stream", async (data: { streamId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
 
       socket.leave(`stream_${data.streamId}`);
 
@@ -1310,7 +1310,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("annotate-media", async (data: { mediaId: string; annotationType: string; annotationData: any; roomId?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       const annotation = {
@@ -1344,7 +1344,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("send-voice-note", (data: { roomId: string; audioData: string; duration: number }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       io.to(data.roomId).emit("voice-note-received", {
@@ -1358,7 +1358,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("update-call-quality", async (data: { roomId: string; quality: "HD" | "SD" | "Low" }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       try {
@@ -1381,7 +1381,7 @@ export function initSocketSignaling(server: HttpServer) {
       "session-recording-state",
       (data: { roomId: string; isRecording: boolean; userId?: string; displayName?: string }) => {
         const userId = (socket as any).userId;
-        const user = users.get(userId);
+        const user = getSocketUser(socket) || findUserByCommsId(userId);
         if (!data?.roomId) return;
         io.to(data.roomId).emit("session-recording-state", {
           roomId: data.roomId,
@@ -1406,7 +1406,7 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       if (data.readBy) {
-        const target = users.get(data.readBy);
+        const target = findUserByCommsId(data.readBy);
         if (target) {
           io.to(target.socketId).emit("messages-read", {
             messageIds: data.messageIds,
@@ -1419,7 +1419,7 @@ export function initSocketSignaling(server: HttpServer) {
 
     socket.on("message-reaction", async (data: { messageId: string; emoji: string; targetUserId?: string; groupId?: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
       try {
@@ -1456,7 +1456,7 @@ export function initSocketSignaling(server: HttpServer) {
       if (data.groupId) {
         socket.to(`group_${data.groupId}`).emit("message-reaction", reactionPayload);
       } else if (data.targetUserId) {
-        const target = users.get(data.targetUserId);
+        const target = findUserByCommsId(data.targetUserId);
         if (target) {
           io.to(target.socketId).emit("message-reaction", reactionPayload);
         }
@@ -1663,7 +1663,7 @@ export function initSocketSignaling(server: HttpServer) {
     /** call:end — either party ends the active call */
     socket.on("call:end", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const user = users.get(userId);
+      const user = getSocketUser(socket) || findUserByCommsId(userId);
 
       if (user) { user.inCall = false; user.currentRoomId = undefined; }
 
@@ -1695,7 +1695,7 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
           io.to(targetUser.socketId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
@@ -1710,7 +1710,7 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
           io.to(targetUser.socketId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
@@ -1725,7 +1725,7 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = users.get(data.targetPeerId);
+        const targetUser = findUserByCommsId(data.targetPeerId);
         if (targetUser) {
           io.to(targetUser.socketId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
           io.to(targetUser.socketId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
