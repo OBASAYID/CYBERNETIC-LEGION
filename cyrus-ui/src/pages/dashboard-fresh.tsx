@@ -60,15 +60,15 @@ export default function DashboardFresh() {
   return (
     <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-transparent text-white">
       {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
-      <div className="pointer-events-none fixed inset-0 bg-slate-950/38" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-amber-950/22 via-slate-950/34 to-black/38" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(251,191,36,0.16),rgba(180,83,9,0.05)_44%,transparent_62%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-slate-950/46" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-slate-800/28 via-slate-950/38 to-black/44" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(148,163,184,0.17),rgba(30,41,59,0.14)_44%,transparent_62%)]" />
       <div
         className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.12] mix-blend-soft-light"
         style={{ backgroundImage: `url(${TSODILO_ROCK_ART_WALL_URL})` }}
       />
       <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.2] mix-blend-screen"
+        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.14] mix-blend-screen"
         style={{ backgroundImage: `url(${TSODILO_HILLS_SIGNS_URL})` }}
       />
       <div
@@ -83,8 +83,8 @@ export default function DashboardFresh() {
         className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.08] mix-blend-multiply"
         style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
       />
-      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep mix-blend-screen" />
-      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep-soft mix-blend-overlay" />
+      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep mix-blend-screen opacity-60" />
+      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep-soft mix-blend-overlay opacity-55" />
       <div className="pointer-events-none fixed inset-0">
         <div
           className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"

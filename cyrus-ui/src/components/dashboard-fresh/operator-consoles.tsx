@@ -52,7 +52,7 @@ function ConsoleShell({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-950/75 via-slate-950/55 to-black/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm cyrus-xs-console-shell ${className}`}
+      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-800/55 via-slate-900/65 to-slate-950/75 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
     >
       <div className={`pointer-events-none absolute inset-0 ${accentAura}`} aria-hidden />
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.16]" aria-hidden />
@@ -90,13 +90,18 @@ export function SystemSpotlightConsole({
   const ai = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
 
   return (
-    <ConsoleShell title="System spotlight" kicker="Priority surface" icon={Sparkles} accent="amber">
-      <div className="mb-3 overflow-hidden rounded-xl border border-amber-400/20 bg-black/30 cyrus-xs-spotlight-hero">
+    <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber">
+      <div className="mb-3 flex gap-3 rounded-2xl border border-white/10 bg-black/25 p-2.5 cyrus-xs-spotlight-hero">
         <img
           src={TSODILO_DANCE_HERO_URL}
           alt="Tsodilo spiritual dance"
-          className="h-36 w-full object-cover"
+          className="h-36 w-28 shrink-0 rounded-xl border border-white/10 object-cover"
         />
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] uppercase tracking-[0.28em] text-white/50">CYRUS Chronicle</p>
+          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
+          <p className="mt-1.5 text-[11px] text-white/65">Live command intelligence, activity stream, and deployment health in one dashboard surface.</p>
+        </div>
       </div>
       <div className="mb-3 grid grid-cols-3 gap-2 cyrus-xs-spotlight-grid">
         <img
@@ -115,25 +120,26 @@ export function SystemSpotlightConsole({
           className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3 cyrus-xs-spotlight-stats">
-        <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/55">Stack health</p>
-          <p className="mt-1 text-2xl font-bold text-amber-50">{healthPercent}%</p>
-          <p className="mt-1 text-xs text-white/65">
-            {onlineEngines}/{totalEngines} engines online
-          </p>
+      <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
+        <div className="rounded-2xl border border-amber-300/35 bg-[#f6d669] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Progress</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none">{healthPercent}</p>
+          <p className="mt-1 text-[10px] text-slate-900/65">Health index</p>
         </div>
-        <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-200/55">Fused origin</p>
-          <p className="mt-1 truncate text-sm font-semibold text-cyan-50">{origin}</p>
-          <p className="mt-1 text-xs text-white/65">Public app endpoint</p>
+        <div className="rounded-2xl border border-orange-200/35 bg-[#f6ad64] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Time</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none">{onlineEngines}</p>
+          <p className="mt-1 text-[10px] text-slate-900/65">Online engines</p>
         </div>
-        <div className="rounded-xl border border-violet-400/20 bg-violet-500/[0.08] p-3 cyrus-xs-spotlight-stat-card">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-violet-200/55">CYRUS AI</p>
-          <p className="mt-1 text-sm font-semibold text-violet-50">{ai}</p>
-          <p className="mt-1 truncate text-xs text-white/65">
-            {stackSummary?.stack?.cyrusAi?.baseUrl ?? "Awaiting stack summary"}
-          </p>
+        <div className="rounded-2xl border border-cyan-100/40 bg-[#9ee7f2] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Signal</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none">{origin}</p>
+          <p className="mt-1 text-[10px] text-slate-900/65">Fused origin</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-100/35 bg-[#b8eca7] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">AI state</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none">{ai}</p>
+          <p className="mt-1 text-[10px] text-slate-900/65">{totalEngines} total engines</p>
         </div>
       </div>
     </ConsoleShell>
