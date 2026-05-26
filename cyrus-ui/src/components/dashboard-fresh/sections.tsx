@@ -396,7 +396,7 @@ export function BottomPanels({ hints }: { hints: string[] }) {
 export function HeaderBadge({ livePort }: { livePort?: number }) {
   return (
     <span
-      className="inline-flex shrink-0 whitespace-nowrap rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-600/25 via-cyan-500/20 to-cyan-600/25 px-2.5 py-1.5 text-[11px] font-mono text-cyan-100 shadow-lg shadow-cyan-500/15 sm:px-3 sm:text-xs"
+      className="inline-flex shrink-0 whitespace-nowrap rounded-xl border border-white/20 bg-white/[0.09] px-2.5 py-1.5 text-[11px] font-medium text-slate-100 shadow-[0_8px_22px_rgba(0,0,0,0.26)] sm:px-3 sm:text-xs"
       style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
     >
       Fused {livePort ?? "—"}
@@ -407,32 +407,31 @@ export function HeaderBadge({ livePort }: { livePort?: number }) {
 export function HeaderTitle({ variant = "default" }: { variant?: "default" | "operator" }) {
   const isOperator = variant === "operator";
   return (
-    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-      <div className="relative hidden h-10 w-10 shrink-0 sm:block md:h-12 md:w-12">
-        <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-orange-500/20 blur-md" />
-        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.35)] md:h-12 md:w-12">
+    <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+      <div className="relative hidden h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/20 bg-slate-900/75 shadow-[0_8px_18px_rgba(0,0,0,0.32)] sm:block md:h-14 md:w-14">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/8 via-transparent to-black/30" />
+        <div className="absolute inset-[1px] overflow-hidden rounded-[10px] md:rounded-[11px]">
           <img
             src="/images/cyrus-logo.png"
             alt=""
             className="h-full w-full object-cover"
-            style={{ clipPath: "circle(42% at center)" }}
           />
         </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-200/80 sm:text-xs sm:tracking-[0.28em]">
-          {isOperator ? "CYRUS" : "CYRUS Command"}
+      <div className="min-w-0 flex-1 rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.24)]">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200/75 sm:text-[11px] sm:tracking-[0.2em]">
+          {isOperator ? "CYRUS Activity" : "CYRUS Command"}
         </p>
         <h1
-          className="mt-0.5 break-words text-base font-bold leading-tight tracking-wide sm:text-lg md:text-xl"
+          className="mt-0.5 break-words text-base font-bold leading-tight tracking-tight sm:text-lg md:text-[1.18rem]"
           style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
         >
           {isOperator ? (
-            <span className="bg-gradient-to-r from-cyan-200 via-white to-orange-300/90 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-white via-slate-100 to-sky-100/90 bg-clip-text text-transparent">
               Module workspace
             </span>
           ) : (
-            <span className="bg-gradient-to-r from-amber-200 via-white to-cyan-200 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-white via-slate-100 to-sky-100/90 bg-clip-text text-transparent">
               Mission console
             </span>
           )}

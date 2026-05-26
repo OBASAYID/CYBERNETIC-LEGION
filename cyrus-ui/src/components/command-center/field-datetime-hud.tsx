@@ -42,12 +42,12 @@ export function FieldDateTimeHud({ className }: FieldDateTimeHudProps) {
         className="block max-w-full text-xs font-semibold tracking-tight sm:text-sm"
         style={orbitron}
       >
-        <span className="bg-gradient-to-r from-white via-white to-[#e11d48]/80 bg-clip-text text-transparent">
+        <span className="bg-gradient-to-r from-white via-slate-100 to-sky-100/90 bg-clip-text text-transparent">
           {dateLabel}
         </span>
       </time>
       <span
-        className="block text-[11px] font-medium tabular-nums text-[#06b6d4]/90 sm:text-xs md:text-sm"
+        className="block text-[11px] font-medium tabular-nums text-sky-100/88 sm:text-xs md:text-sm"
         style={orbitron}
         aria-label={`Current time ${timeLabel}`}
       >

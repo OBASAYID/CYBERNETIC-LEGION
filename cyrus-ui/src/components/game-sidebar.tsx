@@ -54,37 +54,37 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
         mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
       )}
       style={{
-        background: "linear-gradient(175deg, #0f080f 0%, #090610 45%, #0b0810 100%)",
-        borderRight: "1px solid transparent",
-        boxShadow: "4px 0 40px rgba(225,29,72,0.18), 1px 0 0 rgba(225,29,72,0.25)",
+        background: "linear-gradient(175deg, #111826 0%, #0d1522 45%, #0b121d 100%)",
+        borderRight: "1px solid rgba(255,255,255,0.12)",
+        boxShadow: "4px 0 34px rgba(0,0,0,0.38), 1px 0 0 rgba(255,255,255,0.05)",
       }}
     >
-      {/* ── Aggressive red radial bleed ── */}
+      {/* ── Soft ambient glow ── */}
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 50% at 0% 30%, rgba(225,29,72,0.13) 0%, transparent 65%)" }}
+        style={{ background: "radial-gradient(ellipse 80% 50% at 0% 30%, rgba(148,163,184,0.12) 0%, transparent 65%)" }}
       />
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 60% 40% at 100% 80%, rgba(120,0,30,0.10) 0%, transparent 70%)" }}
+        style={{ background: "radial-gradient(ellipse 60% 40% at 100% 80%, rgba(30,64,175,0.08) 0%, transparent 70%)" }}
       />
 
       {/* ── Scanlines ── */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.022]"
+        className="pointer-events-none absolute inset-0 opacity-[0.014]"
         style={{ backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,1) 0px, rgba(255,255,255,1) 1px, transparent 1px, transparent 4px)" }}
       />
 
       {/* ── Right accent line ── */}
       <div
         className="pointer-events-none absolute top-0 right-0 bottom-0 w-[1.5px]"
-        style={{ background: "linear-gradient(180deg, transparent 0%, rgba(225,29,72,0.7) 20%, rgba(225,29,72,0.4) 60%, transparent 100%)" }}
+        style={{ background: "linear-gradient(180deg, transparent 0%, rgba(147,197,253,0.45) 20%, rgba(148,163,184,0.28) 60%, transparent 100%)" }}
       />
 
       {/* ── Top accent bar ── */}
       <div
         className="pointer-events-none absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: "linear-gradient(90deg, rgba(225,29,72,0.9) 0%, rgba(180,0,40,0.5) 60%, transparent 100%)" }}
+        style={{ background: "linear-gradient(90deg, rgba(148,163,184,0.65) 0%, rgba(125,211,252,0.35) 60%, transparent 100%)" }}
       />
 
       {/* ══ BRAND ════════════════════════════════════════════════════ */}
@@ -93,31 +93,31 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           "relative flex items-center shrink-0 border-b",
           collapsed ? "px-4 py-5 justify-center" : "px-5 py-5 gap-3",
         )}
-        style={{ borderColor: "rgba(225,29,72,0.20)", background: "rgba(225,29,72,0.05)" }}
+        style={{ borderColor: "rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)" }}
       >
         {/* Icon */}
         <div className="relative shrink-0 flex h-9 w-9 items-center justify-center rounded-xl"
           style={{
-            background: "linear-gradient(135deg, rgba(225,29,72,0.25), rgba(120,0,20,0.4))",
-            border: "1px solid rgba(225,29,72,0.55)",
-            boxShadow: "0 0 20px rgba(225,29,72,0.35), inset 0 1px 0 rgba(255,255,255,0.07)",
+            background: "linear-gradient(135deg, rgba(148,163,184,0.22), rgba(30,41,59,0.42))",
+            border: "1px solid rgba(226,232,240,0.35)",
+            boxShadow: "0 0 16px rgba(148,163,184,0.22), inset 0 1px 0 rgba(255,255,255,0.07)",
           }}>
-          <Zap className="h-4 w-4 text-[#e11d48]" />
-          <div className="absolute -top-px -left-px w-3 h-3 border-l border-t border-[#e11d48]/60 rounded-tl-lg" />
-          <div className="absolute -bottom-px -right-px w-3 h-3 border-r border-b border-[#e11d48]/50 rounded-br-lg" />
+          <Zap className="h-4 w-4 text-slate-200" />
+          <div className="absolute -top-px -left-px w-3 h-3 border-l border-t border-white/45 rounded-tl-lg" />
+          <div className="absolute -bottom-px -right-px w-3 h-3 border-r border-b border-white/35 rounded-br-lg" />
         </div>
 
         {!collapsed && (
           <div className="min-w-0 flex-1">
             <span
               className="block text-[18px] font-black tracking-[0.25em] text-white leading-none"
-              style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 20px rgba(225,29,72,0.6)" }}
+              style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 16px rgba(125,211,252,0.25)" }}
             >
               CYRUS
             </span>
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="h-1 w-1 rounded-full bg-[#e11d48] animate-pulse shadow-[0_0_6px_rgba(225,29,72,1)]" />
-              <span className="text-[8px] text-[#e11d48]/80 tracking-[0.4em] font-black font-mono uppercase">
+                <span className="h-1 w-1 rounded-full bg-sky-300 animate-pulse shadow-[0_0_6px_rgba(125,211,252,0.8)]" />
+                <span className="text-[8px] text-slate-300/80 tracking-[0.4em] font-black font-mono uppercase">
                 v3.0 OMEGA
               </span>
             </div>
@@ -135,17 +135,17 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
               {/* Group label */}
               {!collapsed ? (
                 <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
-                  <div className="h-px flex-1" style={{ background: "rgba(225,29,72,0.18)" }} />
+                  <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.14)" }} />
                   <p
                     className="text-[7.5px] font-black tracking-[0.45em] uppercase shrink-0"
-                    style={{ color: "rgba(225,29,72,0.55)", fontFamily: "'Orbitron', system-ui" }}
+                    style={{ color: "rgba(226,232,240,0.55)", fontFamily: "'Orbitron', system-ui" }}
                   >
                     {group.label}
                   </p>
-                  <div className="h-px flex-1" style={{ background: "rgba(225,29,72,0.18)" }} />
+                  <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.14)" }} />
                 </div>
               ) : (
-                <div className="mx-3 my-2 h-px" style={{ background: "rgba(225,29,72,0.15)" }} />
+                <div className="mx-3 my-2 h-px" style={{ background: "rgba(255,255,255,0.12)" }} />
               )}
 
               {/* Nav items */}
@@ -158,13 +158,13 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                         "relative flex items-center cursor-pointer group transition-all duration-200 my-0.5",
                         collapsed
                           ? "mx-2 rounded-xl px-0 py-2.5 justify-center"
-                          : "mx-2 rounded-xl px-3 py-2.5 gap-3",
+                          : "mx-2 rounded-xl px-3 py-2.5 gap-2.5",
                       )}
                       title={collapsed ? item.dashboardLabel : undefined}
                       style={isActive ? {
-                        background: "linear-gradient(135deg, rgba(225,29,72,0.18) 0%, rgba(120,0,20,0.12) 100%)",
-                        border: "1px solid rgba(225,29,72,0.30)",
-                        boxShadow: "0 0 16px rgba(225,29,72,0.12), inset 0 1px 0 rgba(255,255,255,0.04)",
+                        background: "linear-gradient(135deg, rgba(148,163,184,0.18) 0%, rgba(30,41,59,0.12) 100%)",
+                        border: "1px solid rgba(226,232,240,0.25)",
+                        boxShadow: "0 0 16px rgba(148,163,184,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
                       } : {
                         border: "1px solid transparent",
                       }}
@@ -173,7 +173,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                       {isActive && (
                         <div
                           className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full"
-                          style={{ background: "#e11d48", boxShadow: "0 0 10px rgba(225,29,72,1)" }}
+                          style={{ background: "#93c5fd", boxShadow: "0 0 10px rgba(147,197,253,0.9)" }}
                         />
                       )}
 
@@ -181,19 +181,19 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                       <item.Icon
                         className={cn(
                           "shrink-0 transition-colors",
-                          collapsed ? "h-5 w-5" : "h-[15px] w-[15px]",
+                          collapsed ? "h-5 w-5" : "h-[14px] w-[14px]",
                         )}
-                        style={{ color: isActive ? "#e11d48" : "rgba(255,255,255,0.32)" }}
+                        style={{ color: isActive ? "#e2e8f0" : "rgba(255,255,255,0.38)" }}
                       />
 
                       {/* Label */}
                       {!collapsed && (
                         <span
-                          className="flex-1 truncate text-[10px] font-black tracking-[0.12em] uppercase transition-colors"
+                          className="flex-1 truncate text-[11px] font-semibold tracking-[0.04em] transition-colors"
                           style={{
                             fontFamily: "'Orbitron', system-ui",
-                            color: isActive ? "#ffffff" : "rgba(255,255,255,0.42)",
-                            textShadow: isActive ? "0 0 12px rgba(225,29,72,0.4)" : "none",
+                            color: isActive ? "#ffffff" : "rgba(255,255,255,0.5)",
+                            textShadow: isActive ? "0 0 12px rgba(148,163,184,0.35)" : "none",
                           }}
                         >
                           {item.dashboardLabel}
@@ -204,7 +204,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                       {isActive && !collapsed && (
                         <span
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: "#e11d48", boxShadow: "0 0 8px rgba(225,29,72,1)" }}
+                          style={{ background: "#bfdbfe", boxShadow: "0 0 8px rgba(191,219,254,0.9)" }}
                         />
                       )}
 
@@ -212,7 +212,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                       {!isActive && (
                         <div
                           className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{ background: "rgba(225,29,72,0.5)" }}
+                          style={{ background: "rgba(148,163,184,0.45)" }}
                         />
                       )}
                     </div>
@@ -227,26 +227,26 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
       {/* ══ FOOTER ═══════════════════════════════════════════════════ */}
       <div
         className="relative shrink-0 border-t p-2 space-y-1"
-        style={{ borderColor: "rgba(225,29,72,0.18)", background: "rgba(0,0,0,0.3)" }}
+        style={{ borderColor: "rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)" }}
       >
         {/* User badge */}
         {!collapsed && displayName && (
           <div
             className="flex items-center gap-2.5 px-3 py-2 rounded-xl mb-1"
             style={{
-              background: "linear-gradient(135deg, rgba(225,29,72,0.08), rgba(0,0,0,0.3))",
-              border: "1px solid rgba(225,29,72,0.20)",
+              background: "linear-gradient(135deg, rgba(148,163,184,0.08), rgba(0,0,0,0.3))",
+              border: "1px solid rgba(255,255,255,0.16)",
             }}
           >
             <div
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
               style={{
-                background: "linear-gradient(135deg, rgba(225,29,72,0.3), rgba(120,0,20,0.4))",
-                border: "1px solid rgba(225,29,72,0.40)",
-                boxShadow: "0 0 10px rgba(225,29,72,0.2)",
+                background: "linear-gradient(135deg, rgba(148,163,184,0.24), rgba(30,41,59,0.45))",
+                border: "1px solid rgba(255,255,255,0.28)",
+                boxShadow: "0 0 10px rgba(148,163,184,0.2)",
               }}
             >
-              <span className="text-[10px] font-black text-[#e11d48]" style={{ fontFamily: "'Orbitron', system-ui" }}>
+              <span className="text-[10px] font-black text-slate-100" style={{ fontFamily: "'Orbitron', system-ui" }}>
                 {displayName.slice(0, 2).toUpperCase()}
               </span>
             </div>
@@ -261,7 +261,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                 <Activity className="h-2 w-2 text-emerald-400" strokeWidth={2.5} />
                 <span
                   className="text-[8px] font-black font-mono tracking-[0.3em] uppercase"
-                  style={{ color: role === "admin" ? "#e11d48" : "#22d3ee" }}
+                  style={{ color: role === "admin" ? "#cbd5e1" : "#bae6fd" }}
                 >
                   {role}
                 </span>
@@ -279,8 +279,8 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           )}
           style={{ border: "1px solid transparent" }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "rgba(225,29,72,0.10)";
-            (e.currentTarget as HTMLElement).style.border = "1px solid rgba(225,29,72,0.22)";
+            (e.currentTarget as HTMLElement).style.background = "rgba(148,163,184,0.12)";
+            (e.currentTarget as HTMLElement).style.border = "1px solid rgba(255,255,255,0.2)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -288,10 +288,10 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           }}
           title="Logout"
         >
-          <LogOut className="h-4 w-4 shrink-0 text-white/30 group-hover:text-red-400 transition-colors" />
+          <LogOut className="h-4 w-4 shrink-0 text-white/35 group-hover:text-white/80 transition-colors" />
           {!collapsed && (
             <span
-              className="text-[10px] font-black uppercase tracking-wider text-white/30 group-hover:text-red-400 transition-colors"
+              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/35 group-hover:text-white/80 transition-colors"
               style={{ fontFamily: "'Orbitron', system-ui" }}
             >
               LOGOUT
