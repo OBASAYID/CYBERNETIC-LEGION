@@ -73,10 +73,11 @@ export function resolveCyrusSocketIoOrigin(): string {
   }
   if (!base) return window.location.origin;
   try {
-    const normalized =
-      base.startsWith("http://") || base.startsWith("https://")
-        ? base
-        : `https://${base.replace(/^\/\//, "")}`;
+    const normalized = base.startsWith("http://") || base.startsWith("https://")
+      ? base
+      : base.startsWith("//")
+        ? `${window.location.protocol}${base}`
+        : `${window.location.protocol}//${base.replace(/^\/\//, "")}`;
     const u = new URL(normalized);
     return `${u.protocol}//${u.host}`;
   } catch {
@@ -98,8 +99,11 @@ export function resolveCyrusWebSocketUrl(pathAndQuery: string): string {
   }
 
   try {
-    const normalized =
-      base.startsWith("http://") || base.startsWith("https://") ? base : `https://${base.replace(/^\/\//, "")}`;
+    const normalized = base.startsWith("http://") || base.startsWith("https://")
+      ? base
+      : base.startsWith("//")
+        ? `${window.location.protocol}${base}`
+        : `${window.location.protocol}//${base.replace(/^\/\//, "")}`;
     const u = new URL(normalized);
     const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
     return `${wsProto}//${u.host}${path}`;
