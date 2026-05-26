@@ -32,3 +32,5 @@ export const TSODILO_CAVE_DANCE_URL = "/tsodilo-cave-dance.png";
 export const TSODILO_MARKINGS_CANVAS_URL = "/tsodilo-markings-canvas.png";
 /** User-provided ancient carved symbol plate texture. */
 export const TSODILO_SYMBOLS_STELE_URL = "/tsodilo-symbols-stele.png";
+/** Diamond hero art placed on a dark leather surface for the featured spotlight panel. */
+export const CYRUS_DIAMONDS_LEATHER_URL = "/images/cyrus-diamonds-leather.png";

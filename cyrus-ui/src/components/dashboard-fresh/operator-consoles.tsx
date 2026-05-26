@@ -3,10 +3,7 @@ import { Activity, Radio, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import {
-  TSODILO_CAVE_DANCE_URL,
-  TSODILO_DANCE_HERO_URL,
-  TSODILO_HUNT_SYMBOLS_URL,
-  TSODILO_MARKINGS_CANVAS_URL,
+  CYRUS_DIAMONDS_LEATHER_URL,
 } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
@@ -95,36 +92,19 @@ export function SystemSpotlightConsole({
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber">
       <div className="mb-3 flex gap-3 rounded-2xl border border-white/12 bg-gradient-to-b from-white/[0.12] via-white/[0.08] to-white/[0.06] p-2.5 shadow-[0_12px_26px_rgba(0,0,0,0.3)] cyrus-xs-spotlight-hero">
         <img
-          src={TSODILO_DANCE_HERO_URL}
-          alt="Tsodilo spiritual dance"
+          src={CYRUS_DIAMONDS_LEATHER_URL}
+          alt="Diamonds on dark leather surface"
           className="h-36 w-28 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
         />
         <div className="min-w-0 flex-1">
           <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
-          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
-          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence, activity stream, and deployment health in one dashboard surface.</p>
+          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Diamond Signal Ledger</h3>
+          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence with the premium diamond texture now fused into the spotlight console.</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Story mode</span>
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Live graphics</span>
+            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Diamond render</span>
           </div>
         </div>
-      </div>
-      <div className="mb-3 grid grid-cols-3 gap-2 cyrus-xs-spotlight-grid">
-        <img
-          src={TSODILO_HUNT_SYMBOLS_URL}
-          alt="Tsodilo hunt symbols"
-          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
-        />
-        <img
-          src={TSODILO_CAVE_DANCE_URL}
-          alt="Tsodilo cave dance mural"
-          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
-        />
-        <img
-          src={TSODILO_MARKINGS_CANVAS_URL}
-          alt="Tsodilo symbolic markings"
-          className="h-16 w-full rounded-lg border border-white/10 object-cover opacity-85"
-        />
       </div>
       <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
         <div className="rounded-2xl border border-amber-300/35 bg-[#f6d669] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
