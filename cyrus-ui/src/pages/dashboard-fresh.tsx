@@ -94,12 +94,12 @@ export default function DashboardFresh() {
           className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
           style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
         />
-        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/45 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-amber-300/[0.1] blur-3xl" />
-        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(251,191,36,0.22),rgba(120,53,15,0.08)_56%,transparent_78%)] blur-2xl" />
-        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-orange-300/[0.08] blur-3xl" />
-        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-amber-700/[0.08] blur-3xl" />
+        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
+        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-slate-400/30 to-transparent" />
+        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-slate-300/[0.08] blur-3xl" />
+        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(186,230,253,0.18),rgba(51,65,85,0.08)_56%,transparent_78%)] blur-2xl" />
+        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-slate-300/[0.06] blur-3xl" />
+        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-slate-600/[0.08] blur-3xl" />
       </div>
       <div className="relative z-10">
         <header className="relative sticky top-0 z-30 overflow-hidden border-b border-white/12 bg-slate-950/62 shadow-[0_8px_44px_-12px_rgba(0,0,0,0.58)] backdrop-blur-xl">

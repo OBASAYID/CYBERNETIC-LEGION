@@ -90,7 +90,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-slate-800/65 via-slate-900/72 to-slate-950/80 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl cyrus-xs-pshare-console",
+        "relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/62 via-slate-900/74 to-slate-950/86 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.36)] backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
@@ -134,7 +134,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <div className="mb-3 rounded-xl border border-white/10 bg-slate-950/40 p-2.5 cyrus-xs-pshare-compose-wrap">
+      <div className="mb-3 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
         <div className="flex items-end gap-2 cyrus-xs-pshare-compose">
           <textarea
             value={draft}
@@ -163,19 +163,19 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
       ) : (
         <article
-          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/10 bg-slate-950/45 p-3 cyrus-xs-pshare-item transition-opacity duration-200"
+          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.1] via-white/[0.06] to-white/[0.04] p-3 cyrus-xs-pshare-item transition-opacity duration-200"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] font-semibold text-sky-100">
+            <span className="truncate text-[11px] font-semibold text-white/95">
               {posts[activeIndex]?.authorName || "Operator"}
             </span>
             <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
               {timeAgo(posts[activeIndex]?.createdAt)}
             </span>
           </div>
-          <p className="line-clamp-4 text-xs leading-relaxed text-white/72">
+          <p className="line-clamp-4 text-xs leading-relaxed text-slate-100/80">
             {posts[activeIndex]?.body || "Shared update"}
           </p>
           {posts.length > 1 && (

@@ -52,10 +52,11 @@ function ConsoleShell({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-800/55 via-slate-900/65 to-slate-950/75 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
+      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-700/60 via-slate-900/74 to-slate-950/86 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_18px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
     >
       <div className={`pointer-events-none absolute inset-0 ${accentAura}`} aria-hidden />
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.16]" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" aria-hidden />
       <div className="mb-3 flex items-center gap-2">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-white/[0.04]`}>
           <Icon className={`h-4 w-4 ${iconTone}`} aria-hidden />
@@ -179,17 +180,17 @@ export function MissionStatusConsole({
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/15 p-2 font-mono text-emerald-100">
+          <div className="rounded-xl border border-emerald-200/35 bg-[#b8eca7] p-2 font-mono text-slate-900">
             {onlineEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-emerald-200/70">Online</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Online</p>
           </div>
-          <div className="rounded-lg border border-amber-400/30 bg-amber-500/15 p-2 font-mono text-amber-100">
+          <div className="rounded-xl border border-amber-200/35 bg-[#f6d669] p-2 font-mono text-slate-900">
             {degradedEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-amber-200/70">Degraded</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Degraded</p>
           </div>
-          <div className="rounded-lg border border-red-400/30 bg-red-500/15 p-2 font-mono text-red-100">
+          <div className="rounded-xl border border-orange-200/35 bg-[#f6ad64] p-2 font-mono text-slate-900">
             {offlineEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-red-200/70">Offline</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Offline</p>
           </div>
         </div>
         <div className="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5">
@@ -208,7 +209,7 @@ export function MissionStatusConsole({
             <Link key={link.href} href={link.href}>
               <button
                 type="button"
-                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone}`}
+                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone} shadow-[0_8px_18px_rgba(0,0,0,0.24)]`}
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 {link.label}
