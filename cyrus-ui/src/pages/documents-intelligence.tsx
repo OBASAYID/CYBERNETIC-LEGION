@@ -28,6 +28,7 @@ import {
 import { maxDocgenTargetPages, parseLargeUploadThresholdBytes, parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 const DOC_CATEGORIES: { value: string; label: string }[] = [
   { value: "auto", label: "Auto-detect (no hint)" },
@@ -250,6 +251,8 @@ export default function DocumentsIntelligence() {
   return (
     <ModuleWorkspacePageShell
       theme="dashboard"
+      backdropTextureUrl={TSODILO_HUNT_SYMBOLS_URL}
+      backdropPixelated
       kicker="Cyrus · Documents"
       title="Document intelligence"
       subtitle="Analysis and long-form output"

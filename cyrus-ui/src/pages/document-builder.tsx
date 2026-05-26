@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { systemFetch } from "@/lib/system-api";
 import { FileText, Loader2, ScrollText, Sparkles } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 type Mode = "full" | "convert" | "assist";
 
@@ -70,6 +71,8 @@ export default function DocumentBuilder() {
   return (
     <ModuleWorkspacePageShell
       theme="dashboard"
+      backdropTextureUrl={TSODILO_HUNT_SYMBOLS_URL}
+      backdropPixelated
       kicker="Cyrus · Documents"
       title="Document builder"
       subtitle="Structured drafting with professional output controls"

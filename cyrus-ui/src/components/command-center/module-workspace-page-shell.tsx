@@ -47,9 +47,64 @@ export type ModuleWorkspacePageShellProps = {
   hidePageBackdrop?: boolean;
   /** Visual theme for workspace chrome. */
   theme?: ShellTheme;
+  /** Optional repeated texture behind workspace cards (docs, maps, etc). */
+  backdropTextureUrl?: string;
+  /** Force stronger pixelated rendering for backdrop texture. */
+  backdropPixelated?: boolean;
 };
 
-function ModuleWorkspaceBackdrop() {
+function ModuleWorkspaceBackdrop({
+  theme,
+  backdropTextureUrl,
+  backdropPixelated,
+}: {
+  theme: ShellTheme;
+  backdropTextureUrl?: string;
+  backdropPixelated?: boolean;
+}) {
+  if (theme === "dashboard") {
+    return (
+      <>
+        <div className="pointer-events-none fixed inset-0" style={{ background: "rgba(8,12,20,0.72)" }} aria-hidden />
+        <div
+          className="pointer-events-none fixed inset-0"
+          style={{ background: "linear-gradient(180deg, rgba(148,163,184,0.08) 0%, rgba(2,6,23,0.36) 44%, rgba(30,41,59,0.62) 100%)" }}
+          aria-hidden
+        />
+        {backdropTextureUrl ? (
+          <>
+            <div className="pointer-events-none fixed inset-0 bg-[#ede4d7]/18" aria-hidden />
+            <div
+              className="pointer-events-none fixed inset-0 opacity-[0.22]"
+              style={{
+                backgroundImage: `url(${backdropTextureUrl})`,
+                backgroundRepeat: "repeat",
+                backgroundPosition: "center",
+                backgroundSize: "360px 260px",
+                imageRendering: backdropPixelated ? "pixelated" : "auto",
+                filter: backdropPixelated ? "grayscale(1) contrast(2) brightness(0.5)" : "grayscale(1) contrast(1.25)",
+                mixBlendMode: "luminosity",
+              }}
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none fixed inset-0"
+              style={{ background: "radial-gradient(ellipse at center, transparent 30%, rgba(2,6,23,0.65) 100%)" }}
+              aria-hidden
+            />
+          </>
+        ) : null}
+        <div className="pointer-events-none fixed left-4 top-4 z-20 flex items-center gap-2 sm:left-5 sm:top-5">
+          <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.85)]" />
+          <span className="text-[10px] font-mono tracking-wider text-emerald-200/85">MODULE ACTIVE</span>
+        </div>
+        <div className="pointer-events-none fixed right-4 top-4 z-20 sm:right-5 sm:top-5">
+          <FieldDateTimeHud />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Gaming dark backdrop with crimson/cyan tones */}
@@ -96,13 +151,21 @@ export function ModuleWorkspacePageShell({
   commandHandoffLargeRefs,
   hidePageBackdrop = false,
   theme = "omega",
+  backdropTextureUrl,
+  backdropPixelated = false,
 }: ModuleWorkspacePageShellProps) {
   const [commandConsoleMinimized, setCommandConsoleMinimized] = useState(false);
 
   if (mode === "page") {
     return (
       <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
-        {!hidePageBackdrop ? <ModuleWorkspaceBackdrop /> : null}
+        {!hidePageBackdrop ? (
+          <ModuleWorkspaceBackdrop
+            theme={theme}
+            backdropTextureUrl={backdropTextureUrl}
+            backdropPixelated={backdropPixelated}
+          />
+        ) : null}
         <div className="relative z-10 min-h-0 w-full min-w-0">{children}</div>
       </div>
     );
@@ -113,7 +176,11 @@ export function ModuleWorkspacePageShell({
   if (!title?.trim() || !Icon) {
     return (
       <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
-        <ModuleWorkspaceBackdrop />
+        <ModuleWorkspaceBackdrop
+          theme={theme}
+          backdropTextureUrl={backdropTextureUrl}
+          backdropPixelated={backdropPixelated}
+        />
         <div className="relative z-10 min-h-0 w-full min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">{children}</div>
       </div>
     );
@@ -141,7 +208,11 @@ export function ModuleWorkspacePageShell({
 
   return (
     <div className="relative min-h-screen min-h-dvh w-full overflow-x-hidden text-white">
-      <ModuleWorkspaceBackdrop />
+      <ModuleWorkspaceBackdrop
+        theme={theme}
+        backdropTextureUrl={backdropTextureUrl}
+        backdropPixelated={backdropPixelated}
+      />
       <div
         className={cn(
           "relative z-10 mx-auto w-full max-w-cyrus-shell px-4 py-5 text-base sm:px-6 sm:py-6 lg:px-8",
