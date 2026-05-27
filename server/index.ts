@@ -571,6 +571,7 @@ void bootstrapServer().catch((err) => {
 async function initializeSystem() {
   const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 5));
   let isAuthenticatedMiddleware: any = null;
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
   // Auth setup — critical; failure here means API auth middleware is absent
   // Always use standalone (access-code) auth — the frontend's PasswordGate posts
@@ -586,12 +587,16 @@ async function initializeSystem() {
   }
 
   // Fusion bootstrap (honest capability map for gate UI)
-  try {
-    const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
-    app.use("/api", completeFusionApi);
-    log("[Fusion] Bootstrap routes registered (honest capability map)");
-  } catch (e) {
-    console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
+  if (!commsOnlyMode) {
+    try {
+      const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
+      app.use("/api", completeFusionApi);
+      log("[Fusion] Bootstrap routes registered (honest capability map)");
+    } catch (e) {
+      console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
+    }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping Fusion bootstrap routes");
   }
 
   // Security middleware — non-fatal so the server still starts without it
@@ -610,90 +615,98 @@ async function initializeSystem() {
   }
 
   // Core API routes — each wrapped individually so one failure doesn't block the rest
-  try {
-    const { default: settingsRoutes } = await import("./settings/routes");
-    app.use("/api/settings", settingsRoutes);
-    log("[Routes] Settings registered");
-  } catch (e) {
-    console.warn("[Init] Settings routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+  if (!commsOnlyMode) {
+    try {
+      const { default: settingsRoutes } = await import("./settings/routes");
+      app.use("/api/settings", settingsRoutes);
+      log("[Routes] Settings registered");
+    } catch (e) {
+      console.warn("[Init] Settings routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: sysdbRoutes } = await import("./sysdb/routes");
-    app.use("/api/sysdb", sysdbRoutes);
-    log("[Routes] SysDB registered");
-  } catch (e) {
-    console.warn("[Init] SysDB routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: sysdbRoutes } = await import("./sysdb/routes");
+      app.use("/api/sysdb", sysdbRoutes);
+      log("[Routes] SysDB registered");
+    } catch (e) {
+      console.warn("[Init] SysDB routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: queryRoutes } = await import("./query/router");
-    app.use("/api/query", queryRoutes);
-    log("[Routes] Query registered");
-  } catch (e) {
-    console.warn("[Init] Query routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: queryRoutes } = await import("./query/router");
+      app.use("/api/query", queryRoutes);
+      log("[Routes] Query registered");
+    } catch (e) {
+      console.warn("[Init] Query routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: trainRoutes } = await import("./train/routes");
-    app.use("/api/train", trainRoutes);
-    log("[Routes] Train registered");
-  } catch (e) {
-    console.warn("[Init] Train routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: trainRoutes } = await import("./train/routes");
+      app.use("/api/train", trainRoutes);
+      log("[Routes] Train registered");
+    } catch (e) {
+      console.warn("[Init] Train routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
-    app.use("/api", intelligenceCoreRoutes);
-    log("[Routes] Intelligence core registered");
-  } catch (e) {
-    console.warn("[Init] Intelligence core routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
+      app.use("/api", intelligenceCoreRoutes);
+      log("[Routes] Intelligence core registered");
+    } catch (e) {
+      console.warn("[Init] Intelligence core routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: stackRoutes } = await import("./routes/stack-routes.js");
-    app.use("/api", stackRoutes);
-    log("[Routes] Stack routes registered");
-  } catch (e) {
-    console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: stackRoutes } = await import("./routes/stack-routes.js");
+      app.use("/api", stackRoutes);
+      log("[Routes] Stack routes registered");
+    } catch (e) {
+      console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
-    app.use("/api", algorithmsRoutes);
-    log("[Routes] Algorithms routes registered");
-  } catch (e) {
-    console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
+      app.use("/api", algorithmsRoutes);
+      log("[Routes] Algorithms routes registered");
+    } catch (e) {
+      console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { mcpRouter } = await import("./mcp/mcp-routes.js");
-    app.use("/api", mcpRouter);
-    const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
-    await initializeMcpOnBoot();
-  } catch (e) {
-    console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    try {
+      const { mcpRouter } = await import("./mcp/mcp-routes.js");
+      app.use("/api", mcpRouter);
+      const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
+      await initializeMcpOnBoot();
+    } catch (e) {
+      console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping non-comms API bundles (settings/sysdb/query/train/intelligence/stack/algorithms/mcp)");
   }
 
   await tick();
 
-  try {
-    const { default: humanoidRoutes } = await import("./humanoid/routes");
-    app.use("/api/humanoid", humanoidRoutes);
-    log("[Humanoid] Registered");
-  } catch (e) {
-    console.warn("[Init] Humanoid routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
-  await tick();
+  if (!commsOnlyMode) {
+    try {
+      const { default: humanoidRoutes } = await import("./humanoid/routes");
+      app.use("/api/humanoid", humanoidRoutes);
+      log("[Humanoid] Registered");
+    } catch (e) {
+      console.warn("[Init] Humanoid routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+    await tick();
 
-  try {
-    const { default: visionRoutes } = await import("./humanoid/vision-analysis");
-    app.use("/api/vision", visionRoutes);
-    log("[Vision] Registered");
-  } catch (e) {
-    console.warn("[Init] Vision routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    try {
+      const { default: visionRoutes } = await import("./humanoid/vision-analysis");
+      app.use("/api/vision", visionRoutes);
+      log("[Vision] Registered");
+    } catch (e) {
+      console.warn("[Init] Vision routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+    await tick();
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping humanoid and vision APIs");
   }
-  await tick();
 
   try {
     const { registerRoutes } = await import("./routes");
@@ -718,11 +731,15 @@ async function initializeSystem() {
   systemReady = true;
   log("All systems initialized - accepting API traffic");
 
-  try {
-    const { startIntelligenceAutomationScheduler } = await import("./ai/intelligence-automation-core.js");
-    startIntelligenceAutomationScheduler();
-  } catch (e) {
-    console.warn("[Init] Intelligence automation scheduler not loaded (non-fatal):", e instanceof Error ? e.message : String(e));
+  if (!commsOnlyMode) {
+    try {
+      const { startIntelligenceAutomationScheduler } = await import("./ai/intelligence-automation-core.js");
+      startIntelligenceAutomationScheduler();
+    } catch (e) {
+      console.warn("[Init] Intelligence automation scheduler not loaded (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping intelligence automation scheduler");
   }
 
   const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
