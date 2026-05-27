@@ -7,7 +7,7 @@ import { v4 as uuid } from "uuid";
 import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
 import { commsIntelligence } from "./comms-intelligence.js";
-import { refreshCommsUserAvatar, getLiveCommsUserIds } from "./socket-signaling.js";
+import { refreshCommsUserAvatar, getLiveCommsUserIds, getCommsRuntimeMetrics, getActiveCalls } from "./socket-signaling.js";
 import {
   parseDeviceInfo,
   mergeDeviceInfoForOnlineTransition,
@@ -1277,7 +1277,7 @@ router.get("/api/comms/status", (req, res) => {
       messageReactions: true,
       readReceipts: true,
     },
-    websocket: '/ws',
+    websocket: '/cyrus-io',
     ...stats,
   });
 });
@@ -1308,6 +1308,164 @@ router.get("/api/comms/webrtc-health", (_req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e?.message || "webrtc-health failed" });
+  }
+});
+
+router.get("/api/comms/runtime-metrics", (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      signaling: {
+        websocket: "/cyrus-io",
+      },
+      runtime: getCommsRuntimeMetrics(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "runtime-metrics failed" });
+  }
+});
+
+router.get("/api/comms/metrics/prometheus", (_req, res) => {
+  try {
+    const runtime = getCommsRuntimeMetrics();
+    const activeCallCount = getActiveCalls().length;
+    const setupTotal = runtime.callSetupSucceeded + runtime.callSetupFailed;
+    const setupSuccessRate = setupTotal > 0 ? runtime.callSetupSucceeded / setupTotal : 1;
+    const lines = [
+      "# HELP cyrus_comms_qos_samples_received_total QoS samples received from clients",
+      "# TYPE cyrus_comms_qos_samples_received_total counter",
+      `cyrus_comms_qos_samples_received_total ${runtime.qosSamplesReceived}`,
+      "# HELP cyrus_comms_qos_samples_rejected_invalid_total QoS samples rejected due to invalid payload values",
+      "# TYPE cyrus_comms_qos_samples_rejected_invalid_total counter",
+      `cyrus_comms_qos_samples_rejected_invalid_total ${runtime.qosSamplesRejectedInvalid}`,
+      "# HELP cyrus_comms_qos_samples_rate_limited_total QoS samples dropped by server-side rate limiting",
+      "# TYPE cyrus_comms_qos_samples_rate_limited_total counter",
+      `cyrus_comms_qos_samples_rate_limited_total ${runtime.qosSamplesRateLimited}`,
+      "# HELP cyrus_comms_signaling_invalid_payload_rejected_total Signaling events rejected due to invalid payload schema",
+      "# TYPE cyrus_comms_signaling_invalid_payload_rejected_total counter",
+      `cyrus_comms_signaling_invalid_payload_rejected_total ${runtime.signalingInvalidPayloadRejected}`,
+      "# HELP cyrus_comms_signaling_event_rate_limited_total Signaling events dropped by per-socket control-plane rate limiting",
+      "# TYPE cyrus_comms_signaling_event_rate_limited_total counter",
+      `cyrus_comms_signaling_event_rate_limited_total ${runtime.signalingEventRateLimited}`,
+      "# HELP cyrus_comms_qos_actions_issued_total QoS recovery actions emitted",
+      "# TYPE cyrus_comms_qos_actions_issued_total counter",
+      `cyrus_comms_qos_actions_issued_total ${runtime.qosActionsIssued}`,
+      "# HELP cyrus_comms_qos_degraded_samples_total Degraded QoS samples observed",
+      "# TYPE cyrus_comms_qos_degraded_samples_total counter",
+      `cyrus_comms_qos_degraded_samples_total ${runtime.degradedSamples}`,
+      "# HELP cyrus_comms_qos_critical_samples_total Critical QoS samples observed",
+      "# TYPE cyrus_comms_qos_critical_samples_total counter",
+      `cyrus_comms_qos_critical_samples_total ${runtime.criticalSamples}`,
+      "# HELP cyrus_comms_active_calls Number of active calls tracked",
+      "# TYPE cyrus_comms_active_calls gauge",
+      `cyrus_comms_active_calls ${activeCallCount}`,
+      "# HELP cyrus_comms_qos_tracked_peers Number of peers with recent QoS samples",
+      "# TYPE cyrus_comms_qos_tracked_peers gauge",
+      `cyrus_comms_qos_tracked_peers ${runtime.qosTrackedPeers}`,
+      "# HELP cyrus_comms_qos_room_profiles_tracked Number of room-level adaptive QoS baseline profiles tracked",
+      "# TYPE cyrus_comms_qos_room_profiles_tracked gauge",
+      `cyrus_comms_qos_room_profiles_tracked ${runtime.qosRoomProfilesTracked}`,
+      "# HELP cyrus_comms_qos_adaptive_degraded_samples_total QoS samples classified degraded by adaptive room policy",
+      "# TYPE cyrus_comms_qos_adaptive_degraded_samples_total counter",
+      `cyrus_comms_qos_adaptive_degraded_samples_total ${runtime.qosAdaptiveDegradedSamples}`,
+      "# HELP cyrus_comms_qos_adaptive_critical_samples_total QoS samples classified critical by adaptive room policy",
+      "# TYPE cyrus_comms_qos_adaptive_critical_samples_total counter",
+      `cyrus_comms_qos_adaptive_critical_samples_total ${runtime.qosAdaptiveCriticalSamples}`,
+      "# HELP cyrus_comms_qos_actions_suppressed_hysteresis_total QoS actions suppressed by hysteresis guard",
+      "# TYPE cyrus_comms_qos_actions_suppressed_hysteresis_total counter",
+      `cyrus_comms_qos_actions_suppressed_hysteresis_total ${runtime.qosActionsSuppressedHysteresis}`,
+      "# HELP cyrus_comms_qos_actions_suppressed_cooldown_total QoS actions suppressed by cooldown guard",
+      "# TYPE cyrus_comms_qos_actions_suppressed_cooldown_total counter",
+      `cyrus_comms_qos_actions_suppressed_cooldown_total ${runtime.qosActionsSuppressedCooldown}`,
+      "# HELP cyrus_comms_qos_action_state_tracked Number of room-user QoS actuator states tracked",
+      "# TYPE cyrus_comms_qos_action_state_tracked gauge",
+      `cyrus_comms_qos_action_state_tracked ${runtime.qosActionStateTracked}`,
+      "# HELP cyrus_comms_fanout_published_total Cross-node comms fanout events published",
+      "# TYPE cyrus_comms_fanout_published_total counter",
+      `cyrus_comms_fanout_published_total ${runtime.commsFanoutPublished}`,
+      "# HELP cyrus_comms_fanout_received_total Cross-node comms fanout events received",
+      "# TYPE cyrus_comms_fanout_received_total counter",
+      `cyrus_comms_fanout_received_total ${runtime.commsFanoutReceived}`,
+      "# HELP cyrus_comms_fanout_delivered_total Cross-node comms fanout events delivered to local sockets",
+      "# TYPE cyrus_comms_fanout_delivered_total counter",
+      `cyrus_comms_fanout_delivered_total ${runtime.commsFanoutDelivered}`,
+      "# HELP cyrus_comms_call_setup_started_total Call setup attempts started",
+      "# TYPE cyrus_comms_call_setup_started_total counter",
+      `cyrus_comms_call_setup_started_total ${runtime.callSetupStarted}`,
+      "# HELP cyrus_comms_call_setup_succeeded_total Call setup attempts succeeded",
+      "# TYPE cyrus_comms_call_setup_succeeded_total counter",
+      `cyrus_comms_call_setup_succeeded_total ${runtime.callSetupSucceeded}`,
+      "# HELP cyrus_comms_call_setup_failed_total Call setup attempts failed",
+      "# TYPE cyrus_comms_call_setup_failed_total counter",
+      `cyrus_comms_call_setup_failed_total ${runtime.callSetupFailed}`,
+      "# HELP cyrus_comms_call_setup_success_ratio Ratio of successful call setups",
+      "# TYPE cyrus_comms_call_setup_success_ratio gauge",
+      `cyrus_comms_call_setup_success_ratio ${setupSuccessRate}`,
+      "# HELP cyrus_comms_session_rehydrates_total Session rehydrate events after reconnect",
+      "# TYPE cyrus_comms_session_rehydrates_total counter",
+      `cyrus_comms_session_rehydrates_total ${runtime.sessionRehydrates}`,
+      "# HELP cyrus_comms_reconnect_under_2s_total Reconnects completed under 2 seconds",
+      "# TYPE cyrus_comms_reconnect_under_2s_total counter",
+      `cyrus_comms_reconnect_under_2s_total ${runtime.reconnectUnder2s}`,
+      "# HELP cyrus_comms_reconnect_2_to_5s_total Reconnects completed between 2 and 5 seconds",
+      "# TYPE cyrus_comms_reconnect_2_to_5s_total counter",
+      `cyrus_comms_reconnect_2_to_5s_total ${runtime.reconnect2to5s}`,
+      "# HELP cyrus_comms_reconnect_5_to_10s_total Reconnects completed between 5 and 10 seconds",
+      "# TYPE cyrus_comms_reconnect_5_to_10s_total counter",
+      `cyrus_comms_reconnect_5_to_10s_total ${runtime.reconnect5to10s}`,
+      "# HELP cyrus_comms_reconnect_over_10s_total Reconnects completed over 10 seconds",
+      "# TYPE cyrus_comms_reconnect_over_10s_total counter",
+      `cyrus_comms_reconnect_over_10s_total ${runtime.reconnectOver10s}`,
+      "# HELP cyrus_comms_ice_restart_attempts_total ICE restart attempts reported by clients",
+      "# TYPE cyrus_comms_ice_restart_attempts_total counter",
+      `cyrus_comms_ice_restart_attempts_total ${runtime.iceRestartAttempts}`,
+      "# HELP cyrus_comms_ice_restart_succeeded_total ICE restart successes reported by clients",
+      "# TYPE cyrus_comms_ice_restart_succeeded_total counter",
+      `cyrus_comms_ice_restart_succeeded_total ${runtime.iceRestartSucceeded}`,
+      "# HELP cyrus_comms_ice_restart_failed_total ICE restart failures reported by clients",
+      "# TYPE cyrus_comms_ice_restart_failed_total counter",
+      `cyrus_comms_ice_restart_failed_total ${runtime.iceRestartFailed}`,
+      "# HELP cyrus_comms_relay_restart_attempts_total Relay restart attempts reported by clients",
+      "# TYPE cyrus_comms_relay_restart_attempts_total counter",
+      `cyrus_comms_relay_restart_attempts_total ${runtime.relayRestartAttempts}`,
+      "# HELP cyrus_comms_relay_restart_succeeded_total Relay restart successes reported by clients",
+      "# TYPE cyrus_comms_relay_restart_succeeded_total counter",
+      `cyrus_comms_relay_restart_succeeded_total ${runtime.relayRestartSucceeded}`,
+      "# HELP cyrus_comms_relay_restart_failed_total Relay restart failures reported by clients",
+      "# TYPE cyrus_comms_relay_restart_failed_total counter",
+      `cyrus_comms_relay_restart_failed_total ${runtime.relayRestartFailed}`,
+      "# HELP cyrus_comms_recovery_latency_avg_ms Average media recovery latency in milliseconds",
+      "# TYPE cyrus_comms_recovery_latency_avg_ms gauge",
+      `cyrus_comms_recovery_latency_avg_ms ${runtime.recoveryLatencyAvgMs}`,
+      "# HELP cyrus_comms_recovery_latency_under_1s_total Recovery events under 1 second",
+      "# TYPE cyrus_comms_recovery_latency_under_1s_total counter",
+      `cyrus_comms_recovery_latency_under_1s_total ${runtime.recoveryLatencyUnder1s}`,
+      "# HELP cyrus_comms_recovery_latency_1_to_2s_total Recovery events between 1 and 2 seconds",
+      "# TYPE cyrus_comms_recovery_latency_1_to_2s_total counter",
+      `cyrus_comms_recovery_latency_1_to_2s_total ${runtime.recoveryLatency1to2s}`,
+      "# HELP cyrus_comms_recovery_latency_2_to_5s_total Recovery events between 2 and 5 seconds",
+      "# TYPE cyrus_comms_recovery_latency_2_to_5s_total counter",
+      `cyrus_comms_recovery_latency_2_to_5s_total ${runtime.recoveryLatency2to5s}`,
+      "# HELP cyrus_comms_recovery_latency_over_5s_total Recovery events over 5 seconds",
+      "# TYPE cyrus_comms_recovery_latency_over_5s_total counter",
+      `cyrus_comms_recovery_latency_over_5s_total ${runtime.recoveryLatencyOver5s}`,
+      "# HELP cyrus_comms_chaos_injections_total Chaos test hooks executed",
+      "# TYPE cyrus_comms_chaos_injections_total counter",
+      `cyrus_comms_chaos_injections_total ${runtime.chaosInjections}`,
+      "# HELP cyrus_comms_pending_call_timeouts_total Pending calls expired without answer",
+      "# TYPE cyrus_comms_pending_call_timeouts_total counter",
+      `cyrus_comms_pending_call_timeouts_total ${runtime.pendingCallTimeouts}`,
+      "# HELP cyrus_comms_active_call_drift_reconciles_total Active calls reconciled after participant drift",
+      "# TYPE cyrus_comms_active_call_drift_reconciles_total counter",
+      `cyrus_comms_active_call_drift_reconciles_total ${runtime.activeCallDriftReconciles}`,
+      "# HELP cyrus_comms_active_call_drift_pruned_total Active calls pruned after full participant drift",
+      "# TYPE cyrus_comms_active_call_drift_pruned_total counter",
+      `cyrus_comms_active_call_drift_pruned_total ${runtime.activeCallDriftPruned}`,
+    ];
+    res.setHeader("Content-Type", "text/plain; version=0.0.4");
+    res.send(`${lines.join("\n")}\n`);
+  } catch (e: any) {
+    res.status(500).send(`# cyrus_comms_metrics_error ${JSON.stringify(e?.message || "unknown")}\n`);
   }
 });
 

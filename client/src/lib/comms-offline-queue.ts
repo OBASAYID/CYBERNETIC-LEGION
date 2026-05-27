@@ -37,10 +37,15 @@ function writeQueue(items: QueuedOutboundMessage[]): void {
 }
 
 export function enqueueOutboundMessage(conversationId: string, payload: ChatOutboundPayload): QueuedOutboundMessage {
+  const clientMessageId = payload.clientMessageId || `cm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const item: QueuedOutboundMessage = {
     id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     conversationId,
-    payload: { ...payload, timestamp: payload.timestamp || new Date().toISOString() },
+    payload: {
+      ...payload,
+      clientMessageId,
+      timestamp: payload.timestamp || new Date().toISOString(),
+    },
     createdAt: Date.now(),
     attempts: 0,
   };

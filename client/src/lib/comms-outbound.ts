@@ -15,6 +15,7 @@ export function buildPresenceSendMessagePayload(
   const base = {
     message: payload.message,
     messageType: payload.messageType || "text",
+    clientMessageId: payload.clientMessageId,
     fileUrl: payload.fileUrl,
     fileName: payload.fileName,
     fileMimeType: payload.fileMimeType,

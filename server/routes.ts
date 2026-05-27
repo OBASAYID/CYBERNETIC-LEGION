@@ -646,20 +646,26 @@ export async function registerRoutes(
     console.warn("[SFU] init skipped (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 
-  if (initSignalingServer) {
+  const legacyWsEnabled = String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "").toLowerCase() === "true";
+  if (initSignalingServer && legacyWsEnabled) {
     try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  } else if (initSignalingServer) {
+    console.log("[Routes] Legacy /ws signaling disabled (set CYRUS_ENABLE_LEGACY_WS_SIGNALING=true to re-enable)");
   }
   if (initSocketSignaling) {
     try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
-  if (initCyrusCommSocketSignaling) {
+  const secondaryCommPathEnabled = String(process.env.CYRUS_ENABLE_SECONDARY_COMM_SIGNALING || "").toLowerCase() === "true";
+  if (initCyrusCommSocketSignaling && secondaryCommPathEnabled) {
     try {
       initCyrusCommSocketSignaling(httpServer);
     } catch (e) {
       console.warn("[Routes] initCyrusCommSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e));
     }
+  } else if (initCyrusCommSocketSignaling) {
+    console.log("[Routes] Secondary /cyrus-comm-io signaling disabled (set CYRUS_ENABLE_SECONDARY_COMM_SIGNALING=true to re-enable)");
   }
-  console.log("[Socket.IO] Real-time communication server active");
+  console.log("[Socket.IO] Real-time communication server active on /cyrus-io");
 
   // ===============================================
   // LOGOUT ALL DEVICES ENDPOINT
@@ -1421,7 +1427,7 @@ export async function registerRoutes(
   // Room creation (simple)
   app.post("/api/comms/room", (_req, res) => {
     const roomId = uuid();
-    res.json({ roomId, joinUrl: `/ws?room=${roomId}` });
+    res.json({ roomId, signalingPath: "/cyrus-io" });
   });
 
   // Reminders
