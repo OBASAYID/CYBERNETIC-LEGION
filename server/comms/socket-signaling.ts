@@ -13,6 +13,24 @@ import {
   persistChatMessage,
   queueForOfflineRecipient,
 } from "./delivery-hub.js";
+import {
+  deleteActiveCallState,
+  deletePendingCallState,
+  getActiveCallState,
+  getActiveCallStateForUser,
+  getPendingCallState,
+  listActiveCallStates,
+  setActiveCallState,
+  setPendingCallState,
+} from "./distributed-call-state.js";
+import {
+  appendCommsUserEvent,
+  readCommsUserEventsSince,
+} from "./distributed-event-log.js";
+import {
+  initCommsFanout,
+  publishCommsFanout,
+} from "./distributed-socket-fanout.js";
 
 interface User {
   id: string;
@@ -53,6 +71,15 @@ interface ActiveCall {
   sfuMode?: "mediasoup" | "star" | "p2p";
 }
 
+type QosSample = {
+  roomId: string;
+  rttMs?: number;
+  jitterMs?: number;
+  packetLossRate?: number;
+  bitrateKbps?: number;
+  quality?: string;
+};
+
 type MessageType = "text" | "emoji" | "media" | "file" | "cad-3d" | "voice-note" | "location" | "system";
 
 interface EnhancedMessage {
@@ -60,6 +87,7 @@ interface EnhancedMessage {
   groupId?: string;
   message: string;
   messageType: MessageType;
+  clientMessageId?: string;
   timestamp: string;
   fileUrl?: string;
   fileName?: string;
@@ -76,11 +104,146 @@ const users = new Map<string, User>();
 const pendingCalls = new Map<string, PendingCall>();
 const groupRooms = new Map<string, GroupRoom>();
 const activeCalls = new Map<string, ActiveCall>();
+const recentMessageAcks = new Map<
+  string,
+  {
+    id: string;
+    recipientId?: string;
+    groupId?: string;
+    message: string;
+    messageType: MessageType;
+    timestamp: string;
+    fileUrl?: string;
+    fileName?: string;
+    fileMimeType?: string;
+    fileSizeBytes?: number;
+    voiceDurationSeconds?: number;
+    latitude?: number;
+    longitude?: number;
+    clientMessageId?: string;
+    storedAt: number;
+  }
+>();
+const processingMessageAcks = new Set<string>();
+const qosByRoomAndUser = new Map<string, QosSample & { userId: string; updatedAt: number }>();
+const qosLastSampleAt = new Map<string, number>();
+const qosActionStateByRoomUser = new Map<
+  string,
+  {
+    lastAction?: "reduce_video" | "force_relay_restart";
+    lastActionAt?: number;
+    degradedStreak: number;
+    criticalStreak: number;
+    updatedAt: number;
+  }
+>();
+const roomQosProfiles = new Map<
+  string,
+  {
+    ewmaRtt: number;
+    ewmaJitter: number;
+    ewmaLoss: number;
+    ewmaBitrate: number;
+    sampleCount: number;
+    updatedAt: number;
+  }
+>();
+const recentCallTransactions = new Map<string, number>();
+const userLastDisconnectAt = new Map<string, number>();
+const pendingCallTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const runtimeMetrics = {
+  qosSamplesReceived: 0,
+  qosSamplesRejectedInvalid: 0,
+  qosSamplesRateLimited: 0,
+  qosActionsIssued: 0,
+  degradedSamples: 0,
+  criticalSamples: 0,
+  callSetupStarted: 0,
+  callSetupSucceeded: 0,
+  callSetupFailed: 0,
+  sessionRehydrates: 0,
+  reconnectUnder2s: 0,
+  reconnect2to5s: 0,
+  reconnect5to10s: 0,
+  reconnectOver10s: 0,
+  iceRestartAttempts: 0,
+  iceRestartSucceeded: 0,
+  iceRestartFailed: 0,
+  relayRestartAttempts: 0,
+  relayRestartSucceeded: 0,
+  relayRestartFailed: 0,
+  recoveryLatencySamples: 0,
+  recoveryLatencyTotalMs: 0,
+  recoveryLatencyUnder1s: 0,
+  recoveryLatency1to2s: 0,
+  recoveryLatency2to5s: 0,
+  recoveryLatencyOver5s: 0,
+  chaosInjections: 0,
+  pendingCallTimeouts: 0,
+  activeCallDriftReconciles: 0,
+  activeCallDriftPruned: 0,
+  signalingInvalidPayloadRejected: 0,
+  signalingEventRateLimited: 0,
+  qosAdaptiveDegradedSamples: 0,
+  qosAdaptiveCriticalSamples: 0,
+  qosActionsSuppressedCooldown: 0,
+  qosActionsSuppressedHysteresis: 0,
+  commsFanoutPublished: 0,
+  commsFanoutReceived: 0,
+  commsFanoutDelivered: 0,
+};
+
+function toPendingCallState(call: PendingCall) {
+  return {
+    callerId: call.callerId,
+    callerName: call.callerName,
+    targetId: call.targetId,
+    roomId: call.roomId,
+    callType: call.callType,
+    timestamp: call.timestamp.toISOString(),
+  } as const;
+}
+
+function fromPendingCallState(state: Awaited<ReturnType<typeof getPendingCallState>>): PendingCall | null {
+  if (!state) return null;
+  return {
+    callerId: state.callerId,
+    callerName: state.callerName,
+    targetId: state.targetId,
+    roomId: state.roomId,
+    callType: state.callType,
+    timestamp: new Date(state.timestamp),
+  };
+}
+
+function toActiveCallState(call: ActiveCall) {
+  return {
+    roomId: call.roomId,
+    participants: call.participants,
+    callType: call.callType,
+    startedAt: call.startedAt.toISOString(),
+    screenSharingBy: call.screenSharingBy,
+    hostPeerId: call.hostPeerId,
+    sfuMode: call.sfuMode,
+  } as const;
+}
 
 /** Max users in a group call (enforced in signaling). */
 const GROUP_CALL_MAX_PARTICIPANTS = 20;
 
 let ioInstance: SocketIOServer | null = null;
+const RECENT_ACK_TTL_MS = 2 * 60 * 1000;
+const CALL_TXN_TTL_MS = 10 * 60 * 1000;
+const QOS_SAMPLE_MIN_INTERVAL_MS = 750;
+const PENDING_CALL_TIMEOUT_MS = 35_000;
+const ACTIVE_CALL_RECONCILE_INTERVAL_MS = 45_000;
+const ACTIVE_CALL_EMPTY_GRACE_MS = 45_000;
+const QOS_ACTION_COOLDOWN_MS = {
+  reduce_video: 8_000,
+  force_relay_restart: 15_000,
+} as const;
+const QOS_HYSTERESIS_DEGRADED_STREAK = 2;
+const COMMS_CHAOS_ENABLED = process.env.CYRUS_ENABLE_COMMS_CHAOS === "1";
 
 function presenceMapKey(commsUserId: string, deviceId: string): string {
   return `${commsUserId}::${deviceId}`;
@@ -96,11 +259,367 @@ function findUserByCommsId(commsUserId: string): User | undefined {
   return undefined;
 }
 
+function findUsersByCommsId(commsUserId: string): User[] {
+  const out: User[] = [];
+  for (const u of users.values()) {
+    if (u.id === commsUserId) out.push(u);
+  }
+  return out;
+}
+
 function getSocketUser(socket: Socket): User | undefined {
   const key = (socket as any).presenceKey as string | undefined;
   if (key) return users.get(key);
   const uid = (socket as any).userId as string | undefined;
   return uid ? findUserByCommsId(uid) : undefined;
+}
+
+function buildMessageAckKey(senderId: string, clientMessageId?: string): string | null {
+  if (!clientMessageId || !clientMessageId.trim()) return null;
+  return `${senderId}::${clientMessageId.trim()}`;
+}
+
+function pruneRecentMessageAcks(): void {
+  const now = Date.now();
+  for (const [key, value] of recentMessageAcks.entries()) {
+    if (now - value.storedAt > RECENT_ACK_TTL_MS) {
+      recentMessageAcks.delete(key);
+    }
+  }
+}
+
+function classifyQos(sample: QosSample): "healthy" | "degraded" | "critical" {
+  const rtt = Number(sample.rttMs || 0);
+  const jitter = Number(sample.jitterMs || 0);
+  const loss = Number(sample.packetLossRate || 0);
+  if (rtt >= 900 || jitter >= 180 || loss >= 18) return "critical";
+  if (rtt >= 450 || jitter >= 80 || loss >= 8) return "degraded";
+  return "healthy";
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getRoomQosProfile(roomId: string) {
+  return roomQosProfiles.get(roomId);
+}
+
+function updateRoomQosProfile(roomId: string, sample: QosSample, updatedAt: number): void {
+  const alpha = 0.2;
+  const rtt = Math.max(0, Number(sample.rttMs || 0));
+  const jitter = Math.max(0, Number(sample.jitterMs || 0));
+  const loss = Math.max(0, Number(sample.packetLossRate || 0));
+  const bitrate = Math.max(0, Number(sample.bitrateKbps || 0));
+  const current = roomQosProfiles.get(roomId);
+  if (!current) {
+    roomQosProfiles.set(roomId, {
+      ewmaRtt: rtt,
+      ewmaJitter: jitter,
+      ewmaLoss: loss,
+      ewmaBitrate: bitrate,
+      sampleCount: 1,
+      updatedAt,
+    });
+    return;
+  }
+  current.ewmaRtt = alpha * rtt + (1 - alpha) * current.ewmaRtt;
+  current.ewmaJitter = alpha * jitter + (1 - alpha) * current.ewmaJitter;
+  current.ewmaLoss = alpha * loss + (1 - alpha) * current.ewmaLoss;
+  current.ewmaBitrate = alpha * bitrate + (1 - alpha) * current.ewmaBitrate;
+  current.sampleCount += 1;
+  current.updatedAt = updatedAt;
+}
+
+function classifyQosAdaptive(
+  roomId: string,
+  sample: QosSample,
+): {
+  qosClass: "healthy" | "degraded" | "critical";
+  thresholds: {
+    degradedRttMs: number;
+    criticalRttMs: number;
+    degradedJitterMs: number;
+    criticalJitterMs: number;
+    degradedLossPct: number;
+    criticalLossPct: number;
+  };
+} {
+  const profile = getRoomQosProfile(roomId);
+  const rtt = Number(sample.rttMs || 0);
+  const jitter = Number(sample.jitterMs || 0);
+  const loss = Number(sample.packetLossRate || 0);
+
+  if (!profile || profile.sampleCount < 6) {
+    const qosClass = classifyQos(sample);
+    return {
+      qosClass,
+      thresholds: {
+        degradedRttMs: 450,
+        criticalRttMs: 900,
+        degradedJitterMs: 80,
+        criticalJitterMs: 180,
+        degradedLossPct: 8,
+        criticalLossPct: 18,
+      },
+    };
+  }
+
+  const degradedRttMs = clamp(Math.max(450, profile.ewmaRtt * 1.6), 350, 1200);
+  const criticalRttMs = clamp(Math.max(900, profile.ewmaRtt * 2.4), 650, 1800);
+  const degradedJitterMs = clamp(Math.max(80, profile.ewmaJitter * 1.7), 60, 300);
+  const criticalJitterMs = clamp(Math.max(180, profile.ewmaJitter * 2.6), 120, 600);
+  const degradedLossPct = clamp(Math.max(8, profile.ewmaLoss * 1.8), 5, 25);
+  const criticalLossPct = clamp(Math.max(18, profile.ewmaLoss * 2.8), 12, 40);
+
+  if (rtt >= 1500 || jitter >= 350 || loss >= 35) {
+    return {
+      qosClass: "critical",
+      thresholds: {
+        degradedRttMs,
+        criticalRttMs,
+        degradedJitterMs,
+        criticalJitterMs,
+        degradedLossPct,
+        criticalLossPct,
+      },
+    };
+  }
+
+  if (rtt >= criticalRttMs || jitter >= criticalJitterMs || loss >= criticalLossPct) {
+    return {
+      qosClass: "critical",
+      thresholds: {
+        degradedRttMs,
+        criticalRttMs,
+        degradedJitterMs,
+        criticalJitterMs,
+        degradedLossPct,
+        criticalLossPct,
+      },
+    };
+  }
+  if (rtt >= degradedRttMs || jitter >= degradedJitterMs || loss >= degradedLossPct) {
+    return {
+      qosClass: "degraded",
+      thresholds: {
+        degradedRttMs,
+        criticalRttMs,
+        degradedJitterMs,
+        criticalJitterMs,
+        degradedLossPct,
+        criticalLossPct,
+      },
+    };
+  }
+  return {
+    qosClass: "healthy",
+    thresholds: {
+      degradedRttMs,
+      criticalRttMs,
+      degradedJitterMs,
+      criticalJitterMs,
+      degradedLossPct,
+      criticalLossPct,
+    },
+  };
+}
+
+function shouldProcessCallTxn(userId: string, txnId?: string): boolean {
+  if (!txnId || !txnId.trim()) return true;
+  const key = `${userId}::${txnId.trim()}`;
+  const now = Date.now();
+  const existing = recentCallTransactions.get(key);
+  if (existing && now - existing < CALL_TXN_TTL_MS) {
+    return false;
+  }
+  recentCallTransactions.set(key, now);
+  return true;
+}
+
+function pruneRecentCallTransactions(): void {
+  const now = Date.now();
+  for (const [key, ts] of recentCallTransactions.entries()) {
+    if (now - ts > CALL_TXN_TTL_MS) {
+      recentCallTransactions.delete(key);
+    }
+  }
+}
+
+function isFiniteInRange(value: unknown, min: number, max: number): boolean {
+  if (value === undefined || value === null) return true;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max;
+}
+
+function isReasonableId(value: unknown, maxLen = 160): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.length > maxLen) return false;
+  return !/[\u0000-\u001F\u007F]/.test(trimmed);
+}
+
+function allowSocketEventRate(
+  socket: Socket,
+  eventName: string,
+  limit: number,
+  windowMs: number,
+): boolean {
+  const now = Date.now();
+  const bag = ((socket.data as any).__eventRateBag ||= new Map<
+    string,
+    number[]
+  >()) as Map<string, number[]>;
+  const list = bag.get(eventName) || [];
+  const kept = list.filter((ts) => now - ts <= windowMs);
+  if (kept.length >= limit) return false;
+  kept.push(now);
+  bag.set(eventName, kept);
+  return true;
+}
+
+function recordRecoveryLatency(latencyMs?: number): void {
+  const ms = Number(latencyMs);
+  if (!Number.isFinite(ms) || ms < 0) return;
+  runtimeMetrics.recoveryLatencySamples += 1;
+  runtimeMetrics.recoveryLatencyTotalMs += ms;
+  if (ms < 1000) runtimeMetrics.recoveryLatencyUnder1s += 1;
+  else if (ms < 2000) runtimeMetrics.recoveryLatency1to2s += 1;
+  else if (ms < 5000) runtimeMetrics.recoveryLatency2to5s += 1;
+  else runtimeMetrics.recoveryLatencyOver5s += 1;
+}
+
+export function getCommsRuntimeMetrics() {
+  const recoveryLatencyAvgMs =
+    runtimeMetrics.recoveryLatencySamples > 0
+      ? runtimeMetrics.recoveryLatencyTotalMs / runtimeMetrics.recoveryLatencySamples
+      : 0;
+  return {
+    ...runtimeMetrics,
+    recoveryLatencyAvgMs,
+    qosTrackedPeers: qosByRoomAndUser.size,
+    qosRoomProfilesTracked: roomQosProfiles.size,
+    qosActionStateTracked: qosActionStateByRoomUser.size,
+  };
+}
+
+function toCommsEnvelope(evt: { seq: number; type: string; payload: Record<string, unknown>; ts: number }) {
+  return {
+    version: "1.0",
+    eventId: `evt_${evt.seq}_${evt.ts}`,
+    seq: evt.seq,
+    type: evt.type,
+    payload: evt.payload,
+    ts: evt.ts,
+  };
+}
+
+async function emitUserEventByCommsId(
+  io: SocketIOServer,
+  commsUserId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const evt = await appendCommsUserEvent(commsUserId, eventType, payload);
+  const envelope = toCommsEnvelope(evt);
+  const localTargets = findUsersByCommsId(commsUserId);
+  for (const target of localTargets) {
+    io.to(target.socketId).emit(eventType, payload);
+    io.to(target.socketId).emit("comms:event", envelope);
+  }
+  const fanoutOk = await publishCommsFanout(commsUserId, eventType, payload, envelope);
+  if (fanoutOk) {
+    runtimeMetrics.commsFanoutPublished += 1;
+  }
+}
+
+async function savePendingCall(roomId: string, call: PendingCall): Promise<void> {
+  pendingCalls.set(roomId, call);
+  await setPendingCallState(roomId, toPendingCallState(call));
+}
+
+async function loadPendingCall(roomId: string): Promise<PendingCall | undefined> {
+  const local = pendingCalls.get(roomId);
+  if (local) return local;
+  const distributed = fromPendingCallState(await getPendingCallState(roomId));
+  if (distributed) {
+    pendingCalls.set(roomId, distributed);
+    return distributed;
+  }
+  return undefined;
+}
+
+async function clearPendingCall(roomId: string): Promise<void> {
+  const timer = pendingCallTimeouts.get(roomId);
+  if (timer) {
+    clearTimeout(timer);
+    pendingCallTimeouts.delete(roomId);
+  }
+  pendingCalls.delete(roomId);
+  await deletePendingCallState(roomId);
+}
+
+function schedulePendingCallTimeout(
+  io: SocketIOServer,
+  roomId: string,
+  callerId: string,
+  targetId: string,
+): void {
+  const existing = pendingCallTimeouts.get(roomId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(async () => {
+    const pending = await loadPendingCall(roomId);
+    if (!pending) return;
+    runtimeMetrics.pendingCallTimeouts += 1;
+    runtimeMetrics.callSetupFailed += 1;
+    await clearPendingCall(roomId);
+
+    const caller = findUserByCommsId(callerId);
+    if (caller) {
+      caller.inCall = false;
+      caller.currentRoomId = undefined;
+      await emitUserEventByCommsId(io, callerId, "call-failed", {
+        reason: "timeout-no-answer",
+        roomId,
+      });
+    }
+    await emitUserEventByCommsId(io, targetId, "call-missed", {
+      roomId,
+      callerId,
+    });
+    emitPresenceUpdate();
+  }, PENDING_CALL_TIMEOUT_MS);
+  if ((timer as any).unref) (timer as any).unref();
+  pendingCallTimeouts.set(roomId, timer);
+}
+
+async function saveActiveCall(roomId: string, call: ActiveCall): Promise<void> {
+  activeCalls.set(roomId, call);
+  await setActiveCallState(roomId, toActiveCallState(call));
+}
+
+async function loadActiveCall(roomId: string): Promise<ActiveCall | undefined> {
+  const local = activeCalls.get(roomId);
+  if (local) return local;
+  const distributed = await getActiveCallState(roomId);
+  if (!distributed) return undefined;
+  const restored: ActiveCall = {
+    roomId: distributed.roomId,
+    participants: distributed.participants,
+    callType: distributed.callType,
+    startedAt: new Date(distributed.startedAt),
+    screenSharingBy: distributed.screenSharingBy,
+    hostPeerId: distributed.hostPeerId,
+    sfuMode: distributed.sfuMode,
+  };
+  activeCalls.set(roomId, restored);
+  return restored;
+}
+
+async function clearActiveCall(roomId: string): Promise<void> {
+  activeCalls.delete(roomId);
+  await deleteActiveCallState(roomId);
 }
 
 function emitPresenceUpdate() {
@@ -191,6 +710,19 @@ export function initSocketSignaling(server: HttpServer) {
 
   ioInstance = io;
 
+  void initCommsFanout(`socksig_${process.pid}`, (message) => {
+    runtimeMetrics.commsFanoutReceived += 1;
+    const targets = findUsersByCommsId(message.userId);
+    if (!targets.length) return;
+    for (const target of targets) {
+      io.to(target.socketId).emit(message.eventType, message.payload);
+      if (message.commsEvent) {
+        io.to(target.socketId).emit("comms:event", message.commsEvent);
+      }
+      runtimeMetrics.commsFanoutDelivered += 1;
+    }
+  });
+
   registerSfuSocketHandlers(io);
 
   console.log("[Socket.IO] Signaling server initialized");
@@ -277,10 +809,98 @@ export function initSocketSignaling(server: HttpServer) {
     }
   }, 60000);
 
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, sample] of qosByRoomAndUser.entries()) {
+      if (now - sample.updatedAt > 5 * 60 * 1000) {
+        qosByRoomAndUser.delete(key);
+      }
+    }
+    for (const [key, ts] of qosLastSampleAt.entries()) {
+      if (now - ts > 5 * 60 * 1000) {
+        qosLastSampleAt.delete(key);
+      }
+    }
+    for (const [roomId, profile] of roomQosProfiles.entries()) {
+      if (now - profile.updatedAt > 15 * 60 * 1000) {
+        roomQosProfiles.delete(roomId);
+      }
+    }
+    for (const [key, state] of qosActionStateByRoomUser.entries()) {
+      if (now - state.updatedAt > 10 * 60 * 1000) {
+        qosActionStateByRoomUser.delete(key);
+      }
+    }
+    pruneRecentCallTransactions();
+  }, 60_000);
+
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+      const liveCommsIds = getLiveCommsUserIds();
+      const distributedCalls = await listActiveCallStates();
+      for (const call of distributedCalls) {
+        const participants = Array.from(new Set((call.participants || []).filter(Boolean)));
+        const onlineParticipants = participants.filter((id) => liveCommsIds.has(id));
+        const startedAtMs = Number(new Date(call.startedAt).getTime()) || 0;
+        const ageMs = startedAtMs > 0 ? now - startedAtMs : 0;
+
+        if (onlineParticipants.length === 0) {
+          if (ageMs >= ACTIVE_CALL_EMPTY_GRACE_MS) {
+            await clearActiveCall(call.roomId);
+            runtimeMetrics.activeCallDriftPruned += 1;
+          }
+          continue;
+        }
+
+        if (onlineParticipants.length !== participants.length) {
+          const reconciled: ActiveCall = {
+            roomId: call.roomId,
+            participants: onlineParticipants,
+            callType: call.callType,
+            startedAt: startedAtMs > 0 ? new Date(startedAtMs) : new Date(),
+            screenSharingBy:
+              call.screenSharingBy && onlineParticipants.includes(call.screenSharingBy)
+                ? call.screenSharingBy
+                : undefined,
+            hostPeerId: onlineParticipants.includes(call.hostPeerId)
+              ? call.hostPeerId
+              : onlineParticipants[0],
+            sfuMode: call.sfuMode,
+          };
+          await saveActiveCall(call.roomId, reconciled);
+          runtimeMetrics.activeCallDriftReconciles += 1;
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }, ACTIVE_CALL_RECONCILE_INTERVAL_MS);
+
   io.on("connection", (socket: Socket) => {
     console.log(`[Socket.IO] New connection: ${socket.id}`);
 
-    socket.on("register", async (data: { userId: string; displayName: string; deviceId: string; profileImageUrl?: string | null }) => {
+    socket.use((packet, next) => {
+      const payload = packet?.[1];
+      if (payload && typeof payload === "object" && typeof (payload as any).clientSeq === "number") {
+        const nextSeq = Number((payload as any).clientSeq);
+        const lastSeq = Number((socket.data as any).lastClientSeq || 0);
+        if (Number.isFinite(nextSeq) && nextSeq > lastSeq) {
+          (socket.data as any).lastClientSeq = nextSeq;
+        } else if (Number.isFinite(nextSeq) && nextSeq <= lastSeq) {
+          return;
+        }
+      }
+      next();
+    });
+
+    socket.on("register", async (data: {
+      userId: string;
+      displayName: string;
+      deviceId: string;
+      profileImageUrl?: string | null;
+      resumeFromSeq?: number;
+    }) => {
       const { displayName, deviceId } = data;
       const commsUserId = data.userId || deviceId;
       const mapKey = presenceMapKey(commsUserId, deviceId);
@@ -308,6 +928,16 @@ export function initSocketSignaling(server: HttpServer) {
       (socket as any).presenceKey = mapKey;
 
       console.log(`[Socket.IO] User registered: ${displayName} (${commsUserId} @ ${deviceId}) - Total: ${users.size}`);
+
+      const disconnectedAt = userLastDisconnectAt.get(commsUserId);
+      if (typeof disconnectedAt === "number" && disconnectedAt > 0) {
+        const delta = Date.now() - disconnectedAt;
+        if (delta < 2000) runtimeMetrics.reconnectUnder2s += 1;
+        else if (delta < 5000) runtimeMetrics.reconnect2to5s += 1;
+        else if (delta < 10000) runtimeMetrics.reconnect5to10s += 1;
+        else runtimeMetrics.reconnectOver10s += 1;
+        userLastDisconnectAt.delete(commsUserId);
+      }
 
       try {
         await db.insert(onlineUsers).values({
@@ -342,12 +972,68 @@ export function initSocketSignaling(server: HttpServer) {
         console.log(`[Socket.IO] Delivered ${delivered} pending message(s) to ${displayName}`);
       }
 
+      const resumeFromSeq =
+        typeof data.resumeFromSeq === "number" && Number.isFinite(data.resumeFromSeq)
+          ? Math.max(0, data.resumeFromSeq)
+          : 0;
+      if (resumeFromSeq > 0) {
+        const replay = await readCommsUserEventsSince(commsUserId, resumeFromSeq, 200);
+        if (replay.length > 0) {
+          socket.emit("session-events-replay", { events: replay });
+        }
+      }
+
+      let rehydrateCall = await getActiveCallStateForUser(commsUserId);
+      if (!rehydrateCall) {
+        const distributedActive = await listActiveCallStates();
+        rehydrateCall = distributedActive.find((c) => c.participants.includes(commsUserId)) || null;
+      }
+      if (rehydrateCall) {
+        const peerId = rehydrateCall.participants.find((id) => id !== commsUserId) || null;
+        const peer = peerId ? findUserByCommsId(peerId) : undefined;
+        runtimeMetrics.sessionRehydrates += 1;
+        socket.emit("call-state-rehydrate", {
+          roomId: rehydrateCall.roomId,
+          callType: rehydrateCall.callType,
+          participants: rehydrateCall.participants,
+          peerId,
+          peerName: peer?.displayName || "Participant",
+          isInitiator: rehydrateCall.hostPeerId === commsUserId,
+          needsMediaRecovery: true,
+        });
+      }
+
       emitPresenceUpdate();
     });
 
-    socket.on("call-user", (data: { targetUserId: string; callType: "audio" | "video" }) => {
+    socket.on("session-resync", async (data: { sinceSeq?: number }) => {
+      if (!allowSocketEventRate(socket, "session-resync", 10, 60_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      const userId = (socket as any).userId as string | undefined;
+      if (!userId) return;
+      const sinceSeq =
+        typeof data?.sinceSeq === "number" && Number.isFinite(data.sinceSeq)
+          ? Math.max(0, data.sinceSeq)
+          : 0;
+      const replay = await readCommsUserEventsSince(userId, sinceSeq, 200);
+      socket.emit("session-events-replay", { events: replay });
+    });
+
+    socket.on("call-user", async (data: { targetUserId: string; callType: "audio" | "video"; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "call-user", 8, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.targetUserId) || (data.callType !== "audio" && data.callType !== "video")) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const callerId = (socket as any).userId;
+      if (!shouldProcessCallTxn(callerId, data.callTxnId)) return;
       const caller = getSocketUser(socket) || findUserByCommsId(callerId);
+      runtimeMetrics.callSetupStarted += 1;
 
       if (!caller) {
         socket.emit("call-failed", { reason: "not-registered" });
@@ -357,6 +1043,7 @@ export function initSocketSignaling(server: HttpServer) {
       const target = findUserByCommsId(data.targetUserId);
 
       if (!target) {
+        runtimeMetrics.callSetupFailed += 1;
         socket.emit("call-failed", { reason: "user-offline" });
         return;
       }
@@ -372,30 +1059,47 @@ export function initSocketSignaling(server: HttpServer) {
         timestamp: new Date(),
       };
 
-      pendingCalls.set(roomId, pendingCall);
+      await savePendingCall(roomId, pendingCall);
+      schedulePendingCallTimeout(io, roomId, callerId, data.targetUserId);
       caller.inCall = true;
       caller.currentRoomId = roomId;
 
       console.log(`[Socket.IO] Call: ${caller.displayName} -> ${target.displayName} (${data.callType}) Room: ${roomId}`);
 
-      io.to(target.socketId).emit("incoming-call", {
+      await emitUserEventByCommsId(io, data.targetUserId, "incoming-call", {
         callerId,
         callerName: caller.displayName,
         roomId,
         callType: data.callType,
       });
 
+      const ringingEvt = await appendCommsUserEvent(callerId, "call-ringing", {
+        roomId,
+        targetName: target.displayName,
+        callType: data.callType,
+      });
       socket.emit("call-ringing", { roomId, targetName: target.displayName, callType: data.callType });
+      socket.emit("comms:event", toCommsEnvelope(ringingEvt));
 
       emitPresenceUpdate();
     });
 
-    socket.on("accept-call", async (data: { roomId: string }) => {
+    socket.on("accept-call", async (data: { roomId: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "accept-call", 12, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const userId = (socket as any).userId;
+      if (!shouldProcessCallTxn(userId, data.callTxnId)) return;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
-      const pendingCall = pendingCalls.get(data.roomId);
+      const pendingCall = await loadPendingCall(data.roomId);
 
       if (!pendingCall || !user) {
+        runtimeMetrics.callSetupFailed += 1;
         socket.emit("call-failed", { reason: "call-not-found" });
         return;
       }
@@ -403,8 +1107,9 @@ export function initSocketSignaling(server: HttpServer) {
       const caller = findUserByCommsId(pendingCall.callerId);
 
       if (!caller) {
+        runtimeMetrics.callSetupFailed += 1;
         socket.emit("call-failed", { reason: "caller-disconnected" });
-        pendingCalls.delete(data.roomId);
+        await clearPendingCall(data.roomId);
         return;
       }
 
@@ -422,7 +1127,7 @@ export function initSocketSignaling(server: HttpServer) {
         hostPeerId: pendingCall.callerId,
         sfuMode: "p2p",
       };
-      activeCalls.set(data.roomId, activeCall);
+      await saveActiveCall(data.roomId, activeCall);
 
       try {
         await db.insert(callSessions).values({
@@ -460,14 +1165,22 @@ export function initSocketSignaling(server: HttpServer) {
       if (handshakeWatchdog.unref) handshakeWatchdog.unref();
 
       const callType = pendingCall.callType;
+      runtimeMetrics.callSetupSucceeded += 1;
 
-      io.to(caller.socketId).emit("call-accepted", {
+      await emitUserEventByCommsId(io, pendingCall.callerId, "call-accepted", {
         roomId: data.roomId,
         peerName: user.displayName,
         peerId: userId,
         callType,
       });
 
+      const connectedEvt = await appendCommsUserEvent(userId, "call-connected", {
+        roomId: data.roomId,
+        peerName: caller.displayName,
+        peerId: caller.id,
+        isInitiator: false,
+        callType,
+      });
       socket.emit("call-connected", {
         roomId: data.roomId,
         peerName: caller.displayName,
@@ -475,18 +1188,29 @@ export function initSocketSignaling(server: HttpServer) {
         isInitiator: false,
         callType,
       });
+      socket.emit("comms:event", toCommsEnvelope(connectedEvt));
 
       try {
         commsIntelligence.trackInteraction(userId, 'call_started', pendingCall.callerId, { callType, roomId: data.roomId });
         commsIntelligence.trackInteraction(pendingCall.callerId, 'call_started', userId, { callType, roomId: data.roomId });
       } catch (_) { }
 
-      pendingCalls.delete(data.roomId);
+      await clearPendingCall(data.roomId);
       emitPresenceUpdate();
     });
 
-    socket.on("decline-call", (data: { roomId: string }) => {
-      const pendingCall = pendingCalls.get(data.roomId);
+    socket.on("decline-call", async (data: { roomId: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "decline-call", 12, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
+      const userId = (socket as any).userId as string | undefined;
+      if (userId && !shouldProcessCallTxn(userId, data.callTxnId)) return;
+      const pendingCall = await loadPendingCall(data.roomId);
 
       if (pendingCall) {
         const caller = findUserByCommsId(pendingCall.callerId);
@@ -494,10 +1218,10 @@ export function initSocketSignaling(server: HttpServer) {
         if (caller) {
           caller.inCall = false;
           caller.currentRoomId = undefined;
-          io.to(caller.socketId).emit("call-declined", { roomId: data.roomId });
+          await emitUserEventByCommsId(io, pendingCall.callerId, "call-declined", { roomId: data.roomId });
         }
 
-        pendingCalls.delete(data.roomId);
+        await clearPendingCall(data.roomId);
         emitPresenceUpdate();
       }
     });
@@ -605,8 +1329,194 @@ export function initSocketSignaling(server: HttpServer) {
       );
     });
 
-    socket.on("end-call", async (data: { roomId: string }) => {
+    socket.on("comms-telemetry", async (data: {
+      eventType?: string;
+      outcome?: "attempt" | "success" | "failed";
+      roomId?: string;
+      latencyMs?: number;
+      reason?: string;
+    }) => {
+      const userId = (socket as any).userId as string | undefined;
+      if (!userId || !data?.eventType) return;
+      const eventType = String(data.eventType);
+      const outcome = data.outcome || "attempt";
+
+      if (eventType === "ice_restart") {
+        if (outcome === "attempt") runtimeMetrics.iceRestartAttempts += 1;
+        if (outcome === "success") {
+          runtimeMetrics.iceRestartSucceeded += 1;
+          recordRecoveryLatency(data.latencyMs);
+        }
+        if (outcome === "failed") runtimeMetrics.iceRestartFailed += 1;
+      } else if (eventType === "relay_restart") {
+        if (outcome === "attempt") runtimeMetrics.relayRestartAttempts += 1;
+        if (outcome === "success") {
+          runtimeMetrics.relayRestartSucceeded += 1;
+          recordRecoveryLatency(data.latencyMs);
+        }
+        if (outcome === "failed") runtimeMetrics.relayRestartFailed += 1;
+      } else if (eventType === "recovery_latency") {
+        recordRecoveryLatency(data.latencyMs);
+      }
+
+      await appendCommsUserEvent(userId, "comms-telemetry", {
+        eventType,
+        outcome,
+        roomId: data.roomId,
+        latencyMs: data.latencyMs,
+        reason: data.reason,
+      });
+    });
+
+    socket.on("comms-chaos", async (data: { mode?: string; roomId?: string; targetUserId?: string }) => {
+      if (!COMMS_CHAOS_ENABLED) return;
+      const userId = (socket as any).userId as string | undefined;
+      if (!userId || !data?.mode) return;
+
+      runtimeMetrics.chaosInjections += 1;
+      const mode = String(data.mode);
+      const roomId = data.roomId;
+
+      if (mode === "force_qos_critical" && roomId) {
+        socket.emit("qos-action", {
+          roomId,
+          action: "force_relay_restart",
+          reason: "chaos_force_qos_critical",
+        });
+        return;
+      }
+
+      if (mode === "force_relay_restart" && roomId) {
+        socket.emit("qos-action", {
+          roomId,
+          action: "force_relay_restart",
+          reason: "chaos_force_relay_restart",
+        });
+        return;
+      }
+
+      if (mode === "force_call_drop" && roomId) {
+        await clearActiveCall(roomId);
+        io.to(roomId).emit("call-ended", {
+          roomId,
+          userId: "chaos-engine",
+          reason: "chaos_force_call_drop",
+        });
+      }
+    });
+
+    socket.on("qos-sample", async (data: QosSample) => {
+      const userId = (socket as any).userId as string | undefined;
+      if (!userId || !data?.roomId) return;
+      if (!isReasonableId(data.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
+
+      const qosKey = `${data.roomId}::${userId}`;
+      const now = Date.now();
+      const lastAt = qosLastSampleAt.get(qosKey) || 0;
+      if (now - lastAt < QOS_SAMPLE_MIN_INTERVAL_MS) {
+        runtimeMetrics.qosSamplesRateLimited += 1;
+        return;
+      }
+      qosLastSampleAt.set(qosKey, now);
+
+      if (
+        !isFiniteInRange(data.rttMs, 0, 60_000) ||
+        !isFiniteInRange(data.jitterMs, 0, 5_000) ||
+        !isFiniteInRange(data.packetLossRate, 0, 100) ||
+        !isFiniteInRange(data.bitrateKbps, 0, 200_000)
+      ) {
+        runtimeMetrics.qosSamplesRejectedInvalid += 1;
+        return;
+      }
+
+      runtimeMetrics.qosSamplesReceived += 1;
+
+      const sample = {
+        ...data,
+        userId,
+        updatedAt: now,
+      };
+      qosByRoomAndUser.set(qosKey, sample);
+
+      const adaptive = classifyQosAdaptive(data.roomId, sample);
+      const qosClass = adaptive.qosClass;
+      updateRoomQosProfile(data.roomId, sample, now);
+      const actionStateKey = `${data.roomId}::${userId}`;
+      const actionState =
+        qosActionStateByRoomUser.get(actionStateKey) || {
+          degradedStreak: 0,
+          criticalStreak: 0,
+          updatedAt: now,
+        };
+      actionState.updatedAt = now;
+      if (qosClass === "healthy") {
+        actionState.degradedStreak = 0;
+        actionState.criticalStreak = 0;
+      } else if (qosClass === "critical") {
+        actionState.criticalStreak += 1;
+        actionState.degradedStreak = 0;
+      } else {
+        actionState.degradedStreak += 1;
+        actionState.criticalStreak = 0;
+      }
+      qosActionStateByRoomUser.set(actionStateKey, actionState);
+      if (qosClass === "degraded") runtimeMetrics.degradedSamples += 1;
+      if (qosClass === "critical") runtimeMetrics.criticalSamples += 1;
+      if (qosClass === "degraded") runtimeMetrics.qosAdaptiveDegradedSamples += 1;
+      if (qosClass === "critical") runtimeMetrics.qosAdaptiveCriticalSamples += 1;
+      if (qosClass === "healthy") return;
+
+      if (
+        qosClass === "degraded" &&
+        actionState.degradedStreak < QOS_HYSTERESIS_DEGRADED_STREAK
+      ) {
+        runtimeMetrics.qosActionsSuppressedHysteresis += 1;
+        return;
+      }
+
+      const action: "reduce_video" | "force_relay_restart" =
+        qosClass === "critical" ? "force_relay_restart" : "reduce_video";
+      const actionPayload = {
+        roomId: data.roomId,
+        action,
+        reason:
+          qosClass === "critical"
+            ? "critical_network_degradation_adaptive"
+            : "degraded_network_conditions_adaptive",
+        policy: adaptive.thresholds,
+      };
+      const cooldownMs = QOS_ACTION_COOLDOWN_MS[action];
+      if (
+        actionState.lastAction === actionPayload.action &&
+        actionState.lastActionAt &&
+        now - actionState.lastActionAt < cooldownMs
+      ) {
+        runtimeMetrics.qosActionsSuppressedCooldown += 1;
+        return;
+      }
+      actionState.lastAction = action;
+      actionState.lastActionAt = now;
+      qosActionStateByRoomUser.set(actionStateKey, actionState);
+      runtimeMetrics.qosActionsIssued += 1;
+      const evt = await appendCommsUserEvent(userId, "qos-action", actionPayload);
+      socket.emit("qos-action", actionPayload);
+      socket.emit("comms:event", toCommsEnvelope(evt));
+    });
+
+    socket.on("end-call", async (data: { roomId: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "end-call", 20, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const userId = (socket as any).userId;
+      if (!shouldProcessCallTxn(userId, data.callTxnId)) return;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
 
       if (user) {
@@ -614,11 +1524,11 @@ export function initSocketSignaling(server: HttpServer) {
         user.currentRoomId = undefined;
       }
 
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
       if (activeCall) {
         activeCall.participants = activeCall.participants.filter(p => p !== userId);
         if (activeCall.participants.length === 0) {
-          activeCalls.delete(data.roomId);
+          await clearActiveCall(data.roomId);
           const now = new Date();
           const durationSeconds = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
           try {
@@ -629,6 +1539,7 @@ export function initSocketSignaling(server: HttpServer) {
             console.error("[Socket.IO] Failed to update call session end:", err);
           }
         } else if (activeCall.participants.length >= 1) {
+          await saveActiveCall(data.roomId, activeCall);
           socket.to(data.roomId).emit("peer-left", { roomId: data.roomId, peerId: userId });
         }
         if (activeCall.screenSharingBy === userId) {
@@ -646,6 +1557,14 @@ export function initSocketSignaling(server: HttpServer) {
       const roomEmpty = !activeCall || activeCall.participants.length === 0;
       if (roomEmpty) {
         socket.to(data.roomId).emit("call-ended", { roomId: data.roomId, userId });
+        if (activeCall?.participants?.length) {
+          for (const participantId of activeCall.participants) {
+            await appendCommsUserEvent(participantId, "call-ended", {
+              roomId: data.roomId,
+              userId,
+            });
+          }
+        }
       }
       socket.leave(data.roomId);
 
@@ -664,12 +1583,60 @@ export function initSocketSignaling(server: HttpServer) {
       if (!sender) return;
 
       const messageType = (data.messageType || "text") as MessageType;
+      const ackKey = buildMessageAckKey(senderId, data.clientMessageId);
+      pruneRecentMessageAcks();
+      if (ackKey) {
+        if (processingMessageAcks.has(ackKey)) {
+          return;
+        }
+        const cachedAck = recentMessageAcks.get(ackKey);
+        if (cachedAck) {
+          const ackEvt = await appendCommsUserEvent(senderId, "message-sent", cachedAck);
+          socket.emit("message-sent", cachedAck);
+          socket.emit("comms:event", toCommsEnvelope(ackEvt));
+          return;
+        }
+        processingMessageAcks.add(ackKey);
+      }
 
-      const outgoingPayload = await persistChatMessage({
-        senderId,
-        senderName: sender.displayName,
-        data: {
-          targetUserId: data.targetUserId,
+      try {
+        const outgoingPayload = await persistChatMessage({
+          senderId,
+          senderName: sender.displayName,
+          data: {
+            targetUserId: data.targetUserId,
+            groupId: data.groupId,
+            message: data.message,
+            messageType,
+            timestamp: data.timestamp,
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            fileMimeType: data.fileMimeType,
+            fileSizeBytes: data.fileSizeBytes,
+            voiceDurationSeconds: data.voiceDurationSeconds,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            replyToId: data.replyToId,
+          },
+        });
+
+        if (data.groupId) {
+          const room = groupRooms.get(data.groupId);
+          if (room) {
+            socket.to(`group_${data.groupId}`).emit("new-message", outgoingPayload);
+          }
+        } else if (data.targetUserId) {
+          const target = findUserByCommsId(data.targetUserId);
+          if (target) {
+            await emitUserEventByCommsId(io, data.targetUserId, "new-message", outgoingPayload as Record<string, unknown>);
+          } else {
+            queueForOfflineRecipient(data.targetUserId, outgoingPayload);
+          }
+        }
+
+        const messageSentPayload = {
+          id: outgoingPayload.id,
+          recipientId: data.targetUserId,
           groupId: data.groupId,
           message: data.message,
           messageType,
@@ -681,52 +1648,48 @@ export function initSocketSignaling(server: HttpServer) {
           voiceDurationSeconds: data.voiceDurationSeconds,
           latitude: data.latitude,
           longitude: data.longitude,
-          replyToId: data.replyToId,
-        },
-      });
-
-      if (data.groupId) {
-        const room = groupRooms.get(data.groupId);
-        if (room) {
-          socket.to(`group_${data.groupId}`).emit("new-message", outgoingPayload);
+          clientMessageId: data.clientMessageId,
+        };
+        const sentEvt = await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
+        socket.emit("message-sent", messageSentPayload);
+        socket.emit("comms:event", toCommsEnvelope(sentEvt));
+        if (ackKey) {
+          recentMessageAcks.set(ackKey, {
+            id: outgoingPayload.id,
+            recipientId: data.targetUserId,
+            groupId: data.groupId,
+            message: data.message,
+            messageType,
+            timestamp: data.timestamp,
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            fileMimeType: data.fileMimeType,
+            fileSizeBytes: data.fileSizeBytes,
+            voiceDurationSeconds: data.voiceDurationSeconds,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            clientMessageId: data.clientMessageId,
+            storedAt: Date.now(),
+          });
         }
-      } else if (data.targetUserId) {
-        const target = findUserByCommsId(data.targetUserId);
-        if (target) {
-          io.to(target.socketId).emit("new-message", outgoingPayload);
-        } else {
-          queueForOfflineRecipient(data.targetUserId, outgoingPayload);
+
+        try {
+          commsIntelligence.trackInteraction(senderId, 'message_sent', data.targetUserId || undefined, {
+            content: data.message,
+            contentLength: data.message?.length || 0,
+            channelType: data.groupId ? 'group' : 'direct',
+            messageType,
+            groupId: data.groupId,
+          });
+          if (data.groupId && data.message) {
+            gwaEngine.recordGroupMessage(data.groupId, senderId, data.message, messageType);
+          }
+        } catch (_) { }
+      } finally {
+        if (ackKey) {
+          processingMessageAcks.delete(ackKey);
         }
       }
-
-      socket.emit("message-sent", {
-        id: outgoingPayload.id,
-        recipientId: data.targetUserId,
-        groupId: data.groupId,
-        message: data.message,
-        messageType,
-        timestamp: data.timestamp,
-        fileUrl: data.fileUrl,
-        fileName: data.fileName,
-        fileMimeType: data.fileMimeType,
-        fileSizeBytes: data.fileSizeBytes,
-        voiceDurationSeconds: data.voiceDurationSeconds,
-        latitude: data.latitude,
-        longitude: data.longitude,
-      });
-
-      try {
-        commsIntelligence.trackInteraction(senderId, 'message_sent', data.targetUserId || undefined, {
-          content: data.message,
-          contentLength: data.message?.length || 0,
-          channelType: data.groupId ? 'group' : 'direct',
-          messageType,
-          groupId: data.groupId,
-        });
-        if (data.groupId && data.message) {
-          gwaEngine.recordGroupMessage(data.groupId, senderId, data.message, messageType);
-        }
-      } catch (_) { }
     });
 
     socket.on("create-group", async (data: { name: string; members: string[] }) => {
@@ -852,7 +1815,7 @@ export function initSocketSignaling(server: HttpServer) {
         hostPeerId: userId,
         sfuMode: resolveGroupSfuMode(),
       };
-      activeCalls.set(roomId, activeCall);
+      await saveActiveCall(roomId, activeCall);
 
       try {
         await db.insert(callSessions).values({
@@ -918,8 +1881,9 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       const requestedRoomId = typeof data.roomId === "string" ? data.roomId.trim() : "";
+      const requestedExisting = requestedRoomId ? await loadActiveCall(requestedRoomId) : undefined;
       const roomId =
-        requestedRoomId && !activeCalls.has(requestedRoomId)
+        requestedRoomId && !requestedExisting
           ? requestedRoomId
           : `gcall_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -931,7 +1895,7 @@ export function initSocketSignaling(server: HttpServer) {
         hostPeerId: userId,
         sfuMode: resolveGroupSfuMode(),
       };
-      activeCalls.set(roomId, activeCall);
+      await saveActiveCall(roomId, activeCall);
 
       try {
         await db.insert(callSessions).values({
@@ -977,10 +1941,10 @@ export function initSocketSignaling(server: HttpServer) {
       emitPresenceUpdate();
     });
 
-    socket.on("join-group-call", (data: { roomId: string }) => {
+    socket.on("join-group-call", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
 
       if (!user || !activeCall) {
         socket.emit("call-failed", { reason: "call-not-found" });
@@ -995,6 +1959,7 @@ export function initSocketSignaling(server: HttpServer) {
       user.inCall = true;
       user.currentRoomId = data.roomId;
       activeCall.participants.push(userId);
+      await saveActiveCall(data.roomId, activeCall);
 
       socket.join(data.roomId);
 
@@ -1051,12 +2016,13 @@ export function initSocketSignaling(server: HttpServer) {
       }
     });
 
-    socket.on("screen-share-start", (data: { roomId: string }) => {
+    socket.on("screen-share-start", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
 
       if (activeCall) {
         activeCall.screenSharingBy = userId;
+        await saveActiveCall(data.roomId, activeCall);
       }
 
       socket.to(data.roomId).emit("screen-share-started", {
@@ -1066,12 +2032,13 @@ export function initSocketSignaling(server: HttpServer) {
       });
     });
 
-    socket.on("screen-share-stop", (data: { roomId: string }) => {
+    socket.on("screen-share-stop", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
 
       if (activeCall && activeCall.screenSharingBy === userId) {
         activeCall.screenSharingBy = undefined;
+        await saveActiveCall(data.roomId, activeCall);
       }
 
       socket.to(data.roomId).emit("screen-share-stopped", {
@@ -1178,12 +2145,12 @@ export function initSocketSignaling(server: HttpServer) {
       try { commsIntelligence.trackInteraction(userId, 'reaction_sent', undefined, { emoji: data.emoji }); } catch (_) { }
     });
 
-    socket.on("share-location", (data: { roomId: string; latitude: number; longitude: number }) => {
+    socket.on("share-location", async (data: { roomId: string; latitude: number; longitude: number }) => {
       const userId = (socket as any).userId;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
       if (!user) return;
 
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
       if (!activeCall) return;
 
       io.to(data.roomId).emit("location-update", {
@@ -1519,13 +2486,27 @@ export function initSocketSignaling(server: HttpServer) {
     // -----------------------------------------------------------------------
 
     /** call:initiate — caller requests a call to targetUserId */
-    socket.on("call:initiate", async (data: { targetUserId: string; callType: "audio" | "video" }) => {
+    socket.on("call:initiate", async (data: { targetUserId: string; callType: "audio" | "video"; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "call:initiate", 8, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.targetUserId) || (data.callType !== "audio" && data.callType !== "video")) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const callerId = (socket as any).userId;
+      if (!shouldProcessCallTxn(callerId, data.callTxnId)) return;
+      runtimeMetrics.callSetupStarted += 1;
       const caller = getSocketUser(socket) || findUserByCommsId(callerId);
       if (!caller) { socket.emit("call:failed", { reason: "not-registered" }); return; }
 
       const target = findUserByCommsId(data.targetUserId);
-      if (!target) { socket.emit("call:failed", { reason: "user-offline" }); return; }
+      if (!target) {
+        runtimeMetrics.callSetupFailed += 1;
+        socket.emit("call:failed", { reason: "user-offline" });
+        return;
+      }
 
       const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const pendingCall: PendingCall = {
@@ -1536,7 +2517,8 @@ export function initSocketSignaling(server: HttpServer) {
         callType: data.callType,
         timestamp: new Date(),
       };
-      pendingCalls.set(roomId, pendingCall);
+      await savePendingCall(roomId, pendingCall);
+      schedulePendingCallTimeout(io, roomId, callerId, data.targetUserId);
       caller.inCall = true;
       caller.currentRoomId = roomId;
 
@@ -1579,14 +2561,32 @@ export function initSocketSignaling(server: HttpServer) {
     });
 
     /** call:accept — recipient accepts the call */
-    socket.on("call:accept", async (data: { roomId: string }) => {
+    socket.on("call:accept", async (data: { roomId: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "call:accept", 12, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const userId = (socket as any).userId;
+      if (!shouldProcessCallTxn(userId, data.callTxnId)) return;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
-      const pendingCall = pendingCalls.get(data.roomId);
-      if (!pendingCall || !user) { socket.emit("call:failed", { reason: "call-not-found" }); return; }
+      const pendingCall = await loadPendingCall(data.roomId);
+      if (!pendingCall || !user) {
+        runtimeMetrics.callSetupFailed += 1;
+        socket.emit("call:failed", { reason: "call-not-found" });
+        return;
+      }
 
       const caller = findUserByCommsId(pendingCall.callerId);
-      if (!caller) { socket.emit("call:failed", { reason: "caller-disconnected" }); pendingCalls.delete(data.roomId); return; }
+      if (!caller) {
+        runtimeMetrics.callSetupFailed += 1;
+        socket.emit("call:failed", { reason: "caller-disconnected" });
+        await clearPendingCall(data.roomId);
+        return;
+      }
 
       user.inCall = true;
       user.currentRoomId = data.roomId;
@@ -1602,7 +2602,7 @@ export function initSocketSignaling(server: HttpServer) {
         hostPeerId: pendingCall.callerId,
         sfuMode: "p2p",
       };
-      activeCalls.set(data.roomId, activeCall);
+      await saveActiveCall(data.roomId, activeCall);
 
       try {
         await db.update(calls).set({ status: "connected" }).where(eq(calls.roomId, data.roomId));
@@ -1623,21 +2623,31 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       const callType = pendingCall.callType;
+      runtimeMetrics.callSetupSucceeded += 1;
       // Emit both colon and hyphen variants for full compat
       io.to(caller.socketId).emit("call:accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
       io.to(caller.socketId).emit("call-accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
       socket.emit("call:connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
       socket.emit("call-connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
 
-      pendingCalls.delete(data.roomId);
+      await clearPendingCall(data.roomId);
       console.log(`[Socket.IO] call:accept ${caller.displayName} <-> ${user.displayName}`);
       emitPresenceUpdate();
     });
 
     /** call:reject — recipient rejects the call */
-    socket.on("call:reject", async (data: { roomId: string; reason?: string }) => {
+    socket.on("call:reject", async (data: { roomId: string; reason?: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "call:reject", 12, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const userId = (socket as any).userId;
-      const pendingCall = pendingCalls.get(data.roomId);
+      if (!shouldProcessCallTxn(userId, data.callTxnId)) return;
+      const pendingCall = await loadPendingCall(data.roomId);
 
       if (pendingCall) {
         const caller = findUserByCommsId(pendingCall.callerId);
@@ -1647,7 +2657,7 @@ export function initSocketSignaling(server: HttpServer) {
           io.to(caller.socketId).emit("call:rejected", { roomId: data.roomId, reason: data.reason ?? "declined" });
           io.to(caller.socketId).emit("call-declined", { roomId: data.roomId });
         }
-        pendingCalls.delete(data.roomId);
+        await clearPendingCall(data.roomId);
 
         try {
           await db.update(calls).set({ status: "rejected", endTime: new Date() }).where(eq(calls.roomId, data.roomId));
@@ -1661,17 +2671,26 @@ export function initSocketSignaling(server: HttpServer) {
     });
 
     /** call:end — either party ends the active call */
-    socket.on("call:end", async (data: { roomId: string }) => {
+    socket.on("call:end", async (data: { roomId: string; callTxnId?: string }) => {
+      if (!allowSocketEventRate(socket, "call:end", 20, 15_000)) {
+        runtimeMetrics.signalingEventRateLimited += 1;
+        return;
+      }
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
       const userId = (socket as any).userId;
+      if (!shouldProcessCallTxn(userId, data.callTxnId)) return;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
 
       if (user) { user.inCall = false; user.currentRoomId = undefined; }
 
-      const activeCall = activeCalls.get(data.roomId);
+      const activeCall = await loadActiveCall(data.roomId);
       if (activeCall) {
         activeCall.participants = activeCall.participants.filter(p => p !== userId);
         if (activeCall.participants.length === 0) {
-          activeCalls.delete(data.roomId);
+          await clearActiveCall(data.roomId);
           const now = new Date();
           const durationSeconds = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
           try {
@@ -1681,6 +2700,8 @@ export function initSocketSignaling(server: HttpServer) {
           } catch (err) {
             console.error("[Socket.IO] call:end persist error:", err);
           }
+        } else {
+          await saveActiveCall(data.roomId, activeCall);
         }
       }
 
@@ -1746,12 +2767,13 @@ export function initSocketSignaling(server: HttpServer) {
         if (user?.currentRoomId) {
           socket.to(user.currentRoomId).emit("call-ended", { roomId: user.currentRoomId, reason: "peer-disconnected", userId });
 
-          const activeCall = activeCalls.get(user.currentRoomId);
+          const activeCall = await loadActiveCall(user.currentRoomId);
           if (activeCall) {
             activeCall.participants = activeCall.participants.filter(p => p !== userId);
             if (activeCall.participants.length === 0) {
-              activeCalls.delete(user.currentRoomId);
+              await clearActiveCall(user.currentRoomId);
             } else {
+              await saveActiveCall(user.currentRoomId, activeCall);
               socket.to(user.currentRoomId).emit("peer-left", {
                 roomId: user.currentRoomId,
                 peerId: userId,
@@ -1774,10 +2796,21 @@ export function initSocketSignaling(server: HttpServer) {
 
         if (presenceKey) users.delete(presenceKey);
         else users.delete(userId);
+        for (const key of qosByRoomAndUser.keys()) {
+          if (key.endsWith(`::${userId}`)) {
+            qosByRoomAndUser.delete(key);
+          }
+        }
+        for (const key of qosActionStateByRoomUser.keys()) {
+          if (key.endsWith(`::${userId}`)) {
+            qosActionStateByRoomUser.delete(key);
+          }
+        }
         console.log(`[Socket.IO] Disconnected: ${user?.displayName || userId} - Remaining: ${users.size}`);
 
         const stillOnline = Array.from(users.values()).some((u) => u.id === userId);
         if (!stillOnline) {
+          userLastDisconnectAt.set(userId, Date.now());
           try {
             await db.update(onlineUsers)
               .set({ isOnline: false, lastSeen: new Date(), status: "offline" })

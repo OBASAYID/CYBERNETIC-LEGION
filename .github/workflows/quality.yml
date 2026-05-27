@@ -37,3 +37,85 @@ jobs:
 
       - name: Typecheck + build + contract validation
         run: npm run typecheck:all
+
+      - name: Comms chaos smoke
+        env:
+          CYRUS_AUTO_INGEST_ON_START: "false"
+          CYRUS_ENABLE_LEGACY_WS_SIGNALING: "false"
+          CYRUS_ENABLE_SECONDARY_COMM_SIGNALING: "false"
+        run: npm run test:comms:chaos
+
+  chaos-soak:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Comms chaos soak (2 cycles)
+        env:
+          CYRUS_AUTO_INGEST_ON_START: "false"
+          CYRUS_ENABLE_LEGACY_WS_SIGNALING: "false"
+          CYRUS_ENABLE_SECONDARY_COMM_SIGNALING: "false"
+          CYRUS_COMMS_CHAOS_CYCLES: "2"
+        run: npm run test:comms:chaos
+
+  reconnect-bucket:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Reconnect bucket validation (2-5s)
+        env:
+          CYRUS_AUTO_INGEST_ON_START: "false"
+          CYRUS_ENABLE_LEGACY_WS_SIGNALING: "false"
+          CYRUS_ENABLE_SECONDARY_COMM_SIGNALING: "false"
+          CYRUS_COMMS_RECONNECT_DELAY_MS: "2600"
+          CYRUS_COMMS_EXPECT_RECONNECT_BUCKET: "2to5s"
+        run: npm run test:comms:chaos
+
+  reconnect-histogram:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Reconnect histogram contract (under2s, 2-5s, 5-10s)
+        env:
+          CYRUS_AUTO_INGEST_ON_START: "false"
+          CYRUS_ENABLE_LEGACY_WS_SIGNALING: "false"
+          CYRUS_ENABLE_SECONDARY_COMM_SIGNALING: "false"
+          CYRUS_COMMS_CHAOS_CYCLES: "3"
+          CYRUS_COMMS_RECONNECT_DELAY_PLAN_MS: "300,2600,6200"
+          CYRUS_COMMS_EXPECT_RECONNECT_BUCKET: "auto"
+        run: npm run test:comms:chaos
