@@ -646,16 +646,26 @@ export async function registerRoutes(
     console.warn("[SFU] init skipped (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 
-  const legacyWsEnabled = String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "").toLowerCase() === "true";
+  const multiSignalingCompatEnabled =
+    String(process.env.CYRUS_ENABLE_MULTI_SIGNALING_COMPAT || "").toLowerCase() === "true";
+  const legacyWsRequested = String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "").toLowerCase() === "true";
+  const legacyWsEnabled = multiSignalingCompatEnabled && legacyWsRequested;
   if (initSignalingServer && legacyWsEnabled) {
     try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   } else if (initSignalingServer) {
-    console.log("[Routes] Legacy /ws signaling disabled (set CYRUS_ENABLE_LEGACY_WS_SIGNALING=true to re-enable)");
+    if (legacyWsRequested && !multiSignalingCompatEnabled) {
+      console.warn("[Routes] Ignoring CYRUS_ENABLE_LEGACY_WS_SIGNALING because multi-signaling compat is disabled");
+    }
+    console.log(
+      "[Routes] Legacy /ws signaling disabled (set CYRUS_ENABLE_MULTI_SIGNALING_COMPAT=true and CYRUS_ENABLE_LEGACY_WS_SIGNALING=true to re-enable)",
+    );
   }
   if (initSocketSignaling) {
     try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
-  const secondaryCommPathEnabled = String(process.env.CYRUS_ENABLE_SECONDARY_COMM_SIGNALING || "").toLowerCase() === "true";
+  const secondaryCommPathRequested =
+    String(process.env.CYRUS_ENABLE_SECONDARY_COMM_SIGNALING || "").toLowerCase() === "true";
+  const secondaryCommPathEnabled = multiSignalingCompatEnabled && secondaryCommPathRequested;
   if (initCyrusCommSocketSignaling && secondaryCommPathEnabled) {
     try {
       initCyrusCommSocketSignaling(httpServer);
@@ -663,7 +673,12 @@ export async function registerRoutes(
       console.warn("[Routes] initCyrusCommSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e));
     }
   } else if (initCyrusCommSocketSignaling) {
-    console.log("[Routes] Secondary /cyrus-comm-io signaling disabled (set CYRUS_ENABLE_SECONDARY_COMM_SIGNALING=true to re-enable)");
+    if (secondaryCommPathRequested && !multiSignalingCompatEnabled) {
+      console.warn("[Routes] Ignoring CYRUS_ENABLE_SECONDARY_COMM_SIGNALING because multi-signaling compat is disabled");
+    }
+    console.log(
+      "[Routes] Secondary /cyrus-comm-io signaling disabled (set CYRUS_ENABLE_MULTI_SIGNALING_COMPAT=true and CYRUS_ENABLE_SECONDARY_COMM_SIGNALING=true to re-enable)",
+    );
   }
   console.log("[Socket.IO] Real-time communication server active on /cyrus-io");
 
