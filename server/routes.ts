@@ -86,6 +86,45 @@ async function loadDependencies() {
   if (depsLoaded) return;
   const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
+  if (commsOnlyMode) {
+    try {
+      // Keep comms DB schema ready even in lightweight mode.
+      const dbInitM = await import("./comms/db-init");
+      await dbInitM.initCommsDatabase();
+    } catch (e) {
+      console.warn("[Routes] Comms DB init failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+
+    try {
+      const sgM = await import("./comms/signaling");
+      initSignalingServer = sgM.initSignalingServer;
+      const ssM = await import("./comms/socket-signaling");
+      initSocketSignaling = ssM.initSocketSignaling;
+      try {
+        const ccSock = await import("./comms/cyrus-comm-socket");
+        initCyrusCommSocketSignaling = ccSock.initCyrusCommSocketSignaling;
+      } catch (cce) {
+        console.warn(
+          "[Routes] cyrus-comm-socket failed (non-fatal):",
+          cce instanceof Error ? cce.message : String(cce),
+        );
+      }
+      const stM = await import("./comms/store");
+      enqueueMessage = stM.enqueueMessage;
+      dequeueMessages = stM.dequeueMessages;
+      addReminder = stM.addReminder;
+      listReminders = stM.listReminders;
+      const crM = await import("./comms/comms-routes");
+      registerCommsRoutes = crM.registerCommsRoutes;
+    } catch (e) {
+      console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+
+    depsLoaded = true;
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — loaded comms dependencies only");
+    return;
+  }
+
   try {
     const storageM = await import("./storage");
     storage = storageM.storage;
@@ -240,12 +279,6 @@ async function loadDependencies() {
     console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
   }
   await tick();
-
-  if (commsOnlyMode) {
-    depsLoaded = true;
-    console.log("[Routes] CYRUS_COMMS_ONLY=1 — loaded comms dependencies only");
-    return;
-  }
 
   try {
     const scM = await import("./scan/analyze");
