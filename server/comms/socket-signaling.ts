@@ -151,6 +151,7 @@ const roomQosProfiles = new Map<
 const recentCallTransactions = new Map<string, number>();
 const userLastDisconnectAt = new Map<string, number>();
 const pendingCallTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const knownDeviceIdsByUser = new Map<string, Set<string>>();
 const runtimeMetrics = {
   qosSamplesReceived: 0,
   qosSamplesRejectedInvalid: 0,
@@ -265,6 +266,15 @@ function findUsersByCommsId(commsUserId: string): User[] {
     if (u.id === commsUserId) out.push(u);
   }
   return out;
+}
+
+function commsUserRoom(commsUserId: string): string {
+  return `comms_user:${commsUserId}`;
+}
+
+function emitToCommsUser(io: SocketIOServer, commsUserId: string, event: string, payload: unknown): number {
+  io.to(commsUserRoom(commsUserId)).emit(event, payload);
+  return findUsersByCommsId(commsUserId).length;
 }
 
 function getSocketUser(socket: Socket): User | undefined {
@@ -523,11 +533,8 @@ async function emitUserEventByCommsId(
 ): Promise<void> {
   const evt = await appendCommsUserEvent(commsUserId, eventType, payload);
   const envelope = toCommsEnvelope(evt);
-  const localTargets = findUsersByCommsId(commsUserId);
-  for (const target of localTargets) {
-    io.to(target.socketId).emit(eventType, payload);
-    io.to(target.socketId).emit("comms:event", envelope);
-  }
+  io.to(commsUserRoom(commsUserId)).emit(eventType, payload);
+  io.to(commsUserRoom(commsUserId)).emit("comms:event", envelope);
   const fanoutOk = await publishCommsFanout(commsUserId, eventType, payload, envelope);
   if (fanoutOk) {
     runtimeMetrics.commsFanoutPublished += 1;
@@ -712,15 +719,13 @@ export function initSocketSignaling(server: HttpServer) {
 
   void initCommsFanout(`socksig_${process.pid}`, (message) => {
     runtimeMetrics.commsFanoutReceived += 1;
-    const targets = findUsersByCommsId(message.userId);
-    if (!targets.length) return;
-    for (const target of targets) {
-      io.to(target.socketId).emit(message.eventType, message.payload);
-      if (message.commsEvent) {
-        io.to(target.socketId).emit("comms:event", message.commsEvent);
-      }
-      runtimeMetrics.commsFanoutDelivered += 1;
+    const targetCount = findUsersByCommsId(message.userId).length;
+    if (!targetCount) return;
+    io.to(commsUserRoom(message.userId)).emit(message.eventType, message.payload);
+    if (message.commsEvent) {
+      io.to(commsUserRoom(message.userId)).emit("comms:event", message.commsEvent);
     }
+    runtimeMetrics.commsFanoutDelivered += targetCount;
   });
 
   registerSfuSocketHandlers(io);
@@ -926,6 +931,10 @@ export function initSocketSignaling(server: HttpServer) {
       users.set(mapKey, user);
       (socket as any).userId = commsUserId;
       (socket as any).presenceKey = mapKey;
+      socket.join(commsUserRoom(commsUserId));
+      const knownDevices = knownDeviceIdsByUser.get(commsUserId) || new Set<string>();
+      knownDevices.add(deviceId);
+      knownDeviceIdsByUser.set(commsUserId, knownDevices);
 
       console.log(`[Socket.IO] User registered: ${displayName} (${commsUserId} @ ${deviceId}) - Total: ${users.size}`);
 
@@ -965,7 +974,15 @@ export function initSocketSignaling(server: HttpServer) {
 
       socket.emit("registered", { userId: commsUserId, totalOnline: users.size });
 
-      const delivered = flushPendingForUser(commsUserId, (payload) => {
+      const deliveredMessageIds = new Set<string>();
+      let delivered = flushPendingForUser(mapKey, (payload) => {
+        if (payload?.id && deliveredMessageIds.has(payload.id)) return;
+        if (payload?.id) deliveredMessageIds.add(payload.id);
+        socket.emit("new-message", payload);
+      });
+      delivered += flushPendingForUser(commsUserId, (payload) => {
+        if (payload?.id && deliveredMessageIds.has(payload.id)) return;
+        if (payload?.id) deliveredMessageIds.add(payload.id);
         socket.emit("new-message", payload);
       });
       if (delivered > 0) {
@@ -1237,14 +1254,11 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] WebRTC offer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc-offer", {
-            offer: data.offer,
-            roomId: data.roomId,
-            fromPeerId,
-          });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc-offer", {
+          offer: data.offer,
+          roomId: data.roomId,
+          fromPeerId,
+        });
       } else {
         socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
@@ -1255,14 +1269,11 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] WebRTC answer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc-answer", {
-            answer: data.answer,
-            roomId: data.roomId,
-            fromPeerId,
-          });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc-answer", {
+          answer: data.answer,
+          roomId: data.roomId,
+          fromPeerId,
+        });
       } else {
         socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       }
@@ -1272,14 +1283,11 @@ export function initSocketSignaling(server: HttpServer) {
       const fromPeerId = (socket as any).userId;
 
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc-ice-candidate", {
-            candidate: data.candidate,
-            roomId: data.roomId,
-            fromPeerId,
-          });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-candidate", {
+          candidate: data.candidate,
+          roomId: data.roomId,
+          fromPeerId,
+        });
       } else {
         socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       }
@@ -1294,14 +1302,11 @@ export function initSocketSignaling(server: HttpServer) {
       console.log(`[Socket.IO] ICE restart relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
 
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc-ice-restart", {
-            offer: data.offer,
-            roomId: data.roomId,
-            fromPeerId,
-          });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-restart", {
+          offer: data.offer,
+          roomId: data.roomId,
+          fromPeerId,
+        });
       } else {
         socket.to(data.roomId).emit("webrtc-ice-restart", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
@@ -1626,10 +1631,16 @@ export function initSocketSignaling(server: HttpServer) {
             socket.to(`group_${data.groupId}`).emit("new-message", outgoingPayload);
           }
         } else if (data.targetUserId) {
-          const target = findUserByCommsId(data.targetUserId);
-          if (target) {
+          const targets = findUsersByCommsId(data.targetUserId);
+          if (targets.length > 0) {
             await emitUserEventByCommsId(io, data.targetUserId, "new-message", outgoingPayload as Record<string, unknown>);
           } else {
+            const knownDevices = knownDeviceIdsByUser.get(data.targetUserId);
+            if (knownDevices && knownDevices.size > 0) {
+              for (const deviceId of knownDevices) {
+                queueForOfflineRecipient(presenceMapKey(data.targetUserId, deviceId), outgoingPayload);
+              }
+            }
             queueForOfflineRecipient(data.targetUserId, outgoingPayload);
           }
         }
@@ -2540,14 +2551,14 @@ export function initSocketSignaling(server: HttpServer) {
       }
 
       // Notify recipient
-      io.to(target.socketId).emit("call:ring", {
+      emitToCommsUser(io, data.targetUserId, "call:ring", {
         callerId,
         callerName: caller.displayName,
         roomId,
         callType: data.callType,
       });
       // Also emit legacy event for backward compat
-      io.to(target.socketId).emit("incoming-call", {
+      emitToCommsUser(io, data.targetUserId, "incoming-call", {
         callerId,
         callerName: caller.displayName,
         roomId,
@@ -2625,8 +2636,8 @@ export function initSocketSignaling(server: HttpServer) {
       const callType = pendingCall.callType;
       runtimeMetrics.callSetupSucceeded += 1;
       // Emit both colon and hyphen variants for full compat
-      io.to(caller.socketId).emit("call:accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
-      io.to(caller.socketId).emit("call-accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
+      emitToCommsUser(io, pendingCall.callerId, "call:accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
+      emitToCommsUser(io, pendingCall.callerId, "call-accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
       socket.emit("call:connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
       socket.emit("call-connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
 
@@ -2654,8 +2665,8 @@ export function initSocketSignaling(server: HttpServer) {
         if (caller) {
           caller.inCall = false;
           caller.currentRoomId = undefined;
-          io.to(caller.socketId).emit("call:rejected", { roomId: data.roomId, reason: data.reason ?? "declined" });
-          io.to(caller.socketId).emit("call-declined", { roomId: data.roomId });
+          emitToCommsUser(io, pendingCall.callerId, "call:rejected", { roomId: data.roomId, reason: data.reason ?? "declined" });
+          emitToCommsUser(io, pendingCall.callerId, "call-declined", { roomId: data.roomId });
         }
         await clearPendingCall(data.roomId);
 
@@ -2716,11 +2727,8 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
-          io.to(targetUser.socketId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, data.targetPeerId, "webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       } else {
         socket.to(data.roomId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
@@ -2731,11 +2739,8 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
-          io.to(targetUser.socketId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, data.targetPeerId, "webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       } else {
         socket.to(data.roomId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
@@ -2746,11 +2751,8 @@ export function initSocketSignaling(server: HttpServer) {
     socket.on("webrtc:ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
       if (data.targetPeerId) {
-        const targetUser = findUserByCommsId(data.targetPeerId);
-        if (targetUser) {
-          io.to(targetUser.socketId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
-          io.to(targetUser.socketId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
-        }
+        emitToCommsUser(io, data.targetPeerId, "webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       } else {
         socket.to(data.roomId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
