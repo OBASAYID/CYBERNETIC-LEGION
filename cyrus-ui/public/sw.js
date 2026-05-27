@@ -5,7 +5,8 @@
    - Static assets (images, fonts): Stale-while-revalidate
 */
 
-const CACHE_NAME = "cyrus-v3-shell";
+// Bump this token whenever runtime-critical JS behavior changes.
+const CACHE_NAME = "cyrus-v3-shell-2026-05-27a";
 const API_RE     = /^\/api\//;
 
 /* Assets to pre-cache on install */
@@ -37,7 +38,8 @@ self.addEventListener("fetch", (event) => {
     API_RE.test(url.pathname) ||
     url.pathname.startsWith("/socket.io") ||
     url.pathname.startsWith("/ws") ||
-    url.pathname.startsWith("/cyrus-io")
+    url.pathname.startsWith("/cyrus-io") ||
+    url.pathname.startsWith("/cyrus-comm-io")
   ) {
     return;
   }
@@ -56,7 +58,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  /* Static assets: stale-while-revalidate */
+  const isRuntimeAsset =
+    url.pathname.startsWith("/assets/") &&
+    (url.pathname.endsWith(".js") || url.pathname.endsWith(".css"));
+
+  /* Runtime JS/CSS: network-first to avoid stale deployed bundles */
+  if (isRuntimeAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  /* Other static assets: stale-while-revalidate */
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(request).then((cached) => {

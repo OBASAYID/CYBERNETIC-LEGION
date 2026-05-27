@@ -212,12 +212,17 @@ const chunkUpload = multer({
 const router = Router();
 
 function getUserId(req: any): string | null {
+  // Prefer per-device identity for comms so two devices on the same account
+  // can exchange direct chat/call payloads without colliding on account id.
+  const deviceIdHeader =
+    (typeof req.headers["x-device-id"] === "string" ? req.headers["x-device-id"] : null) ||
+    (typeof req.headers["X-Device-Id"] === "string" ? req.headers["X-Device-Id"] : null);
+  if (deviceIdHeader && deviceIdHeader.trim()) return deviceIdHeader.trim();
+
   return (
     req.user?.claims?.sub ||
     (typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : null) ||
     (typeof req.headers["X-User-Id"] === "string" ? req.headers["X-User-Id"] : null) ||
-    (typeof req.headers["x-device-id"] === "string" ? req.headers["x-device-id"] : null) ||
-    (typeof req.headers["X-Device-Id"] === "string" ? req.headers["X-Device-Id"] : null) ||
     null
   );
 }

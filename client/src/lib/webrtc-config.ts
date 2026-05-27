@@ -189,9 +189,11 @@ export const MEDIA_CONSTRAINTS = {
     },
   },
   audio: {
-    echoCancellation: { ideal: true, exact: true },
-    noiseSuppression: { ideal: true },
-    autoGainControl: { ideal: true },
+    // Keep constraints broadly compatible; strict `exact` values can fail
+    // on Safari/mobile stacks and prevent media from starting at all.
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
     channelCount: { ideal: 1, max: 1 },
     sampleRate: { ideal: 48000 },
     sampleSize: { ideal: 16 },

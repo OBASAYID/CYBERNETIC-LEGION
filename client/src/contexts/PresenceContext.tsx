@@ -465,8 +465,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           });
         }
 
+        // Prefer relay for call setup to avoid one-way/no-media failures
+        // across mixed NAT and mobile/Wi-Fi network combinations.
         const rtcConfig = await fetchCyrusCommRtcConfiguration({
-          forceRelay: isLikelyCrossNetworkPath(),
+          forceRelay: true,
         });
         if (!alive()) return;
 
