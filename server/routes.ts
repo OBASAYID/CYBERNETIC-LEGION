@@ -84,6 +84,7 @@ let depsLoaded = false;
 
 async function loadDependencies() {
   if (depsLoaded) return;
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
   try {
     const storageM = await import("./storage");
@@ -239,6 +240,12 @@ async function loadDependencies() {
     console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
   }
   await tick();
+
+  if (commsOnlyMode) {
+    depsLoaded = true;
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — loaded comms dependencies only");
+    return;
+  }
 
   try {
     const scM = await import("./scan/analyze");
@@ -638,6 +645,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await loadDependencies();
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
   try {
     const sfuM = await import("./comms/sfu/sfu-manager.js");
@@ -681,6 +689,11 @@ export async function registerRoutes(
     );
   }
   console.log("[Socket.IO] Real-time communication server active on /cyrus-io");
+
+  if (commsOnlyMode) {
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — skipping non-comms HTTP route registration");
+    return httpServer;
+  }
 
   // ===============================================
   // LOGOUT ALL DEVICES ENDPOINT
