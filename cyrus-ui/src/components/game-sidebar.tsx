@@ -17,8 +17,8 @@ interface GameSidebarProps {
 const NAV_GROUPS = [
   { label: "CORE",        paths: ["/"] },
   { label: "INTELLIGENCE", paths: ["/intelligence", "/files", "/scan", "/document-builder", "/algorithms"] },
-  { label: "COMMS & NAV", paths: ["/comms", "/nav"] },
-  { label: "SYSTEMS",     paths: ["/modules", "/device", "/medical", "/security", "/biology", "/quantum", "/ops"] },
+  { label: "COMMS",       paths: ["/comms"] },
+  { label: "SYSTEMS",     paths: ["/modules", "/device", "/medical", "/quantum", "/ops"] },
   { label: "ADMIN",       paths: ["/settings"] },
 ];
 

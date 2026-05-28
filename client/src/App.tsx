@@ -6,15 +6,12 @@ import {
   MessageSquare,
   Scan,
   FileText,
-  MapPin,
   Phone,
   Monitor,
   ChevronRight,
   Cpu,
   Activity,
   Zap,
-  Shield,
-  Microscope,
   LogIn,
   LogOut,
   User,
@@ -28,21 +25,17 @@ import { IntroSequence } from "./components/IntroSequence";
 import { Dashboard } from "./components/Dashboard";
 import { ScanPage } from "./pages/ScanPage";
 import { FileAnalysisPage } from "./pages/FileAnalysisPage";
-import { NavigationPage } from "./pages/NavigationPage";
 import { CommsPage } from "./pages/CommsPage";
 import { DeviceControlPage } from "./pages/DeviceControlPage";
 import { ModulesPage } from "./pages/ModulesPage";
 import { MedicalPage } from "./pages/MedicalPage";
 import { QuantumPage } from "./pages/QuantumPage";
-import { SecurityPage } from "./pages/SecurityPage";
-import { BiologyPage } from "./pages/BiologyPage";
 
 const navItems = [
   { path: "/", label: "Command", sublabel: "Primary Interface", icon: MessageSquare },
   { path: "/modules", label: "Modules", sublabel: "AI Orchestrator", icon: Cpu },
   { path: "/scan", label: "Vision", sublabel: "Optical Analysis", icon: Scan },
   { path: "/files", label: "Documents", sublabel: "File Processing", icon: FileText },
-  { path: "/nav", label: "Navigation", sublabel: "Geospatial", icon: MapPin },
   { path: "/comms", label: "Communications", sublabel: "Secure Channels", icon: Phone },
   { path: "/device", label: "Systems", sublabel: "Hardware Control", icon: Monitor },
 ];
@@ -50,8 +43,6 @@ const navItems = [
 const moduleItems = [
   { path: "/medical", label: "Medical", sublabel: "Diagnostics", icon: Activity },
   { path: "/quantum", label: "Quantum", sublabel: "Neural Net", icon: Zap },
-  { path: "/security", label: "Security", sublabel: "Encryption", icon: Shield },
-  { path: "/biology", label: "Biology", sublabel: "Lab Analysis", icon: Microscope },
 ];
 
 export default function App() {
@@ -463,13 +454,10 @@ function AppContent({
             <Route path="/modules" component={ModulesPage} />
             <Route path="/scan" component={ScanPage} />
             <Route path="/files" component={FileAnalysisPage} />
-            <Route path="/nav" component={NavigationPage} />
             <Route path="/comms" component={CommsPage} />
             <Route path="/device" component={DeviceControlPage} />
             <Route path="/medical" component={MedicalPage} />
             <Route path="/quantum" component={QuantumPage} />
-            <Route path="/security" component={SecurityPage} />
-            <Route path="/biology" component={BiologyPage} />
           </Switch>
         </main>
       </div>

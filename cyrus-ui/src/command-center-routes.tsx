@@ -14,9 +14,6 @@ const ScanPage = lazy(() =>
 const DocumentsIntelligence = lazy(() =>
   import("./pages/documents-intelligence").then((m) => ({ default: m.default })),
 );
-const NavigationPage = lazy(() =>
-  import("../../client/src/pages/NavigationPage").then((m) => ({ default: m.NavigationPage })),
-);
 const CommsPage = lazy(() =>
   import("./pages/comms-hub-page").then((m) => ({ default: m.default })),
 );
@@ -28,12 +25,6 @@ const MedicalPage = lazy(() =>
 );
 const QuantumPage = lazy(() =>
   import("../../client/src/pages/QuantumPage").then((m) => ({ default: m.QuantumPage })),
-);
-const SecurityPage = lazy(() =>
-  import("../../client/src/pages/SecurityPage").then((m) => ({ default: m.SecurityPage })),
-);
-const BiologyPage = lazy(() =>
-  import("../../client/src/pages/BiologyPage").then((m) => ({ default: m.BiologyPage })),
 );
 const OperationsPage = lazy(() =>
   import("../../client/src/pages/OperationsPage").then((m) => ({ default: m.OperationsPage })),
@@ -100,14 +91,11 @@ export function CommandCenterRoutes() {
       <SuspenseRoute path="/files" C={DocumentsIntelligence} />
       <SuspenseRoute path="/scan" C={ScanPage} />
       <SuspenseRoute path="/comms" C={CommsPage} />
-      <SuspenseRoute path="/nav" C={NavigationPage} />
       <SuspenseRoute path="/modules" C={ModulesPage} />
       <SuspenseRoute path="/algorithms" C={AlgorithmsPage} />
       <SuspenseRoute path="/document-builder" C={DocumentBuilder} />
       <SuspenseRoute path="/device" C={DeviceControlPage} />
       <SuspenseRoute path="/medical" C={MedicalPage} />
-      <SuspenseRoute path="/security" C={SecurityPage} />
-      <SuspenseRoute path="/biology" C={BiologyPage} />
       <SuspenseRoute path="/quantum" C={QuantumPage} />
       <SuspenseRoute path="/ops" C={OperationsPage} />
       <SuspenseRoute path="/settings" C={SettingsPage} />

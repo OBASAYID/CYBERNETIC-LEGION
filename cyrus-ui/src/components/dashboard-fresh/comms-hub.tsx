@@ -12,7 +12,6 @@ import {
   Clock,
   Activity,
   Zap,
-  MapPin,
   Settings,
   Plus,
   Share2,
@@ -20,7 +19,6 @@ import {
   ArrowUpRight,
   Scan,
   Globe,
-  Shield,
   TrendingUp,
   Crosshair,
   Cpu,
@@ -486,10 +484,6 @@ function FusionCapabilityStrip() {
     {
       href: "/comms", icon: Mic, label: "Voice", desc: "Realtime audio",
       color: "#34d399", bg: "linear-gradient(135deg, #059669, #047857)",
-    },
-    {
-      href: "/nav", icon: MapPin, label: "Location", desc: "Share position",
-      color: "#60a5fa", bg: "linear-gradient(135deg, #2563eb, #1d4ed8)",
     },
   ];
 
