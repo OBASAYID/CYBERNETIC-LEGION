@@ -1290,15 +1290,37 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setRemoteScreenSharerName(null);
     });
 
-    socket.on('new-message', (data: { senderId: string; senderName: string; message: string; timestamp: string }) => {
+    socket.on('new-message', (data: { id?: string; senderId: string; senderName: string; message: string; timestamp: string }) => {
       console.log("[Presence] Message from:", data.senderName);
       addNotification("info", `Message from ${data.senderName}: ${data.message}`);
+      const currentId = currentUserIdRef.current;
+      if (
+        socket.connected &&
+        typeof data?.id === "string" &&
+        typeof data?.senderId === "string" &&
+        data.senderId !== currentId
+      ) {
+        socket.emit("message-delivered", {
+          messageId: data.id,
+          senderId: data.senderId,
+          recipientId: currentId,
+          clientSeq: nextClientSeq(),
+        });
+      }
     });
 
     socket.on("message-sent", (data: { clientMessageId?: string }) => {
       if (!data?.clientMessageId) return;
       clearPendingMessageAck(data.clientMessageId);
     });
+
+    socket.on(
+      "message-delivered",
+      (data: { messageId?: string; senderId?: string; recipientId?: string; deliveredAt?: string }) => {
+        if (!data?.messageId) return;
+        console.log("[Presence] Message delivered:", data.messageId, "to", data.recipientId);
+      },
+    );
 
     socket.on(
       "comms:event",
