@@ -830,6 +830,18 @@ export async function registerRoutes(
   if (registerAdvancedUpgradeRoutes) {
     try { registerAdvancedUpgradeRoutes(app); } catch (e) { console.warn("[Routes] registerAdvancedUpgradeRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
+
+  // Module retirement: biology/security/maps are intentionally removed.
+  app.use("/api/interactive/biology", (_req, res) => {
+    res.status(410).json({ error: "Biology module removed" });
+  });
+  app.use("/api/interactive/security", (_req, res) => {
+    res.status(410).json({ error: "Security module removed" });
+  });
+  app.use("/api/nav", (_req, res) => {
+    res.status(410).json({ error: "Maps module removed" });
+  });
+
   if (registerInteractiveRoutes) {
     try { registerInteractiveRoutes(app); } catch (e) { console.warn("[Routes] registerInteractiveRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
@@ -4059,7 +4071,6 @@ Return ONLY valid JSON.`
   registerAudioRoutes(app);
   registerImageRoutes(app);
   registerDeviceRoutes(app);
-  registerNavRoutes(app);
   registerDroneRoutes(app);
 
 

@@ -10,14 +10,11 @@ import {
   Cpu,
   FileText,
   LayoutGrid,
-  MapPin,
   MessageSquare,
-  Microscope,
   Monitor,
   Phone,
   Scan,
   Settings,
-  Shield,
   Zap,
 } from "lucide-react";
 
@@ -77,14 +74,6 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
     Icon: Phone,
   },
   {
-    path: "/nav",
-    dashboardLabel: "Maps",
-    dashboardDescription: "Geospatial",
-    surfaceLabel: "Navigation",
-    sublabel: "Routing, tracking, maps",
-    Icon: MapPin,
-  },
-  {
     path: "/modules",
     dashboardLabel: "Modules",
     dashboardDescription: "AI Orchestrator",
@@ -123,22 +112,6 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
     surfaceLabel: "Medical",
     sublabel: "Symptom analysis & health data",
     Icon: Activity,
-  },
-  {
-    path: "/security",
-    dashboardLabel: "Security",
-    dashboardDescription: "Encryption",
-    surfaceLabel: "Security",
-    sublabel: "Encrypt, decrypt, hash",
-    Icon: Shield,
-  },
-  {
-    path: "/biology",
-    dashboardLabel: "Biology",
-    dashboardDescription: "Lab Analysis",
-    surfaceLabel: "Biology",
-    sublabel: "DNA & pathogen analysis",
-    Icon: Microscope,
   },
   {
     path: "/quantum",
