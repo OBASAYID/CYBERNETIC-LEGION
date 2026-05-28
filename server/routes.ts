@@ -688,8 +688,9 @@ export async function registerRoutes(
   }
 
   const multiSignalingCompatEnabled =
-    String(process.env.CYRUS_ENABLE_MULTI_SIGNALING_COMPAT || "").toLowerCase() === "true";
-  const legacyWsRequested = String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "").toLowerCase() === "true";
+    String(process.env.CYRUS_ENABLE_MULTI_SIGNALING_COMPAT || "true").toLowerCase() !== "false";
+  const legacyWsRequested =
+    String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "true").toLowerCase() !== "false";
   const legacyWsEnabled = multiSignalingCompatEnabled && legacyWsRequested;
   if (initSignalingServer && legacyWsEnabled) {
     try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }

@@ -192,6 +192,14 @@ const runtimeMetrics = {
   commsFanoutPublished: 0,
   commsFanoutReceived: 0,
   commsFanoutDelivered: 0,
+  messageSentEvents: 0,
+  messageDeliveryAcksReceived: 0,
+  messageDeliveryAcksSent: 0,
+  webrtcRelayOffer: 0,
+  webrtcRelayAnswer: 0,
+  webrtcRelayIce: 0,
+  webrtcRelayIceRestart: 0,
+  webrtcRelayFallbackRoom: 0,
 };
 
 function toPendingCallState(call: PendingCall) {
@@ -275,6 +283,18 @@ function commsUserRoom(commsUserId: string): string {
 function emitToCommsUser(io: SocketIOServer, commsUserId: string, event: string, payload: unknown): number {
   io.to(commsUserRoom(commsUserId)).emit(event, payload);
   return findUsersByCommsId(commsUserId).length;
+}
+
+async function resolveRelayTargetPeerId(
+  roomId: string,
+  fromPeerId: string,
+  explicitTargetPeerId?: string,
+): Promise<string | undefined> {
+  if (explicitTargetPeerId) return explicitTargetPeerId;
+  const activeCall = await loadActiveCall(roomId);
+  if (!activeCall?.participants?.length) return undefined;
+  const peerId = activeCall.participants.find((id) => id !== fromPeerId);
+  return peerId;
 }
 
 function getSocketUser(socket: Socket): User | undefined {
@@ -1133,8 +1153,10 @@ export function initSocketSignaling(server: HttpServer) {
       user.inCall = true;
       user.currentRoomId = data.roomId;
 
-      socket.join(data.roomId);
-      io.sockets.sockets.get(caller.socketId)?.join(data.roomId);
+      // Join every device socket for both participants so room-based fallbacks
+      // cannot miss a peer when users have multiple active devices.
+      io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
+      io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
 
       const activeCall: ActiveCall = {
         roomId: data.roomId,
@@ -1249,46 +1271,55 @@ export function initSocketSignaling(server: HttpServer) {
     // signaling server media-agnostic and allows the client to handle all
     // ICE negotiation logic (restart, timeout, fallback) independently.
 
-    socket.on("webrtc-offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+    socket.on("webrtc-offer", async (data: { roomId: string; offer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      console.log(`[Socket.IO] WebRTC offer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayOffer += 1;
+      console.log(`[Socket.IO] WebRTC offer relay: ${fromPeerId} → ${targetPeerId || data.roomId}`);
 
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc-offer", {
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc-offer", {
           offer: data.offer,
           roomId: data.roomId,
           fromPeerId,
         });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
     });
 
-    socket.on("webrtc-answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
+    socket.on("webrtc-answer", async (data: { roomId: string; answer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      console.log(`[Socket.IO] WebRTC answer relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayAnswer += 1;
+      console.log(`[Socket.IO] WebRTC answer relay: ${fromPeerId} → ${targetPeerId || data.roomId}`);
 
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc-answer", {
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc-answer", {
           answer: data.answer,
           roomId: data.roomId,
           fromPeerId,
         });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       }
     });
 
-    socket.on("webrtc-ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
+    socket.on("webrtc-ice-candidate", async (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayIce += 1;
 
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-candidate", {
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc-ice-candidate", {
           candidate: data.candidate,
           roomId: data.roomId,
           fromPeerId,
         });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       }
     });
@@ -1297,17 +1328,20 @@ export function initSocketSignaling(server: HttpServer) {
     // When a client detects ICE failure it sends an ice-restart offer.
     // The server relays it to the peer so the non-initiator can respond
     // with a new answer, re-establishing the media path without hanging up.
-    socket.on("webrtc-ice-restart", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+    socket.on("webrtc-ice-restart", async (data: { roomId: string; offer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      console.log(`[Socket.IO] ICE restart relay: ${fromPeerId} → ${data.targetPeerId || data.roomId}`);
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayIceRestart += 1;
+      console.log(`[Socket.IO] ICE restart relay: ${fromPeerId} → ${targetPeerId || data.roomId}`);
 
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-restart", {
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc-ice-restart", {
           offer: data.offer,
           roomId: data.roomId,
           fromPeerId,
         });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc-ice-restart", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
     });
@@ -1664,6 +1698,7 @@ export function initSocketSignaling(server: HttpServer) {
         const sentEvt = await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
         socket.emit("message-sent", messageSentPayload);
         socket.emit("comms:event", toCommsEnvelope(sentEvt));
+        runtimeMetrics.messageSentEvents += 1;
         if (ackKey) {
           recentMessageAcks.set(ackKey, {
             id: outgoingPayload.id,
@@ -1702,6 +1737,30 @@ export function initSocketSignaling(server: HttpServer) {
         }
       }
     });
+
+    socket.on(
+      "message-delivered",
+      async (data: { messageId?: string; senderId?: string; recipientId?: string }) => {
+        if (!allowSocketEventRate(socket, "message-delivered", 90, 15_000)) {
+          runtimeMetrics.signalingEventRateLimited += 1;
+          return;
+        }
+        const recipientId = (socket as any).userId as string | undefined;
+        if (!recipientId || !isReasonableId(data?.messageId) || !isReasonableId(data?.senderId)) {
+          runtimeMetrics.signalingInvalidPayloadRejected += 1;
+          return;
+        }
+        runtimeMetrics.messageDeliveryAcksReceived += 1;
+        const payload = {
+          messageId: data.messageId!,
+          senderId: data.senderId!,
+          recipientId,
+          deliveredAt: new Date().toISOString(),
+        };
+        await emitUserEventByCommsId(io, data.senderId!, "message-delivered", payload);
+        runtimeMetrics.messageDeliveryAcksSent += 1;
+      },
+    );
 
     socket.on("create-group", async (data: { name: string; members: string[] }) => {
       const userId = (socket as any).userId;
@@ -2602,8 +2661,10 @@ export function initSocketSignaling(server: HttpServer) {
       user.inCall = true;
       user.currentRoomId = data.roomId;
 
-      socket.join(data.roomId);
-      io.sockets.sockets.get(caller.socketId)?.join(data.roomId);
+      // Join every device socket for both participants so room-based fallbacks
+      // cannot miss a peer when users have multiple active devices.
+      io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
+      io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
 
       const activeCall: ActiveCall = {
         roomId: data.roomId,
@@ -2724,36 +2785,45 @@ export function initSocketSignaling(server: HttpServer) {
     });
 
     /** webrtc:offer — forward SDP offer to the target peer */
-    socket.on("webrtc:offer", (data: { roomId: string; offer: any; targetPeerId?: string }) => {
+    socket.on("webrtc:offer", async (data: { roomId: string; offer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
-        emitToCommsUser(io, data.targetPeerId, "webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayOffer += 1;
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, targetPeerId, "webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc:offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-offer", { offer: data.offer, roomId: data.roomId, fromPeerId });
       }
     });
 
     /** webrtc:answer — forward SDP answer to the target peer */
-    socket.on("webrtc:answer", (data: { roomId: string; answer: any; targetPeerId?: string }) => {
+    socket.on("webrtc:answer", async (data: { roomId: string; answer: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
-        emitToCommsUser(io, data.targetPeerId, "webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayAnswer += 1;
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, targetPeerId, "webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc:answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-answer", { answer: data.answer, roomId: data.roomId, fromPeerId });
       }
     });
 
     /** webrtc:ice-candidate — forward ICE candidate to the target peer */
-    socket.on("webrtc:ice-candidate", (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
+    socket.on("webrtc:ice-candidate", async (data: { roomId: string; candidate: any; targetPeerId?: string }) => {
       const fromPeerId = (socket as any).userId;
-      if (data.targetPeerId) {
-        emitToCommsUser(io, data.targetPeerId, "webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
-        emitToCommsUser(io, data.targetPeerId, "webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+      const targetPeerId = await resolveRelayTargetPeerId(data.roomId, fromPeerId, data.targetPeerId);
+      runtimeMetrics.webrtcRelayIce += 1;
+      if (targetPeerId) {
+        emitToCommsUser(io, targetPeerId, "webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
+        emitToCommsUser(io, targetPeerId, "webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       } else {
+        runtimeMetrics.webrtcRelayFallbackRoom += 1;
         socket.to(data.roomId).emit("webrtc:ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
         socket.to(data.roomId).emit("webrtc-ice-candidate", { candidate: data.candidate, roomId: data.roomId, fromPeerId });
       }
