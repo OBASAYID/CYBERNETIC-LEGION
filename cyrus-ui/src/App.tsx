@@ -14,6 +14,7 @@ import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
+import { PresenceProvider } from "../../../client/src/contexts/PresenceContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { GameSidebar } from "@/components/game-sidebar";
