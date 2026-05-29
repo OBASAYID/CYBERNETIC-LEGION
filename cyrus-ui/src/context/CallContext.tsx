@@ -1,4 +1,10 @@
 /**
+ * @deprecated This file (cyrus-ui/src/context/CallContext.tsx) is the legacy
+ * single-context/CallContext. The active CallProvider is in
+ * cyrus-ui/src/contexts/CallContext.tsx (plural) which delegates to
+ * PresenceContext. This file is retained for reference only and is NOT
+ * imported by any active component.
+ *
  * CallContext — React context that provides global call state and a persistent
  * hidden <audio> element for remote audio playback.
  *
