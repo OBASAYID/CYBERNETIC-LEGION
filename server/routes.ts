@@ -24,9 +24,11 @@ let cyrusSoul: any;
 let quantumCore: any;
 let domainSummary: any;
 let allBranches: any;
-let registerAudioRoutes: any;
-let speechToText: any;
-let ensureCompatibleFormat: any;
+let registerAudioRoutes: any = () => undefined;
+let speechToText: any = async () => {
+  throw new Error("Audio transcription is unavailable: Replit integrations are disabled");
+};
+let ensureCompatibleFormat: any = async (buffer: Buffer, format = "wav") => ({ buffer, format });
 let textToSpeechElevenLabs: any;
 let textToSpeechStreamElevenLabs: any;
 let ELEVENLABS_VOICES: any;
@@ -72,8 +74,10 @@ let quantumBridge: any;
 let quantumResponseFormatter: any;
 let healthIntegrations: any;
 let validateState: any;
-let registerImageRoutes: any;
-let generateImage: any;
+let registerImageRoutes: any = () => undefined;
+let generateImage: any = async () => {
+  throw new Error("Image generation is unavailable: Replit integrations are disabled");
+};
 let systemRefinementEngine: any;
 let emotionFusion: any;
 let voiceProsody: any;
@@ -81,6 +85,8 @@ let brainRoutes: any;
 
 const tick = (ms = 10): Promise<void> => new Promise((r) => setTimeout(r, ms));
 let depsLoaded = false;
+const disableReplitIntegrations =
+  String(process.env.CYRUS_DISABLE_REPLIT_INTEGRATIONS || "true").toLowerCase() !== "false";
 
 async function loadDependencies() {
   if (depsLoaded) return;
@@ -170,14 +176,18 @@ async function loadDependencies() {
   }
   await tick(20);
 
-  try {
-    const arM = await import("./replit_integrations/audio/routes");
-    registerAudioRoutes = arM.registerAudioRoutes;
-    const acM = await import("./replit_integrations/audio/client");
-    speechToText = acM.speechToText;
-    ensureCompatibleFormat = acM.ensureCompatibleFormat;
-  } catch (e) {
-    console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  if (!disableReplitIntegrations) {
+    try {
+      const arM = await import("./replit_integrations/audio/routes");
+      registerAudioRoutes = arM.registerAudioRoutes;
+      const acM = await import("./replit_integrations/audio/client");
+      speechToText = acM.speechToText;
+      ensureCompatibleFormat = acM.ensureCompatibleFormat;
+    } catch (e) {
+      console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    console.log("[Routes] CYRUS_DISABLE_REPLIT_INTEGRATIONS=true — skipping Replit audio integrations");
   }
 
   try {
@@ -375,13 +385,17 @@ async function loadDependencies() {
     console.warn("[Routes] Failed to load health integrations (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 
-  try {
-    const imgRM = await import("./replit_integrations/image/routes");
-    registerImageRoutes = imgRM.registerImageRoutes;
-    const imgCM = await import("./replit_integrations/image/client");
-    generateImage = imgCM.generateImage;
-  } catch (e) {
-    console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  if (!disableReplitIntegrations) {
+    try {
+      const imgRM = await import("./replit_integrations/image/routes");
+      registerImageRoutes = imgRM.registerImageRoutes;
+      const imgCM = await import("./replit_integrations/image/client");
+      generateImage = imgCM.generateImage;
+    } catch (e) {
+      console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    console.log("[Routes] CYRUS_DISABLE_REPLIT_INTEGRATIONS=true — skipping Replit image integrations");
   }
   await tick();
 
