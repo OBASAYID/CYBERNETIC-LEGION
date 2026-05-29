@@ -14,6 +14,7 @@ import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
 import { CallProvider } from "@/contexts/CallContext";
+import { PresenceProvider } from "../../client/src/contexts/PresenceContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { GameSidebar } from "@/components/game-sidebar";
@@ -134,6 +135,11 @@ function App() {
                 <TooltipProvider>
                   <Toaster />
                   <AppErrorBoundary>
+                    {/* PresenceProvider must be an ancestor of CallProvider because
+                        CallProvider now calls usePresence() internally. It is placed
+                        at the authenticated-section level so all authenticated routes
+                        have access to both contexts. */}
+                    <PresenceProvider>
                     {/* CallProvider wraps all authenticated routes so incoming/active
                         call overlays are globally available regardless of current page.
                         All signaling flows through PresenceContext (/cyrus-io) — the
@@ -164,6 +170,7 @@ function App() {
                         </div>
                       </div>
                     </CallProvider>
+                    </PresenceProvider>
                   </AppErrorBoundary>
                   <PwaInstallPrompt />
                   <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
