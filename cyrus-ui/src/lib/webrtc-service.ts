@@ -1,3 +1,20 @@
+/**
+ * @deprecated webRTCService — LEGACY /ws WebSocket engine. DO NOT USE for new call flows.
+ *
+ * SINGLE-ENGINE CONSOLIDATION:
+ * All real-time communication (presence, call signaling, SDP offer/answer,
+ * ICE candidates, media) now flows exclusively through PresenceContext's
+ * Socket.IO connection on /cyrus-io.
+ *
+ * This file is retained only for:
+ *  - Type exports (OnlineUser, ChatMessage, etc.) consumed by UI components
+ *  - The AdminDashboard / communication-panel legacy views that have not yet
+ *    been migrated to PresenceContext
+ *
+ * webRTCService.connect() is NO LONGER called from useWebRTC or CallProvider.
+ * The /ws WebSocket is therefore NOT opened during normal authenticated sessions.
+ */
+
 import {
   systemFetch,
   resolveCyrusWebSocketUrl,

@@ -92,12 +92,8 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // Derive a stable userId from localStorage device ID (same key used by PresenceContext)
-  const callUserId =
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
-    `device_${Math.random().toString(36).substr(2, 9)}`;
   const callDisplayName = gateUsername || readStoredDisplayName() || "User";
+
   // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -139,14 +135,10 @@ function App() {
                   <Toaster />
                   <AppErrorBoundary>
                     {/* CallProvider wraps all authenticated routes so incoming/active
-                        call overlays are globally available regardless of current page. */}
-                    <CallProvider
-                      webRTCOptions={{
-                        userId: callUserId,
-                        userName: callDisplayName,
-                        isAuthenticated,
-                      }}
-                    >
+                        call overlays are globally available regardless of current page.
+                        All signaling flows through PresenceContext (/cyrus-io) — the
+                        legacy webRTCService (/ws) is no longer connected here. */}
+                    <CallProvider>
                       <GameSidebar
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed((v) => !v)}
