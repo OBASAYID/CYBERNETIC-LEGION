@@ -913,12 +913,21 @@ class WebRTCService {
         break;
 
       case "call-response":
-        console.log("[WebRTC] Call response:", message.data);
+        console.log("[WebRTC] call-response received — from:", message.from, "| accepted:", message.data?.accepted);
         if (message.data.accepted) {
           this.currentCallUserId = message.from;
           if (this.isInitiator && this.pendingCallType) {
+            console.log("[WebRTC] call-response — initiating WebRTC as caller, callType:", this.pendingCallType);
             await this.initiateWebRTC(message.from, this.pendingCallType);
+          } else {
+            console.warn(
+              "[WebRTC] call-response — accepted but not initiating WebRTC:",
+              "isInitiator:", this.isInitiator,
+              "pendingCallType:", this.pendingCallType
+            );
           }
+        } else {
+          console.log("[WebRTC] call-response — call rejected, reason:", message.data?.reason);
         }
         if (this.onCallResponse) this.onCallResponse(message.data);
         break;
@@ -1071,16 +1080,65 @@ class WebRTCService {
 
     // ── Remote Tracks ───────────────────────────────────────────────────────
     pc.ontrack = (event) => {
-      console.log("[WebRTC] Remote track received:", event.track.kind);
+      console.log(
+        "[WebRTC] ontrack fired — kind:", event.track.kind,
+        "| readyState:", event.track.readyState,
+        "| streams:", event.streams.length,
+        "| enabled:", event.track.enabled
+      );
 
-      if (!this.remoteStream) this.remoteStream = new MediaStream();
-      this.remoteStream.addTrack(event.track);
+      // Prefer the stream the remote peer already associated with this track
+      // (event.streams[0]). Fall back to building one manually only when the
+      // remote side sent no stream association (rare but possible).
+      if (event.streams && event.streams.length > 0) {
+        // Use the remote-provided stream directly so all tracks share the same
+        // MediaStream object and the browser can manage synchronisation.
+        this.remoteStream = event.streams[0];
+        console.log(
+          "[WebRTC] Using remote stream from event.streams[0] — id:", this.remoteStream.id,
+          "| audio tracks:", this.remoteStream.getAudioTracks().length,
+          "| video tracks:", this.remoteStream.getVideoTracks().length
+        );
+      } else {
+        // No stream association — build one manually.
+        if (!this.remoteStream) this.remoteStream = new MediaStream();
+        this.remoteStream.addTrack(event.track);
+        console.log(
+          "[WebRTC] Built remote stream manually — audio tracks:",
+          this.remoteStream.getAudioTracks().length,
+          "| video tracks:", this.remoteStream.getVideoTracks().length
+        );
+      }
 
-      if (this.onRemoteStream) this.onRemoteStream(this.remoteStream);
+      // Ensure the track is enabled (some browsers deliver muted tracks initially).
+      if (!event.track.enabled) {
+        console.log("[WebRTC] Enabling initially-disabled remote track:", event.track.kind);
+        event.track.enabled = true;
+      }
+
+      // Always emit a *new* MediaStream snapshot so React useState triggers a
+      // re-render even when the underlying stream object is the same reference.
+      const snapshot = new MediaStream(this.remoteStream.getTracks());
+      console.log(
+        "[WebRTC] Emitting remote stream snapshot — audio:", snapshot.getAudioTracks().length,
+        "| video:", snapshot.getVideoTracks().length
+      );
+      if (this.onRemoteStream) this.onRemoteStream(snapshot);
 
       event.track.onended = () => console.log("[WebRTC] Remote track ended:", event.track.kind);
-      event.track.onmute = () => console.log("[WebRTC] Remote track muted:", event.track.kind);
-      event.track.onunmute = () => console.log("[WebRTC] Remote track unmuted:", event.track.kind);
+      event.track.onmute = () => {
+        console.log("[WebRTC] Remote track muted:", event.track.kind);
+        // Re-emit stream so UI can react to mute state changes.
+        if (this.remoteStream && this.onRemoteStream) {
+          this.onRemoteStream(new MediaStream(this.remoteStream.getTracks()));
+        }
+      };
+      event.track.onunmute = () => {
+        console.log("[WebRTC] Remote track unmuted:", event.track.kind);
+        if (this.remoteStream && this.onRemoteStream) {
+          this.onRemoteStream(new MediaStream(this.remoteStream.getTracks()));
+        }
+      };
     };
 
     pc.onnegotiationneeded = async () => {
@@ -1464,11 +1522,14 @@ class WebRTCService {
   }
 
   async acceptCall(callerId: string, callerName: string, callType: "voice" | "video"): Promise<void> {
-    console.log(`[WebRTC] Accepting ${callType} call from ${callerId}`);
+    console.log(`[WebRTC] acceptCall() — type: ${callType}, caller: ${callerId} (${callerName})`);
 
     if (this.groupMesh?.isActive()) {
       throw new Error("End the group call before accepting a direct call");
     }
+
+    // Reset any stale remote stream from a previous call so ontrack creates a fresh one.
+    this.remoteStream = null;
 
     this.currentCallUserId = callerId;
     this.currentCallUserName = callerName;
@@ -1478,24 +1539,42 @@ class WebRTCService {
     this.callStartTime = Date.now();
     this.pendingCandidates = [];
 
+    console.log("[WebRTC] acceptCall() — acquiring local media, linkProfile:", this.linkProfile);
+
     try {
       this.localStream = await getMediaWithFallback(callType, this.linkProfile);
-      console.log("[WebRTC] Local media acquired (callee — peer connection opens on SDP offer)");
+
+      const audioTracks = this.localStream.getAudioTracks();
+      const videoTracks = this.localStream.getVideoTracks();
+      console.log(
+        "[WebRTC] acceptCall() — local media acquired:",
+        `audio tracks: ${audioTracks.length}, video tracks: ${videoTracks.length}`
+      );
+      audioTracks.forEach(t =>
+        console.log(`[WebRTC]   audio track id=${t.id} enabled=${t.enabled} readyState=${t.readyState}`)
+      );
+      videoTracks.forEach(t =>
+        console.log(`[WebRTC]   video track id=${t.id} enabled=${t.enabled} readyState=${t.readyState}`)
+      );
 
       if (this.onLocalStream) this.onLocalStream(this.localStream);
 
       this.startAudioLevelMonitoring();
 
-      // Defer RTCPeerConnection until the caller's offer arrives. Creating a PC + setParameters
-      // before setRemoteDescription(offer) breaks negotiation on several browsers (hang / no media).
+      // Defer RTCPeerConnection creation until the caller's offer arrives.
+      // Creating a PC + setParameters before setRemoteDescription(offer) breaks
+      // negotiation on several browsers (hang / no media).
+      console.log("[WebRTC] acceptCall() — sending call-response accepted=true to", callerId);
       this.send({
         type: "call-response",
         from: this.userId,
         to: callerId,
         data: { accepted: true }
       });
+
+      console.log("[WebRTC] acceptCall() — waiting for SDP offer from caller");
     } catch (error) {
-      console.error("[WebRTC] Failed to accept call:", error);
+      console.error("[WebRTC] acceptCall() — failed to acquire media:", error);
       this.rejectCall(callerId, "Failed to access camera/microphone");
       throw error;
     }
@@ -1517,125 +1596,201 @@ class WebRTCService {
   }
 
   async initiateWebRTC(targetUserId: string, callType: "voice" | "video"): Promise<MediaStream | null> {
-    console.log(`[WebRTC] Initiating WebRTC for ${callType}`);
+    console.log(`[WebRTC] initiateWebRTC() — callType: ${callType}, target: ${targetUserId}`);
 
     this.callStartTime = Date.now();
+    // Reset any stale remote stream so ontrack creates a fresh one.
+    this.remoteStream = null;
 
     try {
+      console.log("[WebRTC] initiateWebRTC() — acquiring local media, linkProfile:", this.linkProfile);
       this.localStream = await getMediaWithFallback(callType, this.linkProfile);
-      console.log("[WebRTC] Local media acquired (initiator)");
+
+      const audioTracks = this.localStream.getAudioTracks();
+      const videoTracks = this.localStream.getVideoTracks();
+      console.log(
+        "[WebRTC] initiateWebRTC() — local media acquired:",
+        `audio: ${audioTracks.length}, video: ${videoTracks.length}`
+      );
+      audioTracks.forEach(t =>
+        console.log(`[WebRTC]   audio track id=${t.id} enabled=${t.enabled} readyState=${t.readyState}`)
+      );
+      videoTracks.forEach(t =>
+        console.log(`[WebRTC]   video track id=${t.id} enabled=${t.enabled} readyState=${t.readyState}`)
+      );
 
       if (this.onLocalStream) this.onLocalStream(this.localStream);
 
+      console.log("[WebRTC] initiateWebRTC() — creating peer connection");
       this.peerConnection = await this.createPeerConnection();
 
-      this.localStream.getTracks().forEach(track => {
-        console.log("[WebRTC] Adding local track:", track.kind);
+      const tracks = this.localStream.getTracks();
+      console.log("[WebRTC] initiateWebRTC() — adding", tracks.length, "local tracks to peer connection");
+      tracks.forEach(track => {
+        console.log("[WebRTC]   adding track:", track.kind, "id:", track.id);
         this.peerConnection!.addTrack(track, this.localStream!);
       });
 
       this.applyCodecPreferences(this.peerConnection);
       this.startAudioLevelMonitoring();
 
+      console.log("[WebRTC] initiateWebRTC() — creating SDP offer");
       const offer = await this.peerConnection.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: callType === "video"
       });
 
+      console.log("[WebRTC] initiateWebRTC() — setting local description (offer)");
       await this.peerConnection.setLocalDescription(offer);
       await this.applyOutboundMediaTuning(this.peerConnection, callType);
 
-      console.log("[WebRTC] Sending offer");
+      console.log("[WebRTC] initiateWebRTC() — sending offer to", targetUserId);
       this.send({
         type: "offer",
         from: this.userId,
         to: targetUserId,
         data: offer
       });
+      console.log("[WebRTC] initiateWebRTC() — offer sent; waiting for answer");
 
       return this.localStream;
     } catch (error) {
-      console.error("[WebRTC] Failed to initiate WebRTC:", error);
+      console.error("[WebRTC] initiateWebRTC() — failed:", error);
       this.cleanupCall(true);
       return null;
     }
   }
 
   private async handleOffer(message: any) {
-    console.log("[WebRTC] Handling offer");
+    console.log("[WebRTC] handleOffer() — from:", message.from, "| sdp type:", message.data?.type);
 
     if (!this.peerConnection) {
-      console.log("[WebRTC] Creating peer connection for offer");
+      console.log("[WebRTC] handleOffer() — no existing PC, creating peer connection");
+
+      // Ensure any stale remote stream is cleared so ontrack builds a fresh one.
+      this.remoteStream = null;
+
       this.peerConnection = await this.createPeerConnection();
+      console.log("[WebRTC] handleOffer() — peer connection created");
 
       if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          console.log("[WebRTC] Adding local track (from accept):", track.kind);
+        // Local stream was already acquired in acceptCall() — add all tracks now.
+        const tracks = this.localStream.getTracks();
+        console.log("[WebRTC] handleOffer() — adding", tracks.length, "pre-acquired local tracks");
+        tracks.forEach(track => {
+          console.log("[WebRTC]   adding local track:", track.kind, "id:", track.id);
           this.peerConnection!.addTrack(track, this.localStream!);
         });
       } else if (this.pendingCallType) {
+        // Fallback: acceptCall() didn't acquire media yet — get it now.
+        console.log("[WebRTC] handleOffer() — no local stream, acquiring media for:", this.pendingCallType);
         try {
           this.localStream = await getMediaWithFallback(this.pendingCallType, this.linkProfile);
+          console.log(
+            "[WebRTC] handleOffer() — fallback media acquired:",
+            "audio:", this.localStream.getAudioTracks().length,
+            "video:", this.localStream.getVideoTracks().length
+          );
           if (this.onLocalStream) this.onLocalStream(this.localStream);
           this.localStream.getTracks().forEach(track => {
+            console.log("[WebRTC]   adding fallback local track:", track.kind, "id:", track.id);
             this.peerConnection!.addTrack(track, this.localStream!);
           });
           this.startAudioLevelMonitoring();
         } catch (error) {
-          console.error("[WebRTC] Failed to get media for offer:", error);
+          console.error("[WebRTC] handleOffer() — failed to acquire fallback media:", error);
+          // Continue without local media — remote stream can still be received.
         }
+      } else {
+        console.warn("[WebRTC] handleOffer() — no local stream and no pendingCallType; proceeding without local media");
       }
+    } else {
+      console.log("[WebRTC] handleOffer() — reusing existing peer connection (ICE restart or re-offer)");
+    }
+
+    if (!this.peerConnection) {
+      console.error("[WebRTC] handleOffer() — peer connection is null after creation attempt; aborting");
+      return;
     }
 
     try {
+      console.log("[WebRTC] handleOffer() — setting remote description (offer)");
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.data));
-      console.log("[WebRTC] Remote description set");
+      console.log("[WebRTC] handleOffer() — remote description set successfully");
 
-      for (const candidate of this.pendingCandidates) {
-        await addIceCandidateLoose(this.peerConnection, candidate);
+      // Drain any ICE candidates that arrived before the remote description was ready.
+      if (this.pendingCandidates.length > 0) {
+        console.log("[WebRTC] handleOffer() — draining", this.pendingCandidates.length, "pending ICE candidates");
+        for (const candidate of this.pendingCandidates) {
+          await addIceCandidateLoose(this.peerConnection, candidate);
+        }
+        this.pendingCandidates = [];
+        console.log("[WebRTC] handleOffer() — pending ICE candidates drained");
       }
-      this.pendingCandidates = [];
 
       this.applyCodecPreferences(this.peerConnection);
 
+      console.log("[WebRTC] handleOffer() — creating SDP answer");
       const answer = await this.peerConnection.createAnswer();
+      console.log("[WebRTC] handleOffer() — setting local description (answer)");
       await this.peerConnection.setLocalDescription(answer);
+      console.log("[WebRTC] handleOffer() — local description set");
 
       await this.applyOutboundMediaTuning(
         this.peerConnection,
         this.pendingCallType || "voice"
       );
 
-      console.log("[WebRTC] Sending answer");
+      console.log("[WebRTC] handleOffer() — sending answer to", message.from);
       this.send({
         type: "answer",
         from: this.userId,
         to: message.from,
         data: answer
       });
+      console.log("[WebRTC] handleOffer() — answer sent; waiting for ICE negotiation");
     } catch (error) {
-      console.error("[WebRTC] Failed to handle offer:", error);
+      console.error("[WebRTC] handleOffer() — failed:", error);
     }
   }
 
   private async handleAnswer(message: any) {
-    console.log("[WebRTC] Handling answer");
+    console.log("[WebRTC] handleAnswer() — from:", message.from, "| sdp type:", message.data?.type);
 
     if (!this.peerConnection) {
-      console.error("[WebRTC] No peer connection for answer");
+      console.error("[WebRTC] handleAnswer() — no peer connection; cannot apply answer");
+      return;
+    }
+
+    const sigState = this.peerConnection.signalingState;
+    console.log("[WebRTC] handleAnswer() — current signalingState:", sigState);
+
+    if (sigState !== "have-local-offer") {
+      console.warn(
+        "[WebRTC] handleAnswer() — unexpected signalingState:", sigState,
+        "— expected 'have-local-offer'; skipping setRemoteDescription"
+      );
       return;
     }
 
     try {
+      console.log("[WebRTC] handleAnswer() — setting remote description (answer)");
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(message.data));
-      console.log("[WebRTC] Remote description set from answer");
+      console.log("[WebRTC] handleAnswer() — remote description set successfully");
 
-      for (const candidate of this.pendingCandidates) {
-        await addIceCandidateLoose(this.peerConnection, candidate);
+      // Drain any ICE candidates that arrived before the remote description was ready.
+      if (this.pendingCandidates.length > 0) {
+        console.log("[WebRTC] handleAnswer() — draining", this.pendingCandidates.length, "pending ICE candidates");
+        for (const candidate of this.pendingCandidates) {
+          await addIceCandidateLoose(this.peerConnection, candidate);
+        }
+        this.pendingCandidates = [];
+        console.log("[WebRTC] handleAnswer() — pending ICE candidates drained");
       }
-      this.pendingCandidates = [];
+
+      console.log("[WebRTC] handleAnswer() — ICE negotiation in progress");
     } catch (error) {
-      console.error("[WebRTC] Failed to handle answer:", error);
+      console.error("[WebRTC] handleAnswer() — failed:", error);
     }
   }
 
