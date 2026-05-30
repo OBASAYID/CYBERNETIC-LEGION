@@ -69,6 +69,8 @@ interface CallViewProps {
   onStartScreenShare?: () => void;
   onStopScreenShare?: () => void;
   onSendChatMessage?: (message: string) => void;
+  /** Dedicated remote MediaStream (P2P) — main stage uses video tracks from this, not localStream. */
+  remoteStream?: MediaStream | null;
   onSendCallMedia?: (file: File, caption: string) => Promise<void>;
   onSendReaction?: (emoji: string, x: number, y: number) => void;
   onShareLocation?: () => void;
@@ -290,6 +292,13 @@ function formatCallDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Remote tile should bind video tracks only — never reuse the local camera stream. */
+function videoOnlyStream(stream: MediaStream | null | undefined): MediaStream | null {
+  if (!stream) return null;
+  const tracks = stream.getVideoTracks().filter((t) => t.readyState !== "ended");
+  return tracks.length ? new MediaStream(tracks) : null;
+}
+
 function getGridClass(count: number): string {
   if (count <= 1) return "grid-cols-1 grid-rows-1";
   if (count === 2) return "grid-cols-2 grid-rows-1";
@@ -318,6 +327,7 @@ export function CallView({
   onStartScreenShare,
   onStopScreenShare,
   onSendChatMessage,
+  remoteStream: remoteStreamProp,
   onSendCallMedia,
   onSendReaction,
   onShareLocation,
@@ -418,7 +428,21 @@ export function CallView({
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
   const remoteParticipant = participants.find((p) => p.id !== currentUserId);
-  const remoteAudioStream = remoteParticipant?.stream ?? null;
+  const remoteAudioStream = remoteParticipant?.stream ?? remoteStreamProp ?? null;
+  const remoteVideoStream = videoOnlyStream(remoteParticipant?.stream ?? remoteStreamProp);
+  const remoteDisplayName = remoteParticipant?.displayName ?? "Participant";
+  const isOneToOne = callType === "video" && participants.filter((p) => p.id !== currentUserId).length <= 1;
+  const remoteMainRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!isOneToOne) return;
+    void attachMediaStreamToVideo(remoteMainRef.current, remoteVideoStream, {
+      muted: false,
+      volume: 1,
+      onPlaybackStarted: () => onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" }),
+      onPlaybackBlocked: () => onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" }),
+    });
+  }, [isOneToOne, remoteVideoStream, onRemotePlaybackDiagnostics]);
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
@@ -523,35 +547,44 @@ export function CallView({
                 ))}
               </div>
             </div>
-          ) : callType === "video" && localStream ? (
-            <div className={`grid ${gridClass} gap-2 h-full`}>
-              {allParticipants.map((p) => (
-                <ParticipantVideo
-                  key={p.id}
-                  participant={p}
-                  isSelf={p.id === currentUserId}
-                  gridSize={Math.max(totalCount, 2)}
-                  onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
+          ) : isOneToOne ? (
+            <div className="relative h-full w-full">
+              {remoteVideoStream ? (
+                <video
+                  ref={remoteMainRef}
+                  autoPlay
+                  playsInline
+                  className="h-full w-full object-cover [transform:translateZ(0)]"
                 />
-              ))}
-              <ParticipantVideo
-                participant={{
-                  id: currentUserId,
-                  displayName: currentUserName,
-                  stream: localStream,
-                  isMuted,
-                  isVideoEnabled,
-                }}
-                isSelf
-                gridSize={Math.max(totalCount, 2)}
-              />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/30 to-blue-600/30 text-2xl font-bold text-white">
+                    {remoteDisplayName
+                      .split(" ")
+                      .map((w) => w[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </div>
+                  <p className="mt-4 text-sm font-medium text-white/80">{remoteDisplayName}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {mediaEstablishing ? "Connecting video…" : "Waiting for remote camera…"}
+                  </p>
+                </div>
+              )}
+              <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/50 px-2 py-1">
+                <span className="text-xs font-medium text-white">{remoteDisplayName}</span>
+              </div>
             </div>
           ) : (
             <div className={`grid ${gridClass} gap-2 h-full`}>
               {allParticipants.map((p) => (
                 <ParticipantVideo
                   key={p.id}
-                  participant={p}
+                  participant={{
+                    ...p,
+                    stream: p.id === currentUserId ? p.stream : videoOnlyStream(p.stream) ?? p.stream,
+                  }}
                   isSelf={p.id === currentUserId}
                   gridSize={totalCount}
                   onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
@@ -560,7 +593,7 @@ export function CallView({
             </div>
           )}
 
-          {localStream && callType === "video" && (
+          {localStream && callType === "video" && isOneToOne && (
             <div
               className="absolute w-36 h-28 rounded-xl overflow-hidden border-2 border-gray-700/60 shadow-2xl cursor-grab active:cursor-grabbing z-10"
               style={{ bottom: `${pipPosition.y}px`, right: `${pipPosition.x}px` }}
