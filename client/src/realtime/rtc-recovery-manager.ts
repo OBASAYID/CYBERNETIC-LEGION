@@ -71,7 +71,11 @@ export class RtcRecoveryManager {
 
     if (input.iceState === "checking" && this.checkingSince !== null) {
       const stuck = now - this.checkingSince >= CYRUS_ICE_CHECKING_STUCK_MS;
-      if (stuck && now - this.lastAutoRestartAt >= CYRUS_ICE_RESTART_COOLDOWN_MS) {
+      if (
+        stuck &&
+        input.mediaWasLive &&
+        now - this.lastAutoRestartAt >= CYRUS_ICE_RESTART_COOLDOWN_MS
+      ) {
         this.lastAutoRestartAt = now;
         this.autoRestartCount += 1;
         return { action: "ice_restart", reason: "ice_checking_stuck" };
