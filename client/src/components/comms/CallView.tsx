@@ -331,14 +331,9 @@ function resolveRemoteStageStream(
   if (!remote) return null;
   if (local && remote === local) return null;
   const localTrackIds = new Set(local?.getTracks().map((t) => t.id) ?? []);
-  const remoteTracks = remote.getTracks();
-  if (
-    remoteTracks.length > 0 &&
-    remoteTracks.every((t) => localTrackIds.has(t.id))
-  ) {
-    return null;
-  }
-  return remote;
+  const inboundTracks = remote.getTracks().filter((t) => !localTrackIds.has(t.id));
+  if (!inboundTracks.length) return null;
+  return new MediaStream(inboundTracks);
 }
 
 function getGridClass(count: number): string {
@@ -673,7 +668,7 @@ export function CallView({
             </div>
           ) : isOneToOne ? (
             <div className="absolute inset-0 bg-black">
-              {callType === "video" && (
+              {callType === "video" && remoteVideoStream && (
                 <video
                   ref={remoteMainRef}
                   autoPlay
@@ -742,7 +737,7 @@ export function CallView({
                 playsInline
                 muted
                 data-cyrus-local-pip="1"
-                className="h-full w-full object-cover"
+                className="h-full w-full scale-x-[-1] object-cover"
               />
               <div className="absolute top-1 right-1">
                 <Move className="w-3 h-3 text-white/50" />
