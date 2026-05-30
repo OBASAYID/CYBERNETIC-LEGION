@@ -1474,6 +1474,7 @@ export default function CommsHubPage() {
           onSendChatMessage={(msg: string) => sendCallChatMessage({ message: msg, messageType: "text" })}
           chatMessages={callChatMessages}
           onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
+          onRecoverMedia={() => void recoverCallMedia()}
           socketRef={wsRef}
         />
       )}

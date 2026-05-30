@@ -2,18 +2,34 @@
  * Best-effort recovery for browser audio / autoplay restrictions during CYRUS calls.
  */
 
-/** Try to resume playback on all in-page video elements (often carries remote audio). */
+/** Try to resume playback on in-page media elements (remote call audio/video). */
 export async function resumeCyrusAudioPipeline(): Promise<boolean> {
   let anyOk = false;
   try {
-    const nodes = document.querySelectorAll("video");
+    const nodes = document.querySelectorAll('[data-cyrus-remote-call="1"], audio[data-cyrus-remote-call="1"]');
     for (const el of nodes) {
       try {
-        el.muted = false;
-        await el.play();
-        anyOk = true;
+        if (el instanceof HTMLMediaElement) {
+          el.muted = false;
+          await el.play();
+          anyOk = true;
+        }
       } catch {
         /* ignore per-element */
+      }
+    }
+    // Fallback: legacy remote call videos without data attribute (skip local PIP)
+    if (!anyOk) {
+      for (const el of document.querySelectorAll("video:not([data-cyrus-local-pip])")) {
+        try {
+          if (el instanceof HTMLVideoElement) {
+            el.muted = false;
+            await el.play();
+            anyOk = true;
+          }
+        } catch {
+          /* ignore */
+        }
       }
     }
   } catch {
