@@ -323,14 +323,17 @@ function videoOnlyStream(stream: MediaStream | null | undefined): MediaStream | 
   return tracks.length ? new MediaStream(tracks) : null;
 }
 
-/** Never bind the local camera stream to the remote main stage. */
+/** Never bind the local camera stream (or its tracks) to the remote main stage. */
 function resolveRemoteStageStream(
   remote: MediaStream | null | undefined,
   local: MediaStream | null | undefined,
 ): MediaStream | null {
   if (!remote) return null;
   if (local && remote === local) return null;
-  return remote;
+  const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
+  const remoteTracks = remote.getTracks().filter((t) => !localIds.has(t.id));
+  if (!remoteTracks.length) return null;
+  return new MediaStream(remoteTracks);
 }
 
 function getGridClass(count: number): string {
