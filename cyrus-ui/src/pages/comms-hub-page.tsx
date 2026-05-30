@@ -1347,7 +1347,7 @@ export default function CommsHubPage() {
 
   const {
     onlineUsers, isConnected, myUserId, incomingCall, activeCall,
-    localStream, remoteStream, callDuration, notifications, callDiagnostics,
+    localStream, remoteStream, callDuration, notifications,
     callUser, acceptCall, declineCall, endCall,
     toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
     mediaControls, wsRef, isScreenSharing, screenShareStream,
@@ -1462,11 +1462,7 @@ export default function CommsHubPage() {
           isMuted={isMuted}
           isVideoEnabled={!isVideoOff && (mediaControls?.isVideoEnabled ?? true)}
           callDuration={callDuration}
-          sessionStatus={activeCall.status}
-          connectionLabel={callDiagnostics?.qualityScores?.label}
-          mediaEstablishing={
-            activeCall.status === "connecting" || activeCall.status === "negotiating"
-          }
+          mediaEstablishing={activeCall.status !== "connected"}
           onEndCall={endCall}
           onToggleMute={handleToggleMute}
           onToggleVideo={handleToggleVideo}
