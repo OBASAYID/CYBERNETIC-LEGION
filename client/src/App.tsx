@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Link, useLocation } from "wouter";
 import {
   Menu,
@@ -25,7 +25,9 @@ import { IntroSequence } from "./components/IntroSequence";
 import { Dashboard } from "./components/Dashboard";
 import { ScanPage } from "./pages/ScanPage";
 import { FileAnalysisPage } from "./pages/FileAnalysisPage";
-import { CommsPage } from "./pages/CommsPage";
+const CommsHubPage = lazy(() =>
+  import("../../cyrus-ui/src/pages/comms-hub-page").then((m) => ({ default: m.default })),
+);
 import { DeviceControlPage } from "./pages/DeviceControlPage";
 import { ModulesPage } from "./pages/ModulesPage";
 import { MedicalPage } from "./pages/MedicalPage";
@@ -454,7 +456,11 @@ function AppContent({
             <Route path="/modules" component={ModulesPage} />
             <Route path="/scan" component={ScanPage} />
             <Route path="/files" component={FileAnalysisPage} />
-            <Route path="/comms" component={CommsPage} />
+            <Route path="/comms">
+              <Suspense fallback={<div className="p-8 text-sm text-cyan-200/70">Loading comms…</div>}>
+                <CommsHubPage />
+              </Suspense>
+            </Route>
             <Route path="/device" component={DeviceControlPage} />
             <Route path="/medical" component={MedicalPage} />
             <Route path="/quantum" component={QuantumPage} />
