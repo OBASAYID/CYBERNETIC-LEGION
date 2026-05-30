@@ -1456,6 +1456,7 @@ export default function CommsHubPage() {
             isVideoEnabled: activeCall.callType === "video",
           }]}
           localStream={localStream ?? null}
+          remoteStream={remoteStream ?? null}
           currentUserId={myId}
           currentUserName={displayName}
           isMuted={isMuted}
