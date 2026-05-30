@@ -614,6 +614,23 @@ async function initializeSystem() {
     console.warn("[Init] Security middleware not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
   }
 
+  // Dashboard + algorithms catalog — lightweight; keep available in comms-only deploys
+  try {
+    const { default: stackRoutes } = await import("./routes/stack-routes.js");
+    app.use("/api", stackRoutes);
+    log("[Routes] Stack routes registered");
+  } catch (e) {
+    console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
+  try {
+    const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
+    app.use("/api", algorithmsRoutes);
+    log("[Routes] Algorithms routes registered");
+  } catch (e) {
+    console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+  }
+
   // Core API routes — each wrapped individually so one failure doesn't block the rest
   if (!commsOnlyMode) {
     try {
@@ -657,22 +674,6 @@ async function initializeSystem() {
     }
 
     try {
-      const { default: stackRoutes } = await import("./routes/stack-routes.js");
-      app.use("/api", stackRoutes);
-      log("[Routes] Stack routes registered");
-    } catch (e) {
-      console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-    }
-
-    try {
-      const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
-      app.use("/api", algorithmsRoutes);
-      log("[Routes] Algorithms routes registered");
-    } catch (e) {
-      console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-    }
-
-    try {
       const { mcpRouter } = await import("./mcp/mcp-routes.js");
       app.use("/api", mcpRouter);
       const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
@@ -681,7 +682,7 @@ async function initializeSystem() {
       console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
     }
   } else {
-    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping non-comms API bundles (settings/sysdb/query/train/intelligence/stack/algorithms/mcp)");
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping extended API bundles (settings/sysdb/query/train/intelligence/mcp); stack/algorithms + engine bridge remain");
   }
 
   await tick();

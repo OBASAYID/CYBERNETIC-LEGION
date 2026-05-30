@@ -799,7 +799,19 @@ export async function registerRoutes(
       }
     });
 
-    console.log("[Routes] CYRUS_COMMS_ONLY=1 — skipping non-comms HTTP route registration");
+    try {
+      const { registerUiEngineBridge } = await import("./routes/ui-engine-bridge.js");
+      await registerUiEngineBridge(app);
+    } catch (e) {
+      console.warn(
+        "[Routes] UI engine bridge failed (non-fatal):",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+
+    console.log(
+      "[Routes] CYRUS_COMMS_ONLY=1 — comms HTTP + UI engine bridge (orchestrator, /api/infer); skipping full route bundle",
+    );
     return httpServer;
   }
 

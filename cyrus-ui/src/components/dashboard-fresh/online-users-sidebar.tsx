@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Phone, Radio, Users } from "lucide-react";
 import { Link } from "wouter";
+import { usePresence } from "../../../../client/src/contexts/PresenceContext";
 import { systemFetch } from "@/lib/system-api";
 
 type OnlineUser = {
@@ -10,6 +11,15 @@ type OnlineUser = {
   name?: string;
   status?: "online" | "offline" | "busy" | "in_call";
   isOnline?: boolean;
+  lastSeen?: string;
+  profileImageUrl?: string | null;
+};
+
+type SidebarUser = {
+  id: string;
+  name: string;
+  live: boolean;
+  status: string;
   lastSeen?: string;
   profileImageUrl?: string | null;
 };
@@ -41,6 +51,8 @@ function seenAgo(iso?: string) {
 }
 
 export function OnlineUsersSidebar() {
+  const { onlineUsers, isConnected } = usePresence();
+
   const usersQuery = useQuery<OnlineUser[]>({
     queryKey: ["/api/comms/users/all", "dashboard-sidebar"],
     queryFn: async () => {
@@ -49,26 +61,53 @@ export function OnlineUsersSidebar() {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    refetchInterval: 12_000,
+    refetchInterval: isConnected ? 60_000 : 12_000,
   });
 
-  const users = useMemo(() => {
-    const arr = usersQuery.data ?? [];
-    return arr
-      .map((u) => {
-        const name = (u.displayName || u.name || "Operator").trim();
-        const live = Boolean(u.isOnline || u.status === "online");
-        const status = u.status ?? (live ? "online" : "offline");
-        return { ...u, name, live, status };
-      })
+  const users = useMemo((): SidebarUser[] => {
+    const restById = new Map(
+      (usersQuery.data ?? []).map((u) => [u.id, u]),
+    );
+
+    const liveRows: SidebarUser[] =
+      isConnected && onlineUsers.length > 0
+        ? onlineUsers.map((u) => {
+            const rest = restById.get(u.id);
+            const name = (u.displayName || rest?.displayName || rest?.name || "Operator").trim();
+            const status = u.inCall ? "in_call" : "online";
+            return {
+              id: u.id,
+              name,
+              live: true,
+              status,
+              lastSeen: u.lastActivity ?? rest?.lastSeen,
+              profileImageUrl: u.profileImageUrl ?? rest?.profileImageUrl ?? null,
+            };
+          })
+        : (usersQuery.data ?? []).map((u) => {
+            const name = (u.displayName || u.name || "Operator").trim();
+            const live = Boolean(u.isOnline || u.status === "online");
+            const status = u.status ?? (live ? "online" : "offline");
+            return {
+              id: u.id,
+              name,
+              live,
+              status,
+              lastSeen: u.lastSeen,
+              profileImageUrl: u.profileImageUrl ?? null,
+            };
+          });
+
+    return liveRows
       .sort((a, b) => {
         if (a.live !== b.live) return a.live ? -1 : 1;
         return a.name.localeCompare(b.name);
       })
       .slice(0, 12);
-  }, [usersQuery.data]);
+  }, [isConnected, onlineUsers, usersQuery.data]);
 
   const activeCount = users.filter((u) => u.live).length;
+  const isLoading = !isConnected && usersQuery.isLoading;
 
   return (
     <aside
@@ -94,7 +133,7 @@ export function OnlineUsersSidebar() {
         </span>
       </div>
 
-      {usersQuery.isLoading ? (
+      {isLoading ? (
         <p className="px-1 text-xs text-white/50">Loading active operators…</p>
       ) : users.length === 0 ? (
         <p className="px-1 text-xs text-white/45">No active operators yet.</p>

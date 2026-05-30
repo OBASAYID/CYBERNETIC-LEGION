@@ -13,6 +13,7 @@ import {
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
 import { useCyrusGroupCall } from "../../../client/src/hooks/useCyrusGroupCall";
 import { CallView } from "../../../client/src/components/comms/CallView";
+import { PshareTabPanel } from "@/components/comms/PshareTabPanel";
 import { systemFetch } from "@shared/cyrus-api-client";
 
 /* ══════════════════════════════════════════════════════════════
@@ -25,7 +26,7 @@ const C = {
   border: "rgba(255,255,255,0.08)",
 } as const;
 
-type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote";
+type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote" | "pshare";
 
 interface OnlineUser {
   id: string; displayName: string;
@@ -1333,6 +1334,7 @@ const TABS: Array<{ id:CommsTab; label:string; icon:typeof MessageSquare; color:
   { id:"group",   label:"GROUP",      icon:Users,         color:C.purple, sub:"Multi-party call"  },
   { id:"vnote",   label:"VOICE NOTE", icon:Mic,           color:C.orange, sub:"Audio message"     },
   { id:"vidnote", label:"VIDEO NOTE", icon:Film,          color:"#f43f5e",sub:"Video message"     },
+  { id:"pshare",  label:"PSHARE",     icon:Radio,         color:C.crimson,sub:"Broadcast feed"    },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -1345,7 +1347,7 @@ export default function CommsHubPage() {
 
   const {
     onlineUsers, isConnected, myUserId, incomingCall, activeCall,
-    localStream, remoteStream, callDuration, connectPresence,
+    localStream, remoteStream, callDuration,
     callUser, acceptCall, declineCall, endCall,
     toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
     mediaControls, wsRef, isScreenSharing, screenShareStream,
@@ -1372,14 +1374,13 @@ export default function CommsHubPage() {
     if(t==="vnote") return "vnote";
     if(t==="vidnote") return "vidnote";
     if(t==="group") return "group";
+    if(t==="pshare") return "pshare";
     return "chat";
   });
 
   const [targetUser, setTargetUser] = useState<{id:string;name:string}|null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-
-  useEffect(() => { connectPresence(displayName); }, [displayName]);
 
   const handleCallVoice = useCallback((userId:string, name:string) => {
     setActiveTab("voice"); callUser(userId, name, "audio");
@@ -1561,6 +1562,9 @@ export default function CommsHubPage() {
               )}
               {activeTab==="vidnote" && (
                 <VideoNotePanel targetUser={targetUser} />
+              )}
+              {activeTab==="pshare" && (
+                <PshareTabPanel />
               )}
             </div>
           </main>
