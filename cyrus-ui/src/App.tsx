@@ -92,6 +92,7 @@ function App() {
   }, [isAuthenticated]);
 
   const displayName = gateUsername || readStoredDisplayName() || "User";
+
   // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
   useEffect(() => {
     if (!isAuthenticated) return;
