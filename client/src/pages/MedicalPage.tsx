@@ -618,11 +618,37 @@ export function MedicalPage() {
     }
   };
 
+  const commandHandoffText = () => {
+    if (diagnosis) {
+      const condLines = diagnosis.conditions.map(
+        (c) => `- ${c.name} (${(c.probability * 100).toFixed(0)}% probable, ${c.severity})`,
+      );
+      const recs = diagnosis.recommendations.map((r) => `- ${r}`);
+      return [
+        `Medical assessment (urgency: ${diagnosis.urgency})`,
+        diagnosis.summary,
+        condLines.length ? `Conditions:\n${condLines.join("\n")}` : "",
+        recs.length ? `Recommendations:\n${recs.join("\n")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    if (symptoms.trim()) return `Reported symptoms:\n${symptoms.trim()}`;
+    if (healthInsights.length) {
+      return healthInsights
+        .map((i) => `${i.category}: ${i.title}\n${i.description}\n${i.recommendation}`)
+        .join("\n\n---\n\n");
+    }
+    return undefined;
+  };
+
   return (
     <ModuleWorkspacePageShell
       title="Medical Diagnostics"
       subtitle="Quantified self health analytics and sensor integration"
       icon={Stethoscope}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="medical-diagnostics"
       headerEnd={
         <>
           <div className="flex items-center gap-2 rounded-lg border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] px-3 py-1.5">
@@ -659,7 +685,7 @@ export function MedicalPage() {
         </>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-cyrus-page space-y-6">
         <div className="rounded-xl border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">

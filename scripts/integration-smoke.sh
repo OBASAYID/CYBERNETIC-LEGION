@@ -54,8 +54,12 @@ check_json() {
   local label="$2"
   local use_auth="${3:-}"
   local code
+  local auth_hdr=()
+  if [[ -n "${SESSION_TOKEN:-}" ]]; then
+    auth_hdr=(-H "Authorization: Bearer ${SESSION_TOKEN}")
+  fi
   if [[ "$use_auth" == "auth" ]]; then
-    code="$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" -o /tmp/cyrus_smoke_body.json -w "%{http_code}" "$url" || echo "000")"
+    code="$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" "${auth_hdr[@]}" -o /tmp/cyrus_smoke_body.json -w "%{http_code}" "$url" || echo "000")"
   else
     code="$(curl -sS -o /tmp/cyrus_smoke_body.json -w "%{http_code}" "$url" || echo "000")"
   fi
@@ -78,11 +82,22 @@ if [[ "$login_code" != "200" ]]; then
   exit 1
 fi
 
+# Token-first login returns sessionToken; isAuthenticated accepts Bearer (see standalone/auth-adapter.ts).
+SESSION_TOKEN=""
+if command -v python3 >/dev/null 2>&1; then
+  SESSION_TOKEN="$(python3 -c "import json; print(json.load(open('/tmp/cyrus_smoke_login.json')).get('sessionToken') or '')" 2>/dev/null || true)"
+fi
+if [[ -z "$SESSION_TOKEN" ]] && command -v node >/dev/null 2>&1; then
+  SESSION_TOKEN="$(node -e "const j=require('/tmp/cyrus_smoke_login.json');process.stdout.write(String(j.sessionToken||''))" 2>/dev/null || true)"
+fi
+export SESSION_TOKEN
+
 check_json "$BASE/api/cyrus/status" "GET /api/cyrus/status (authenticated)" "auth"
+check_json "$BASE/api/cyrus-comm/config/webrtc" "GET /api/cyrus-comm/config/webrtc (authenticated)" "auth"
 check_json "$BASE/api/cyrus/branches" "GET /api/cyrus/branches (authenticated)" "auth"
 check_json "$BASE/api/files/module-status" "GET /api/files/module-status (authenticated)" "auth"
 
-post_infer_code="$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" -o /tmp/cyrus_smoke_infer.json -w "%{http_code}" \
+post_infer_code="$(curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" ${SESSION_TOKEN:+-H "Authorization: Bearer ${SESSION_TOKEN}"} -o /tmp/cyrus_smoke_infer.json -w "%{http_code}" \
   -H "Content-Type: application/json" \
   -d '{"message":"integration smoke ping"}' \
   "$BASE/api/cyrus" || echo "000")"

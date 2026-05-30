@@ -1,11 +1,13 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import multer, { type StorageEngine } from "multer";
+import { parseMaxAnalysisChunks, parseMaxUploadFileBytes } from "../shared/cyrus-document-limits.js";
 
 type MulterFile = Express.Multer.File;
 type HealthProvider = string;
 type ElevenLabsVoice = string;
 import path from "path";
+import fs from "node:fs/promises";
 import { randomUUID } from "crypto";
 import OpenAI, { AzureOpenAI } from "openai";
 import { z } from "zod";
@@ -22,9 +24,11 @@ let cyrusSoul: any;
 let quantumCore: any;
 let domainSummary: any;
 let allBranches: any;
-let registerAudioRoutes: any;
-let speechToText: any;
-let ensureCompatibleFormat: any;
+let registerAudioRoutes: any = () => undefined;
+let speechToText: any = async () => {
+  throw new Error("Audio transcription is unavailable: Replit integrations are disabled");
+};
+let ensureCompatibleFormat: any = async (buffer: Buffer, format = "wav") => ({ buffer, format });
 let textToSpeechElevenLabs: any;
 let textToSpeechStreamElevenLabs: any;
 let ELEVENLABS_VOICES: any;
@@ -40,6 +44,7 @@ let createAnalysisJob: any;
 let getAnalysisJob: any;
 let listAnalysisReports: any;
 let generateDocument: any;
+let exportGeneratedDocument: any;
 let createDocgenJob: any;
 let getDocgenJob: any;
 let listDocgenJobs: any;
@@ -47,6 +52,7 @@ let cancelDocgenJob: any;
 let resumeDocgenJob: any;
 let initSignalingServer: any;
 let initSocketSignaling: any;
+let initCyrusCommSocketSignaling: any;
 let enqueueMessage: any;
 let dequeueMessages: any;
 let addReminder: any;
@@ -61,14 +67,17 @@ let registerAdvancedUpgradeRoutes: any;
 let moduleOrchestrator: any;
 let autonomyRoutes: any;
 let dataCollectionRoutes: any;
+let assetRouter: any;
 let humanoidRoutes: any;
 let registerInteractiveRoutes: any;
 let quantumBridge: any;
 let quantumResponseFormatter: any;
 let healthIntegrations: any;
 let validateState: any;
-let registerImageRoutes: any;
-let generateImage: any;
+let registerImageRoutes: any = () => undefined;
+let generateImage: any = async () => {
+  throw new Error("Image generation is unavailable: Replit integrations are disabled");
+};
 let systemRefinementEngine: any;
 let emotionFusion: any;
 let voiceProsody: any;
@@ -76,9 +85,51 @@ let brainRoutes: any;
 
 const tick = (ms = 10): Promise<void> => new Promise((r) => setTimeout(r, ms));
 let depsLoaded = false;
+const disableReplitIntegrations =
+  String(process.env.CYRUS_DISABLE_REPLIT_INTEGRATIONS || "true").toLowerCase() !== "false";
 
 async function loadDependencies() {
   if (depsLoaded) return;
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
+
+  if (commsOnlyMode) {
+    try {
+      // Keep comms DB schema ready even in lightweight mode.
+      const dbInitM = await import("./comms/db-init");
+      await dbInitM.initCommsDatabase();
+    } catch (e) {
+      console.warn("[Routes] Comms DB init failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+
+    try {
+      const sgM = await import("./comms/signaling");
+      initSignalingServer = sgM.initSignalingServer;
+      const ssM = await import("./comms/socket-signaling");
+      initSocketSignaling = ssM.initSocketSignaling;
+      try {
+        const ccSock = await import("./comms/cyrus-comm-socket");
+        initCyrusCommSocketSignaling = ccSock.initCyrusCommSocketSignaling;
+      } catch (cce) {
+        console.warn(
+          "[Routes] cyrus-comm-socket failed (non-fatal):",
+          cce instanceof Error ? cce.message : String(cce),
+        );
+      }
+      const stM = await import("./comms/store");
+      enqueueMessage = stM.enqueueMessage;
+      dequeueMessages = stM.dequeueMessages;
+      addReminder = stM.addReminder;
+      listReminders = stM.listReminders;
+      const crM = await import("./comms/comms-routes");
+      registerCommsRoutes = crM.registerCommsRoutes;
+    } catch (e) {
+      console.warn("[Routes] Failed to load comms modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+
+    depsLoaded = true;
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — loaded comms dependencies only");
+    return;
+  }
 
   try {
     const storageM = await import("./storage");
@@ -125,14 +176,18 @@ async function loadDependencies() {
   }
   await tick(20);
 
-  try {
-    const arM = await import("./replit_integrations/audio/routes");
-    registerAudioRoutes = arM.registerAudioRoutes;
-    const acM = await import("./replit_integrations/audio/client");
-    speechToText = acM.speechToText;
-    ensureCompatibleFormat = acM.ensureCompatibleFormat;
-  } catch (e) {
-    console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  if (!disableReplitIntegrations) {
+    try {
+      const arM = await import("./replit_integrations/audio/routes");
+      registerAudioRoutes = arM.registerAudioRoutes;
+      const acM = await import("./replit_integrations/audio/client");
+      speechToText = acM.speechToText;
+      ensureCompatibleFormat = acM.ensureCompatibleFormat;
+    } catch (e) {
+      console.warn("[Routes] Failed to load audio modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    console.log("[Routes] CYRUS_DISABLE_REPLIT_INTEGRATIONS=true — skipping Replit audio integrations");
   }
 
   try {
@@ -188,6 +243,8 @@ async function loadDependencies() {
   try {
     const dgM = await import("./docgen/generate");
     generateDocument = dgM.generateDocument;
+    const dgExportM = await import("./docgen/export");
+    exportGeneratedDocument = dgExportM.exportGeneratedDocument;
     const dgJobsM = await import("./docgen/jobs");
     createDocgenJob = dgJobsM.createDocgenJob;
     getDocgenJob = dgJobsM.getDocgenJob;
@@ -200,10 +257,27 @@ async function loadDependencies() {
   await tick();
 
   try {
+    // Auto-heal missing comms DB tables before loading comms routes
+    const dbInitM = await import("./comms/db-init");
+    await dbInitM.initCommsDatabase();
+  } catch (e) {
+    console.warn("[Routes] Comms DB init failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
     const sgM = await import("./comms/signaling");
     initSignalingServer = sgM.initSignalingServer;
     const ssM = await import("./comms/socket-signaling");
     initSocketSignaling = ssM.initSocketSignaling;
+    try {
+      const ccSock = await import("./comms/cyrus-comm-socket");
+      initCyrusCommSocketSignaling = ccSock.initCyrusCommSocketSignaling;
+    } catch (cce) {
+      console.warn(
+        "[Routes] cyrus-comm-socket failed (non-fatal):",
+        cce instanceof Error ? cce.message : String(cce),
+      );
+    }
     const stM = await import("./comms/store");
     enqueueMessage = stM.enqueueMessage;
     dequeueMessages = stM.dequeueMessages;
@@ -286,6 +360,14 @@ async function loadDependencies() {
   await tick();
 
   try {
+    const assetM = await import("./assets/asset-routes");
+    assetRouter = assetM.assetRouter;
+  } catch (e) {
+    console.warn("[Routes] Failed to load asset routes (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+  await tick();
+
+  try {
     const qbM = await import("./ai/quantum-bridge-client");
     quantumBridge = qbM.quantumBridge;
     const qrfM = await import("./ai/quantum-response-formatter");
@@ -303,13 +385,17 @@ async function loadDependencies() {
     console.warn("[Routes] Failed to load health integrations (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 
-  try {
-    const imgRM = await import("./replit_integrations/image/routes");
-    registerImageRoutes = imgRM.registerImageRoutes;
-    const imgCM = await import("./replit_integrations/image/client");
-    generateImage = imgCM.generateImage;
-  } catch (e) {
-    console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+  if (!disableReplitIntegrations) {
+    try {
+      const imgRM = await import("./replit_integrations/image/routes");
+      registerImageRoutes = imgRM.registerImageRoutes;
+      const imgCM = await import("./replit_integrations/image/client");
+      generateImage = imgCM.generateImage;
+    } catch (e) {
+      console.warn("[Routes] Failed to load image modules (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    console.log("[Routes] CYRUS_DISABLE_REPLIT_INTEGRATIONS=true — skipping Replit image integrations");
   }
   await tick();
 
@@ -510,6 +596,86 @@ const getOpenAIClient = (): OpenAI | AzureOpenAI => {
   return openai;
 };
 
+function clampAnalysisChunks(maxChunksRaw: string | undefined): number | undefined {
+  const cap = parseMaxAnalysisChunks();
+  if (!maxChunksRaw) return undefined;
+  const n = parseInt(String(maxChunksRaw), 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(cap, Math.max(1, n));
+}
+
+/** Safe disk path for chat uploads served as `/uploads/<file>`. */
+function uploadsDiskPathFromPublicUrl(url: string): string | null {
+  const u = String(url || "").trim();
+  if (!u.startsWith("/uploads/")) return null;
+  const base = path.basename(u);
+  if (!base || base === "." || base === "..") return null;
+  return path.join(process.cwd(), "public", "uploads", base);
+}
+
+/**
+ * Inline video/document context for /api/cyrus/infer using the same extraction pipeline as file analysis
+ * (audio transcription + sampled frame OCR when available).
+ */
+async function enrichCyrusMessageWithUploads(message: string, context: unknown): Promise<string> {
+  if (!extractFile) return message;
+  const ctx = context as
+    | { uploadedFile?: { url?: string; type?: string; mimetype?: string; name?: string } }
+    | undefined;
+  const uf = ctx?.uploadedFile;
+  if (!uf || typeof uf.url !== "string" || !uf.url.trim()) return message;
+
+  const mimetype = typeof uf.mimetype === "string" ? uf.mimetype : "";
+  const fileType = typeof uf.type === "string" ? uf.type : "";
+  const isVideo =
+    fileType === "video" ||
+    mimetype.startsWith("video/") ||
+    /\.(mp4|webm|mov|m4v|mkv|ogv|avi)(\?.*)?$/i.test(uf.url);
+
+  if (!isVideo) {
+    if (fileType && fileType !== "image") {
+      return `${message}\n\n[FILE REFERENCE] ${uf.name || "upload"} (${mimetype || "unknown"}) — ${uf.url}`;
+    }
+    return message;
+  }
+
+  const absPath = uploadsDiskPathFromPublicUrl(uf.url);
+  if (!absPath) {
+    return `${message}\n\n[VIDEO] Could not resolve upload path for: ${uf.url}`;
+  }
+
+  try {
+    const buffer = await fs.readFile(absPath);
+    const ext = await extractFile(buffer, mimetype || undefined);
+    const parts: string[] = [message, "", "[VIDEO — extracted from uploaded file]"];
+    if (ext.transcript?.trim()) {
+      parts.push("Audio / speech (best effort):", ext.transcript.trim(), "");
+    }
+    const frameText =
+      Array.isArray(ext.frames)
+        ? ext.frames.map((f: { ocrText?: string }) => f?.ocrText).filter(Boolean).join("\n")
+        : "";
+    if (frameText.trim()) {
+      parts.push("Sampled frame / visual notes:", frameText.trim(), "");
+    }
+    if (ext.warnings?.length) {
+      parts.push(`Extraction notes: ${ext.warnings.join("; ")}`, "");
+    }
+    const hasContent = Boolean(ext.transcript?.trim() || frameText.trim() || ext.text?.trim());
+    if (!hasContent) {
+      parts.push(
+        "No speech or on-screen text was extracted. Describe what you need from the video, or use a common format (e.g. MP4 with AAC audio).",
+      );
+    } else if (ext.text?.trim()) {
+      parts.push("Additional text extraction:", ext.text.trim().slice(0, 12_000));
+    }
+    return parts.join("\n");
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return `${message}\n\n[VIDEO] Failed to process upload: ${detail}`;
+  }
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: path.join(process.cwd(), "public", "uploads"),
@@ -518,7 +684,7 @@ const upload = multer({
       cb(null, uniqueName);
     },
   }) as StorageEngine,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: parseMaxUploadFileBytes() },
 });
 
 export async function registerRoutes(
@@ -526,20 +692,231 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await loadDependencies();
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
-  if (initSignalingServer) {
+  try {
+    const sfuM = await import("./comms/sfu/sfu-manager.js");
+    await sfuM.initCyrusSfu();
+  } catch (e) {
+    console.warn("[SFU] init skipped (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  const multiSignalingCompatEnabled =
+    String(process.env.CYRUS_ENABLE_MULTI_SIGNALING_COMPAT || "true").toLowerCase() !== "false";
+  const legacyWsRequested =
+    String(process.env.CYRUS_ENABLE_LEGACY_WS_SIGNALING || "true").toLowerCase() !== "false";
+  const legacyWsEnabled = multiSignalingCompatEnabled && legacyWsRequested;
+  if (initSignalingServer && legacyWsEnabled) {
     try { initSignalingServer(httpServer); } catch (e) { console.warn("[Routes] initSignalingServer failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+  } else if (initSignalingServer) {
+    if (legacyWsRequested && !multiSignalingCompatEnabled) {
+      console.warn("[Routes] Ignoring CYRUS_ENABLE_LEGACY_WS_SIGNALING because multi-signaling compat is disabled");
+    }
+    console.log(
+      "[Routes] Legacy /ws signaling disabled (set CYRUS_ENABLE_MULTI_SIGNALING_COMPAT=true and CYRUS_ENABLE_LEGACY_WS_SIGNALING=true to re-enable)",
+    );
   }
   if (initSocketSignaling) {
     try { initSocketSignaling(httpServer); } catch (e) { console.warn("[Routes] initSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
-  console.log("[Socket.IO] Real-time communication server active");
+  const secondaryCommPathRequested =
+    String(process.env.CYRUS_ENABLE_SECONDARY_COMM_SIGNALING || "").toLowerCase() === "true";
+  const secondaryCommPathEnabled = multiSignalingCompatEnabled && secondaryCommPathRequested;
+  if (initCyrusCommSocketSignaling && secondaryCommPathEnabled) {
+    try {
+      initCyrusCommSocketSignaling(httpServer);
+    } catch (e) {
+      console.warn("[Routes] initCyrusCommSocketSignaling failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else if (initCyrusCommSocketSignaling) {
+    if (secondaryCommPathRequested && !multiSignalingCompatEnabled) {
+      console.warn("[Routes] Ignoring CYRUS_ENABLE_SECONDARY_COMM_SIGNALING because multi-signaling compat is disabled");
+    }
+    console.log(
+      "[Routes] Secondary /cyrus-comm-io signaling disabled (set CYRUS_ENABLE_MULTI_SIGNALING_COMPAT=true and CYRUS_ENABLE_SECONDARY_COMM_SIGNALING=true to re-enable)",
+    );
+  }
+  console.log("[Socket.IO] Real-time communication server active on /cyrus-io");
+
+  if (commsOnlyMode) {
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — registering comms HTTP routes only");
+
+    app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
+      try {
+        const m = await import("./comms/cyrus-comm-config.js");
+        const link = typeof req.query?.link === "string" ? req.query.link : undefined;
+        res.json(m.getCyrusCommWebRtcConfigResponse({ link }));
+      } catch {
+        res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
+      }
+    });
+
+    if (registerCommsRoutes) {
+      try {
+        registerCommsRoutes(app);
+      } catch (e) {
+        console.warn(
+          "[Routes] registerCommsRoutes failed (non-fatal):",
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    }
+
+    // Minimal upload fallback for comms-only mode: keep file-sharing alive even
+    // when broader content/DB pipelines are intentionally skipped.
+    app.post("/api/files/upload", upload.single("file"), async (req: Request & { file?: MulterFile }, res) => {
+      const requestId = `files-upload-comms-only-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        if (!req.file) {
+          console.warn("[Files][upload:reject:no-file]", { requestId, mode: "comms-only" });
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+        console.log("[Files][upload:success]", {
+          requestId,
+          mode: "comms-only",
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+        });
+        return res.json({
+          id: `upl_${Date.now()}`,
+          userId: req.body?.userId || null,
+          originalName: req.file.originalname,
+          filename: req.file.filename,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          url: `/uploads/${req.file.filename}`,
+          _persisted: false,
+          mode: "comms-only",
+        });
+      } catch (error) {
+        console.error("[Files][upload:error]", {
+          requestId,
+          mode: "comms-only",
+          error: error instanceof Error ? error.stack || error.message : String(error),
+        });
+        return res.status(500).json({ error: "Failed to upload file" });
+      }
+    });
+
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — skipping non-comms HTTP route registration");
+    return httpServer;
+  }
+
+  // ===============================================
+  // LOGOUT ALL DEVICES ENDPOINT
+  // ===============================================
+  app.post("/api/logout-all", async (req: any, res) => {
+    // Resolve the authenticated user from session or token
+    const user = req.user || req.session?.user;
+    if (!user?.id) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const userId: string = user.id;
+
+    try {
+      // 1. Delete all PostgreSQL sessions for this user (connect-pg-simple stores
+      //    sessions in a `sessions` table; the sess column is JSONB so we can
+      //    filter by the embedded user id).
+      try {
+        const { pool: pgPool } = await import("./db.js");
+        await pgPool.query(
+          `DELETE FROM sessions WHERE sess->>'user' IS NOT NULL
+             AND (sess->'user'->>'id' = $1 OR sess->>'userId' = $1)`,
+          [userId],
+        );
+      } catch (dbErr) {
+        // Non-fatal: sessions table may not exist when using in-memory store
+        console.warn("[logout-all] Session DB cleanup skipped:", dbErr instanceof Error ? dbErr.message : String(dbErr));
+      }
+
+      // 2. Broadcast FORCE_LOGOUT over Socket.IO and disconnect all sockets for
+      //    this user so every open tab / device is kicked in real-time.
+      try {
+        const { broadcastForceLogout } = await import("./comms/socket-signaling.js");
+        broadcastForceLogout(userId);
+      } catch (wsErr) {
+        console.warn("[logout-all] Socket broadcast skipped:", wsErr instanceof Error ? wsErr.message : String(wsErr));
+      }
+
+      // 3. Destroy the current server-side session (if any) so this request's
+      //    cookie is also invalidated immediately.
+      if (req.session?.destroy) {
+        await new Promise<void>((resolve) => req.session.destroy(() => resolve()));
+      }
+
+      console.log(`[logout-all] All sessions invalidated for user ${userId}`);
+      return res.json({ success: true, message: "Logged out from all devices" });
+    } catch (error) {
+      console.error("[logout-all] Error:", error);
+      return res.status(500).json({ error: "Failed to logout from all devices" });
+    }
+  });
+
+  app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
+    try {
+      const m = await import("./comms/cyrus-comm-config.js");
+      const link = typeof req.query?.link === "string" ? req.query.link : undefined;
+      res.json(m.getCyrusCommWebRtcConfigResponse({ link }));
+    } catch {
+      res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
+    }
+  });
   if (registerCommsRoutes) {
     try { registerCommsRoutes(app); } catch (e) { console.warn("[Routes] registerCommsRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
+
+  try {
+    const { docRouter } = await import("./ingestion/doc-routes.js");
+    app.use(docRouter);
+  } catch (e) {
+    console.warn("[Routes] doc calibration routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { visionRouter } = await import("./scan/vision-routes.js");
+    app.use(visionRouter);
+  } catch (e) {
+    console.warn("[Routes] vision calibration routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { missionRouter } = await import("./ai/mission-routes.js");
+    app.use(missionRouter);
+  } catch (e) {
+    console.warn("[Routes] mission autonomy routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { intelligenceAutomationRouter } = await import("./ai/intelligence-automation-routes.js");
+    app.use(intelligenceAutomationRouter);
+  } catch (e) {
+    console.warn("[Routes] intelligence automation routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { intelligenceGrowthRouter } = await import("./intelligence/intelligence-growth-routes.js");
+    app.use(intelligenceGrowthRouter);
+  } catch (e) {
+    console.warn("[Routes] intelligence growth routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
   if (registerAdvancedUpgradeRoutes) {
     try { registerAdvancedUpgradeRoutes(app); } catch (e) { console.warn("[Routes] registerAdvancedUpgradeRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
+
+  // Module retirement: biology/security/maps are intentionally removed.
+  app.use("/api/interactive/biology", (_req, res) => {
+    res.status(410).json({ error: "Biology module removed" });
+  });
+  app.use("/api/interactive/security", (_req, res) => {
+    res.status(410).json({ error: "Security module removed" });
+  });
+  app.use("/api/nav", (_req, res) => {
+    res.status(410).json({ error: "Maps module removed" });
+  });
+
   if (registerInteractiveRoutes) {
     try { registerInteractiveRoutes(app); } catch (e) { console.warn("[Routes] registerInteractiveRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
   }
@@ -555,6 +932,50 @@ export async function registerRoutes(
   } else {
     app.get('/api/brain/status', (_req, res) => res.json({ status: 'unavailable', reason: 'Brain module failed to load' }));
   }
+
+  // ===============================================
+  // DB HEALTH CHECK ENDPOINT
+  // ===============================================
+
+  app.get("/api/health/db", async (_req, res) => {
+    try {
+      let commEngine: any = null;
+      try {
+        const ceM = await import("./comms/communication-engine.js");
+        commEngine = ceM.communicationEngine;
+      } catch (_e) {
+        // module not loaded yet — return basic status
+      }
+
+      if (commEngine) {
+        const status = commEngine.getDbStatus();
+        return res.json({
+          ok: status.dbConnected && !status.fallbackMode,
+          ...status,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback: probe the db-service directly
+      const { checkDbHealth, getDbHealthState } = await import("./comms/db-service.js");
+      const healthy = await checkDbHealth();
+      const state = getDbHealthState();
+      return res.json({
+        ok: healthy,
+        dbConnected: healthy,
+        fallbackMode: false,
+        circuitOpen: state.circuitOpen,
+        consecutiveFailures: state.consecutiveFailures,
+        lastError: state.lastError,
+        lastCheckedAt: state.lastCheckedAt?.toISOString() ?? null,
+        queue: { size: 0, oldestAgeMs: 0, totalEnqueued: 0, totalFlushed: 0, totalDropped: 0, successRate: 1 },
+        fallbackStoreSizes: { messages: 0, calls: 0, rooms: 0, users: 0, groups: 0 },
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: formatError(e), checkedAt: new Date().toISOString() });
+    }
+  });
 
   // Health Device Integration Routes
   app.get("/api/health/providers", async (req, res) => {
@@ -868,8 +1289,21 @@ export async function registerRoutes(
 
   // Upload file
   app.post("/api/files/upload", upload.single("file"), async (req: Request & { file?: MulterFile }, res) => {
+    const requestId = `files-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const memStart = process.memoryUsage();
+    console.log("[Files][upload:start]", {
+      requestId,
+      hasFile: Boolean(req.file),
+      originalName: req.file?.originalname || null,
+      mimeType: req.file?.mimetype || null,
+      sizeBytes: req.file?.size || 0,
+      userId: req.body?.userId || null,
+      heapUsedMb: Number((memStart.heapUsed / (1024 * 1024)).toFixed(2)),
+      rssMb: Number((memStart.rss / (1024 * 1024)).toFixed(2)),
+    });
     try {
       if (!req.file) {
+        console.warn("[Files][upload:reject:no-file]", { requestId });
         return res.status(400).json({ error: "No file uploaded" });
       }
 
@@ -884,13 +1318,25 @@ export async function registerRoutes(
 
       const parsed = insertUploadedFileSchema.safeParse(fileData);
       if (!parsed.success) {
+        console.warn("[Files][upload:reject:schema]", { requestId });
         return res.status(400).json({ error: "Invalid file data", details: parsed.error });
       }
 
       const uploadedFile = await storage.createUploadedFile(parsed.data);
+      const memEnd = process.memoryUsage();
+      console.log("[Files][upload:success]", {
+        requestId,
+        uploadedId: uploadedFile?.id || null,
+        url: uploadedFile?.url || null,
+        heapUsedMb: Number((memEnd.heapUsed / (1024 * 1024)).toFixed(2)),
+        rssMb: Number((memEnd.rss / (1024 * 1024)).toFixed(2)),
+      });
       res.json(uploadedFile);
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("[Files][upload:error]", {
+        requestId,
+        error: error instanceof Error ? error.stack || error.message : String(error),
+      });
       res.status(500).json({ error: "Failed to upload file" });
     }
   });
@@ -907,7 +1353,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -998,7 +1444,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
       const buffer = req.file.buffer || (req.file.path ? await (await import("fs/promises")).readFile(req.file.path) : null);
       if (!buffer) {
         return res.status(500).json({ success: false, error: "Unable to read uploaded file buffer" });
@@ -1075,7 +1521,7 @@ export async function registerRoutes(
       const docHint = (req.body.docHint as string | undefined)?.trim() || undefined;
       const analysisCommand = (req.body.analysisCommand as string | undefined)?.trim() || undefined;
       const maxChunksRaw = req.body.maxChunks as string | undefined;
-      const maxChunks = maxChunksRaw ? Math.min(120, Math.max(1, parseInt(String(maxChunksRaw), 10))) : undefined;
+      const maxChunks = clampAnalysisChunks(maxChunksRaw);
 
       const job = await createAnalysisJob({
         userId: null, // TODO: get from auth
@@ -1154,7 +1600,7 @@ export async function registerRoutes(
   // Room creation (simple)
   app.post("/api/comms/room", (_req, res) => {
     const roomId = uuid();
-    res.json({ roomId, joinUrl: `/ws?room=${roomId}` });
+    res.json({ roomId, signalingPath: "/cyrus-io" });
   });
 
   // Reminders
@@ -1167,6 +1613,132 @@ export async function registerRoutes(
 
   app.get("/api/reminders", (_req, res) => {
     res.json({ reminders: listReminders() });
+  });
+
+  // Free RSS news feed — multi-source: BBC, NASA, Reuters, Space.com, Al Jazeera, Defense, TechCrunch
+  app.get("/api/news/rss", async (_req, res) => {
+    try {
+      const feeds = [
+        /* BBC News */
+        { url: "https://feeds.bbci.co.uk/news/world/rss.xml",                   category: "World",      source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/technology/rss.xml",              category: "Technology", source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/business/rss.xml",                category: "Finance",    source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", category: "Science",    source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/health/rss.xml",                  category: "Health",     source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/news/politics/rss.xml",                category: "Politics",   source: "BBC News"     },
+        { url: "https://feeds.bbci.co.uk/sport/rss.xml",                        category: "Sport",      source: "BBC Sport"    },
+        /* NASA */
+        { url: "https://www.nasa.gov/rss/dyn/breaking_news.rss",                category: "NASA",       source: "NASA"         },
+        { url: "https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss",          category: "Space",      source: "NASA"         },
+        /* Space */
+        { url: "https://www.space.com/feeds/all",                               category: "Space",      source: "Space.com"    },
+        /* Current Affairs / Global */
+        { url: "https://www.aljazeera.com/xml/rss/all.xml",                     category: "World",      source: "Al Jazeera"   },
+        { url: "https://rss.dw.com/rss/rss-en-world",                           category: "World",      source: "DW News"      },
+        /* Technology */
+        { url: "https://feeds.feedburner.com/TechCrunch/",                      category: "Technology", source: "TechCrunch"   },
+        { url: "https://www.wired.com/feed/rss",                                category: "Technology", source: "WIRED"        },
+        /* Military & Defense */
+        { url: "https://www.defensenews.com/arc/outboundfeeds/rss/?hierarchy=news", category: "Military", source: "Defense News" },
+        { url: "https://breakingdefense.com/feed/",                             category: "Military",   source: "Breaking Defense" },
+        /* Finance */
+        { url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                category: "Finance",    source: "WSJ Markets"  },
+        /* Sport extras */
+        { url: "https://feeds.skysports.com/feeds/topstories/rss.xml",          category: "Sport",      source: "Sky Sports"   },
+      ];
+
+      const extract = (block: string, tag: string): string => {
+        const cdata = block.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i"));
+        if (cdata) return cdata[1].trim();
+        const plain = block.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`, "i"));
+        return plain ? plain[1].trim() : "";
+      };
+
+      const extractImage = (block: string): string => {
+        // 1. BBC media:thumbnail
+        const bbc = block.match(/media:thumbnail[^>]*url="([^"]+)"/i);
+        if (bbc) return bbc[1].replace(/standard\/\d+/g, "standard/624");
+        // 2. media:content url with image
+        const mc = block.match(/media:content[^>]*url="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
+        if (mc) return mc[1];
+        // 3. enclosure url (podcasts/news images)
+        const enc = block.match(/<enclosure[^>]*url="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
+        if (enc) return enc[1];
+        // 4. img tag in description
+        const img = block.match(/<img[^>]+src=["']([^"']+\.(jpg|jpeg|png|webp)[^"']*)["']/i);
+        if (img) return img[1];
+        // 5. NASA image link
+        const nasaImg = block.match(/https:\/\/[^"'\s]+(?:jpg|jpeg|png|webp)/i);
+        if (nasaImg) return nasaImg[0];
+        return "";
+      };
+
+      const items: any[] = [];
+      const fetchJobs = feeds.map(async (feed) => {
+        try {
+          const r = await fetch(feed.url, {
+            signal: AbortSignal.timeout(7000),
+            headers: { "User-Agent": "CYRUS/3.0 NewsAggregator RSS-Reader/1.0" },
+          });
+          if (!r.ok) return;
+          const xml = await r.text();
+          const rawItems = xml.split(/<item[\s>]/i).slice(1, 4);
+          for (const block of rawItems) {
+            const title    = extract(block, "title");
+            const link     = extract(block, "link");
+            const desc     = extract(block, "description").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            const pubDate  = extract(block, "pubDate") || extract(block, "dc:date") || extract(block, "updated");
+            const imageUrl = extractImage(block);
+            if (!title || title.length < 5) continue;
+            items.push({
+              id:          `${feed.category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              title,
+              summary:     desc.slice(0, 350),
+              source:      feed.source,
+              category:    feed.category,
+              url:         link,
+              imageUrl:    imageUrl || undefined,
+              publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+            });
+          }
+        } catch { /* skip failing feed */ }
+      });
+
+      await Promise.all(fetchJobs);
+      items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      res.json({ items: items.slice(0, 30) });
+    } catch (err: any) {
+      res.status(500).json({ error: "RSS fetch failed", detail: err?.message });
+    }
+  });
+
+  // In-app article reader — expands headline + summary into full readable article via OpenAI
+  app.post("/api/news/article", async (req: any, res) => {
+    const { title, summary, category } = req.body || {};
+    if (!title) return res.status(400).json({ error: "title required" });
+    try {
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) return res.json({ article: summary || "No expanded content available." });
+      const { OpenAI } = await import("openai");
+      const client = new OpenAI({ apiKey: openaiKey });
+      const completion = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content: "You are a BBC-style news journalist. Write an engaging, factual news article (3–4 paragraphs) based on the headline and summary below. Do NOT fabricate quotes or unconfirmed facts. Use a clear, professional journalistic tone. Provide real context and background for the story.",
+          },
+          {
+            role: "user",
+            content: `Category: ${category || "General"}\nHeadline: ${title}\nSummary: ${summary || "(no summary)"}\n\nWrite the full article:`,
+          },
+        ],
+      });
+      res.json({ article: completion.choices[0]?.message?.content || summary });
+    } catch (err: any) {
+      res.status(500).json({ error: "Article generation failed", article: summary });
+    }
   });
 
   // News fetch (server-side proxy)
@@ -1252,6 +1824,52 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Docgen generate failed:", err);
       res.status(500).json({ error: "Document generation failed", detail: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/docgen/export", async (req, res) => {
+    try {
+      if (!exportGeneratedDocument) {
+        return res.status(503).json({ error: "Document export service unavailable" });
+      }
+      const {
+        format,
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        attachments,
+        wordCount,
+        estimatedPages,
+      } = req.body || {};
+      const normalizedFormat = String(format || "md").toLowerCase();
+      const allowed = new Set(["pdf", "docx", "html", "md", "txt", "json"]);
+      if (!allowed.has(normalizedFormat)) {
+        return res.status(400).json({ error: "Unsupported export format" });
+      }
+
+      const file = await exportGeneratedDocument(normalizedFormat, {
+        title,
+        rendered,
+        htmlRendered,
+        docType,
+        audience,
+        confidence,
+        sections,
+        attachments,
+        wordCount,
+        estimatedPages,
+      });
+
+      res.setHeader("Content-Type", file.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+      return res.send(file.data);
+    } catch (err: any) {
+      console.error("Docgen export failed:", err);
+      return res.status(500).json({ error: "Document export failed", detail: err?.message || String(err) });
     }
   });
 
@@ -2309,12 +2927,12 @@ Format your response in a clear, structured manner.`
       }
     };
 
-    const jsonOfflineNoKey = (userMessage: string, hasImage: boolean) => {
+    const jsonOfflineNoKey = (userMessage: string, requiresCloudMedia: boolean) => {
       const identity = cyrusSoul.getIdentity();
       const preview = String(userMessage).replace(/\s+/g, " ").trim().slice(0, 280);
       const ellip = preview.length >= 280 ? "…" : "";
-      const response = hasImage
-        ? "Image analysis requires an OpenAI-compatible API key on the server. I cannot inspect images in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
+      const response = requiresCloudMedia
+        ? "Image and video chat requires an OpenAI-compatible API key on the server. I cannot run vision or multimodal understanding in offline mode. Set OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY), restart, and try again."
         : `I'm running in **offline mode** (no API key on the server), so I can't call the cloud model. I received: "${preview}${ellip}"\n\nSet **OPENAI_API_KEY** or **AI_INTEGRATIONS_OPENAI_API_KEY** in the environment and restart for full AI replies.`;
       cyrusSoul.processThought(userMessage, "offline_mode");
       return res.json({
@@ -2332,11 +2950,26 @@ Format your response in a clear, structured manner.`
         return res.status(400).json({ error: "Message is required" });
       }
 
+      const hasUploadContext = Boolean(
+        context &&
+          typeof context === "object" &&
+          (context as { uploadedFile?: unknown }).uploadedFile &&
+          typeof (context as { uploadedFile?: unknown }).uploadedFile === "object",
+      );
+      const uf = hasUploadContext
+        ? (context as { uploadedFile: { type?: string; mimetype?: string } }).uploadedFile
+        : null;
+      const hasVideoUpload = Boolean(
+        uf &&
+          (uf.type === "video" ||
+            (typeof uf.mimetype === "string" && uf.mimetype.startsWith("video/"))),
+      );
+
       // Track each inference so learning/evolution metrics reflect real usage.
       taskTrackingId = adaptiveLearning.generateTaskId();
       adaptiveLearning.startTaskTracking(taskTrackingId, "general_conversation", {
         message,
-        hasImage: Boolean(imageData),
+        hasImage: Boolean(imageData) || hasVideoUpload,
         hasConversationHistory: Array.isArray(conversationHistory) && conversationHistory.length > 0,
       });
 
@@ -2344,7 +2977,7 @@ Format your response in a clear, structured manner.`
       const requiresAgentExecution = isAgentCommand(message);
 
       // If it's an agent command, execute it autonomously
-      if (requiresAgentExecution && !imageData) {
+      if (requiresAgentExecution && !imageData && !hasUploadContext) {
         console.log("[CYRUS] Autonomous agent activated for command:", message);
         const { response, agentResult } = await executeAgentTask(message);
 
@@ -2374,18 +3007,19 @@ Format your response in a clear, structured manner.`
       }
 
       if (!openai) {
-        const hasImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const hasVisionImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+        const requiresCloudMedia = hasVisionImage || hasVideoUpload;
         await adaptiveLearning.learnFromConversation(String(message), "offline_mode_no_api_key", {
           moduleContext: "offline_mode",
         });
         await adaptiveLearning.endTaskTracking(
           taskTrackingId,
           true,
-          { offlineMode: true, hasImage },
+          { offlineMode: true, hasImage: requiresCloudMedia },
           "offline_fallback_response",
         );
         taskTrackingId = null;
-        return jsonOfflineNoKey(String(message), hasImage);
+        return jsonOfflineNoKey(String(message), requiresCloudMedia);
       }
 
       // Standard CYRUS response path
@@ -2434,13 +3068,15 @@ If you detect a command that requires physical device interaction, inform the op
         }
       }
 
-      // Build the user message content
+      const enrichedMessage = await enrichCyrusMessageWithUploads(String(message), context);
+
+      // Build the user message content (video/document text is inlined via enrichment)
       const fullMessage = contextInfo
-        ? `${message}\n\n[CONTEXT]${contextInfo}`
-        : message;
+        ? `${enrichedMessage}\n\n[CONTEXT]${contextInfo}`
+        : enrichedMessage;
 
       // Check if we have image data for vision analysis
-      if (imageData && typeof imageData === 'string' && imageData.startsWith('data:image')) {
+      if (imageData && typeof imageData === "string" && imageData.startsWith("data:image")) {
         // Use vision capability with image
         chatMessages.push({
           role: "user",
@@ -3531,22 +4167,11 @@ Return ONLY valid JSON.`
     }
   });
 
-  // Register audio/voice routes (guard against load failures)
-  if (registerAudioRoutes) {
-    try { registerAudioRoutes(app); } catch (e) { console.warn("[Routes] registerAudioRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
-  }
-  if (registerImageRoutes) {
-    try { registerImageRoutes(app); } catch (e) { console.warn("[Routes] registerImageRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
-  }
-  if (registerDeviceRoutes) {
-    try { registerDeviceRoutes(app); } catch (e) { console.warn("[Routes] registerDeviceRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
-  }
-  if (registerNavRoutes) {
-    try { registerNavRoutes(app); } catch (e) { console.warn("[Routes] registerNavRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
-  }
-  if (registerDroneRoutes) {
-    try { registerDroneRoutes(app); } catch (e) { console.warn("[Routes] registerDroneRoutes failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
-  }
+  // Register audio/voice routes
+  registerAudioRoutes(app);
+  registerImageRoutes(app);
+  registerDeviceRoutes(app);
+  registerDroneRoutes(app);
 
 
   app.get("/api/nexus/tools", async (_req, res) => {
@@ -4011,8 +4636,31 @@ Return ONLY valid JSON.`
   // Use data collection routes
   app.use("/api/data-collection", dataCollectionRoutes);
 
+  if (assetRouter) {
+    app.use(assetRouter);
+  }
+
   // Use humanoid routes
   app.use("/api/humanoid", humanoidRoutes);
+
+  // ── PShare broadcast posts (in-memory, real-time for all active users) ──
+  const pSharePosts: Array<{
+    id: string; user: string; content: string; ts: string; avatar?: string;
+  }> = [];
+
+  app.get("/api/pshare/posts", (_req, res) => {
+    res.json(pSharePosts.slice(-60).reverse());
+  });
+
+  app.post("/api/pshare/posts", (req: any, res) => {
+    const user    = req.session?.user?.username ?? req.body?.user ?? "OPERATOR";
+    const content = (req.body?.content ?? "").trim().slice(0, 500);
+    if (!content) return res.status(400).json({ error: "empty" });
+    const post = { id: Date.now().toString(), user, content, ts: new Date().toISOString() };
+    pSharePosts.push(post);
+    if (pSharePosts.length > 200) pSharePosts.splice(0, pSharePosts.length - 200);
+    res.json(post);
+  });
 
   return httpServer;
 }

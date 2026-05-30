@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -13,7 +14,86 @@ const uiRoot = process.env.CYRUS_UI_ROOT
 const rootReactQuery = path.resolve(__dirname, "node_modules/@tanstack/react-query");
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.svg", "pwa-icon.svg", "pwa-icon-192.png", "pwa-icon-512.png", "apple-touch-icon.png"],
+      manifest: {
+        id: "/",
+        name: "CYRUS AI — Super-Intelligence Assistant",
+        short_name: "CYRUS",
+        description: "CYRUS fused stack: dashboard, Command Center modules, and real-time comms.",
+        theme_color: "#0f172a",
+        background_color: "#0f172a",
+        display: "standalone",
+        orientation: "any",
+        scope: "/",
+        start_url: "/",
+        categories: ["productivity", "utilities"],
+        icons: [
+          {
+            src: "/pwa-icon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
+        shortcuts: [
+          {
+            name: "Dashboard",
+            short_name: "Home",
+            url: "/",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
+          },
+          {
+            name: "Comms",
+            short_name: "Comms",
+            url: "/comms",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
+          },
+        ],
+      },
+      workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        navigateFallback: "index.html",
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/health\//,
+          /^\/uploads\//,
+          /^\/images\//,
+          /^\/videos\//,
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts",
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
   resolve: {
     dedupe: ["@tanstack/react-query", "react", "react-dom"],
     alias: {

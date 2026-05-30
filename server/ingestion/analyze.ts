@@ -1,5 +1,12 @@
+import { parseMaxAnalysisChunks } from "../../shared/cyrus-document-limits.js";
 import { localLLM } from "../ai/local-llm-client.js";
 import { ExtractionResult } from "./extract.js";
+import {
+    applyDocCalibration,
+    buildDocCalibrationMeta,
+    type DocAnalysisSignals,
+} from "./doc-scoring-core.js";
+import { loadDocModel } from "./doc-model.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
@@ -7,7 +14,12 @@ const useLocalLLM = process.env.USE_LOCAL_LLM !== "false";
 let openaiClient: any = null;
 
 const CHUNK_SIZE = 24_000;
-const MAX_CHUNKS = 120;
+const MAX_CHUNKS = parseMaxAnalysisChunks();
+
+const LEGAL_BRIDGE_BODY_CAP = (() => {
+    const raw = parseInt(process.env.CYRUS_LEGAL_BRIDGE_MAX_CONTENT_CHARS || "800000", 10);
+    return Number.isFinite(raw) ? Math.min(8_000_000, Math.max(50_000, raw)) : 800_000;
+})();
 
 async function initOpenAIClient() {
     if (!openaiClient && !useLocalLLM && openaiApiKey) {
@@ -56,6 +68,12 @@ export interface AnalysisResult {
     chunksAnalyzed?: number;
     entities?: Array<{ type: string; value: string }>;
     riskLevel?: "low" | "medium" | "high";
+    qualityScores?: Record<string, number>;
+    calibration?: {
+        algorithmVersion: string;
+        calibrated: boolean;
+        overallQuality?: number;
+    };
 }
 
 interface ChunkInsight {
@@ -294,7 +312,7 @@ async function performLegalAnalysis(content: string, jurisdiction: string, stric
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                content: content.slice(0, 120_000),
+                content: content.slice(0, LEGAL_BRIDGE_BODY_CAP),
                 jurisdiction,
                 strictLegalReview: strictReview,
             }),
@@ -439,6 +457,35 @@ export async function analyzeExtraction(ext: ExtractionResult, options: Analysis
         return { type, value };
     });
 
+    const finalRiskLevel = legalBridge?.riskLevel || riskFromIssues(mergedIssues.length, Boolean(options.strictLegalReview));
+    const finalConfidence = legalBridge?.confidence || confidence;
+    const finalDocType = legalBridge?.documentType || documentType;
+    const finalTypeConf = legalBridge?.documentTypeConfidence || documentTypeConfidence;
+    const finalSummary = legalBridge?.summary || summary;
+
+    const docSignals: DocAnalysisSignals = {
+        textLength: aggregateText.length,
+        chunkCount: legalBridge?.chunksAnalyzed || chunks.length,
+        findingsCount: mergedFindings.length,
+        issuesCount: mergedIssues.length,
+        actionsCount: mergedActions.length,
+        citationsCount: mergedCitations.length,
+        entitiesCount: mergedEntities.length,
+        recommendationsCount: mergedRecommendations.length,
+        documentType: finalDocType,
+        documentTypeConfidence: finalTypeConf,
+        riskLevel: finalRiskLevel,
+        confidence: finalConfidence,
+        strictLegalReview: legalBridge?.strictLegalReview ?? Boolean(options.strictLegalReview),
+        jurisdictionSet: Boolean(options.jurisdiction || legalBridge?.jurisdictionApplied),
+        mode: options.mode || "standard",
+        hasLegalBridge: Boolean(legalBridge),
+        mandatoryActions: mergedActions.filter((a) => a.obligation === "Mandatory").length,
+        summaryQuality: Math.min(15, Math.round(finalSummary.length / 120)),
+    };
+
+    const { scores: qualityScores, calibrated, algorithmVersion } = applyDocCalibration(docSignals);
+
     return {
         summary: legalBridge?.summary || summary,
         findings: mergedFindings,
@@ -457,6 +504,13 @@ export async function analyzeExtraction(ext: ExtractionResult, options: Analysis
         citationAnchors: mergedCitations,
         chunksAnalyzed: legalBridge?.chunksAnalyzed || chunks.length,
         entities: mergedEntities,
-        riskLevel: legalBridge?.riskLevel || riskFromIssues(mergedIssues.length, Boolean(options.strictLegalReview)),
+        riskLevel: finalRiskLevel,
+        qualityScores,
+        calibration: {
+            algorithmVersion,
+            calibrated,
+            overallQuality: qualityScores.overall_quality,
+            ...(calibrated ? buildDocCalibrationMeta(loadDocModel()) : {}),
+        },
     };
 }

@@ -17,10 +17,25 @@ import {
   MapPin,
   Smile,
   Signal,
+  Paperclip,
+  Sparkles,
+  Circle,
 } from "lucide-react";
+import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
+import {
+  attachMediaStreamToAudio,
+  attachMediaStreamToVideo,
+  extractAudioOnlyStream,
+} from "../../lib/comms-video-playback";
 import { InCallChat } from "./InCallChat";
 import { ScreenShareView } from "./ScreenShareView";
 import { FloatingReactions, Reaction } from "./FloatingReactions";
+import {
+  cycleCommsMediaFilterMode,
+  getCommsMediaFilterLabel,
+  getCommsMediaFilterMode,
+  type CommsMediaFilterMode,
+} from "../../lib/comms-media-filters";
 
 export interface CallParticipant {
   id: string;
@@ -43,6 +58,8 @@ interface CallViewProps {
   isVideoEnabled: boolean;
   callDuration: number;
   callQuality?: "HD" | "SD" | "Low";
+  /** True while ICE/DTLS or remote tracks are still coming up (avoid “connected but silent” UX). */
+  mediaEstablishing?: boolean;
   isScreenSharing?: boolean;
   screenShareStream?: MediaStream | null;
   screenSharerName?: string;
@@ -52,11 +69,20 @@ interface CallViewProps {
   onStartScreenShare?: () => void;
   onStopScreenShare?: () => void;
   onSendChatMessage?: (message: string) => void;
+  onSendCallMedia?: (file: File, caption: string) => Promise<void>;
   onSendReaction?: (emoji: string, x: number, y: number) => void;
   onShareLocation?: () => void;
   chatMessages?: { senderId: string; senderName: string; message: string; timestamp: string }[];
   reactions?: Reaction[];
   socketRef?: React.MutableRefObject<any>;
+  /** Fires when remote media `play()` is blocked (autoplay policy). */
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
+  isRecording?: boolean;
+  isRecordingUploading?: boolean;
+  recordingDurationSec?: number;
+  remoteRecordingActive?: boolean;
+  remoteRecordingBy?: string;
+  onToggleRecording?: () => void;
 }
 
 interface IncomingCallOverlayProps {
@@ -123,8 +149,11 @@ export function IncomingCallOverlay({
             <PhoneOff className="w-7 h-7 text-white" />
           </button>
           <button
+            type="button"
+            data-testid="comms-accept-call"
             onClick={onAccept}
             className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-600/30 transition-all active:scale-95 animate-pulse"
+            aria-label="Accept call"
           >
             <Phone className="w-7 h-7 text-white" />
           </button>
@@ -139,22 +168,44 @@ export function IncomingCallOverlay({
   );
 }
 
+function RemoteAudioSink({ stream }: { stream: MediaStream | null | undefined }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    void attachMediaStreamToAudio(audioRef.current, extractAudioOnlyStream(stream ?? null), {
+      volume: 1,
+    });
+  }, [stream]);
+
+  if (!stream?.getAudioTracks().length) return null;
+  return <audio ref={audioRef} autoPlay playsInline className="sr-only" />;
+}
+
 function ParticipantVideo({
   participant,
   isSelf,
   gridSize,
+  onRemotePlaybackDiagnostics,
 }: {
   participant: CallParticipant;
   isSelf?: boolean;
   gridSize: number;
+  onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && participant.stream) {
-      videoRef.current.srcObject = participant.stream;
-    }
-  }, [participant.stream]);
+    void attachMediaStreamToVideo(videoRef.current, participant.stream ?? null, {
+      muted: !!isSelf,
+      volume: 1,
+      onPlaybackStarted: () => {
+        if (!isSelf) onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
+      },
+      onPlaybackBlocked: () => {
+        if (!isSelf) onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
+      },
+    });
+  }, [participant.stream, isSelf, onRemotePlaybackDiagnostics]);
 
   const qualityColor =
     participant.connectionQuality === "excellent"
@@ -181,8 +232,8 @@ function ParticipantVideo({
           ref={videoRef}
           autoPlay
           playsInline
-          muted={isSelf}
-          className="w-full h-full object-cover"
+          muted
+          className="h-full w-full object-cover [transform:translateZ(0)]"
         />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
@@ -257,6 +308,7 @@ export function CallView({
   isVideoEnabled,
   callDuration,
   callQuality,
+  mediaEstablishing = false,
   isScreenSharing,
   screenShareStream,
   screenSharerName,
@@ -266,25 +318,58 @@ export function CallView({
   onStartScreenShare,
   onStopScreenShare,
   onSendChatMessage,
+  onSendCallMedia,
   onSendReaction,
   onShareLocation,
   chatMessages = [],
   reactions = [],
   socketRef,
+  onRemotePlaybackDiagnostics,
+  isRecording = false,
+  isRecordingUploading = false,
+  recordingDurationSec = 0,
+  remoteRecordingActive = false,
+  remoteRecordingBy,
+  onToggleRecording,
 }: CallViewProps) {
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaFilterMode, setMediaFilterMode] = useState<CommsMediaFilterMode>(getCommsMediaFilterMode);
   const [pipPosition, setPipPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const callMediaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
+
+  useEffect(() => {
+    const syncMode = () => setMediaFilterMode(getCommsMediaFilterMode());
+    window.addEventListener("cyrus-media-filters-changed", syncMode);
+    return () => window.removeEventListener("cyrus-media-filters-changed", syncMode);
+  }, []);
+
+  const handleCallMediaPick = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !onSendCallMedia) return;
+      setShowChat(true);
+      setMediaUploading(true);
+      try {
+        await onSendCallMedia(file, "");
+      } finally {
+        setMediaUploading(false);
+      }
+    },
+    [onSendCallMedia],
+  );
 
   const handlePipMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -332,8 +417,12 @@ export function CallView({
 
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
+  const remoteParticipant = participants.find((p) => p.id !== currentUserId);
+  const remoteAudioStream = remoteParticipant?.stream ?? null;
+
   return (
-    <div className="fixed inset-0 z-[90] bg-gray-950 flex flex-col">
+    <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
+      <RemoteAudioSink stream={remoteAudioStream} />
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -351,6 +440,35 @@ export function CallView({
             }`}>
               <Signal className="w-3 h-3 inline mr-1" />
               {callQuality}
+            </span>
+          )}
+          {mediaFilterMode !== "off" && (
+            <span
+              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                mediaFilterMode === "studio"
+                  ? "bg-violet-500/20 text-violet-300 border-violet-500/30"
+                  : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+              }`}
+            >
+              <Sparkles className="w-3 h-3 inline mr-1" />
+              {getCommsMediaFilterLabel(mediaFilterMode)}
+            </span>
+          )}
+          {(isRecording || isRecordingUploading) && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/40 bg-rose-500/15 text-rose-200 animate-pulse">
+              <Circle className="w-3 h-3 inline mr-1 fill-rose-400 text-rose-400" />
+              {isRecordingUploading ? "Saving…" : `REC ${formatCallDuration(recordingDurationSec)}`}
+            </span>
+          )}
+          {!isRecording && !isRecordingUploading && remoteRecordingActive && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200/90">
+              <Circle className="w-3 h-3 inline mr-1 fill-rose-400/80 text-rose-400/80" />
+              {remoteRecordingBy ? `${remoteRecordingBy} recording` : "Recording active"}
+            </span>
+          )}
+          {mediaEstablishing && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+              Establishing media…
             </span>
           )}
         </div>
@@ -399,6 +517,7 @@ export function CallView({
                       participant={p}
                       isSelf={p.id === currentUserId}
                       gridSize={totalCount}
+                      onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                     />
                   </div>
                 ))}
@@ -412,6 +531,7 @@ export function CallView({
                   participant={p}
                   isSelf={p.id === currentUserId}
                   gridSize={totalCount}
+                  onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
                 />
               ))}
             </div>
@@ -513,6 +633,7 @@ export function CallView({
             currentUserName={currentUserName}
             messages={chatMessages}
             onSendMessage={onSendChatMessage}
+            onSendMedia={onSendCallMedia}
             onClose={() => setShowChat(false)}
             socketRef={socketRef}
           />
@@ -563,6 +684,29 @@ export function CallView({
           </button>
         )}
 
+        {onSendCallMedia ? (
+          <>
+            <input
+              ref={callMediaInputRef}
+              type="file"
+              accept={COMMS_MEDIA_FILE_ACCEPT}
+              className="hidden"
+              onChange={(e) => void handleCallMediaPick(e)}
+            />
+            <button
+              type="button"
+              disabled={mediaUploading}
+              onClick={() => callMediaInputRef.current?.click()}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                mediaUploading ? "bg-cyan-600/80" : "bg-gray-700/80 hover:bg-gray-600/80"
+              } disabled:opacity-50`}
+              title="Share photo or file"
+            >
+              <Paperclip className="w-5 h-5 text-white" />
+            </button>
+          </>
+        ) : null}
+
         <button
           onClick={() => setShowChat((p) => !p)}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showChat ? "bg-cyan-600 hover:bg-cyan-500" : "bg-gray-700/80 hover:bg-gray-600/80"}`}
@@ -579,6 +723,47 @@ export function CallView({
           </button>
         )}
 
+        <button
+          type="button"
+          onClick={() => setMediaFilterMode(cycleCommsMediaFilterMode())}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+            mediaFilterMode === "off"
+              ? "bg-gray-700/80 hover:bg-gray-600/80"
+              : mediaFilterMode === "studio"
+                ? "bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-600/20"
+                : "bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
+          }`}
+          title={`${getCommsMediaFilterLabel(mediaFilterMode)} — tap to cycle (applies on next call)`}
+        >
+          <Sparkles className="w-5 h-5 text-white" />
+        </button>
+
+        {onToggleRecording && (
+          <button
+            type="button"
+            disabled={isRecordingUploading}
+            onClick={onToggleRecording}
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+              isRecording
+                ? "bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 animate-pulse"
+                : isRecordingUploading
+                  ? "bg-rose-600/60"
+                  : "bg-gray-700/80 hover:bg-gray-600/80"
+            } disabled:opacity-50`}
+            title={
+              isRecordingUploading
+                ? "Saving recording…"
+                : isRecording
+                  ? "Stop recording"
+                  : "Record call"
+            }
+          >
+            <Circle
+              className={`w-5 h-5 ${isRecording ? "fill-white text-white" : "text-white"}`}
+            />
+          </button>
+        )}
+
         {onShareLocation && (
           <button
             onClick={onShareLocation}
@@ -590,8 +775,11 @@ export function CallView({
         )}
 
         <button
+          type="button"
+          data-testid="comms-end-call"
           onClick={onEndCall}
           className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-xl shadow-red-600/30 transition-all active:scale-95"
+          aria-label="End call"
         >
           <PhoneOff className="w-6 h-6 text-white" />
         </button>

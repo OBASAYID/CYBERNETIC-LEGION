@@ -2,7 +2,14 @@
  * Single entry for browser → CYRUS Express (same origin or `VITE_CYRUS_API_BASE`).
  * Use this for fetches that must not depend on the optional global `fetch` patch in `fetch-fusion-bootstrap.ts`.
  */
-export { systemFetch, systemApiUrl, systemCredentials } from "@shared/cyrus-api-client";
+export {
+  systemFetch,
+  systemApiUrl,
+  systemCredentials,
+  resolveCyrusWebSocketUrl,
+  resolveCyrusSocketIoOrigin,
+  appendCommSignalingTokenToSearchParams,
+} from "@shared/cyrus-api-client";
 
 export const SYSTEM_INITIALIZING_CODE = "SYSTEM_INITIALIZING" as const;
 

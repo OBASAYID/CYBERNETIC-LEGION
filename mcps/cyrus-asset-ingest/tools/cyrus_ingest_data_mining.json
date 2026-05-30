@@ -1,0 +1,9 @@
+{
+  "name": "cyrus_ingest_data_mining",
+  "description": "Run TF-IDF tag mining, domain clustering, and expanded query catalog to guide ingestion.",
+  "arguments": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}

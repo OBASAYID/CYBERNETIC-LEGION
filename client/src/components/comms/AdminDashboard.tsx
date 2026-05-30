@@ -107,13 +107,20 @@ export function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [messageHistory, setMessageHistory] = useState<number[]>([]);
+  const [webrtcHealth, setWebrtcHealth] = useState<{
+    relayConfigured?: boolean;
+    iceServerCount?: number;
+    iceTransportPolicy?: string;
+    encodingProfile?: string;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [statsRes, callsRes, usersRes] = await Promise.all([
+      const [statsRes, callsRes, usersRes, webrtcRes] = await Promise.all([
         systemFetch("/api/comms/admin/stats"),
         systemFetch("/api/comms/admin/active-calls"),
         systemFetch("/api/comms/admin/online-users"),
+        systemFetch("/api/comms/webrtc-health"),
       ]);
 
       if (statsRes.ok) {
@@ -134,6 +141,16 @@ export function AdminDashboard() {
       if (usersRes.ok) {
         const usersData = await usersRes.json();
         setOnlineUsersList(usersData.users || []);
+      }
+
+      if (webrtcRes.ok) {
+        const w = await webrtcRes.json();
+        setWebrtcHealth({
+          relayConfigured: w.relayConfigured,
+          iceServerCount: w.iceServerCount,
+          iceTransportPolicy: w.iceTransportPolicy,
+          encodingProfile: w.encodingProfile,
+        });
       }
 
       setError(null);
@@ -224,6 +241,20 @@ export function AdminDashboard() {
           color={heapPercent <= 85 ? "emerald" : "yellow"}
         />
       </div>
+
+      {webrtcHealth && (
+        <div className="rounded-xl border border-sky-800/40 bg-sky-950/25 px-3 py-2 text-[11px] text-sky-100/90">
+          <span className="font-semibold text-sky-300">WebRTC health</span>
+          <span className="mx-2 text-white/30">|</span>
+          TURN relay: {webrtcHealth.relayConfigured ? "configured" : "not set (STUN-only risk)"}
+          <span className="mx-2 text-white/30">·</span>
+          ICE servers: {webrtcHealth.iceServerCount ?? "—"}
+          <span className="mx-2 text-white/30">·</span>
+          policy: {webrtcHealth.iceTransportPolicy ?? "—"}
+          <span className="mx-2 text-white/30">·</span>
+          profile: {webrtcHealth.encodingProfile ?? "—"}
+        </div>
+      )}
 
       <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4 backdrop-blur-sm">
         <h3 className="text-sm font-medium text-gray-300 mb-3">Message Volume</h3>

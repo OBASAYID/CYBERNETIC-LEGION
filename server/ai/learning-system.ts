@@ -11,14 +11,12 @@ export class LearningSystem {
     this.initializeKnowledgeGraph();
   }
 
-  private async initializeKnowledgeGraph() {
-    // Initialize Neo4j or NetworkX based knowledge graph
-    if (this.config.knowledgeGraph.type === 'neo4j') {
-      // Neo4j implementation would go here
-      console.log('Initializing Neo4j knowledge graph...');
+  private initializeKnowledgeGraph() {
+    const graphType = this.config?.knowledgeGraph?.type ?? "networkx";
+    if (graphType === "neo4j") {
+      console.log("Initializing Neo4j knowledge graph...");
     } else {
-      // Fallback to NetworkX
-      console.log('Initializing NetworkX knowledge graph...');
+      console.log("Initializing NetworkX knowledge graph...");
     }
   }
 

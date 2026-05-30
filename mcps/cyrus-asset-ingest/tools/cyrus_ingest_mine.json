@@ -1,0 +1,13 @@
+{
+  "name": "cyrus_ingest_mine",
+  "description": "Start ML-guided bulk web asset mining (images + 3D models, OpenAI-free). Use for large-scale ingestion.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "target": { "type": "number", "description": "Target asset count (default 10000)" },
+      "useMl": { "type": "boolean", "description": "ML ranking + query expansion (default true)" },
+      "wait": { "type": "boolean", "description": "Block until complete (default false)" }
+    },
+    "additionalProperties": false
+  }
+}

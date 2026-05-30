@@ -19,7 +19,7 @@ let modulesLoaded = false;
 async function ensureModules() {
   if (modulesLoaded) return;
   try {
-    const [vkb, ec, ul, di, eg, se, qnn, ase, cda, ns, hr, bni, ahc] = await Promise.all([
+    const [vkb, ec, ul, di, eg, se, qnn, ase, cda, ns, hr, bni, ahc, iotNtn] = await Promise.all([
       import("./vector-knowledge-base"),
       import("./emotional-cognition"),
       import("./universal-language"),
@@ -33,6 +33,7 @@ async function ensureModules() {
       import("./hyperlinked-reality"),
       import("./bio-neural-interface"),
       import("./adaptive-hardware-controller"),
+      import("./iot-ntn-connectivity"),
     ]);
     modulesRef.vectorKnowledgeBase = vkb.vectorKnowledgeBase;
     modulesRef.emotionalCognition = ec.emotionalCognition;
@@ -47,22 +48,21 @@ async function ensureModules() {
     modulesRef.hyperlinkedReality = hr.hyperlinkedReality;
     modulesRef.bioNeuralInterface = bni.bioNeuralInterface;
     modulesRef.adaptiveHardwareController = ahc.adaptiveHardwareController;
+    modulesRef.iotNtnConnectivity = iotNtn.iotNtnConnectivity;
 
-    const [bm, es, md, ri, tm, se2, bs] = await Promise.all([
-      import("../interactive/biology-module"),
+    const [es, md, ri, tm, bs] = await Promise.all([
       import("../interactive/environmental-sensing"),
       import("../interactive/medical-diagnostics"),
       import("../interactive/robotic-integration"),
       import("../interactive/teaching-module"),
-      import("../interactive/security-encryption"),
       import("../interactive/blood-sampling-system"),
     ]);
-    modulesRef.biologyModule = bm.biologyModule;
+    modulesRef.biologyModule = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.environmentalSensing = es.environmentalSensing;
     modulesRef.medicalDiagnostics = md.medicalDiagnostics;
     modulesRef.roboticIntegration = ri.roboticIntegration;
     modulesRef.teachingModule = tm.teachingModule;
-    modulesRef.securityEncryption = se2.securityEncryption;
+    modulesRef.securityEncryption = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.bloodSamplingSystem = bs.bloodSamplingSystem;
 
     const qbM = await import("../quantum-bridge-client");
@@ -93,6 +93,7 @@ class ModuleOrchestrator {
     this.modules.set("emotional-cognition", { instance: modulesRef.emotionalCognition, category: "core", name: "Emotional Cognition" });
     this.modules.set("universal-language", { instance: modulesRef.universalLanguage, category: "core", name: "Universal Language" });
     this.modules.set("decentralized-intelligence", { instance: modulesRef.decentralizedIntelligence, category: "core", name: "Decentralized Intelligence" });
+    this.modules.set("iot-ntn-connectivity", { instance: modulesRef.iotNtnConnectivity, category: "core", name: "IoT–NTN Satellite Connectivity" });
     this.modules.set("ethical-governance", { instance: modulesRef.ethicalGovernance, category: "core", name: "Ethical Governance" });
     this.modules.set("self-evolution", { instance: modulesRef.selfEvolution, category: "core", name: "Self-Evolution Engine" });
     this.modules.set("quantum-neural", { instance: modulesRef.quantumNeuralNetworks, category: "advanced", name: "Quantum Neural Networks" });
@@ -102,12 +103,10 @@ class ModuleOrchestrator {
     this.modules.set("hyperlinked-reality", { instance: modulesRef.hyperlinkedReality, category: "advanced", name: "Hyperlinked Reality" });
     this.modules.set("bio-neural", { instance: modulesRef.bioNeuralInterface, category: "advanced", name: "Bio-Neural Interface" });
     this.modules.set("adaptive-hardware", { instance: modulesRef.adaptiveHardwareController, category: "advanced", name: "Adaptive Hardware Controller" });
-    this.modules.set("biology", { instance: modulesRef.biologyModule, category: "interactive", name: "Biology Interactive" });
     this.modules.set("environmental", { instance: modulesRef.environmentalSensing, category: "interactive", name: "Environmental Sensing" });
     this.modules.set("medical", { instance: modulesRef.medicalDiagnostics, category: "interactive", name: "Medical Diagnostics" });
     this.modules.set("robotic", { instance: modulesRef.roboticIntegration, category: "interactive", name: "Robotic Integration" });
     this.modules.set("teaching", { instance: modulesRef.teachingModule, category: "interactive", name: "Teaching & Learning" });
-    this.modules.set("security", { instance: modulesRef.securityEncryption, category: "interactive", name: "Security & Encryption" });
     this.modules.set("blood-sampling", { instance: modulesRef.bloodSamplingSystem, category: "interactive", name: "Blood Sampling System" });
 
     const nexusBridgeModule = {
@@ -184,6 +183,12 @@ class ModuleOrchestrator {
       case "decentralized-intelligence":
         metrics.workers = status.activeWorkers || 0;
         metrics.completed = status.tasksCompleted || 0;
+        break;
+      case "iot-ntn-connectivity":
+        metrics.endpoints = status.satelliteEndpoints ?? 0;
+        metrics.verticals = status.activeVerticals?.length ?? 0;
+        metrics.flashMb = status.memory?.flashMb ?? 0;
+        metrics.psramMb = status.memory?.psramMb ?? 0;
         break;
       case "ethical-governance":
         metrics.principles = status.principleCount || 0;

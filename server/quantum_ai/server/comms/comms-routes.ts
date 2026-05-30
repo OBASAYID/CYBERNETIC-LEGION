@@ -949,8 +949,9 @@ router.post("/api/comms/upload", commsUpload.single("file"), async (req: any, re
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     res.json({
       success: true,
       fileId,
@@ -970,8 +971,9 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
     if (!req.file) {
       return res.status(400).json({ error: "No audio file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     const duration = req.body.duration || null;
     res.json({
       success: true,

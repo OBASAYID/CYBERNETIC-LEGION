@@ -47,10 +47,20 @@ export function clearAuthSessionStorage(): void {
     localStorage.removeItem(SESSION_TOKEN_KEY);
     localStorage.removeItem("cyrus-user-role");
     localStorage.removeItem("cyrus-display-name");
+    // Critical comms/session isolation cleanup: remove persisted identity/cursors
+    // so account switching cannot inherit previous transport/message state.
+    localStorage.removeItem("cyrus_comm_user_id");
+    localStorage.removeItem("cyrus_device_id");
+    localStorage.removeItem("cyrus-device-id");
+    localStorage.removeItem("cyrus_comms_event_seq_v1");
+    localStorage.removeItem("cyrus_comms_client_seq_v1");
+    localStorage.removeItem("cyrus-force-relay");
   } catch {
     /* ignore */
   }
 }
+
+export const CYRUS_AUTH_SESSION_CHANGED = "cyrus-auth-session-changed";
 
 export function persistAuthSession(sessionToken: string, profile: GateProfile): void {
   localStorage.setItem(AUTH_KEY, "valid");
@@ -58,6 +68,9 @@ export function persistAuthSession(sessionToken: string, profile: GateProfile): 
   if (sessionToken) localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
   localStorage.setItem("cyrus-display-name", profile.displayName);
   localStorage.setItem("cyrus-user-role", profile.role);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CYRUS_AUTH_SESSION_CHANGED));
+  }
 }
 
 export function checkAuthValidity(): boolean {

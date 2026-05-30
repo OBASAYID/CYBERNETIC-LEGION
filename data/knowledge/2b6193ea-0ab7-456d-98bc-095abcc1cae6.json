@@ -1,0 +1,18 @@
+{
+  "content": "In knowledge representation and reasoning, a knowledge graph is a knowledge base that uses a graph-structured data model or topology to represent and operate on data. Knowledge graphs are often used to store interlinked descriptions of entities – objects, events, situations or abstract concepts – while also encoding the free-form semantics or relationships underlying these entities.",
+  "metadata": {
+    "title": "Knowledge graph",
+    "url": "https://en.wikipedia.org/wiki/Knowledge_graph",
+    "domain": "science"
+  },
+  "source": "https://en.wikipedia.org/wiki/Knowledge_graph",
+  "category": "ai",
+  "tags": [
+    "knowledge",
+    "graph",
+    "wikipedia",
+    "ai"
+  ],
+  "id": "2b6193ea-0ab7-456d-98bc-095abcc1cae6",
+  "timestamp": "2026-05-23T18:04:19.672Z"
+}

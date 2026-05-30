@@ -24,6 +24,7 @@ interface ConversationListProps {
   onSelect: (conversation: Conversation) => void;
   onCreateGroup?: () => void;
   onNewChat?: () => void;
+  holoSurface?: boolean;
 }
 
 export function ConversationList({
@@ -32,6 +33,7 @@ export function ConversationList({
   onSelect,
   onCreateGroup,
   onNewChat,
+  holoSurface = false,
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
 
@@ -82,7 +84,11 @@ export function ConversationList({
       <div className="space-y-3 px-3 pb-2 pt-3 sm:px-4 sm:pt-4">
         <div className="flex items-center justify-between">
           <h2
-            className="text-base font-bold tracking-tight bg-gradient-to-r from-amber-200 via-yellow-200 to-orange-200 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(251,146,60,0.45)]"
+            className={
+              holoSurface
+                ? "text-base font-bold tracking-tight bg-gradient-to-r from-cyan-200 via-sky-200 to-violet-200 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(0,229,255,0.4)]"
+                : "text-base font-bold tracking-tight bg-gradient-to-r from-amber-200 via-yellow-200 to-orange-200 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(251,146,60,0.45)]"
+            }
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             Chats
@@ -91,7 +97,11 @@ export function ConversationList({
             {onNewChat && (
               <button
                 onClick={onNewChat}
-                className="p-2 rounded-lg text-amber-200/50 transition hover:bg-amber-500/12 hover:text-cyan-300 hover:shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+                className={
+                  holoSurface
+                    ? "p-2 rounded-lg text-cyan-200/55 transition hover:bg-cyan-500/15 hover:text-cyan-100 hover:shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+                    : "p-2 rounded-lg text-amber-200/50 transition hover:bg-amber-500/12 hover:text-cyan-300 hover:shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+                }
                 title="New Chat"
               >
                 <MessageSquare className="w-5 h-5" />
@@ -100,7 +110,11 @@ export function ConversationList({
             {onCreateGroup && (
               <button
                 onClick={onCreateGroup}
-                className="p-2 rounded-lg text-amber-200/50 transition hover:bg-orange-500/12 hover:text-orange-200 hover:shadow-[0_0_12px_rgba(251,146,60,0.3)]"
+                className={
+                  holoSurface
+                    ? "p-2 rounded-lg text-cyan-200/50 transition hover:bg-violet-500/15 hover:text-violet-100 hover:shadow-[0_0_12px_rgba(139,92,246,0.28)]"
+                    : "p-2 rounded-lg text-amber-200/50 transition hover:bg-orange-500/12 hover:text-orange-200 hover:shadow-[0_0_12px_rgba(251,146,60,0.3)]"
+                }
                 title="New Group"
               >
                 <Plus className="w-5 h-5" />
@@ -109,24 +123,40 @@ export function ConversationList({
           </div>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-300/50" />
+          <Search
+            className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${holoSurface ? "text-cyan-300/45" : "text-amber-300/50"}`}
+          />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations..."
-            className="w-full rounded-lg border border-amber-500/30 bg-slate-950/55 py-2 pl-9 pr-3 text-sm text-white placeholder-amber-200/35 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/40"
+            className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/40 ${
+              holoSurface
+                ? "border-cyan-500/35 bg-slate-950/50 placeholder-cyan-200/30"
+                : "border-amber-500/30 bg-slate-950/55 placeholder-amber-200/35"
+            }`}
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5 scrollbar-thin scrollbar-thumb-amber-900/50 scrollbar-track-transparent">
+      <div
+        className={`flex-1 overflow-y-auto px-2 py-1 space-y-0.5 scrollbar-thin scrollbar-track-transparent ${
+          holoSurface ? "scrollbar-thumb-cyan-900/50" : "scrollbar-thumb-amber-900/50"
+        }`}
+      >
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-amber-200/50">
-            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/35 to-cyan-500/25 shadow-[0_0_24px_rgba(251,146,60,0.35)]">
+          <div className={`flex flex-col items-center justify-center py-12 ${holoSurface ? "text-cyan-200/50" : "text-amber-200/50"}`}>
+            <div
+              className={
+                holoSurface
+                  ? "mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/35 to-violet-500/25 shadow-[0_0_24px_rgba(0,229,255,0.35)]"
+                  : "mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/35 to-cyan-500/25 shadow-[0_0_24px_rgba(251,146,60,0.35)]"
+              }
+            >
               <MessageSquare className="h-7 w-7 text-cyan-200/80" />
             </div>
-            <p className="text-sm text-amber-100/85">
+            <p className={`text-sm ${holoSurface ? "text-cyan-100/85" : "text-amber-100/85"}`}>
               {search ? "No conversations found" : "No conversations yet"}
             </p>
           </div>
@@ -137,8 +167,12 @@ export function ConversationList({
               onClick={() => onSelect(conv)}
               className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${
                 selectedId === conv.id
-                  ? "border border-amber-400/35 bg-gradient-to-r from-amber-600/25 to-cyan-600/10 shadow-[0_0_22px_-6px_rgba(251,146,60,0.45)]"
-                  : "hover:bg-amber-950/20 border border-transparent hover:border-amber-500/18"
+                  ? holoSurface
+                    ? "border border-cyan-400/40 bg-gradient-to-r from-cyan-600/22 to-violet-600/12 shadow-[0_0_22px_-6px_rgba(0,229,255,0.4)]"
+                    : "border border-amber-400/35 bg-gradient-to-r from-amber-600/25 to-cyan-600/10 shadow-[0_0_22px_-6px_rgba(251,146,60,0.45)]"
+                  : holoSurface
+                    ? "hover:bg-cyan-950/25 border border-transparent hover:border-cyan-500/22"
+                    : "hover:bg-amber-950/20 border border-transparent hover:border-amber-500/18"
               }`}
             >
               <div className="relative shrink-0">
@@ -159,19 +193,25 @@ export function ConversationList({
                 <div className="flex items-center justify-between mb-0.5">
                   <span
                     className={`text-sm font-medium truncate ${
-                      selectedId === conv.id ? "text-cyan-200" : "text-amber-50"
+                      selectedId === conv.id ? "text-cyan-100" : holoSurface ? "text-cyan-50/95" : "text-amber-50"
                     }`}
                   >
                     {conv.name}
                   </span>
-                  <span className="text-[10px] text-amber-300/50 shrink-0 ml-2">
+                  <span className={`text-[10px] shrink-0 ml-2 ${holoSurface ? "text-cyan-300/45" : "text-amber-300/50"}`}>
                     {formatTime(conv.lastMessageTime)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-amber-200/55 truncate pr-2">{conv.lastMessage}</p>
+                  <p className={`text-xs truncate pr-2 ${holoSurface ? "text-cyan-200/55" : "text-amber-200/55"}`}>{conv.lastMessage}</p>
                   {conv.unreadCount > 0 && (
-                    <span className="shrink-0 min-w-[18px] h-[18px] flex items-center justify-center bg-gradient-to-br from-orange-500 to-amber-400 text-[10px] font-bold text-slate-950 rounded-full px-1 shadow-[0_0_10px_rgba(251,146,60,0.5)]">
+                    <span
+                      className={
+                        holoSurface
+                          ? "shrink-0 min-w-[18px] h-[18px] flex items-center justify-center bg-gradient-to-br from-cyan-400 to-sky-500 text-[10px] font-bold text-slate-950 rounded-full px-1 shadow-[0_0_10px_rgba(0,229,255,0.45)]"
+                          : "shrink-0 min-w-[18px] h-[18px] flex items-center justify-center bg-gradient-to-br from-orange-500 to-amber-400 text-[10px] font-bold text-slate-950 rounded-full px-1 shadow-[0_0_10px_rgba(251,146,60,0.5)]"
+                      }
+                    >
                       {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
                     </span>
                   )}

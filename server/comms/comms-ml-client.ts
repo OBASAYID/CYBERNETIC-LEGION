@@ -1,4 +1,7 @@
-const ML_SERVICE_URL = process.env.COMMS_ML_URL || "http://comms-ml:5002";
+/** Sidecar URL — explicit COMMS_ML_URL in production; no silent loopback on multi-node deploys. */
+import { getCommsMlServiceUrl } from "../config/deployment.js";
+
+const ML_SERVICE_URL = getCommsMlServiceUrl();
 const TIMEOUT_MS = 5000;
 
 interface SentimentResult {

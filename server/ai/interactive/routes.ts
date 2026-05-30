@@ -8,11 +8,17 @@ let teachingModule: any;
 let securityEncryption: any;
 let bloodSamplingSystem: any;
 let interactiveLoaded = false;
+const REMOVE_BIOLOGY_MODULE = true;
+const REMOVE_SECURITY_MODULE = true;
 
 async function ensureInteractiveLoaded() {
   if (interactiveLoaded) return;
-  const m1 = await import("./biology-module");
-  biologyModule = m1.biologyModule;
+  if (!REMOVE_BIOLOGY_MODULE) {
+    const m1 = await import("./biology-module");
+    biologyModule = m1.biologyModule;
+  } else {
+    biologyModule = { getStatus: () => ({ enabled: false, reason: "removed" }) };
+  }
   const m2 = await import("./environmental-sensing");
   environmentalSensing = m2.environmentalSensing;
   const m3 = await import("./medical-diagnostics");
@@ -21,8 +27,12 @@ async function ensureInteractiveLoaded() {
   roboticIntegration = m4.roboticIntegration;
   const m5 = await import("./teaching-module");
   teachingModule = m5.teachingModule;
-  const m6 = await import("./security-encryption");
-  securityEncryption = m6.securityEncryption;
+  if (!REMOVE_SECURITY_MODULE) {
+    const m6 = await import("./security-encryption");
+    securityEncryption = m6.securityEncryption;
+  } else {
+    securityEncryption = { getStatus: () => ({ enabled: false, reason: "removed" }) };
+  }
   const m7 = await import("./blood-sampling-system");
   bloodSamplingSystem = m7.bloodSamplingSystem;
   interactiveLoaded = true;

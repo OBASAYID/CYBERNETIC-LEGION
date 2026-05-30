@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { systemFetch } from "@shared/cyrus-api-client";
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline, Circle } from "@react-google-maps/api";
 import { useNavigation } from "../hooks/useNavigation";
 import { CyrusHumanoid } from "../components/CyrusHumanoid";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
+import { getCommsDeviceId } from "../lib/comms-device-id";
 import {
   MapPin,
   Navigation,
@@ -33,6 +34,8 @@ import {
   Copy,
   Check,
   LayoutGrid,
+  Users,
+  RefreshCw,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 
@@ -92,6 +95,42 @@ function formatCoordinate(value: number, type: "lat" | "lon"): string {
   return `${deg}° ${min}' ${sec}" ${dir}`;
 }
 
+type FieldPinSource = "comms" | "tracked" | "url";
+
+type FieldPin = {
+  key: string;
+  label: string;
+  lat: number;
+  lng: number;
+  accuracy?: number | null;
+  updatedAt?: string | null;
+  source: FieldPinSource;
+};
+
+type CommsRosterUser = {
+  id: string;
+  displayName: string;
+  lastLocation?: { lat: number; lng: number; accuracy?: number | null; at: string } | null;
+  locationShareEnabled?: boolean;
+  isOnline?: boolean;
+};
+
+type TrackedRosterRow = {
+  userId: string;
+  userName: string;
+  lat: number | null;
+  lon: number | null;
+  accuracy?: number | null;
+  lastUpdated?: string;
+  status?: string;
+};
+
+function fieldPinColor(source: FieldPinSource): string {
+  if (source === "comms") return "#f97316";
+  if (source === "tracked") return "#a855f7";
+  return "#eab308";
+}
+
 export function NavigationPage() {
   const { apiKey, loading: apiKeyLoading } = useGoogleMapsApiKey();
 
@@ -99,8 +138,8 @@ export function NavigationPage() {
     return (
       <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-[#0a84ff] animate-spin mx-auto mb-3" />
-          <p className="text-[rgba(235,235,245,0.6)] text-sm">Initializing Navigation Module...</p>
+          <Loader2 className="w-8 h-8 text-\[#e11d48\] animate-spin mx-auto mb-3" />
+          <p className="text-white/60 text-sm">Initializing Navigation Module...</p>
         </div>
       </div>
     );
@@ -128,6 +167,162 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
   const [copiedCoord, setCopiedCoord] = useState(false);
   const [activePanel, setActivePanel] = useState<"tracking" | "route" | "share">("tracking");
   const autoStartedRef = useRef(false);
+  const search = useSearch();
+  const [fieldPins, setFieldPins] = useState<FieldPin[]>([]);
+  const [fieldPinInfoKey, setFieldPinInfoKey] = useState<string | null>(null);
+  const [commsRoster, setCommsRoster] = useState<CommsRosterUser[]>([]);
+  const [trackedRoster, setTrackedRoster] = useState<TrackedRosterRow[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const lastPinFitSig = useRef("");
+
+  const mergePin = useCallback((pin: FieldPin) => {
+    setFieldPins((prev) => {
+      const ix = prev.findIndex((p) => p.key === pin.key);
+      if (ix >= 0) {
+        const next = [...prev];
+        next[ix] = pin;
+        return next;
+      }
+      return [...prev, pin];
+    });
+  }, []);
+
+  const unpinFieldPin = useCallback((key: string) => {
+    setFieldPins((prev) => prev.filter((p) => p.key !== key));
+    setFieldPinInfoKey((k) => (k === key ? null : k));
+  }, []);
+
+  const refreshFieldRoster = useCallback(async () => {
+    setRosterLoading(true);
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Device-Id": getCommsDeviceId(),
+      };
+      const [cRes, tRes] = await Promise.all([
+        systemFetch("/api/comms/users/all?includeSelf=1", { headers }),
+        systemFetch("/api/nav/admin/users"),
+      ]);
+      if (cRes.ok) {
+        const j = await cRes.json();
+        setCommsRoster(Array.isArray(j) ? j : []);
+      } else {
+        setCommsRoster([]);
+      }
+      if (tRes.ok) {
+        const j = await tRes.json();
+        setTrackedRoster(Array.isArray(j?.users) ? j.users : []);
+      } else {
+        setTrackedRoster([]);
+      }
+    } catch {
+      setCommsRoster([]);
+      setTrackedRoster([]);
+    } finally {
+      setRosterLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshFieldRoster();
+    const id = window.setInterval(() => void refreshFieldRoster(), 30_000);
+    return () => window.clearInterval(id);
+  }, [refreshFieldRoster]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(search || "");
+    const pinUser = q.get("pinUser");
+    const pinLatRaw = q.get("pinLat");
+    const pinLonRaw = q.get("pinLon") || q.get("pinLng");
+    const pinLabel = q.get("pinLabel") || "Pinned";
+
+    if (pinUser) {
+      const commsU = commsRoster.find((u) => u.id === pinUser);
+      if (commsU?.lastLocation) {
+        mergePin({
+          key: `comms:${pinUser}`,
+          label: commsU.displayName,
+          lat: commsU.lastLocation.lat,
+          lng: commsU.lastLocation.lng,
+          accuracy: commsU.lastLocation.accuracy,
+          updatedAt: commsU.lastLocation.at,
+          source: "comms",
+        });
+      } else {
+        const tu = trackedRoster.find((u) => u.userId === pinUser);
+        if (
+          tu?.lat != null &&
+          tu?.lon != null &&
+          Number.isFinite(tu.lat) &&
+          Number.isFinite(tu.lon)
+        ) {
+          mergePin({
+            key: `tracked:${pinUser}`,
+            label: tu.userName || pinUser,
+            lat: tu.lat,
+            lng: tu.lon,
+            accuracy: tu.accuracy ?? null,
+            updatedAt: tu.lastUpdated ?? null,
+            source: "tracked",
+          });
+        }
+      }
+    }
+
+    const pinLat = pinLatRaw != null && pinLatRaw !== "" ? parseFloat(pinLatRaw) : NaN;
+    const pinLon = pinLonRaw != null && pinLonRaw !== "" ? parseFloat(pinLonRaw) : NaN;
+    if (Number.isFinite(pinLat) && Number.isFinite(pinLon)) {
+      mergePin({
+        key: "url:coords",
+        label: pinLabel,
+        lat: pinLat,
+        lng: pinLon,
+        source: "url",
+      });
+    }
+  }, [search, commsRoster, trackedRoster, mergePin]);
+
+  useEffect(() => {
+    setFieldPins((prev) =>
+      prev.map((pin) => {
+        if (pin.source === "url") return pin;
+        if (pin.key.startsWith("comms:")) {
+          const id = pin.key.slice("comms:".length);
+          const u = commsRoster.find((x) => x.id === id);
+          if (u?.lastLocation) {
+            return {
+              ...pin,
+              label: u.displayName,
+              lat: u.lastLocation.lat,
+              lng: u.lastLocation.lng,
+              accuracy: u.lastLocation.accuracy,
+              updatedAt: u.lastLocation.at,
+            };
+          }
+        }
+        if (pin.key.startsWith("tracked:")) {
+          const id = pin.key.slice("tracked:".length);
+          const tu = trackedRoster.find((x) => x.userId === id);
+          if (
+            tu?.lat != null &&
+            tu?.lon != null &&
+            Number.isFinite(tu.lat) &&
+            Number.isFinite(tu.lon)
+          ) {
+            return {
+              ...pin,
+              label: tu.userName || pin.label,
+              lat: tu.lat,
+              lng: tu.lon,
+              accuracy: tu.accuracy ?? null,
+              updatedAt: tu.lastUpdated ?? null,
+            };
+          }
+        }
+        return pin;
+      })
+    );
+  }, [commsRoster, trackedRoster]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: apiKey,
@@ -147,6 +342,25 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
     isLoading,
     isRouting,
   } = useNavigation();
+
+  const pinFitSig = fieldPins
+    .map((p) => `${p.key}:${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`)
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    if (!map || !isLoaded || fieldPins.length === 0) return;
+    if (pinFitSig === lastPinFitSig.current) return;
+    lastPinFitSig.current = pinFitSig;
+    const bounds = new google.maps.LatLngBounds();
+    fieldPins.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
+    if (currentPosition) bounds.extend({ lat: currentPosition.lat, lng: currentPosition.lon });
+    map.fitBounds(bounds, 72);
+  }, [map, isLoaded, pinFitSig, fieldPins, currentPosition]);
+
+  useEffect(() => {
+    if (fieldPins.length === 0) lastPinFitSig.current = "";
+  }, [fieldPins.length]);
 
   const reverseGeocode = useCallback(async (lat: number, lon: number) => {
     if (!isLoaded || !window.google) return;
@@ -238,6 +452,23 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
     }
   };
 
+  const centerMapOnLatLng = useCallback(
+    (lat: number, lng: number) => {
+      if (!map) return;
+      map.panTo({ lat, lng });
+      map.setZoom(16);
+    },
+    [map]
+  );
+
+  const fitAllFieldPins = useCallback(() => {
+    if (!map || !isLoaded || fieldPins.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    fieldPins.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
+    if (currentPosition) bounds.extend({ lat: currentPosition.lat, lng: currentPosition.lon });
+    map.fitBounds(bounds, 72);
+  }, [map, isLoaded, fieldPins, currentPosition]);
+
   const handleZoomIn = () => {
     if (map) {
       const newZoom = Math.min((map.getZoom() || 15) + 1, 21);
@@ -267,10 +498,10 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
   return (
     <ModuleWorkspacePageShell mode="page">
     <div className="flex min-h-full h-screen min-h-0 flex-col overflow-hidden bg-[#000000]">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[rgba(84,84,88,0.35)] bg-[rgba(10,10,12,0.95)] backdrop-blur-xl z-20">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-white/\[0.08\] bg-black/90 backdrop-blur-xl z-20">
         <div className="flex items-center gap-3">
           <Link href="/">
-            <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-all">
+            <button className="p-2 text-white/50 hover:text-white hover:bg-white/\[0.05\] rounded-lg transition-all">
               <ArrowLeft className="w-5 h-5" />
             </button>
           </Link>
@@ -280,7 +511,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
           <div>
             <h1 className="text-[15px] font-bold tracking-tight text-white">Satellite Navigation</h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] text-[rgba(235,235,245,0.5)]">Geospatial Intelligence</span>
+              <span className="text-[11px] text-white/50">Geospatial Intelligence</span>
               {isWatching && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 bg-[rgba(48,209,88,0.15)] text-[#30d158] text-[9px] font-bold rounded-full">
                   <span className="w-1.5 h-1.5 bg-[#30d158] rounded-full animate-pulse" />
@@ -303,8 +534,8 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 onClick={() => setMapType(type)}
                 className={`px-3 py-1 rounded-md text-[11px] font-medium transition-all ${
                   mapType === type
-                    ? "bg-[#0a84ff] text-white shadow-sm"
-                    : "text-[rgba(235,235,245,0.6)] hover:text-white"
+                    ? "bg-\[#e11d48\] text-white shadow-sm"
+                    : "text-white/60 hover:text-white"
                 }`}
               >
                 {label}
@@ -457,34 +688,34 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/45">
             <div className="relative h-full min-h-0 min-w-0 flex-1">
           {!apiKey ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="text-center p-8 max-w-md">
                 <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-[#ff9f0a] to-[#ff375f] rounded-3xl flex items-center justify-center">
                   <MapPin className="w-10 h-10 text-white" />
                 </div>
                 <h2 className="text-xl font-semibold mb-3">Google Maps API Required</h2>
-                <p className="text-[rgba(235,235,245,0.6)] text-sm mb-4">
+                <p className="text-white/60 text-sm mb-4">
                   To enable real-time maps and GPS features, please configure your Google Maps API key.
                 </p>
               </div>
             </div>
           ) : loadError ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="text-center p-8 max-w-md">
                 <div className="w-16 h-16 mx-auto mb-4 bg-[#ff375f] rounded-2xl flex items-center justify-center">
                   <MapPin className="w-8 h-8 text-white" />
                 </div>
                 <h2 className="text-lg font-semibold mb-2">Maps JavaScript API Not Activated</h2>
-                <p className="text-[rgba(235,235,245,0.6)] text-sm mb-3">
+                <p className="text-white/60 text-sm mb-3">
                   Enable it in Google Cloud Console.
                 </p>
               </div>
             </div>
           ) : !isLoaded ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-3 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
-                <p className="text-[rgba(235,235,245,0.6)]">Loading maps...</p>
+                <p className="text-white/60">Loading maps...</p>
               </div>
             </div>
           ) : (
@@ -541,36 +772,111 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       <p className="text-xs text-gray-600 mb-2">{locationName || "Resolving..."}</p>
                       <div className="grid grid-cols-2 gap-2 text-[10px]">
                         <div>
-                          <span className="text-gray-400">LAT</span>
+                          <span className="text-white/50">LAT</span>
                           <p className="font-mono font-bold text-green-700">{currentPosition.lat.toFixed(6)}</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">LON</span>
+                          <span className="text-white/50">LON</span>
                           <p className="font-mono font-bold text-blue-700">{currentPosition.lon.toFixed(6)}</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">ALT</span>
+                          <span className="text-white/50">ALT</span>
                           <p className="font-mono">{altitude.toFixed(1)}m</p>
                         </div>
                         <div>
-                          <span className="text-gray-400">ACC</span>
+                          <span className="text-white/50">ACC</span>
                           <p className="font-mono">{(currentPosition.accuracy || 0).toFixed(0)}m</p>
                         </div>
                       </div>
                     </div>
                   </InfoWindow>
                 )}
+                {fieldPins.map((p) => {
+                  const fill = fieldPinColor(p.source);
+                  const acc =
+                    p.accuracy != null && p.accuracy > 0 ? Math.min(p.accuracy, 5000) : null;
+                  return (
+                    <Fragment key={p.key}>
+                      {acc != null && (
+                        <Circle
+                          center={{ lat: p.lat, lng: p.lng }}
+                          radius={acc}
+                          options={{
+                            fillColor: fill,
+                            fillOpacity: 0.07,
+                            strokeColor: fill,
+                            strokeOpacity: 0.28,
+                            strokeWeight: 1,
+                          }}
+                        />
+                      )}
+                      <Marker
+                        position={{ lat: p.lat, lng: p.lng }}
+                        onClick={() =>
+                          setFieldPinInfoKey((k) => (k === p.key ? null : p.key))
+                        }
+                        icon={{
+                          path: google.maps.SymbolPath.CIRCLE,
+                          scale: 9,
+                          fillColor: fill,
+                          fillOpacity: 1,
+                          strokeColor: "#ffffff",
+                          strokeWeight: 2,
+                        }}
+                      />
+                      {fieldPinInfoKey === p.key && (
+                        <InfoWindow
+                          position={{ lat: p.lat, lng: p.lng }}
+                          onCloseClick={() => setFieldPinInfoKey(null)}
+                        >
+                          <div className="p-2 text-black min-w-[170px] text-xs">
+                            <p className="font-bold text-sm mb-0.5">{p.label}</p>
+                            <p className="text-[10px] text-white/40 mb-1">
+                              {p.source === "comms"
+                                ? "Team (Comms GPS)"
+                                : p.source === "tracked"
+                                  ? "Tracked (Nav DB)"
+                                  : "Coordinates"}
+                            </p>
+                            <div className="grid grid-cols-2 gap-1 text-[10px] mb-2">
+                              <div>
+                                <span className="text-white/50">LAT</span>
+                                <p className="font-mono font-semibold">{p.lat.toFixed(5)}</p>
+                              </div>
+                              <div>
+                                <span className="text-white/50">LON</span>
+                                <p className="font-mono font-semibold">{p.lng.toFixed(5)}</p>
+                              </div>
+                            </div>
+                            {p.updatedAt ? (
+                              <p className="text-[9px] text-white/40 mb-2">
+                                Updated {new Date(p.updatedAt).toLocaleString()}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="w-full rounded-md bg-black/40 py-1.5 text-[11px] font-medium text-white hover:bg-white/\[0.06\]"
+                              onClick={() => unpinFieldPin(p.key)}
+                            >
+                              Remove pin
+                            </button>
+                          </div>
+                        </InfoWindow>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </GoogleMap>
 
               <div className="absolute right-3 top-3 flex flex-col gap-2 z-10">
-                <div className="bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/80 backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-white/\[0.08\]">
                   <button
                     onClick={handleZoomIn}
                     className="w-10 h-10 flex items-center justify-center text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
                   >
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <div className="h-px bg-[rgba(84,84,88,0.35)]" />
+                  <div className="h-px bg-white/[0.06]" />
                   <button
                     onClick={handleZoomOut}
                     className="w-10 h-10 flex items-center justify-center text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
@@ -581,16 +887,25 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 <button
                   onClick={centerOnPosition}
                   disabled={!currentPosition}
-                  className="w-10 h-10 bg-[rgba(20,20,22,0.92)] backdrop-blur-xl rounded-xl flex items-center justify-center text-[#0a84ff] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-[rgba(84,84,88,0.35)]"
+                  className="w-10 h-10 bg-black/80 backdrop-blur-xl rounded-xl flex items-center justify-center text-\[#e11d48\] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-white/\[0.08\]"
                 >
                   <LocateFixed className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={fitAllFieldPins}
+                  disabled={fieldPins.length === 0}
+                  title="Fit map to pinned team / tracked targets"
+                  className="w-10 h-10 bg-black/80 backdrop-blur-xl rounded-xl flex items-center justify-center text-[#f97316] hover:bg-[rgba(255,255,255,0.1)] transition-colors disabled:opacity-30 shadow-2xl border border-white/\[0.08\]"
+                >
+                  <Users className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => isWatching ? stopGPSWatch() : startGPSWatch()}
                   className={`w-10 h-10 backdrop-blur-xl rounded-xl flex items-center justify-center transition-colors shadow-2xl border ${
                     isWatching 
                       ? "bg-[rgba(48,209,88,0.2)] border-[rgba(48,209,88,0.4)] text-[#30d158]" 
-                      : "bg-[rgba(20,20,22,0.92)] border-[rgba(84,84,88,0.35)] text-gray-400"
+                      : "bg-black/80 border-white/\[0.08\] text-white/50"
                   }`}
                 >
                   {isWatching ? <Radio className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
@@ -640,7 +955,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
           <div className="flex-1 p-3 space-y-3 overflow-y-auto">
             {activePanel === "tracking" && (
               <>
-                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Crosshair className="w-3.5 h-3.5 text-[#30d158]" />
@@ -662,9 +977,9 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                   </button>
                 </div>
 
-                <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                   <div className="flex items-center gap-2 mb-3">
-                    <Navigation className="w-3.5 h-3.5 text-[#0a84ff]" />
+                    <Navigation className="w-3.5 h-3.5 text-\[#e11d48\]" />
                     <span className="text-[12px] font-semibold">Manual Position</span>
                   </div>
                   
@@ -674,19 +989,19 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       placeholder="Latitude (e.g. -24.6282)"
                       value={manualLat}
                       onChange={(e) => setManualLat(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#0a84ff] focus:outline-none transition-colors font-mono"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-\[#e11d48\] focus:outline-none transition-colors font-mono"
                     />
                     <input
                       type="text"
                       placeholder="Longitude (e.g. 25.9231)"
                       value={manualLon}
                       onChange={(e) => setManualLon(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#0a84ff] focus:outline-none transition-colors font-mono"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-\[#e11d48\] focus:outline-none transition-colors font-mono"
                     />
                     <button
                       onClick={handleSetManualPosition}
                       disabled={isLoading}
-                      className="w-full py-2 bg-[#0a84ff] text-white rounded-lg text-[12px] font-semibold hover:bg-[#0070d4] transition-colors disabled:opacity-50"
+                      className="w-full py-2 bg-\[#e11d48\] text-white rounded-lg text-[12px] font-semibold hover:bg-[#0070d4] transition-colors disabled:opacity-50"
                     >
                       Set Position
                     </button>
@@ -694,48 +1009,198 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 </div>
 
                 {currentPosition && (
-                  <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+                  <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                     <div className="flex items-center gap-2 mb-2">
                       <Target className="w-3.5 h-3.5 text-[#ff9f0a]" />
                       <span className="text-[12px] font-semibold">Position Data</span>
                     </div>
                     <div className="space-y-1.5 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Source</span>
+                        <span className="text-white/40">Source</span>
                         <span className="font-mono text-[#30d158]">{currentPosition.source?.toUpperCase() || "GPS"}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Altitude</span>
+                        <span className="text-white/40">Altitude</span>
                         <span className="font-mono">{altitude.toFixed(1)}m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Speed</span>
+                        <span className="text-white/40">Speed</span>
                         <span className="font-mono">{(speed * 3.6).toFixed(1)} km/h</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Heading</span>
+                        <span className="text-white/40">Heading</span>
                         <span className="font-mono">{heading.toFixed(0)}° {getCardinalDirection(heading)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Accuracy</span>
+                        <span className="text-white/40">Accuracy</span>
                         <span className="font-mono">{(currentPosition.accuracy || 0).toFixed(0)}m</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[rgba(235,235,245,0.4)]">Updated</span>
+                        <span className="text-white/40">Updated</span>
                         <span className="font-mono">{new Date().toLocaleTimeString()}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <Link href="/drone">
+                <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Users className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
+                      <span className="text-[12px] font-semibold truncate">Field roster</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void refreshFieldRoster()}
+                      disabled={rosterLoading}
+                      className="shrink-0 p-1.5 rounded-lg border border-white/\[0.08\] text-white/70 hover:bg-white/\[0.05\] disabled:opacity-40"
+                      title="Refresh team & tracked list"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${rosterLoading ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-white/45 mb-2">
+                    Pin shared team GPS (Comms) or last known Nav-tracked positions. Deep link:{" "}
+                    <span className="font-mono text-[9px]">/nav?pinUser=…</span>
+                  </p>
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto pr-0.5">
+                    {commsRoster
+                      .filter((u) => u.lastLocation)
+                      .map((u) => {
+                        const key = `comms:${u.id}`;
+                        const pinned = fieldPins.some((fp) => fp.key === key);
+                        const loc = u.lastLocation!;
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center gap-2 rounded-lg bg-white/\[0.05\]/80 px-2 py-1.5 text-[10px]"
+                          >
+                            <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
+                              {u.displayName}
+                            </span>
+                            <span className="shrink-0 rounded bg-orange-500/20 px-1 py-0.5 text-[8px] font-mono uppercase text-orange-300">
+                              GPS
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-cyan-300 hover:bg-white/5"
+                              onClick={() => centerMapOnLatLng(loc.lat, loc.lng)}
+                            >
+                              Map
+                            </button>
+                            {pinned ? (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-red-500/30 px-1.5 py-0.5 text-[9px] text-red-300 hover:bg-red-500/10"
+                                onClick={() => unpinFieldPin(key)}
+                              >
+                                Unpin
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-orange-500/35 px-1.5 py-0.5 text-[9px] text-orange-200 hover:bg-orange-500/10"
+                                onClick={() =>
+                                  mergePin({
+                                    key,
+                                    label: u.displayName,
+                                    lat: loc.lat,
+                                    lng: loc.lng,
+                                    accuracy: loc.accuracy,
+                                    updatedAt: loc.at,
+                                    source: "comms",
+                                  })
+                                }
+                              >
+                                Pin
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {trackedRoster
+                      .filter(
+                        (tu) =>
+                          tu.lat != null &&
+                          tu.lon != null &&
+                          Number.isFinite(tu.lat) &&
+                          Number.isFinite(tu.lon)
+                      )
+                      .map((tu) => {
+                        const key = `tracked:${tu.userId}`;
+                        const pinned = fieldPins.some((fp) => fp.key === key);
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center gap-2 rounded-lg bg-white/\[0.05\]/80 px-2 py-1.5 text-[10px]"
+                          >
+                            <span className="min-w-0 flex-1 truncate font-medium text-[rgba(235,235,245,0.9)]">
+                              {tu.userName || tu.userId}
+                            </span>
+                            <span className="shrink-0 rounded bg-violet-500/20 px-1 py-0.5 text-[8px] font-mono uppercase text-violet-200">
+                              Nav
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-cyan-300 hover:bg-white/5"
+                              onClick={() => centerMapOnLatLng(tu.lat!, tu.lon!)}
+                            >
+                              Map
+                            </button>
+                            {pinned ? (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-red-500/30 px-1.5 py-0.5 text-[9px] text-red-300 hover:bg-red-500/10"
+                                onClick={() => unpinFieldPin(key)}
+                              >
+                                Unpin
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-violet-500/35 px-1.5 py-0.5 text-[9px] text-violet-200 hover:bg-violet-500/10"
+                                onClick={() =>
+                                  mergePin({
+                                    key,
+                                    label: tu.userName || tu.userId,
+                                    lat: tu.lat!,
+                                    lng: tu.lon!,
+                                    accuracy: tu.accuracy ?? null,
+                                    updatedAt: tu.lastUpdated ?? null,
+                                    source: "tracked",
+                                  })
+                                }
+                              >
+                                Pin
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {!rosterLoading &&
+                    commsRoster.filter((u) => u.lastLocation).length === 0 &&
+                    trackedRoster.filter(
+                      (tu) =>
+                        tu.lat != null &&
+                        tu.lon != null &&
+                        Number.isFinite(tu.lat) &&
+                        Number.isFinite(tu.lon)
+                    ).length === 0 ? (
+                      <p className="text-[10px] text-[rgba(235,235,245,0.35)] py-2 text-center">
+                        No shared team GPS or tracked fixes yet.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <Link href="/intelligence">
                   <button className="w-full bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/30 rounded-xl p-3 flex items-center gap-3 hover:border-cyan-400/50 transition-all group">
                     <div className="w-8 h-8 bg-cyan-600/30 rounded-lg flex items-center justify-center">
                       <Plane className="w-4 h-4 text-cyan-400" />
                     </div>
                     <div className="text-left">
-                      <p className="text-[11px] font-semibold text-cyan-400">Drone Operations</p>
-                      <p className="text-[9px] text-[rgba(235,235,245,0.4)]">NAV-guided flight control</p>
+                      <p className="text-[11px] font-semibold text-cyan-400">Intelligence Hub</p>
+                      <p className="text-[9px] text-white/40">Missions, assets & automation</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-cyan-400/50 ml-auto group-hover:text-cyan-400 transition-colors" />
                   </button>
@@ -744,7 +1209,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             )}
 
             {activePanel === "route" && (
-              <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+              <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                 <div className="flex items-center gap-2 mb-3">
                   <Route className="w-3.5 h-3.5 text-[#ff9f0a]" />
                   <span className="text-[12px] font-semibold">Route Planning</span>
@@ -759,7 +1224,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                         className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
                           travelMode === mode
                             ? "bg-[#ff9f0a] text-black"
-                            : "bg-[#2c2c2e] text-[rgba(235,235,245,0.6)] hover:text-white"
+                            : "bg-white/\[0.05\] text-white/60 hover:text-white"
                         }`}
                       >
                         {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -771,14 +1236,14 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                     placeholder="Destination Latitude"
                     value={destLat}
                     onChange={(e) => setDestLat(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#ff9f0a] focus:outline-none transition-colors font-mono"
+                    className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-amber-400 focus:outline-none transition-colors font-mono"
                   />
                   <input
                     type="text"
                     placeholder="Destination Longitude"
                     value={destLon}
                     onChange={(e) => setDestLon(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#ff9f0a] focus:outline-none transition-colors font-mono"
+                    className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-amber-400 focus:outline-none transition-colors font-mono"
                   />
                   <button
                     onClick={handleGetRoute}
@@ -791,17 +1256,17 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 </div>
 
                 {getRoute.data && (
-                  <div className="mt-3 pt-3 border-t border-[rgba(84,84,88,0.35)] space-y-2">
+                  <div className="mt-3 pt-3 border-t border-white/\[0.08\] space-y-2">
                     <div className="flex justify-between text-[11px]">
-                      <span className="text-[rgba(235,235,245,0.4)]">Distance</span>
+                      <span className="text-white/40">Distance</span>
                       <span className="font-semibold text-[#ff9f0a]">{getRoute.data.totalDistance}</span>
                     </div>
                     <div className="flex justify-between text-[11px]">
-                      <span className="text-[rgba(235,235,245,0.4)]">Duration</span>
+                      <span className="text-white/40">Duration</span>
                       <span className="font-semibold">{getRoute.data.totalDuration}</span>
                     </div>
                     {getRoute.data.steps?.slice(0, 5).map((step: any, i: number) => (
-                      <div key={i} className="text-[10px] text-[rgba(235,235,245,0.5)] pl-2 border-l-2 border-[rgba(84,84,88,0.35)]">
+                      <div key={i} className="text-[10px] text-white/50 pl-2 border-l-2 border-white/\[0.08\]">
                         {step.instruction?.replace(/<[^>]*>/g, '')}
                       </div>
                     ))}
@@ -811,7 +1276,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
             )}
 
             {activePanel === "share" && (
-              <div className="bg-[#1c1c1e] rounded-xl p-3 border border-[rgba(84,84,88,0.35)]">
+              <div className="bg-black/40 rounded-xl p-3 border border-white/\[0.08\]">
                 <div className="flex items-center gap-2 mb-3">
                   <Share2 className="w-3.5 h-3.5 text-[#bf5af2]" />
                   <span className="text-[12px] font-semibold">Live Sharing</span>
@@ -819,8 +1284,8 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                 
                 {activeShare ? (
                   <div className="space-y-2">
-                    <div className="bg-[#2c2c2e] rounded-lg p-3">
-                      <p className="text-[10px] text-[rgba(235,235,245,0.4)] mb-1">Sharing with</p>
+                    <div className="bg-white/\[0.05\] rounded-lg p-3">
+                      <p className="text-[10px] text-white/40 mb-1">Sharing with</p>
                       <p className="text-[12px] font-medium">{activeShare.recipientId}</p>
                       <div className="flex items-center gap-1 mt-2 text-[#bf5af2]">
                         <Clock className="w-3 h-3" />
@@ -841,12 +1306,12 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
                       placeholder="Recipient ID"
                       value={shareRecipient}
                       onChange={(e) => setShareRecipient(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] placeholder-[rgba(235,235,245,0.25)] border border-[rgba(84,84,88,0.35)] focus:border-[#bf5af2] focus:outline-none transition-colors"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] placeholder-white/25 border border-white/\[0.08\] focus:border-[#bf5af2] focus:outline-none transition-colors"
                     />
                     <select
                       value={shareDuration}
                       onChange={(e) => setShareDuration(parseInt(e.target.value))}
-                      className="w-full px-3 py-2 bg-[#2c2c2e] rounded-lg text-[12px] border border-[rgba(84,84,88,0.35)] focus:border-[#bf5af2] focus:outline-none transition-colors"
+                      className="w-full px-3 py-2 bg-white/\[0.05\] rounded-lg text-[12px] border border-white/\[0.08\] focus:border-[#bf5af2] focus:outline-none transition-colors"
                     >
                       <option value={300}>5 minutes</option>
                       <option value={900}>15 minutes</option>
@@ -873,7 +1338,7 @@ function NavigationPageInner({ apiKey }: { apiKey: string }) {
 
       <CyrusHumanoid
         module="navigation"
-        context={`User is in navigation module. ${currentPosition ? `Current position: ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}. Location: ${locationName}. Altitude: ${altitude.toFixed(1)}m. Speed: ${(speed * 3.6).toFixed(1)}km/h. Heading: ${heading.toFixed(0)}° ${getCardinalDirection(heading)}.` : "No position data"}. GPS tracking: ${isWatching ? "active" : "inactive"}.`}
+        context={`User is in navigation module. ${currentPosition ? `Current position: ${currentPosition.lat.toFixed(6)}, ${currentPosition.lon.toFixed(6)}. Location: ${locationName}. Altitude: ${altitude.toFixed(1)}m. Speed: ${(speed * 3.6).toFixed(1)}km/h. Heading: ${heading.toFixed(0)}° ${getCardinalDirection(heading)}.` : "No position data"}. GPS tracking: ${isWatching ? "active" : "inactive"}. Field pins: ${fieldPins.length} (${fieldPins.map((p) => p.label).join(", ") || "none"}).`}
         compact={true}
       />
     </div>

@@ -93,10 +93,25 @@ export function useScan() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, targetLanguage }),
       });
-      if (!res.ok) throw new Error("Translation failed");
-      const result = await res.json();
-      setLastTranslation(result);
-      return result;
+      const result = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new Error(typeof result.error === "string" ? result.error : "Translation failed");
+      }
+      const translatedRaw = result.translatedText ?? result.translation;
+      const translatedText =
+        typeof translatedRaw === "string" ? translatedRaw.trim() : String(translatedRaw ?? "").trim();
+      if (!translatedText) {
+        throw new Error("Translation response was empty.");
+      }
+      const normalized: TranslateResult = {
+        originalText: typeof result.originalText === "string" ? result.originalText : text,
+        detectedLanguage: String(result.detectedLanguage ?? "Unknown"),
+        targetLanguage: String(result.targetLanguage ?? targetLanguage),
+        translatedText,
+        confidence: typeof result.confidence === "number" ? result.confidence : 0,
+      };
+      setLastTranslation(normalized);
+      return normalized;
     },
   });
 

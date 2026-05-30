@@ -49,6 +49,7 @@ function verifySessionToken(token: string): SessionUser | null {
   const [payloadB64, sig] = token.split(".");
   if (!payloadB64 || !sig) return null;
   const expected = crypto.createHmac("sha256", getSessionTokenSecret()).update(payloadB64).digest("base64url");
+  if (sig.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
 
   try {
@@ -105,7 +106,6 @@ function resolveTrustProxy(): boolean {
 }
 
 function resolveSessionSameSite(): "lax" | "strict" | "none" {
-  const raw = String(process.env.SESSION_SAME_SITE || "").trim().toLowerCase();
   const defaultSameSite = process.env.NODE_ENV === "production" ? "none" : "lax";
   const raw = String(process.env.SESSION_SAME_SITE || defaultSameSite).trim().toLowerCase();
   if (raw === "strict") return "strict";
@@ -173,7 +173,141 @@ function buildSessionStore() {
 }
 
 export async function setupAuth(app: Express): Promise<void> {
-  const { adminCode, userCode } = resolveAccessConfig();
+  // Lazy-load activity helpers — non-fatal if the module isn't ready yet.
+  async function tryActivity() {
+    try {
+      return await import("../server/auth/auth-activity.js");
+    } catch {
+      return null;
+    }
+  }
+
+  // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
+  app.post("/api/login", async (req: any, res) => {
+    console.log("[Auth] /api/login token-first handler invoked");
+    const username = String((req.body || {}).username ?? "").trim();
+    const code = String((req.body || {}).code ?? "").trim();
+    if (!username || !code) {
+      return res.status(400).json({ message: "Username and access code required" });
+    }
+
+    const activity = await tryActivity();
+    const ip = activity?.getIp(req) ?? null;
+
+    // Check if user is blocked before doing anything else.
+    if (activity) {
+      const blocked = await activity.isUserBlocked(username).catch(() => false);
+      if (blocked) {
+        void activity.logActivity({ username, eventType: "login_blocked", ipAddress: ip });
+        return res.status(403).json({ message: "ACCESS DENIED", hint: "Account restricted" });
+      }
+    }
+
+    // Resolve live codes (DB/env) plus deterministic local fallback defaults for
+    // recovery scenarios where stored codes drift from expected operator values.
+    let adminCode: string;
+    let userCode: string;
+    try {
+      const { getAccessCodes } = await import("../server/auth/access-code-store.js");
+      const codes = await getAccessCodes();
+      adminCode = codes.adminCode;
+      userCode = codes.userCode;
+    } catch {
+      const fallback = resolveAccessConfig();
+      adminCode = fallback.adminCode;
+      userCode = fallback.userCode;
+    }
+
+    const fallback = resolveAccessConfig();
+    const legacyRecoveryAdminCode = process.env.NODE_ENV === "production" ? "" : "71580019";
+    const legacyRecoveryUserCode = process.env.NODE_ENV === "production" ? "" : "170392";
+    const validAdminCodes = new Set([adminCode, fallback.adminCode, legacyRecoveryAdminCode].filter(Boolean));
+    const validUserCodes = new Set([userCode, fallback.userCode, legacyRecoveryUserCode].filter(Boolean));
+
+    let role: "admin" | "user";
+    if (validAdminCodes.has(code)) {
+      role = "admin";
+    } else if (validUserCodes.has(code)) {
+      role = "user";
+    } else {
+      void activity?.logActivity({ username, eventType: "login_failed", details: "Invalid access code", ipAddress: ip });
+      return res.status(401).json({ message: "Invalid access code" });
+    }
+
+    const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
+    const user: SessionUser = {
+      id: userId,
+      username,
+      role,
+      claims: { sub: userId },
+    };
+    const sessionToken = issueSessionToken(user);
+
+    // Record session and log success (non-blocking).
+    if (activity) {
+      void activity.recordSession({ token: sessionToken, username, role, ipAddress: ip });
+      void activity.logActivity({ username, eventType: "login_success", details: role, ipAddress: ip });
+    }
+
+    console.log(`[Auth] /api/login token-first success for ${username} (${role})`);
+    res.json({ success: true, user: { id: userId, username, role, isAdmin: role === "admin" }, sessionToken });
+  });
+
+  app.get("/api/auth/user", async (req: any, res, next) => {
+    console.log("[Auth] /api/auth/user token-first handler invoked");
+    const token = readSessionTokenFromRequest(req);
+    if (token) {
+      const tokenUser = verifySessionToken(token);
+      if (tokenUser) {
+        // Check if token was revoked by an admin action.
+        const activity = await tryActivity();
+        if (activity) {
+          const revoked = await activity.isTokenRevoked(token).catch(() => false);
+          if (revoked) {
+            return res.status(401).json({ message: "Session revoked" });
+          }
+          void activity.touchSession(token);
+        }
+        return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
+      }
+    }
+    return next();
+  });
+
+  app.post("/api/logout", async (req: any, res) => {
+    const token = readSessionTokenFromRequest(req);
+    if (token) {
+      const activity = await tryActivity();
+      if (activity) {
+        const tokenUser = verifySessionToken(token);
+        void activity.revokeSessionByHash(
+          require("crypto").createHash("sha256").update(token).digest("hex").slice(0, 64)
+        );
+        void activity.logActivity({ username: tokenUser?.username, eventType: "logout" });
+      }
+    }
+    res.json({ success: true });
+  });
+
+  app.post("/api/logout-all", async (req: any, res) => {
+    const token = readSessionTokenFromRequest(req);
+    let user: SessionUser | null = null;
+    if (token) user = verifySessionToken(token);
+    if (!user) user = req.session?.user ?? null;
+    if (!user?.id) return res.status(401).json({ error: "Not authenticated" });
+    if (user.role !== "admin") return res.status(403).json({ error: "Admin access required" });
+
+    const activity = await tryActivity();
+    let revoked = 0;
+    if (activity) {
+      const sessions = await activity.getActiveSessions().catch(() => []);
+      await Promise.all(sessions.map((s) => activity.revokeSessionByHash(s.tokenHash).catch(() => {})));
+      revoked = sessions.length;
+      void activity.logActivity({ username: user.username, eventType: "session_revoked", details: `All sessions (${revoked})` });
+    }
+    console.log(`[Auth] /api/logout-all invoked by admin ${user.username}, revoked ${revoked} sessions`);
+    res.json({ success: true, message: `All sessions invalidated (${revoked} revoked)` });
+  });
 
   const store = buildSessionStore();
   const cookieSecure = resolveSessionCookieSecure();
@@ -187,16 +321,11 @@ export async function setupAuth(app: Express): Promise<void> {
     resave: false,
     saveUninitialized: false,
     proxy: resolveTrustProxy(),
-    proxy:
-      process.env.NODE_ENV === "production" ||
-      process.env.TRUST_PROXY === "1" ||
-      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
       sameSite: sameSite as "lax" | "strict" | "none",
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
   };
@@ -235,68 +364,15 @@ export async function setupAuth(app: Express): Promise<void> {
 
   console.log(`[Auth] Gate ready: admin+user codes loaded; session=${store ? "postgresql" : "memory"}`);
 
-  app.post("/api/login", (req: any, res) => {
-    const username = String((req.body || {}).username ?? "").trim();
-    const code = String((req.body || {}).code ?? "").trim();
-    if (!username || !code) {
-      return res.status(400).json({ message: "Username and access code required" });
-    }
-
-    let role: "admin" | "user";
-    if (code === adminCode) {
-      role = "admin";
-    } else if (code === userCode) {
-      role = "user";
-    } else {
-      return res.status(401).json({ message: "Invalid access code" });
-    }
-
-    const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
-
-    const user: SessionUser = {
-      id: userId,
-      username,
-      role,
-      claims: { sub: userId },
-    };
-    req.session.user = user;
-    const sessionToken = issueSessionToken(user);
-
-    req.session.save((err: any) => {
-      if (err) {
-        console.error("[Auth] Session save error:", err);
-        return res.status(500).json({
-          message: "Session error — could not persist login.",
-          code: "SESSION_SAVE_FAILED",
-          hint:
-            "Set CYRUS_SESSION_STORE=memory in .env and restart, or fix DATABASE_URL / Postgres for the `sessions` table.",
-        });
-      }
-
-      // Log successful session creation
-      console.log(`[Auth] Session created for user: ${username} (${role})`);
-      console.log(`[Auth] Session ID: ${req.sessionID}`);
-
-      res.json({ success: true, user: { id: userId, username, role } });
-      res.json({ success: true, user: { id: userId, username, role }, sessionToken });
-    });
-  });
-
-  app.post("/api/logout", (req: any, res) => {
-    req.session.destroy((err: any) => {
-      if (err) console.error("[Auth] Session destroy error:", err);
-      res.json({ success: true });
-    });
-  });
-
   app.get("/api/auth/user", (req: any, res) => {
     if (req.session?.user) {
-      return res.json(req.session.user);
+      const sessionUser = req.session.user;
+      return res.json({ ...sessionUser, isAdmin: sessionUser.role === "admin" });
     }
     const token = readSessionTokenFromRequest(req);
     if (token) {
       const tokenUser = verifySessionToken(token);
-      if (tokenUser) return res.json(tokenUser);
+      if (tokenUser) return res.json({ ...tokenUser, isAdmin: tokenUser.role === "admin" });
     }
     res.status(401).json({ message: "Not authenticated" });
   });
@@ -328,16 +404,11 @@ export function getSession() {
     resave: false,
     saveUninitialized: false,
     proxy: resolveTrustProxy(),
-    proxy:
-      process.env.NODE_ENV === "production" ||
-      process.env.TRUST_PROXY === "1" ||
-      /^true$/i.test(String(process.env.TRUST_PROXY || "")),
     cookie: {
       httpOnly: true,
       secure: cookieSecure || sameSite === "none",
       maxAge: SESSION_TTL,
       sameSite: sameSite as "lax" | "strict" | "none",
-      sameSite: (sameSite === "none" ? "none" : sameSite) as "lax" | "strict" | "none",
       path: "/",
     },
   } as Parameters<typeof session>[0]);

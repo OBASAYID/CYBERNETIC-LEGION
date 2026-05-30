@@ -12,7 +12,7 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [currentDate, setCurrentDate] = useState("");
   const [error, setError] = useState("");
-  const [backgroundVersion] = useState(() => Date.now());
+  const loginBackgroundImage = "/images/botswana-dashboard-wildlife.jpg";
 
   useEffect(() => {
     const now = new Date();
@@ -62,14 +62,22 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
 
       const data = await response.json();
 
+      // DEBUG: Log the login response
+      console.log("[AccessGate] Login response:", data);
+      console.log("[AccessGate] User role from response:", data.user?.role);
+
       // Store auth data in localStorage
       localStorage.setItem("cyrus_authenticated", "true");
       localStorage.setItem("cyrus-display-name", username.trim());
       localStorage.setItem("cyrus-user-role", data.user?.role || "user");
 
+      // DEBUG: Verify it was stored
+      console.log("[AccessGate] Stored role in localStorage:", localStorage.getItem("cyrus-user-role"));
+
       // Store session token if provided
       if (data.sessionToken) {
         localStorage.setItem("cyrus_session_token", data.sessionToken);
+        window.dispatchEvent(new CustomEvent("cyrus-auth-session-changed"));
       }
 
       // Success - call onAuthenticated
@@ -92,10 +100,10 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url('/images/login-background.png?v=${backgroundVersion}')`,
+          backgroundImage: `url("${loginBackgroundImage}")`,
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/50" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/32 to-black/50" />
 
       <div className="relative z-10 flex-1 flex flex-col px-6 py-4">
         <div className="flex justify-between items-center">

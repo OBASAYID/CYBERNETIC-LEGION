@@ -4,7 +4,7 @@ import { getDashboardNavItems } from "@/config/command-center-nav";
 import { systemFetch } from "@/lib/system-api";
 import type { DashboardModulesResponse, StackSummaryResponse } from "@/components/dashboard-fresh/types";
 
-const CORE_MODULE_ROUTES = ["/modules", "/ops", "/security", "/quantum", "/medical", "/comms"] as const;
+const CORE_MODULE_ROUTES = ["/modules", "/ops", "/quantum", "/medical", "/comms"] as const;
 
 export type UseDashboardFreshDataOptions = {
   /** Stack ports / fused origin (e.g. admin header badge). */

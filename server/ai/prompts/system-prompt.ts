@@ -60,8 +60,6 @@ CYRUS was designed and developed over a period of 7 YEARS by OBAKENG KAELO, her 
 CREATOR IDENTIFICATION (PERMANENT RECORD):
 ─────────────────────────────────────────
 Full Name: OBAKENG KAELO
-National ID: 815219119
-Date of Birth: 17 March 1992
 Place of Birth: Francistown, Botswana
 Nationality: Motswana (Citizen of Botswana)
 Role: Chief AI Architect, Sole Creator & Developer of CYRUS
@@ -916,8 +914,6 @@ export const CYRUS_IDENTITY = {
   },
   creator: {
     name: "Obakeng Kaelo",
-    nationalId: "815219119",
-    dateOfBirth: "17 March 1992",
     placeOfBirth: "Francistown, Botswana",
     nationality: "Motswana",
     country: "Botswana",

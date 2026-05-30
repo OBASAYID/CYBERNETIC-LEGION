@@ -16,7 +16,15 @@ import {
   Share2,
   Terminal,
 } from "lucide-react";
-import { saveHandoff } from "@shared/module-handoff";
+import {
+  clearCommandSearchShare,
+  formatCommandHandoffTranscript,
+  mergeWorkspaceAndCommandHandoff,
+  saveHandoff,
+  writeCommandSearchShare,
+  type ModuleHandoffAttachment,
+  type ModuleHandoffLargeRef,
+} from "@shared/module-handoff";
 import { getSpeechRecognitionConstructor, speakCyrusTts } from "@shared/command-console-voice";
 import { systemFetch } from "@shared/cyrus-api-client";
 import { cn } from "@/lib/utils";
@@ -28,18 +36,6 @@ const COMMAND_SYSTEM =
 
 type Exchange = { role: "user" | "cyrus"; content: string };
 
-function getHandoffText(log: Exchange[]): string {
-  for (let i = log.length - 1; i >= 0; i--) {
-    const L = log[i]!;
-    if (L.role === "cyrus" && L.content.trim()) return L.content.trim();
-  }
-  for (let i = log.length - 1; i >= 0; i--) {
-    const L = log[i]!;
-    if (L.role === "user" && L.content.trim()) return L.content.trim();
-  }
-  return "";
-}
-
 export type ModuleCommandConsoleProps = {
   /** Page title / subtitle or other hint so CYRUS knows which surface is open. */
   pageContext?: string;
@@ -48,10 +44,17 @@ export type ModuleCommandConsoleProps = {
   scope?: "dashboard" | "module";
   /** Parent can reduce bottom padding when the console is collapsed (module shell). */
   onLayoutChange?: (minimized: boolean) => void;
+  /** When the console chat is empty, Pipeline handoff can use text from the workspace above. */
+  workspaceHandoffText?: () => string | undefined;
+  /** `sourceModule` on the saved handoff when text comes from `workspaceHandoffText`. */
+  workspaceHandoffSource?: string;
+  /** Optional small files to send with pipeline handoff (e.g. staged upload). */
+  workspaceHandoffAttachments?: () => ModuleHandoffAttachment[] | undefined;
+  workspaceHandoffLargeRefs?: () => ModuleHandoffLargeRef[] | undefined;
 };
 
 /**
- * Pinned to the bottom of the viewport, matching module workspace max width so the bar is always visible on long pages.
+ * Pinned to the bottom of the viewport; narrower than the workspace so the command bar stays compact and centered.
  */
 export function ModuleCommandConsoleDock({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -69,7 +72,7 @@ export function ModuleCommandConsoleDock({ children, className }: { children: Re
         <div className="absolute bottom-0 left-1/2 h-36 w-[min(36rem,88vw)] -translate-x-1/2 rounded-full bg-blue-600/3 blur-2xl" />
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-950/95 to-transparent" />
       </div>
-      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-screen-2xl px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
+      <div className="pointer-events-auto relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8">
         {children}
       </div>
     </div>
@@ -81,6 +84,10 @@ export function ModuleCommandConsole({
   className,
   scope = "dashboard",
   onLayoutChange,
+  workspaceHandoffText,
+  workspaceHandoffSource,
+  workspaceHandoffAttachments,
+  workspaceHandoffLargeRefs,
 }: ModuleCommandConsoleProps) {
   const [, setLocation] = useLocation();
   const [input, setInput] = useState("");
@@ -206,19 +213,49 @@ export function ModuleCommandConsole({
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [log, send.isPending]);
 
+  useEffect(() => {
+    writeCommandSearchShare(formatCommandHandoffTranscript(log));
+  }, [log]);
+
   const goHandoff = (target: "files" | "scan" | "comms" | "pshare") => {
-    const text = getHandoffText(log);
-    if (!text) {
-      setHandoffHint("Send a message and get a CYRUS reply first, or type in the log.");
+    const fromWorkspace = (workspaceHandoffText?.() ?? "").trim();
+    const transcript = formatCommandHandoffTranscript(log).trim();
+    writeCommandSearchShare(transcript);
+
+    const rawAtt = workspaceHandoffAttachments?.() ?? [];
+    const attachments = rawAtt.filter((a) => a?.data && a.name);
+    const largeRefs = (workspaceHandoffLargeRefs?.() ?? []).filter((r) => r?.id && r.name);
+    const merged = mergeWorkspaceAndCommandHandoff(workspaceHandoffText?.() ?? "", transcript).trim();
+    const attachNames = [
+      ...attachments.map((a) => a.name),
+      ...largeRefs.map((r) => `${r.name} (${(r.size / (1024 * 1024)).toFixed(1)} MB)`),
+    ].filter(Boolean);
+    const fallbackText =
+      attachNames.length > 0 ? `Cross-module handoff — attached file(s): ${attachNames.join(", ")}` : "";
+    const text = merged || fallbackText;
+    if (!text && attachments.length === 0 && largeRefs.length === 0) {
+      setHandoffHint(
+        "Nothing to send yet — add a file or text in this module, or run a CYRUS command search below, then tap a pipeline target.",
+      );
       return;
     }
     setHandoffHint(null);
-    const note = "Cross-module handoff from Command console — generate a report, translate, or share with the group.";
+    const hasWs = fromWorkspace.length > 0;
+    const hasCmd = transcript.length > 0;
+    const fromModule = hasWs ? (workspaceHandoffSource?.trim() || "module-workspace") : "command-console";
+    let note =
+      fromModule === "command-console"
+        ? "Cross-module handoff from Command console — generate a report, translate, or share with the group."
+        : `Cross-module handoff from ${fromModule} — continue in the target module.`;
+    if (hasWs && hasCmd) note = `${note} Includes full CYRUS command search/Q&A transcript.`;
+    if (attachments.length || largeRefs.length) note = `${note} Includes staged file(s) for analysis where supported.`;
     saveHandoff({
-      text,
-      sourceModule: "command-console",
-      title: "Command → pipeline",
+      text: text || fallbackText,
+      sourceModule: fromModule,
+      title: fromModule === "command-console" ? "Command → pipeline" : "Workspace → pipeline",
       note,
+      attachments: attachments.length ? attachments : undefined,
+      largeAttachments: largeRefs.length ? largeRefs : undefined,
     });
     if (target === "files") setLocation("/files?handoff=1");
     else if (target === "scan") setLocation("/scan?handoff=1");
@@ -242,6 +279,7 @@ export function ModuleCommandConsole({
     setLog([]);
     setHandoffHint(null);
     setVoiceError(null);
+    clearCommandSearchShare();
     send.reset();
   };
 
@@ -265,12 +303,12 @@ export function ModuleCommandConsole({
     return (
       <section
         className={cn(
-          "relative z-20 overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/40 via-slate-950/82 to-orange-950/32 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_0_44px_-32px_rgba(251,191,36,0.03),0_8px_40px_rgba(0,0,0,0.5)]",
+          "relative z-20 overflow-hidden rounded-3xl bg-black/20 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[2px]",
           className,
         )}
         aria-label="CYRUS command console (minimized)"
       >
-        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-gradient-to-b from-amber-950/30 via-slate-950/78 to-slate-950/92 px-3 py-2.5 shadow-inner shadow-black/35 sm:px-4">
+        <div className="relative z-10 flex items-center justify-between gap-2 rounded-2xl bg-black/26 px-3 py-2.5 shadow-inner shadow-black/35 sm:px-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-500/25 bg-cyan-500/10">
               <Terminal className="h-4 w-4 text-cyan-300" aria-hidden />
@@ -307,13 +345,13 @@ export function ModuleCommandConsole({
   return (
     <section
       className={cn(
-        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-amber-950/40 via-slate-950/82 to-orange-950/32 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_0_44px_-32px_rgba(251,191,36,0.03),0_8px_40px_rgba(0,0,0,0.5)] sm:min-h-[26rem]",
+        "relative z-20 flex min-h-[24rem] max-h-[min(88vh,42rem)] flex-col overflow-hidden rounded-3xl bg-black/20 p-1 shadow-[0_0_50px_-22px_rgba(34,211,238,0.08),0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[2px] sm:min-h-[26rem]",
         className,
       )}
       aria-label="CYRUS command console"
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-slate-950"
+        className="pointer-events-none absolute inset-0 z-0 rounded-3xl bg-black/12"
         aria-hidden
       />
       <div
@@ -323,7 +361,7 @@ export function ModuleCommandConsole({
           backgroundSize: "24px 24px",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-300/4 via-yellow-500/2 to-orange-500/8" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-cyan-300/8 via-white/4 to-transparent" />
       <div
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_90%_55%_at_50%_0%,rgba(253,230,138,0.05),transparent_55%)]"
         aria-hidden
@@ -336,7 +374,7 @@ export function ModuleCommandConsole({
         className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(125deg,rgba(255,255,255,0.04)_0%,transparent_38%,rgba(255,255,255,0.01)_100%)]"
         aria-hidden
       />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-amber-950/25 via-slate-950/52 to-orange-950/22 p-4 shadow-inner shadow-black/30 backdrop-blur-sm sm:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-black/22 p-4 shadow-inner shadow-black/30 backdrop-blur-[1px] sm:p-5">
         <div
           className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_0%,rgba(255,255,255,0.04),transparent_58%)]"
           aria-hidden

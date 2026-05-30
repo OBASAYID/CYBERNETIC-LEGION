@@ -15,6 +15,7 @@ Use this file so **any** coding assistant (Cursor, VS Code, web UIs) shares the 
 ## Run and URL
 
 - **Integrated dev:** repo root `npm run dev` → UI + API + HMR on **`http://127.0.0.1:${CYRUS_LIVE_PORT:-${PORT:-3020}}/`** (single origin). Prefer **`CYRUS_LIVE_PORT`** as the one env name; `PORT` mirrors it at boot. Example: **`http://127.0.0.1:3020/scan`**.
+- **Mobile / installable:** production `npm run build` enables a **PWA** (web app manifest + service worker via `vite-plugin-pwa` in root `vite.config.ts`). After deploy, use the browser **Install** / **Add to Home Screen** action; APIs still require network. For **store** distribution, wrap the same web app with **Capacitor** (not scaffolded in-repo).
 - **Readiness:** `GET /api/ready` or `GET /health/ready` (503 + `SYSTEM_INITIALIZING` while booting).
 
 ## UI ↔ server wiring (do not duplicate)
@@ -25,6 +26,16 @@ Use this file so **any** coding assistant (Cursor, VS Code, web UIs) shares the 
 4. **`client/`** — use `@shared/cyrus-api-client` (`systemFetch`) for `/api/*` calls (Command Center, Dashboard, comms, hooks, `cyrusApi.request`). Leave plain `fetch` only for non-API URLs (e.g. blob/audio URLs).
 
 Leave **`VITE_CYRUS_API_BASE` unset** for normal local single-port dev.
+
+## Multi-device / universal deployment
+
+- **Public origin:** set **`PUBLIC_BASE_URL`** (or **`BASE_URL`**) to the HTTPS URL users open — not `127.0.0.1`. Cookies, WebRTC, and mobile installs depend on this.
+- **Identity:** **`userId`** = account from auth session (same on every device); **`deviceId`** = per-browser install (`shared/cyrus-identity.ts`, `client/src/lib/cyrus-identity.ts`). Comms registers both; socket map is keyed per device.
+- **Sessions:** use **`DATABASE_URL`** + **`CYRUS_SESSION_STORE=postgresql`** in production so logins persist across server restarts and devices.
+- **Sidecars:** set **`CYRUS_AI_URL`**, **`COMMS_ML_URL`**, **`REDIS_URL`** to service hostnames — not loopback — when API runs in containers.
+- **Calls (WAN):** **`TURN_URLS`** + **`CYRUS_SFU_ANNOUNCED_IP`** for cross-network group/1:1 media.
+- **Group SFU:** **`npm run sfu:install`** fetches mediasoup-worker prebuild; **`npm run sfu:verify`** checks worker. Linux/Docker/Apple Silicon supported; Intel Mac falls back to star relay. Production: open UDP **`CYRUS_SFU_RTC_MIN_PORT`–`CYRUS_SFU_RTC_MAX_PORT`**.
+- **Ops probe:** **`GET /api/stack/deployment`** — public URL, session mode, TURN/SFU flags (no secrets).
 
 ## Auth branches
 

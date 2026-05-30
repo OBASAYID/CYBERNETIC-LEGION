@@ -17,12 +17,24 @@ export function getWebPort(): number {
   return getCyrusLivePort();
 }
 
-/** Primary browser URL for local fused dev (loopback + live port). */
+/** Primary browser URL — PUBLIC_BASE_URL / BASE_URL when set; else loopback for local dev. */
 export function getCyrusFusedOrigin(): string {
+  const explicit =
+    process.env.PUBLIC_BASE_URL?.trim() ||
+    process.env.BASE_URL?.trim() ||
+    process.env.PUBLIC_ORIGIN?.trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+
   const port = getCyrusLivePort();
   const proto = (process.env.PUBLIC_PROTOCOL || "http").replace(/\/$/, "");
-  const host = "127.0.0.1";
-  return `${proto}://${host}:${port}`;
+  const domain = (process.env.PUBLIC_DOMAIN || "").trim();
+  if (domain) {
+    const hasPort = domain.includes(":");
+    const defaultPort = proto === "https" ? 443 : 80;
+    const needsPort = !hasPort && port !== defaultPort;
+    return `${proto}://${domain}${needsPort ? `:${port}` : ""}`;
+  }
+  return `${proto}://127.0.0.1:${port}`;
 }
 
 /**
@@ -79,7 +91,9 @@ export function getStackPortsPayload() {
   const source = getCyrusAiUrlSource();
 
   const displayUrls = [fusedOrigin];
-  if (bindHost && bindHost !== "127.0.0.1" && bindHost !== "0.0.0.0") {
+  if (bindHost === "0.0.0.0" || bindHost === "::") {
+    displayUrls.push(`${(process.env.PUBLIC_PROTOCOL || "http").replace(/\/$/, "")}://localhost:${webPort}`);
+  } else if (bindHost && bindHost !== "127.0.0.1") {
     const proto = (process.env.PUBLIC_PROTOCOL || "http").replace(/\/$/, "");
     displayUrls.push(`${proto}://${bindHost}:${webPort}`);
   }

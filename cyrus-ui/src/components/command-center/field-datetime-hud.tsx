@@ -32,15 +32,22 @@ export function FieldDateTimeHud({ className }: FieldDateTimeHudProps) {
 
   return (
     <div
-      className={cn("pointer-events-none flex flex-col items-end gap-0.5 text-right leading-tight", className)}
+      className={cn(
+        "flex max-w-[min(100%,18rem)] flex-col items-end gap-0.5 text-right leading-tight",
+        className,
+      )}
     >
-      <time dateTime={now.toISOString()} className="block text-sm font-semibold tracking-tight sm:text-base" style={orbitron}>
-        <span className="bg-gradient-to-r from-cyan-100 via-white to-orange-200/95 bg-clip-text text-transparent">
+      <time
+        dateTime={now.toISOString()}
+        className="block max-w-full text-xs font-semibold tracking-tight sm:text-sm"
+        style={orbitron}
+      >
+        <span className="bg-gradient-to-r from-white via-slate-100 to-sky-100/90 bg-clip-text text-transparent">
           {dateLabel}
         </span>
       </time>
       <span
-        className="block text-xs font-medium tabular-nums text-cyan-200/90 sm:text-sm"
+        className="block text-[11px] font-medium tabular-nums text-sky-100/88 sm:text-xs md:text-sm"
         style={orbitron}
         aria-label={`Current time ${timeLabel}`}
       >

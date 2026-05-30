@@ -37,6 +37,30 @@ type CatalogResponse = {
       description: string;
       items: Array<{ id: string; name: string; description: string; uiRoute?: string }>;
     };
+    assetIntelligence?: {
+      id: string;
+      title: string;
+      description: string;
+      items: Array<{
+        id: string;
+        name: string;
+        description: string;
+        uiRoute?: string;
+        apis?: Array<{ method: string; path: string; summary?: string }>;
+      }>;
+    };
+    mcp?: {
+      id: string;
+      title: string;
+      description: string;
+      items: Array<{
+        id: string;
+        name: string;
+        description: string;
+        uiRoute?: string;
+        apis?: Array<{ method: string; path: string }>;
+      }>;
+    };
   };
   ts: number;
 };
@@ -61,6 +85,14 @@ export function AlgorithmsPage() {
       subtitle="Orchestrator engines, upgrade REST endpoints, and Python core-algorithm families in one view. Open a module to run the UI; use API paths from the same origin (session may be required for some routes)."
       headerEnd={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link href="/intelligence">
+            <button
+              type="button"
+              className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100 hover:bg-cyan-500/20"
+            >
+              Intelligence Hub
+            </button>
+          </Link>
           <Link href="/modules">
             <button
               type="button"
@@ -80,7 +112,7 @@ export function AlgorithmsPage() {
         </div>
       }
     >
-      <div className="max-w-5xl space-y-8 overflow-y-auto">
+      <div className="max-w-cyrus-module space-y-8 overflow-y-auto">
         {isLoading && <p className="text-sm text-white/45">Loading catalog…</p>}
         {error && <p className="text-sm text-rose-300">{(error as Error).message}</p>}
 
@@ -88,8 +120,8 @@ export function AlgorithmsPage() {
           <>
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="w-5 h-5 text-amber-200/90" />
-                <h2 className="text-lg font-medium">{cat.orchestrator.title}</h2>
+                <BookOpen className="w-5 h-5 text-[#e11d48]/80" />
+                <h2 className="text-lg font-bold text-white">{cat.orchestrator.title}</h2>
                 <span className="text-[10px] text-white/40 ml-auto">v{cat.version}</span>
               </div>
               <p className="text-xs text-white/50 mb-4">{cat.orchestrator.description}</p>
@@ -162,6 +194,66 @@ export function AlgorithmsPage() {
                 </div>
               </section>
             ))}
+
+            {cat.assetIntelligence ? (
+              <section className="rounded-2xl border border-emerald-400/15 bg-emerald-950/20 p-5">
+                <h2 className="text-lg font-medium text-white mb-1">{cat.assetIntelligence.title}</h2>
+                <p className="text-xs text-white/50 mb-4">{cat.assetIntelligence.description}</p>
+                <div className="space-y-4">
+                  {cat.assetIntelligence.items.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-white/10 bg-black/35 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-white">{item.name}</p>
+                          <p className="text-xs text-white/50 mt-0.5">{item.description}</p>
+                        </div>
+                        {item.uiRoute ? (
+                          <Link href={item.uiRoute}>
+                            <button type="button" className="text-[11px] px-2 py-1 rounded-lg border border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/10">
+                              Open Hub
+                            </button>
+                          </Link>
+                        ) : null}
+                      </div>
+                      {item.apis?.length ? (
+                        <ul className="mt-3 space-y-1.5 text-[11px] font-mono text-emerald-200/80">
+                          {item.apis.map((a) => (
+                            <li key={`${item.id}-${a.path}`} className="flex items-center gap-2">
+                              <span className="text-white/40 w-11 shrink-0">{a.method}</span>
+                              <code className="text-emerald-100/90">{a.path}</code>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {cat.mcp ? (
+              <section className="rounded-2xl border border-cyan-400/15 bg-cyan-950/20 p-5">
+                <h2 className="text-lg font-medium text-white mb-1">{cat.mcp.title}</h2>
+                <p className="text-xs text-white/50 mb-4">{cat.mcp.description}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {cat.mcp.items.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-white/10 bg-black/35 px-3 py-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-white">{item.name}</p>
+                          <p className="text-[11px] text-white/50 mt-0.5">{item.description}</p>
+                        </div>
+                        {item.uiRoute ? (
+                          <Link href={item.uiRoute}>
+                            <span className="text-[10px] text-cyan-300 hover:underline shrink-0">Open</span>
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <section className="rounded-2xl border border-violet-400/15 bg-violet-950/25 p-5">
               <h2 className="text-lg font-medium text-white mb-1">{cat.pythonCore.title}</h2>
