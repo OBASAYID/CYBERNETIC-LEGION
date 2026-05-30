@@ -262,6 +262,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const iceRestartVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Ignore spurious ICE "disconnected" before we have ever reached a live path. */
   const mediaWasLiveRef = useRef(false);
+  /** True only after ICE reached connected/completed (not merely ontrack). */
+  const icePathWasLiveRef = useRef(false);
   const webrtcDiagSessionRef = useRef<WebRtcDiagnosticsSession | null>(null);
   const recoveryManagerRef = useRef(new RtcRecoveryManager());
   const negotiationCoordinatorRef = useRef(new RtcNegotiationCoordinator());
@@ -341,22 +343,38 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       const call = activeCallRef.current;
       const socket = socketRef.current;
       if (!pc || !call || !socket?.connected) return false;
+
+      const signalingReady =
+        pc.signalingState === "stable" ||
+        pc.signalingState === "have-remote-offer" ||
+        icePathWasLiveRef.current;
+      if (!signalingReady) return false;
+
+      const mediaReady =
+        mediaWasLiveRef.current || reason === "qos_action_force_relay_restart";
+      if (!mediaReady) return false;
+
+      if (reason === "ice_disconnected" && !icePathWasLiveRef.current) return false;
+
       try {
-        setActiveCall((prev) =>
-          prev && prev.roomId === call.roomId ? { ...prev, status: "reconnecting" } : prev,
-        );
-        await pc.restartIce();
-        const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
-        await pc.setLocalDescription(offer);
-        const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
-        socket.emit("webrtc-offer", payload);
-        socket.emit("webrtc:offer", payload);
-        emitCommsTelemetry("ice_restart", {
-          outcome: "success",
-          roomId: call.roomId,
-          reason: reason || "ice_restart_offer",
+        return await negotiationCoordinatorRef.current.runExclusive(async () => {
+          if (!peerConnectionRef.current || peerConnectionRef.current !== pc) return false;
+          setActiveCall((prev) =>
+            prev && prev.roomId === call.roomId ? { ...prev, status: "reconnecting" } : prev,
+          );
+          await pc.restartIce();
+          const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
+          await pc.setLocalDescription(offer);
+          const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
+          socket.emit("webrtc-offer", payload);
+          socket.emit("webrtc:offer", payload);
+          emitCommsTelemetry("ice_restart", {
+            outcome: "success",
+            roomId: call.roomId,
+            reason: reason || "ice_restart_offer",
+          });
+          return true;
         });
-        return true;
       } catch (e) {
         emitCommsTelemetry("ice_restart", {
           outcome: "failed",
@@ -531,6 +549,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     pendingRemoteOfferRef.current = null;
     negotiationBusyRef.current = false;
     mediaWasLiveRef.current = false;
+    icePathWasLiveRef.current = false;
     iceRestartAttemptsRef.current = 0;
     if (iceRestartVerifyTimerRef.current) {
       clearTimeout(iceRestartVerifyTimerRef.current);
@@ -731,6 +750,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         iceRestartAttemptsRef.current = 0;
         recoveryManagerRef.current.reset();
         negotiationCoordinatorRef.current.reset();
+        mediaWasLiveRef.current = false;
+        icePathWasLiveRef.current = false;
         if (iceRestartVerifyTimerRef.current) {
           clearTimeout(iceRestartVerifyTimerRef.current);
           iceRestartVerifyTimerRef.current = null;
@@ -973,6 +994,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           recoveryManagerRef.current.onIceStateChange(pc.iceConnectionState, Date.now());
           const maxAttempts = recoveryManagerRef.current.maxRestartAttempts();
           if (isIcePathLive(pc.iceConnectionState)) {
+            icePathWasLiveRef.current = true;
             iceRestartAttemptsRef.current = 0;
             if (iceRestartVerifyTimerRef.current) {
               clearTimeout(iceRestartVerifyTimerRef.current);
@@ -983,6 +1005,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           if (
             pc.iceConnectionState === "disconnected" &&
             mediaWasLiveRef.current &&
+            icePathWasLiveRef.current &&
             iceRestartAttemptsRef.current < maxAttempts
           ) {
             iceRestartAttemptsRef.current += 1;
@@ -1943,7 +1966,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           });
           const maxA = rec.maxRestartAttempts();
           if (res.action === "ice_restart") {
-            if (iceRestartAttemptsRef.current >= maxA) return;
+            if (!mediaWasLiveRef.current || iceRestartAttemptsRef.current >= maxA) return;
             iceRestartAttemptsRef.current += 1;
             session.recordRecoveryAction("auto_ice_restart", { reason: res.reason });
             webrtcDiagSessionRef.current?.logReconnectAttempt(iceRestartAttemptsRef.current, maxA);
@@ -1996,6 +2019,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               }
             }, CYRUS_ICE_RESTART_VERIFY_MS);
           } else if (res.action === "force_relay_restart" || res.action === "escalate_relay_preference") {
+            if (!mediaWasLiveRef.current && !icePathWasLiveRef.current) return;
             session.recordRecoveryAction("relay_escalation", { reason: res.reason });
             addNotification("info", "Switching to relay path for clearer audio…");
             const relayStartedAt = Date.now();
@@ -2011,32 +2035,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             }
             if (iceRestartAttemptsRef.current >= maxA) return;
             iceRestartAttemptsRef.current += 1;
-            try {
-              await pc.restartIce();
-              const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
-              await pc.setLocalDescription(offer);
-              if (socketRef.current?.connected && call?.roomId) {
-                const offerPayload = withWebRtcTarget(
-                  { roomId: call.roomId, offer },
-                  call.peerId,
-                );
-                socketRef.current.emit("webrtc-offer", offerPayload);
-                socketRef.current.emit("webrtc:offer", offerPayload);
-              }
+            const relayOk = await emitIceRestartOffer(res.reason || "relay_escalation");
+            if (relayOk) {
               emitCommsTelemetry("relay_restart", {
                 outcome: "success",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - relayStartedAt,
                 reason: res.reason || "relay_escalation",
               });
-            } catch (e) {
+            } else {
               emitCommsTelemetry("relay_restart", {
                 outcome: "failed",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - relayStartedAt,
                 reason: "relay_escalation_exception",
               });
-              console.warn("[WebRTC-Presence] relay restart failed:", e);
             }
           }
           return;
