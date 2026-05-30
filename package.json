@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.server.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.server.json",
     "typecheck:ui": "tsc --noEmit -p cyrus-ui/tsconfig.json",
-    "typecheck:all": "npm run typecheck && npm run typecheck:ui",
+    "typecheck:all": "npm run typecheck && npm run typecheck:ui && node scripts/validate-json-configs.mjs",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
     "lint": "npm run typecheck",
     "test": "npm run typecheck:all && bash scripts/integration-smoke.sh",
