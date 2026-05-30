@@ -27,6 +27,7 @@ import {
   attachMediaStreamToVideo,
   extractAudioOnlyStream,
 } from "../../lib/comms-video-playback";
+import { resumeCyrusAudioPipeline } from "../../realtime/audio-context-recovery";
 import { InCallChat } from "./InCallChat";
 import { ScreenShareView } from "./ScreenShareView";
 import { FloatingReactions, Reaction } from "./FloatingReactions";
@@ -187,7 +188,10 @@ function RemoteAudioSink({
     const attach = () => {
       void attachMediaStreamToAudio(el, extractAudioOnlyStream(stream ?? null), {
         volume: 1,
-        onPlaybackBlocked,
+        onPlaybackBlocked: () => {
+          onPlaybackBlocked?.();
+          window.setTimeout(() => void attachMediaStreamToAudio(el, extractAudioOnlyStream(stream ?? null), { volume: 1 }), 500);
+        },
       });
     };
 
@@ -319,6 +323,24 @@ function videoOnlyStream(stream: MediaStream | null | undefined): MediaStream | 
   return tracks.length ? new MediaStream(tracks) : null;
 }
 
+/** Never bind the local camera stream to the remote main stage. */
+function resolveRemoteStageStream(
+  remote: MediaStream | null | undefined,
+  local: MediaStream | null | undefined,
+): MediaStream | null {
+  if (!remote) return null;
+  if (local && remote === local) return null;
+  const localTrackIds = new Set(local?.getTracks().map((t) => t.id) ?? []);
+  const remoteTracks = remote.getTracks();
+  if (
+    remoteTracks.length > 0 &&
+    remoteTracks.every((t) => localTrackIds.has(t.id))
+  ) {
+    return null;
+  }
+  return remote;
+}
+
 function getGridClass(count: number): string {
   if (count <= 1) return "grid-cols-1 grid-rows-1";
   if (count === 2) return "grid-cols-2 grid-rows-1";
@@ -373,6 +395,7 @@ export function CallView({
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteMainRef = useRef<HTMLVideoElement>(null);
   const callMediaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -450,14 +473,16 @@ export function CallView({
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
   const remoteParticipant = participants.find((p) => p.id !== currentUserId);
-  const remoteMediaStream = remoteParticipant?.stream ?? remoteStreamProp ?? null;
+  /** Presence `remoteStream` is the single source of truth for inbound media. */
+  const remoteMediaStream = resolveRemoteStageStream(
+    remoteStreamProp ?? remoteParticipant?.stream ?? null,
+    localStream,
+  );
   const remoteAudioStream = remoteMediaStream;
   const remoteVideoStream = videoOnlyStream(remoteMediaStream);
   const remoteDisplayName = remoteParticipant?.displayName ?? "Participant";
   const isOneToOne = participants.filter((p) => p.id !== currentUserId).length <= 1;
-  /** macOS/Safari: play remote audio on the main <video> when video tracks exist. */
-  const playRemoteAudioOnMainVideo = isOneToOne && Boolean(remoteVideoStream);
-  const remoteMainRef = useRef<HTMLVideoElement>(null);
+  const isFullScreenVideoCall = isOneToOne && callType === "video" && !isLocalScreenSharing;
 
   const handleRemotePlaybackBlocked = useCallback(() => {
     setRemoteAudioBlocked(true);
@@ -473,8 +498,9 @@ export function CallView({
     if (!isOneToOne || callType !== "video") return;
 
     const attach = () => {
-      void attachMediaStreamToVideo(remoteMainRef.current, remoteMediaStream, {
-        muted: !playRemoteAudioOnMainVideo,
+      const stageStream = videoOnlyStream(remoteMediaStream) ?? remoteMediaStream;
+      void attachMediaStreamToVideo(remoteMainRef.current, stageStream, {
+        muted: true,
         volume: 1,
         onPlaybackStarted: handleRemotePlaybackStarted,
         onPlaybackBlocked: handleRemotePlaybackBlocked,
@@ -485,7 +511,11 @@ export function CallView({
     const ms = remoteMediaStream;
     if (!ms) return;
 
-    const onTracksChanged = () => attach();
+    const onTracksChanged = () => {
+      attach();
+      void resumeCyrusAudioPipeline();
+      onRecoverMedia?.();
+    };
     ms.onaddtrack = onTracksChanged;
     ms.onremovetrack = onTracksChanged;
     for (const track of ms.getVideoTracks()) {
@@ -503,17 +533,27 @@ export function CallView({
     isOneToOne,
     callType,
     remoteMediaStream,
-    playRemoteAudioOnMainVideo,
     handleRemotePlaybackStarted,
     handleRemotePlaybackBlocked,
+    onRecoverMedia,
   ]);
 
-  return (
-    <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
-      {!playRemoteAudioOnMainVideo && (
-        <RemoteAudioSink stream={remoteAudioStream} onPlaybackBlocked={handleRemotePlaybackBlocked} />
-      )}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md">
+  useEffect(() => {
+    if (!isOneToOne || !remoteMediaStream?.getAudioTracks().length) return;
+    void resumeCyrusAudioPipeline();
+    onRecoverMedia?.();
+    const retry = window.setTimeout(() => void resumeCyrusAudioPipeline(), 600);
+    return () => window.clearTimeout(retry);
+  }, [isOneToOne, remoteMediaStream, onRecoverMedia]);
+
+  const callChromeHeader = (
+      <div
+        className={
+          isFullScreenVideoCall
+            ? "absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none [&_button]:pointer-events-auto"
+            : "flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md"
+        }
+      >
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
           <span className="text-sm font-medium text-white">
@@ -584,9 +624,27 @@ export function CallView({
           </button>
         </div>
       </div>
+  );
+
+  return (
+    <div
+      className={`fixed inset-0 z-[90] flex flex-col ${isFullScreenVideoCall ? "bg-black" : "bg-gray-950"}`}
+    >
+      {isOneToOne && (
+        <RemoteAudioSink
+          stream={remoteAudioStream}
+          onPlaybackBlocked={() => {
+            handleRemotePlaybackBlocked();
+            void resumeCyrusAudioPipeline();
+            onRecoverMedia?.();
+          }}
+        />
+      )}
+      {!isFullScreenVideoCall && callChromeHeader}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="relative min-h-0 flex-1 overflow-hidden">
+          {isFullScreenVideoCall && callChromeHeader}
           <FloatingReactions
             reactions={reactions}
             onSendReaction={onSendReaction}
@@ -615,18 +673,18 @@ export function CallView({
             </div>
           ) : isOneToOne ? (
             <div className="absolute inset-0 bg-black">
-              {(callType === "video" || remoteVideoStream) && (
+              {callType === "video" && (
                 <video
                   ref={remoteMainRef}
                   autoPlay
                   playsInline
-                  muted={!playRemoteAudioOnMainVideo}
+                  muted
                   data-cyrus-remote-call="1"
-                  className="absolute inset-0 h-full w-full object-contain sm:object-cover [transform:translateZ(0)]"
+                  className="absolute inset-0 z-0 h-full w-full object-cover [transform:translateZ(0)]"
                 />
               )}
               {!remoteVideoStream && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+                <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
                   <div className="flex h-28 w-28 items-center justify-center rounded-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/30 to-blue-600/30 text-3xl font-bold text-white">
                     {remoteDisplayName
                       .split(" ")
@@ -650,24 +708,6 @@ export function CallView({
               <div className="pointer-events-none absolute bottom-4 left-4 z-[5] rounded-lg bg-black/55 px-3 py-1.5 backdrop-blur-sm">
                 <span className="text-sm font-medium text-white">{remoteDisplayName}</span>
               </div>
-              {remoteAudioBlocked && (
-                <button
-                  type="button"
-                  className="absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2.5 text-sm font-semibold text-amber-100 shadow-lg backdrop-blur-sm"
-                  onClick={() => {
-                    void (async () => {
-                      onRecoverMedia?.();
-                      try {
-                        await remoteMainRef.current?.play();
-                      } catch {
-                        /* retry via recover */
-                      }
-                    })();
-                  }}
-                >
-                  Tap to enable sound
-                </button>
-              )}
             </div>
           ) : (
             <div className={`grid ${gridClass} gap-2 h-full`}>
@@ -688,10 +728,10 @@ export function CallView({
 
           {localStream && callType === "video" && isOneToOne && (
             <div
-              className="absolute z-20 w-40 max-w-[36vw] overflow-hidden rounded-xl border-2 border-white/25 shadow-2xl cursor-grab active:cursor-grabbing"
+              className="absolute z-40 w-36 max-w-[32vw] overflow-hidden rounded-xl border-2 border-white/30 shadow-2xl cursor-grab active:cursor-grabbing"
               style={{
                 aspectRatio: "4 / 3",
-                bottom: `${pipPosition.y + 12}px`,
+                bottom: `${pipPosition.y + (isFullScreenVideoCall ? 96 : 12)}px`,
                 right: `${pipPosition.x + 12}px`,
               }}
               onMouseDown={handlePipMouseDown}

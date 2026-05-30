@@ -1356,7 +1356,14 @@ export default function CommsHubPage() {
     callChatMessages,
   } = usePresence();
 
-  const myId = myUserId || `local-${Date.now()}`;
+  const myId = useMemo(() => {
+    if (myUserId) return myUserId;
+    try {
+      return localStorage.getItem("cyrus_comms_user_id") || "local-operator";
+    } catch {
+      return "local-operator";
+    }
+  }, [myUserId]);
 
   const {
     sfuStatus, incomingGroupCall, activeGroupCall,

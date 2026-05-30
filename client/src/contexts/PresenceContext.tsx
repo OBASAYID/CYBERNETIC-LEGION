@@ -893,10 +893,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
           for (const track of toAdd) inbound.addTrack(track);
           setRemoteStream(new MediaStream(inbound.getTracks()));
-          if (toAdd.some((t) => t.kind === "audio" && t.readyState === "live")) {
+          if (toAdd.some((t) => t.kind === "audio")) {
             promoteMediaConnected();
+            void resumeCyrusAudioPipeline();
           }
-          if (callType === "video" && toAdd.some((t) => t.kind === "video" && t.readyState === "live")) {
+          if (callType === "video" && toAdd.some((t) => t.kind === "video")) {
             promoteMediaConnected();
           }
         };
