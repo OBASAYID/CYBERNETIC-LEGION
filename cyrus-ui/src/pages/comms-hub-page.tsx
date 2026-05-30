@@ -1353,6 +1353,7 @@ export default function CommsHubPage() {
     mediaControls, wsRef, isScreenSharing, screenShareStream,
     remoteScreenSharerName, startScreenShare, stopScreenShare,
     sendCallChatMessage, recoverCallMedia, reportRemoteMediaPlayback,
+    callChatMessages,
   } = usePresence();
 
   const myId = myUserId || `local-${Date.now()}`;
@@ -1470,6 +1471,7 @@ export default function CommsHubPage() {
           onStartScreenShare={startScreenShare}
           onStopScreenShare={stopScreenShare}
           onSendChatMessage={(msg: string) => sendCallChatMessage({ message: msg, messageType: "text" })}
+          chatMessages={callChatMessages}
           onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
           socketRef={wsRef}
         />

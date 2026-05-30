@@ -44,6 +44,7 @@ import {
   enqueueOutboundMessage,
   flushOutboundQueue,
 } from "../lib/comms-offline-queue";
+import type { InCallChatMessage } from "../components/comms/InCallChat";
 
 export type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
 
@@ -146,6 +147,7 @@ interface PresenceContextType {
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => Promise<void>;
   sendCallChatMessage: (payload: ChatOutboundPayload) => void;
+  callChatMessages: InCallChatMessage[];
 }
 
 const PresenceContext = createContext<PresenceContextType | null>(null);
@@ -221,6 +223,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
   const [notifications, setNotifications] = useState<CallNotification[]>([]);
+  const [callChatMessages, setCallChatMessages] = useState<InCallChatMessage[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [mediaControls, setMediaControls] = useState<MediaCallControls>({ isMuted: false, isVideoEnabled: true });
@@ -548,6 +551,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setRemoteStream(null);
     setCallDuration(0);
     setMediaControls({ isMuted: false, isVideoEnabled: true });
+    setCallChatMessages([]);
   }, []);
 
   const applyReplayedCommsEvent = useCallback(
@@ -1193,6 +1197,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('call-ringing', (data: { roomId: string; targetName: string; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call ringing:", data.targetName, "type:", data.callType);
+      socket.emit("join-call-room", { roomId: data.roomId });
+      setCallChatMessages([]);
       setActiveCall({
         roomId: data.roomId,
         peerName: data.targetName,
@@ -1240,6 +1246,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       activeCallRef.current = nextCall;
       setIncomingCall(null);
       incomingCallRef.current = null;
+      socket.emit("join-call-room", { roomId: data.roomId });
       addNotification("success", `Connecting to ${data.peerName}…`);
       setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId);
     });
@@ -1247,6 +1254,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call connected:", data.peerName, "type:", data.callType);
       const callType = data.callType || "audio";
+      socket.emit("join-call-room", { roomId: data.roomId });
+      setCallChatMessages([]);
       const nextCall: ActiveCallState = {
         roomId: data.roomId,
         peerName: data.peerName,
@@ -1311,6 +1320,39 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           status: data.needsMediaRecovery ? "reconnecting" : "connecting",
         });
         addNotification("info", "Call session restored - recovering media path.");
+      },
+    );
+
+    socket.on(
+      "call-chat-message",
+      (data: {
+        senderId: string;
+        senderName: string;
+        message: string;
+        timestamp: string;
+        messageType?: string;
+        fileUrl?: string;
+        fileName?: string;
+        fileMimeType?: string;
+        roomId?: string;
+      }) => {
+        const call = activeCallRef.current;
+        if (call && data.roomId && data.roomId !== call.roomId) return;
+        setCallChatMessages((prev) => {
+          const next: InCallChatMessage = {
+            senderId: data.senderId,
+            senderName: data.senderName,
+            message: data.message,
+            timestamp: data.timestamp || new Date().toISOString(),
+            messageType: data.messageType,
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            fileMimeType: data.fileMimeType,
+          };
+          const key = `${next.senderId}:${next.timestamp}:${next.message}`;
+          if (prev.some((m) => `${m.senderId}:${m.timestamp}:${m.message}` === key)) return prev;
+          return [...prev, next];
+        });
       },
     );
 
@@ -1634,20 +1676,57 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     );
   }, [addNotification]);
 
+  const renegotiateCallMedia = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const call = activeCallRef.current;
+    const socket = socketRef.current;
+    if (!pc || !call || !socket?.connected) return;
+    try {
+      await negotiationCoordinatorRef.current.runExclusive(async () => {
+        const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
+        await pc.setLocalDescription(offer);
+        const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
+        socket.emit("webrtc-offer", payload);
+        socket.emit("webrtc:offer", payload);
+      });
+    } catch (e) {
+      console.warn("[Presence] call media renegotiation failed:", e);
+    }
+  }, []);
+
   const sendCallChatMessage = useCallback((payload: ChatOutboundPayload) => {
     const call = activeCallRef.current;
     const uid = currentUserIdRef.current;
-    if (!call || !uid || !socketRef.current?.connected) return;
-    socketRef.current.emit("call-chat-message", {
+    const socket = socketRef.current;
+    if (!call || !uid || !socket?.connected) {
+      addNotification("error", "Join an active call before sending in-call chat.");
+      return;
+    }
+    const timestamp = payload.timestamp || new Date().toISOString();
+    const displayName = displayNameRef.current || "You";
+    setCallChatMessages((prev) => [
+      ...prev,
+      {
+        senderId: uid,
+        senderName: displayName,
+        message: payload.message,
+        timestamp,
+        messageType: payload.messageType || "text",
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileMimeType: payload.fileMimeType,
+      },
+    ]);
+    socket.emit("call-chat-message", {
       roomId: call.roomId,
       message: payload.message,
       messageType: payload.messageType || "text",
       fileUrl: payload.fileUrl,
       fileName: payload.fileName,
       fileMimeType: payload.fileMimeType,
-      timestamp: payload.timestamp || new Date().toISOString(),
+      timestamp,
     });
-  }, []);
+  }, [addNotification]);
 
   const stopScreenShare = useCallback(async () => {
     const pc = peerConnectionRef.current;
@@ -1669,8 +1748,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setIsScreenSharing(false);
     if (call && socketRef.current?.connected) {
       socketRef.current.emit("screen-share-stop", { roomId: call.roomId });
+      await renegotiateCallMedia();
     }
-  }, []);
+  }, [renegotiateCallMedia]);
 
   const startScreenShare = useCallback(async () => {
     const pc = peerConnectionRef.current;
@@ -1708,12 +1788,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setIsScreenSharing(true);
       setMediaControls((prev) => ({ ...prev, isVideoEnabled: true }));
       socketRef.current.emit("screen-share-start", { roomId: call.roomId });
+      await renegotiateCallMedia();
       addNotification("success", "Screen sharing started");
     } catch (err) {
       console.warn("[Presence] screen share failed:", err);
       addNotification("warning", "Screen share cancelled or blocked by the browser.");
     }
-  }, [addNotification, stopScreenShare]);
+  }, [addNotification, stopScreenShare, renegotiateCallMedia]);
 
   useEffect(() => {
     return () => {
@@ -1990,6 +2071,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         startScreenShare,
         stopScreenShare,
         sendCallChatMessage,
+        callChatMessages,
       }}
     >
       {children}

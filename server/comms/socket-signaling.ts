@@ -254,6 +254,24 @@ const QOS_ACTION_COOLDOWN_MS = {
 const QOS_HYSTERESIS_DEGRADED_STREAK = 2;
 const COMMS_CHAOS_ENABLED = process.env.CYRUS_ENABLE_COMMS_CHAOS === "1";
 
+async function emitToCallRoom(
+  io: SocketIOServer,
+  roomId: string,
+  event: string,
+  payload: Record<string, unknown>,
+  excludeUserId?: string,
+): Promise<void> {
+  const activeCall = await loadActiveCall(roomId);
+  if (activeCall?.participants?.length) {
+    for (const pid of activeCall.participants) {
+      if (excludeUserId && pid === excludeUserId) continue;
+      emitToCommsUser(io, pid, event, payload);
+    }
+    return;
+  }
+  io.to(roomId).emit(event, payload);
+}
+
 function presenceMapKey(commsUserId: string, deviceId: string): string {
   return `${commsUserId}::${deviceId}`;
 }
@@ -1118,6 +1136,7 @@ export function initSocketSignaling(server: HttpServer) {
       schedulePendingCallTimeout(io, roomId, callerId, data.targetUserId);
       caller.inCall = true;
       caller.currentRoomId = roomId;
+      socket.join(roomId);
 
       console.log(`[Socket.IO] Call: ${caller.displayName} -> ${target.displayName} (${data.callType}) Room: ${roomId}`);
 
@@ -1173,8 +1192,9 @@ export function initSocketSignaling(server: HttpServer) {
 
       // Join every device socket for both participants so room-based fallbacks
       // cannot miss a peer when users have multiple active devices.
-      io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
-      io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
+      await io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
+      await io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
+      socket.join(data.roomId);
 
       const activeCall: ActiveCall = {
         roomId: data.roomId,
@@ -2104,6 +2124,14 @@ export function initSocketSignaling(server: HttpServer) {
       }
     });
 
+    socket.on("join-call-room", async (data: { roomId?: string }) => {
+      if (!isReasonableId(data?.roomId)) {
+        runtimeMetrics.signalingInvalidPayloadRejected += 1;
+        return;
+      }
+      socket.join(data!.roomId!);
+    });
+
     socket.on("screen-share-start", async (data: { roomId: string }) => {
       const userId = (socket as any).userId;
       const activeCall = await loadActiveCall(data.roomId);
@@ -2113,11 +2141,12 @@ export function initSocketSignaling(server: HttpServer) {
         await saveActiveCall(data.roomId, activeCall);
       }
 
-      socket.to(data.roomId).emit("screen-share-started", {
+      const payload = {
         roomId: data.roomId,
         userId,
         displayName: (getSocketUser(socket) || findUserByCommsId(userId))?.displayName,
-      });
+      };
+      await emitToCallRoom(io, data.roomId, "screen-share-started", payload, userId);
     });
 
     socket.on("screen-share-stop", async (data: { roomId: string }) => {
@@ -2129,7 +2158,7 @@ export function initSocketSignaling(server: HttpServer) {
         await saveActiveCall(data.roomId, activeCall);
       }
 
-      socket.to(data.roomId).emit("screen-share-stopped", {
+      await emitToCallRoom(io, data.roomId, "screen-share-stopped", {
         roomId: data.roomId,
         userId,
       });
@@ -2165,7 +2194,7 @@ export function initSocketSignaling(server: HttpServer) {
         console.error("[Socket.IO] Failed to persist call message:", err);
       }
 
-      io.to(data.roomId).emit("call-chat-message", {
+      const chatPayload = {
         senderId: userId,
         senderName: user.displayName,
         message: data.message,
@@ -2175,7 +2204,9 @@ export function initSocketSignaling(server: HttpServer) {
         fileMimeType: data.fileMimeType,
         timestamp: data.timestamp,
         roomId: data.roomId,
-      });
+      };
+
+      await emitToCallRoom(io, data.roomId, "call-chat-message", chatPayload);
     });
 
     socket.on("send-private-message", async (data: { roomId: string; message: string; privateRecipients: string[]; mediaUrls?: string[]; messageType?: string }) => {
@@ -2681,8 +2712,9 @@ export function initSocketSignaling(server: HttpServer) {
 
       // Join every device socket for both participants so room-based fallbacks
       // cannot miss a peer when users have multiple active devices.
-      io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
-      io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
+      await io.in(commsUserRoom(pendingCall.callerId)).socketsJoin(data.roomId);
+      await io.in(commsUserRoom(userId)).socketsJoin(data.roomId);
+      socket.join(data.roomId);
 
       const activeCall: ActiveCall = {
         roomId: data.roomId,
