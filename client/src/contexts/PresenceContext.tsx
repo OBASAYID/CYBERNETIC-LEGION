@@ -262,8 +262,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const iceRestartVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Ignore spurious ICE "disconnected" before we have ever reached a live path. */
   const mediaWasLiveRef = useRef(false);
-  /** True only after ICE reached connected/completed (not merely ontrack). */
-  const icePathWasLiveRef = useRef(false);
   const webrtcDiagSessionRef = useRef<WebRtcDiagnosticsSession | null>(null);
   const recoveryManagerRef = useRef(new RtcRecoveryManager());
   const negotiationCoordinatorRef = useRef(new RtcNegotiationCoordinator());
@@ -284,24 +282,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     >()
   );
   const lastQosSampleEmitAtRef = useRef(0);
-  /** Warm TURN/STUN before the first offer to shorten call setup. */
-  const rtcConfigPrefetchRef = useRef<RTCConfiguration | null>(null);
-  const rtcPrefetchInFlightRef = useRef(false);
-
-  const prefetchCommRtcConfig = useCallback(() => {
-    if (rtcPrefetchInFlightRef.current) return;
-    rtcPrefetchInFlightRef.current = true;
-    void fetchCyrusCommRtcConfiguration()
-      .then((cfg) => {
-        rtcConfigPrefetchRef.current = cfg;
-      })
-      .catch(() => {
-        /* setupWebRTCMedia falls back to live fetch */
-      })
-      .finally(() => {
-        rtcPrefetchInFlightRef.current = false;
-      });
-  }, []);
 
   const nextClientSeq = useCallback(() => {
     if (clientSeqRef.current <= 0) {
@@ -334,58 +314,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       });
     },
     [nextClientSeq],
-  );
-
-  /** ICE restart must re-offer with targetPeerId — restartIce() alone does not renegotiate on the remote peer. */
-  const emitIceRestartOffer = useCallback(
-    async (reason?: string): Promise<boolean> => {
-      const pc = peerConnectionRef.current;
-      const call = activeCallRef.current;
-      const socket = socketRef.current;
-      if (!pc || !call || !socket?.connected) return false;
-
-      const signalingReady =
-        pc.signalingState === "stable" ||
-        pc.signalingState === "have-remote-offer" ||
-        icePathWasLiveRef.current;
-      if (!signalingReady) return false;
-
-      const mediaReady =
-        mediaWasLiveRef.current || reason === "qos_action_force_relay_restart";
-      if (!mediaReady) return false;
-
-      if (reason === "ice_disconnected" && !icePathWasLiveRef.current) return false;
-
-      try {
-        return await negotiationCoordinatorRef.current.runExclusive(async () => {
-          if (!peerConnectionRef.current || peerConnectionRef.current !== pc) return false;
-          setActiveCall((prev) =>
-            prev && prev.roomId === call.roomId ? { ...prev, status: "reconnecting" } : prev,
-          );
-          await pc.restartIce();
-          const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
-          await pc.setLocalDescription(offer);
-          const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
-          socket.emit("webrtc-offer", payload);
-          socket.emit("webrtc:offer", payload);
-          emitCommsTelemetry("ice_restart", {
-            outcome: "success",
-            roomId: call.roomId,
-            reason: reason || "ice_restart_offer",
-          });
-          return true;
-        });
-      } catch (e) {
-        emitCommsTelemetry("ice_restart", {
-          outcome: "failed",
-          roomId: call?.roomId,
-          reason: reason || "ice_restart_offer_failed",
-        });
-        console.warn("[WebRTC-Presence] ICE restart offer failed:", e);
-        return false;
-      }
-    },
-    [emitCommsTelemetry],
   );
 
   const emitPresenceRegister = useCallback((socket: Socket) => {
@@ -522,7 +450,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           /* ignore */
         }
         try {
-          await emitIceRestartOffer("qos_action_force_relay_restart");
+          await pc.restartIce();
+          const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
+          await pc.setLocalDescription(offer);
+          if (socket.connected) {
+            socket.emit(
+              "webrtc-offer",
+              withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId),
+            );
+          }
           emitCommsTelemetry("relay_restart", {
             outcome: "success",
             roomId: call.roomId,
@@ -541,7 +477,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [addNotification, emitCommsTelemetry, emitIceRestartOffer],
+    [addNotification, emitCommsTelemetry],
   );
 
   const cleanupMedia = useCallback(() => {
@@ -549,7 +485,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     pendingRemoteOfferRef.current = null;
     negotiationBusyRef.current = false;
     mediaWasLiveRef.current = false;
-    icePathWasLiveRef.current = false;
     iceRestartAttemptsRef.current = 0;
     if (iceRestartVerifyTimerRef.current) {
       clearTimeout(iceRestartVerifyTimerRef.current);
@@ -750,8 +685,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         iceRestartAttemptsRef.current = 0;
         recoveryManagerRef.current.reset();
         negotiationCoordinatorRef.current.reset();
-        mediaWasLiveRef.current = false;
-        icePathWasLiveRef.current = false;
         if (iceRestartVerifyTimerRef.current) {
           clearTimeout(iceRestartVerifyTimerRef.current);
           iceRestartVerifyTimerRef.current = null;
@@ -857,10 +790,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           socket.on("webrtc:offer", handleRemoteOffer);
         }
 
-        const rtcConfig =
-          rtcConfigPrefetchRef.current ?? (await fetchCyrusCommRtcConfiguration());
-        rtcConfigPrefetchRef.current = null;
-        prefetchCommRtcConfig();
+        const rtcConfig = await fetchCyrusCommRtcConfiguration();
         if (!alive()) return;
 
         const networkMode = getCyrusCommsNetworkMode();
@@ -994,7 +924,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           recoveryManagerRef.current.onIceStateChange(pc.iceConnectionState, Date.now());
           const maxAttempts = recoveryManagerRef.current.maxRestartAttempts();
           if (isIcePathLive(pc.iceConnectionState)) {
-            icePathWasLiveRef.current = true;
             iceRestartAttemptsRef.current = 0;
             if (iceRestartVerifyTimerRef.current) {
               clearTimeout(iceRestartVerifyTimerRef.current);
@@ -1005,7 +934,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           if (
             pc.iceConnectionState === "disconnected" &&
             mediaWasLiveRef.current &&
-            icePathWasLiveRef.current &&
             iceRestartAttemptsRef.current < maxAttempts
           ) {
             iceRestartAttemptsRef.current += 1;
@@ -1018,7 +946,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               prev && prev.roomId === roomId ? { ...prev, status: "reconnecting" } : prev
             );
             addNotification("warning", `Recovering media (${iceRestartAttemptsRef.current}/${maxAttempts})…`);
-            void emitIceRestartOffer("ice_disconnected");
+            try {
+              pc.restartIce();
+            } catch (e) {
+              console.warn("[WebRTC-Presence] restartIce error:", e);
+            }
             if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
             iceRestartVerifyTimerRef.current = setTimeout(() => {
               if (!alive() || peerConnectionRef.current !== pc) return;
@@ -1160,7 +1092,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [addNotification, startCallTimer, cleanupMedia, emitIceRestartOffer]
+    [addNotification, startCallTimer, cleanupMedia]
   );
 
   const connectPresence = useCallback((displayName: string = "User") => {
@@ -1233,7 +1165,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socket.on("connect", () => {
         console.log("[Presence] CONNECTED - Socket ID:", socket.id);
         setIsConnected(true);
-        prefetchCommRtcConfig();
         emitPresenceRegister(socket);
         if (sessionSeqRef.current > 0) {
           socket.emit("session-resync", {
@@ -1278,7 +1209,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           presenceRegisteredOnceRef.current = true;
           addNotification("success", `Connected as ${displayNameRef.current}`);
         }
-        prefetchCommRtcConfig();
       });
 
     socket.on('presence-update', (data: { users: OnlineUser[]; total: number }) => {
@@ -1966,7 +1896,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           });
           const maxA = rec.maxRestartAttempts();
           if (res.action === "ice_restart") {
-            if (!mediaWasLiveRef.current || iceRestartAttemptsRef.current >= maxA) return;
+            if (iceRestartAttemptsRef.current >= maxA) return;
             iceRestartAttemptsRef.current += 1;
             session.recordRecoveryAction("auto_ice_restart", { reason: res.reason });
             webrtcDiagSessionRef.current?.logReconnectAttempt(iceRestartAttemptsRef.current, maxA);
@@ -1980,21 +1910,22 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               prev && prev.roomId === call?.roomId ? { ...prev, status: "reconnecting" } : prev
             );
             addNotification("warning", `Auto-recovering (${res.reason})…`);
-            const ok = await emitIceRestartOffer(res.reason || "auto_ice_restart");
-            if (ok) {
+            try {
+              pc.restartIce();
               emitCommsTelemetry("ice_restart", {
                 outcome: "success",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - restartStartedAt,
                 reason: res.reason || "auto_ice_restart",
               });
-            } else {
+            } catch (e) {
               emitCommsTelemetry("ice_restart", {
                 outcome: "failed",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - restartStartedAt,
                 reason: "auto_ice_restart_exception",
               });
+              console.warn("[WebRTC-Presence] auto restartIce error:", e);
             }
             if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
             const rid = call?.roomId;
@@ -2019,7 +1950,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               }
             }, CYRUS_ICE_RESTART_VERIFY_MS);
           } else if (res.action === "force_relay_restart" || res.action === "escalate_relay_preference") {
-            if (!mediaWasLiveRef.current && !icePathWasLiveRef.current) return;
             session.recordRecoveryAction("relay_escalation", { reason: res.reason });
             addNotification("info", "Switching to relay path for clearer audio…");
             const relayStartedAt = Date.now();
@@ -2035,21 +1965,32 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             }
             if (iceRestartAttemptsRef.current >= maxA) return;
             iceRestartAttemptsRef.current += 1;
-            const relayOk = await emitIceRestartOffer(res.reason || "relay_escalation");
-            if (relayOk) {
+            try {
+              await pc.restartIce();
+              const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
+              await pc.setLocalDescription(offer);
+              if (socketRef.current?.connected && call?.roomId) {
+                const offerPayload = withWebRtcTarget(
+                  { roomId: call.roomId, offer },
+                  call.peerId,
+                );
+                socketRef.current.emit("webrtc-offer", offerPayload);
+                socketRef.current.emit("webrtc:offer", offerPayload);
+              }
               emitCommsTelemetry("relay_restart", {
                 outcome: "success",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - relayStartedAt,
                 reason: res.reason || "relay_escalation",
               });
-            } else {
+            } catch (e) {
               emitCommsTelemetry("relay_restart", {
                 outcome: "failed",
                 roomId: call?.roomId,
                 latencyMs: Date.now() - relayStartedAt,
                 reason: "relay_escalation_exception",
               });
+              console.warn("[WebRTC-Presence] relay restart failed:", e);
             }
           }
           return;
