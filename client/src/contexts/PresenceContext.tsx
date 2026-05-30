@@ -44,8 +44,17 @@ import {
   enqueueOutboundMessage,
   flushOutboundQueue,
 } from "../lib/comms-offline-queue";
+import type { InCallChatMessage } from "../components/comms/InCallChat";
 
 export type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
+
+function withWebRtcTarget<T extends { roomId: string }>(
+  payload: T,
+  targetPeerId?: string | null,
+): T & { targetPeerId?: string } {
+  const id = typeof targetPeerId === "string" ? targetPeerId.trim() : "";
+  return id ? { ...payload, targetPeerId: id } : payload;
+}
 
 export interface OnlineUser {
   id: string;
@@ -138,6 +147,7 @@ interface PresenceContextType {
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => Promise<void>;
   sendCallChatMessage: (payload: ChatOutboundPayload) => void;
+  callChatMessages: InCallChatMessage[];
 }
 
 const PresenceContext = createContext<PresenceContextType | null>(null);
@@ -213,6 +223,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
   const [notifications, setNotifications] = useState<CallNotification[]>([]);
+  const [callChatMessages, setCallChatMessages] = useState<InCallChatMessage[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [mediaControls, setMediaControls] = useState<MediaCallControls>({ isMuted: false, isVideoEnabled: true });
@@ -438,7 +449,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
           await pc.setLocalDescription(offer);
           if (socket.connected) {
-            socket.emit("webrtc-offer", { roomId: call.roomId, offer });
+            socket.emit(
+              "webrtc-offer",
+              withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId),
+            );
           }
           emitCommsTelemetry("relay_restart", {
             outcome: "success",
@@ -525,8 +539,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
     if (socketRef.current) {
       socketRef.current.removeAllListeners("webrtc-offer");
+      socketRef.current.removeAllListeners("webrtc:offer");
       socketRef.current.removeAllListeners("webrtc-answer");
+      socketRef.current.removeAllListeners("webrtc:answer");
       socketRef.current.removeAllListeners("webrtc-ice-candidate");
+      socketRef.current.removeAllListeners("webrtc:ice-candidate");
     }
     pendingCandidatesRef.current = [];
     remoteStreamRef.current = new MediaStream();
@@ -534,6 +551,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setRemoteStream(null);
     setCallDuration(0);
     setMediaControls({ isMuted: false, isVideoEnabled: true });
+    setCallChatMessages([]);
   }, []);
 
   const applyReplayedCommsEvent = useCallback(
@@ -598,9 +616,17 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setupWebRTCMedia = useCallback(
-    async (roomId: string, callType: "audio" | "video", isInitiator: boolean, socket: Socket) => {
+    async (
+      roomId: string,
+      callType: "audio" | "video",
+      isInitiator: boolean,
+      socket: Socket,
+      targetPeerId?: string,
+    ) => {
       const sessionGen = ++webrtcSessionGenerationRef.current;
       const alive = () => sessionGen === webrtcSessionGenerationRef.current;
+      const rtcPeerId = () =>
+        targetPeerId?.trim() || activeCallRef.current?.peerId?.trim() || undefined;
 
       const promoteMediaConnected = () => {
         if (!alive()) return;
@@ -671,8 +697,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           localStreamRef.current = null;
         }
         socket.removeAllListeners("webrtc-offer");
+        socket.removeAllListeners("webrtc:offer");
         socket.removeAllListeners("webrtc-answer");
+        socket.removeAllListeners("webrtc:answer");
         socket.removeAllListeners("webrtc-ice-candidate");
+        socket.removeAllListeners("webrtc:ice-candidate");
         pendingCandidatesRef.current = [];
         pendingRemoteOfferRef.current = null;
         negotiationBusyRef.current = false;
@@ -682,8 +711,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           prev && prev.roomId === roomId ? { ...prev, status: "negotiating" } : prev
         );
 
-        if (!isInitiator) {
-          socket.on("webrtc-offer", (data: { offer: RTCSessionDescriptionInit; roomId: string }) => {
+        const handleRemoteOffer = (data: { offer: RTCSessionDescriptionInit; roomId: string }) => {
             void negotiationCoordinatorRef.current.runExclusive(async () => {
               try {
                 if (data.roomId !== roomId || !alive() || isInitiator) return;
@@ -715,7 +743,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                     diag?.logSdpFlow("createAnswer", true);
                     await p.setLocalDescription(answer);
                     diag?.logSdpFlow("setLocalAnswer", true);
-                    if (alive() && socket.connected) socket.emit("webrtc-answer", { roomId, answer });
+                    if (alive() && socket.connected) {
+                      socket.emit("webrtc-answer", withWebRtcTarget({ roomId, answer }, rtcPeerId()));
+                      socket.emit("webrtc:answer", withWebRtcTarget({ roomId, answer }, rtcPeerId()));
+                    }
                   } catch (e) {
                     diag?.logSdpFlow("createAnswer", false, { error: String(e) });
                     throw e;
@@ -729,14 +760,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 console.warn("[WebRTC-Presence] webrtc-offer handler failed:", e);
               }
             });
-          });
+        };
+
+        if (!isInitiator) {
+          socket.on("webrtc-offer", handleRemoteOffer);
+          socket.on("webrtc:offer", handleRemoteOffer);
         }
 
-        // Prefer relay for call setup to avoid one-way/no-media failures
-        // across mixed NAT and mobile/Wi-Fi network combinations.
-        const rtcConfig = await fetchCyrusCommRtcConfiguration({
-          forceRelay: true,
-        });
+        const rtcConfig = await fetchCyrusCommRtcConfiguration();
         if (!alive()) return;
 
         const networkMode = getCyrusCommsNetworkMode();
@@ -812,7 +843,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 diag?.logSdpFlow("createAnswer", true, { buffered: true });
                 await p.setLocalDescription(answer);
                 diag?.logSdpFlow("setLocalAnswer", true, { buffered: true });
-                if (alive() && socket.connected) socket.emit("webrtc-answer", { roomId, answer });
+                if (alive() && socket.connected) {
+                  const ansPayload = withWebRtcTarget({ roomId, answer }, rtcPeerId());
+                  socket.emit("webrtc-answer", ansPayload);
+                  socket.emit("webrtc:answer", ansPayload);
+                }
               } finally {
                 negotiationBusyRef.current = false;
               }
@@ -845,7 +880,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 : event.candidate;
             diag?.logIceCandidate("local", plain);
             if (socket.connected && alive()) {
-              socket.emit("webrtc-ice-candidate", { roomId, candidate: plain });
+              const icePayload = withWebRtcTarget({ roomId, candidate: plain }, rtcPeerId());
+              socket.emit("webrtc-ice-candidate", icePayload);
+              socket.emit("webrtc:ice-candidate", icePayload);
             }
           } else {
             diag?.logIceCandidate("local", { candidate: "" });
@@ -927,7 +964,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
         };
 
-        socket.on("webrtc-answer", (data: { answer: RTCSessionDescriptionInit; roomId: string }) => {
+        const handleRemoteAnswer = (data: { answer: RTCSessionDescriptionInit; roomId: string }) => {
           void negotiationCoordinatorRef.current.runExclusive(async () => {
             try {
               if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
@@ -949,9 +986,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               console.warn("[WebRTC-Presence] webrtc-answer handler failed:", e);
             }
           });
-        });
+        };
+        socket.on("webrtc-answer", handleRemoteAnswer);
+        socket.on("webrtc:answer", handleRemoteAnswer);
 
-        socket.on("webrtc-ice-candidate", async (data: { candidate: unknown; roomId: string }) => {
+        const handleRemoteIce = async (data: { candidate: unknown; roomId: string }) => {
           try {
             if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
             const p = peerConnectionRef.current;
@@ -965,7 +1004,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.warn("[WebRTC-Presence] webrtc-ice-candidate handler failed:", e);
           }
-        });
+        };
+        socket.on("webrtc-ice-candidate", handleRemoteIce);
+        socket.on("webrtc:ice-candidate", handleRemoteIce);
 
         await applyPendingOfferIfAny();
         if (!alive()) return;
@@ -990,7 +1031,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   try {
                     await pc.setLocalDescription(offer);
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", true);
-                    if (alive() && socket.connected) socket.emit("webrtc-offer", { roomId, offer });
+                    if (alive() && socket.connected) {
+                      const offerPayload = withWebRtcTarget({ roomId, offer }, rtcPeerId());
+                      socket.emit("webrtc-offer", offerPayload);
+                      socket.emit("webrtc:offer", offerPayload);
+                    }
                   } catch (e2) {
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", false, { error: String(e2) });
                   }
@@ -1152,6 +1197,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('call-ringing', (data: { roomId: string; targetName: string; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call ringing:", data.targetName, "type:", data.callType);
+      socket.emit("join-call-room", { roomId: data.roomId });
+      setCallChatMessages([]);
       setActiveCall({
         roomId: data.roomId,
         peerName: data.targetName,
@@ -1187,41 +1234,42 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         callTimeoutRef.current = null;
       }
       const callType = data.callType || activeCallRef.current?.callType || "audio";
-      setActiveCall(prev => prev ? {
-        ...prev,
-        peerId: data.peerId,
-        peerName: data.peerName,
-        callType,
-        status: "connecting",
-      } : {
+      const nextCall: ActiveCallState = {
         roomId: data.roomId,
         peerName: data.peerName,
         peerId: data.peerId,
         callType,
         isInitiator: true,
         status: "connecting",
-      });
+      };
+      setActiveCall((prev) => (prev ? { ...prev, ...nextCall } : nextCall));
+      activeCallRef.current = nextCall;
       setIncomingCall(null);
       incomingCallRef.current = null;
+      socket.emit("join-call-room", { roomId: data.roomId });
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, true, socket);
+      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId);
     });
 
     socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call connected:", data.peerName, "type:", data.callType);
       const callType = data.callType || "audio";
-      setActiveCall({
+      socket.emit("join-call-room", { roomId: data.roomId });
+      setCallChatMessages([]);
+      const nextCall: ActiveCallState = {
         roomId: data.roomId,
         peerName: data.peerName,
         peerId: data.peerId,
         callType,
         isInitiator: data.isInitiator || false,
         status: "connecting",
-      });
+      };
+      setActiveCall(nextCall);
+      activeCallRef.current = nextCall;
       setIncomingCall(null);
       incomingCallRef.current = null;
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, false, socket);
+      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId);
     });
 
     socket.on('call-declined', (data: { roomId: string }) => {
@@ -1272,6 +1320,39 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           status: data.needsMediaRecovery ? "reconnecting" : "connecting",
         });
         addNotification("info", "Call session restored - recovering media path.");
+      },
+    );
+
+    socket.on(
+      "call-chat-message",
+      (data: {
+        senderId: string;
+        senderName: string;
+        message: string;
+        timestamp: string;
+        messageType?: string;
+        fileUrl?: string;
+        fileName?: string;
+        fileMimeType?: string;
+        roomId?: string;
+      }) => {
+        const call = activeCallRef.current;
+        if (call && data.roomId && data.roomId !== call.roomId) return;
+        setCallChatMessages((prev) => {
+          const next: InCallChatMessage = {
+            senderId: data.senderId,
+            senderName: data.senderName,
+            message: data.message,
+            timestamp: data.timestamp || new Date().toISOString(),
+            messageType: data.messageType,
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            fileMimeType: data.fileMimeType,
+          };
+          const key = `${next.senderId}:${next.timestamp}:${next.message}`;
+          if (prev.some((m) => `${m.senderId}:${m.timestamp}:${m.message}` === key)) return prev;
+          return [...prev, next];
+        });
       },
     );
 
@@ -1441,12 +1522,28 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
 
     console.log("[Presence] Emitting accept-call for room:", call.roomId);
+    setActiveCall({
+      roomId: call.roomId,
+      peerName: call.callerName,
+      peerId: call.callerId,
+      callType: call.callType,
+      isInitiator: false,
+      status: "connecting",
+    });
+    activeCallRef.current = {
+      roomId: call.roomId,
+      peerName: call.callerName,
+      peerId: call.callerId,
+      callType: call.callType,
+      isInitiator: false,
+      status: "connecting",
+    };
     socketRef.current.emit('accept-call', {
       roomId: call.roomId,
       callTxnId: generateCallTxnId(),
       clientSeq: nextClientSeq(),
     });
-    
+
     setIncomingCall(null);
     incomingCallRef.current = null;
     addNotification("success", `Connecting to ${call.callerName}...`);
@@ -1579,20 +1676,57 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     );
   }, [addNotification]);
 
+  const renegotiateCallMedia = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const call = activeCallRef.current;
+    const socket = socketRef.current;
+    if (!pc || !call || !socket?.connected) return;
+    try {
+      await negotiationCoordinatorRef.current.runExclusive(async () => {
+        const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
+        await pc.setLocalDescription(offer);
+        const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
+        socket.emit("webrtc-offer", payload);
+        socket.emit("webrtc:offer", payload);
+      });
+    } catch (e) {
+      console.warn("[Presence] call media renegotiation failed:", e);
+    }
+  }, []);
+
   const sendCallChatMessage = useCallback((payload: ChatOutboundPayload) => {
     const call = activeCallRef.current;
     const uid = currentUserIdRef.current;
-    if (!call || !uid || !socketRef.current?.connected) return;
-    socketRef.current.emit("call-chat-message", {
+    const socket = socketRef.current;
+    if (!call || !uid || !socket?.connected) {
+      addNotification("error", "Join an active call before sending in-call chat.");
+      return;
+    }
+    const timestamp = payload.timestamp || new Date().toISOString();
+    const displayName = displayNameRef.current || "You";
+    setCallChatMessages((prev) => [
+      ...prev,
+      {
+        senderId: uid,
+        senderName: displayName,
+        message: payload.message,
+        timestamp,
+        messageType: payload.messageType || "text",
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileMimeType: payload.fileMimeType,
+      },
+    ]);
+    socket.emit("call-chat-message", {
       roomId: call.roomId,
       message: payload.message,
       messageType: payload.messageType || "text",
       fileUrl: payload.fileUrl,
       fileName: payload.fileName,
       fileMimeType: payload.fileMimeType,
-      timestamp: payload.timestamp || new Date().toISOString(),
+      timestamp,
     });
-  }, []);
+  }, [addNotification]);
 
   const stopScreenShare = useCallback(async () => {
     const pc = peerConnectionRef.current;
@@ -1614,8 +1748,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setIsScreenSharing(false);
     if (call && socketRef.current?.connected) {
       socketRef.current.emit("screen-share-stop", { roomId: call.roomId });
+      await renegotiateCallMedia();
     }
-  }, []);
+  }, [renegotiateCallMedia]);
 
   const startScreenShare = useCallback(async () => {
     const pc = peerConnectionRef.current;
@@ -1653,12 +1788,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setIsScreenSharing(true);
       setMediaControls((prev) => ({ ...prev, isVideoEnabled: true }));
       socketRef.current.emit("screen-share-start", { roomId: call.roomId });
+      await renegotiateCallMedia();
       addNotification("success", "Screen sharing started");
     } catch (err) {
       console.warn("[Presence] screen share failed:", err);
       addNotification("warning", "Screen share cancelled or blocked by the browser.");
     }
-  }, [addNotification, stopScreenShare]);
+  }, [addNotification, stopScreenShare, renegotiateCallMedia]);
 
   useEffect(() => {
     return () => {
@@ -1790,7 +1926,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
               await pc.setLocalDescription(offer);
               if (socketRef.current?.connected && call?.roomId) {
-                socketRef.current.emit("webrtc-offer", { roomId: call.roomId, offer });
+                const offerPayload = withWebRtcTarget(
+                  { roomId: call.roomId, offer },
+                  call.peerId,
+                );
+                socketRef.current.emit("webrtc-offer", offerPayload);
+                socketRef.current.emit("webrtc:offer", offerPayload);
               }
               emitCommsTelemetry("relay_restart", {
                 outcome: "success",
@@ -1930,6 +2071,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         startScreenShare,
         stopScreenShare,
         sendCallChatMessage,
+        callChatMessages,
       }}
     >
       {children}

@@ -523,6 +523,29 @@ export function CallView({
                 ))}
               </div>
             </div>
+          ) : callType === "video" && localStream ? (
+            <div className={`grid ${gridClass} gap-2 h-full`}>
+              {allParticipants.map((p) => (
+                <ParticipantVideo
+                  key={p.id}
+                  participant={p}
+                  isSelf={p.id === currentUserId}
+                  gridSize={Math.max(totalCount, 2)}
+                  onRemotePlaybackDiagnostics={onRemotePlaybackDiagnostics}
+                />
+              ))}
+              <ParticipantVideo
+                participant={{
+                  id: currentUserId,
+                  displayName: currentUserName,
+                  stream: localStream,
+                  isMuted,
+                  isVideoEnabled,
+                }}
+                isSelf
+                gridSize={Math.max(totalCount, 2)}
+              />
+            </div>
           ) : (
             <div className={`grid ${gridClass} gap-2 h-full`}>
               {allParticipants.map((p) => (
@@ -537,7 +560,7 @@ export function CallView({
             </div>
           )}
 
-          {localStream && totalCount > 1 && (
+          {localStream && callType === "video" && (
             <div
               className="absolute w-36 h-28 rounded-xl overflow-hidden border-2 border-gray-700/60 shadow-2xl cursor-grab active:cursor-grabbing z-10"
               style={{ bottom: `${pipPosition.y}px`, right: `${pipPosition.x}px` }}
