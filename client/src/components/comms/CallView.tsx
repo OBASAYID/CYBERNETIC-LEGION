@@ -20,7 +20,10 @@ import {
   Paperclip,
   Sparkles,
   Circle,
+  Loader2,
 } from "lucide-react";
+import type { CallSessionStatus } from "@shared/calls/call-session-types";
+import type { CommsCallQualityLabel } from "../../realtime/comms-quality-engine";
 import { COMMS_MEDIA_FILE_ACCEPT } from "../../lib/comms-media-upload";
 import {
   attachMediaStreamToAudio,
@@ -60,6 +63,10 @@ interface CallViewProps {
   callQuality?: "HD" | "SD" | "Low";
   /** True while ICE/DTLS or remote tracks are still coming up (avoid “connected but silent” UX). */
   mediaEstablishing?: boolean;
+  /** Call session phase from Presence (connecting → connected → reconnecting). */
+  sessionStatus?: CallSessionStatus;
+  /** Composite link quality from call diagnostics. */
+  connectionLabel?: CommsCallQualityLabel;
   isScreenSharing?: boolean;
   screenShareStream?: MediaStream | null;
   screenSharerName?: string;
@@ -312,6 +319,21 @@ function formatCallDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function connectionLabelClasses(label?: CommsCallQualityLabel): string {
+  switch (label) {
+    case "Excellent":
+      return "bg-emerald-500/20 text-emerald-300 border-emerald-500/35";
+    case "Good":
+      return "bg-cyan-500/20 text-cyan-300 border-cyan-500/35";
+    case "Poor":
+      return "bg-amber-500/20 text-amber-200 border-amber-500/35";
+    case "Critical":
+      return "bg-red-500/20 text-red-300 border-red-500/35";
+    default:
+      return "bg-gray-500/20 text-gray-300 border-gray-500/30";
+  }
+}
+
 /** Remote tile should bind video tracks only — never reuse the local camera stream. */
 function videoOnlyStream(stream: MediaStream | null | undefined): MediaStream | null {
   if (!stream) return null;
@@ -338,6 +360,8 @@ export function CallView({
   callDuration,
   callQuality,
   mediaEstablishing = false,
+  sessionStatus,
+  connectionLabel,
   isScreenSharing,
   screenShareStream,
   screenSharerName,
@@ -373,6 +397,7 @@ export function CallView({
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteMainRef = useRef<HTMLVideoElement>(null);
   const callMediaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -448,7 +473,6 @@ export function CallView({
   const gridClass = getGridClass(totalCount);
 
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
-
   const remoteParticipant = participants.find((p) => p.id !== currentUserId);
   const remoteMediaStream = remoteParticipant?.stream ?? remoteStreamProp ?? null;
   const remoteAudioStream = remoteMediaStream;
@@ -457,7 +481,9 @@ export function CallView({
   const isOneToOne = participants.filter((p) => p.id !== currentUserId).length <= 1;
   /** macOS/Safari: play remote audio on the main <video> when video tracks exist. */
   const playRemoteAudioOnMainVideo = isOneToOne && Boolean(remoteVideoStream);
-  const remoteMainRef = useRef<HTMLVideoElement>(null);
+  const isReconnecting = sessionStatus === "reconnecting";
+  const isImmersiveOneToOne =
+    isOneToOne && !isLocalScreenSharing && !(isScreenSharing && screenShareStream);
 
   const handleRemotePlaybackBlocked = useCallback(() => {
     setRemoteAudioBlocked(true);
@@ -485,85 +511,114 @@ export function CallView({
     handleRemotePlaybackBlocked,
   ]);
 
-  return (
-    <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
-      {!playRemoteAudioOnMainVideo && (
-        <RemoteAudioSink stream={remoteAudioStream} onPlaybackBlocked={handleRemotePlaybackBlocked} />
+  const statusPill = (
+    <>
+      <div
+        className={`w-2 h-2 rounded-full ${
+          isReconnecting ? "bg-amber-400 animate-pulse" : "bg-emerald-500 animate-pulse"
+        }`}
+      />
+      <span className="text-sm font-medium text-white">
+        {isReconnecting
+          ? "Reconnecting"
+          : `${callType === "video" ? "Video" : "Audio"} Call`}
+      </span>
+      <span className="text-xs text-gray-300/90 font-mono tabular-nums">
+        {formatCallDuration(callDuration)}
+      </span>
+      {(connectionLabel || callQuality) && (
+        <span
+          className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+            connectionLabel
+              ? connectionLabelClasses(connectionLabel)
+              : callQuality === "HD"
+                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                : callQuality === "SD"
+                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                  : "bg-red-500/20 text-red-400 border-red-500/30"
+          }`}
+        >
+          <Signal className="w-3 h-3 inline mr-1" />
+          {connectionLabel ?? callQuality}
+        </span>
       )}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          <span className="text-sm font-medium text-white">
-            {callType === "video" ? "Video" : "Audio"} Call
-          </span>
-          <span className="text-xs text-gray-400 font-mono">
-            {formatCallDuration(callDuration)}
-          </span>
-          {callQuality && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-              callQuality === "HD" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
-              callQuality === "SD" ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" :
-              "bg-red-500/20 text-red-400 border-red-500/30"
-            }`}>
-              <Signal className="w-3 h-3 inline mr-1" />
-              {callQuality}
-            </span>
-          )}
-          {mediaFilterMode !== "off" && (
-            <span
-              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                mediaFilterMode === "studio"
-                  ? "bg-violet-500/20 text-violet-300 border-violet-500/30"
-                  : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
-              }`}
-            >
-              <Sparkles className="w-3 h-3 inline mr-1" />
-              {getCommsMediaFilterLabel(mediaFilterMode)}
-            </span>
-          )}
-          {(isRecording || isRecordingUploading) && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/40 bg-rose-500/15 text-rose-200 animate-pulse">
-              <Circle className="w-3 h-3 inline mr-1 fill-rose-400 text-rose-400" />
-              {isRecordingUploading ? "Saving…" : `REC ${formatCallDuration(recordingDurationSec)}`}
-            </span>
-          )}
-          {!isRecording && !isRecordingUploading && remoteRecordingActive && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200/90">
-              <Circle className="w-3 h-3 inline mr-1 fill-rose-400/80 text-rose-400/80" />
-              {remoteRecordingBy ? `${remoteRecordingBy} recording` : "Recording active"}
-            </span>
-          )}
-          {mediaEstablishing && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
-              Establishing media…
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowParticipants((p) => !p)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showParticipants ? "bg-cyan-500/20 text-cyan-400" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}
-          >
-            <Users className="w-4 h-4" />
-            <span>{totalCount}</span>
-          </button>
-          <button
-            onClick={() => setShowChat((p) => !p)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showChat ? "bg-cyan-500/20 text-cyan-400" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}
-          >
-            <MessageSquare className="w-4 h-4" />
-          </button>
+      {mediaFilterMode !== "off" && (
+        <span
+          className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+            mediaFilterMode === "studio"
+              ? "bg-violet-500/20 text-violet-300 border-violet-500/30"
+              : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+          }`}
+        >
+          <Sparkles className="w-3 h-3 inline mr-1" />
+          {getCommsMediaFilterLabel(mediaFilterMode)}
+        </span>
+      )}
+      {(isRecording || isRecordingUploading) && (
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/40 bg-rose-500/15 text-rose-200 animate-pulse">
+          <Circle className="w-3 h-3 inline mr-1 fill-rose-400 text-rose-400" />
+          {isRecordingUploading ? "Saving…" : `REC ${formatCallDuration(recordingDurationSec)}`}
+        </span>
+      )}
+      {!isRecording && !isRecordingUploading && remoteRecordingActive && (
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-200/90">
+          <Circle className="w-3 h-3 inline mr-1 fill-rose-400/80 text-rose-400/80" />
+          {remoteRecordingBy ? `${remoteRecordingBy} recording` : "Recording active"}
+        </span>
+      )}
+      {mediaEstablishing && !isReconnecting && (
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-200">
+          Connecting…
+        </span>
+      )}
+    </>
+  );
+
+  const headerBar = (
+    <div
+      className={
+        isImmersiveOneToOne
+          ? "absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/75 via-black/35 to-transparent pointer-events-none [&_button]:pointer-events-auto"
+          : "flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md"
+      }
+    >
+      <div className="flex items-center gap-2.5 flex-wrap min-w-0">{statusPill}</div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={() => setShowParticipants((p) => !p)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showParticipants ? "bg-cyan-500/20 text-cyan-400" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}
+        >
+          <Users className="w-4 h-4" />
+          <span>{totalCount}</span>
+        </button>
+        <button
+          onClick={() => setShowChat((p) => !p)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showChat ? "bg-cyan-500/20 text-cyan-400" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}
+        >
+          <MessageSquare className="w-4 h-4" />
+        </button>
+        {!isImmersiveOneToOne && (
           <button
             onClick={onEndCall}
             className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/60 rounded-lg transition-colors"
           >
             <ChevronDown className="w-5 h-5" />
           </button>
-        </div>
+        )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950 relative">
+      {!playRemoteAudioOnMainVideo && (
+        <RemoteAudioSink stream={remoteAudioStream} onPlaybackBlocked={handleRemotePlaybackBlocked} />
+      )}
+      {!isImmersiveOneToOne && headerBar}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="relative min-h-0 flex-1 overflow-hidden">
+          {isImmersiveOneToOne && headerBar}
           <FloatingReactions
             reactions={reactions}
             onSendReaction={onSendReaction}
@@ -644,6 +699,15 @@ export function CallView({
                   Tap to enable sound
                 </button>
               )}
+              {isReconnecting && (
+                <div className="absolute inset-0 z-[25] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+                  <div className="flex flex-col items-center gap-3 rounded-2xl border border-amber-400/25 bg-black/65 px-8 py-6 shadow-2xl">
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+                    <p className="text-sm font-semibold text-white">Reconnecting…</p>
+                    <p className="text-xs text-gray-400">Restoring your media connection</p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className={`grid ${gridClass} gap-2 h-full`}>
@@ -667,7 +731,7 @@ export function CallView({
               className="absolute z-20 w-40 max-w-[36vw] overflow-hidden rounded-xl border-2 border-white/25 shadow-2xl cursor-grab active:cursor-grabbing"
               style={{
                 aspectRatio: "4 / 3",
-                bottom: `${pipPosition.y + 12}px`,
+                bottom: `${pipPosition.y + (isImmersiveOneToOne ? 88 : 12)}px`,
                 right: `${pipPosition.x + 12}px`,
               }}
               onMouseDown={handlePipMouseDown}
@@ -771,7 +835,7 @@ export function CallView({
       </div>
 
       {showReactions && onSendReaction && (
-        <div className="flex justify-center pb-1 bg-gray-900/60">
+        <div className={`flex justify-center pb-1 ${isImmersiveOneToOne ? "absolute bottom-28 left-0 right-0 z-30" : "bg-gray-900/60"}`}>
           <FloatingReactions
             reactions={[]}
             onSendReaction={onSendReaction}
@@ -780,7 +844,20 @@ export function CallView({
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-3 px-4 py-4 bg-gray-900/80 border-t border-gray-800/40 backdrop-blur-md">
+      <div
+        className={
+          isImmersiveOneToOne
+            ? "absolute bottom-5 left-1/2 z-30 -translate-x-1/2"
+            : "shrink-0 w-full"
+        }
+      >
+        <div
+          className={
+            isImmersiveOneToOne
+              ? "flex items-center justify-center gap-2.5 px-3 py-2.5 rounded-2xl bg-black/55 backdrop-blur-xl border border-white/10 shadow-2xl"
+              : "flex items-center justify-center gap-3 px-4 py-4 bg-gray-900/80 border-t border-gray-800/40 backdrop-blur-md"
+          }
+        >
         <button
           onClick={onToggleMute}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMuted ? "bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20" : "bg-gray-700/80 hover:bg-gray-600/80"}`}
@@ -913,6 +990,7 @@ export function CallView({
         >
           <PhoneOff className="w-6 h-6 text-white" />
         </button>
+        </div>
       </div>
     </div>
   );
