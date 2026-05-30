@@ -739,6 +739,66 @@ export async function registerRoutes(
   console.log("[Socket.IO] Real-time communication server active on /cyrus-io");
 
   if (commsOnlyMode) {
+    console.log("[Routes] CYRUS_COMMS_ONLY=1 — registering comms HTTP routes only");
+
+    app.get("/api/cyrus-comm/config/webrtc", async (req, res) => {
+      try {
+        const m = await import("./comms/cyrus-comm-config.js");
+        const link = typeof req.query?.link === "string" ? req.query.link : undefined;
+        res.json(m.getCyrusCommWebRtcConfigResponse({ link }));
+      } catch {
+        res.status(500).json({ error: "CYRUS Comm WebRTC config unavailable" });
+      }
+    });
+
+    if (registerCommsRoutes) {
+      try {
+        registerCommsRoutes(app);
+      } catch (e) {
+        console.warn(
+          "[Routes] registerCommsRoutes failed (non-fatal):",
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    }
+
+    // Minimal upload fallback for comms-only mode: keep file-sharing alive even
+    // when broader content/DB pipelines are intentionally skipped.
+    app.post("/api/files/upload", upload.single("file"), async (req: Request & { file?: MulterFile }, res) => {
+      const requestId = `files-upload-comms-only-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        if (!req.file) {
+          console.warn("[Files][upload:reject:no-file]", { requestId, mode: "comms-only" });
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+        console.log("[Files][upload:success]", {
+          requestId,
+          mode: "comms-only",
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+        });
+        return res.json({
+          id: `upl_${Date.now()}`,
+          userId: req.body?.userId || null,
+          originalName: req.file.originalname,
+          filename: req.file.filename,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          url: `/uploads/${req.file.filename}`,
+          _persisted: false,
+          mode: "comms-only",
+        });
+      } catch (error) {
+        console.error("[Files][upload:error]", {
+          requestId,
+          mode: "comms-only",
+          error: error instanceof Error ? error.stack || error.message : String(error),
+        });
+        return res.status(500).json({ error: "Failed to upload file" });
+      }
+    });
+
     console.log("[Routes] CYRUS_COMMS_ONLY=1 — skipping non-comms HTTP route registration");
     return httpServer;
   }
@@ -1229,8 +1289,21 @@ export async function registerRoutes(
 
   // Upload file
   app.post("/api/files/upload", upload.single("file"), async (req: Request & { file?: MulterFile }, res) => {
+    const requestId = `files-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const memStart = process.memoryUsage();
+    console.log("[Files][upload:start]", {
+      requestId,
+      hasFile: Boolean(req.file),
+      originalName: req.file?.originalname || null,
+      mimeType: req.file?.mimetype || null,
+      sizeBytes: req.file?.size || 0,
+      userId: req.body?.userId || null,
+      heapUsedMb: Number((memStart.heapUsed / (1024 * 1024)).toFixed(2)),
+      rssMb: Number((memStart.rss / (1024 * 1024)).toFixed(2)),
+    });
     try {
       if (!req.file) {
+        console.warn("[Files][upload:reject:no-file]", { requestId });
         return res.status(400).json({ error: "No file uploaded" });
       }
 
@@ -1245,13 +1318,25 @@ export async function registerRoutes(
 
       const parsed = insertUploadedFileSchema.safeParse(fileData);
       if (!parsed.success) {
+        console.warn("[Files][upload:reject:schema]", { requestId });
         return res.status(400).json({ error: "Invalid file data", details: parsed.error });
       }
 
       const uploadedFile = await storage.createUploadedFile(parsed.data);
+      const memEnd = process.memoryUsage();
+      console.log("[Files][upload:success]", {
+        requestId,
+        uploadedId: uploadedFile?.id || null,
+        url: uploadedFile?.url || null,
+        heapUsedMb: Number((memEnd.heapUsed / (1024 * 1024)).toFixed(2)),
+        rssMb: Number((memEnd.rss / (1024 * 1024)).toFixed(2)),
+      });
       res.json(uploadedFile);
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("[Files][upload:error]", {
+        requestId,
+        error: error instanceof Error ? error.stack || error.message : String(error),
+      });
       res.status(500).json({ error: "Failed to upload file" });
     }
   });

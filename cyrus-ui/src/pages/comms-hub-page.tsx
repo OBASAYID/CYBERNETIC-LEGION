@@ -324,29 +324,81 @@ function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
 ══════════════════════════════════════════════════════════════ */
 function ChatPanel({ myId, myName, targetUser }:
   { myId:string; myName:string; targetUser:{id:string;name:string}|null }) {
+  const { sendMessage, wsRef } = usePresence();
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const commIdentityHeaders = useMemo(
+    () => ({ "x-device-id": myId, "x-user-id": myId }),
+    [myId],
+  );
 
   useEffect(() => {
     if (!targetUser) return;
-    const load = () =>
-      systemFetch(`/api/comms/messages/${targetUser.id}`)
-        .then(r=>r.json())
-        .then(d => {
-          const list = Array.isArray(d) ? d : d?.messages ?? [];
-          setMsgs(list.map((m: any) => normalizeChatMsg(m, myId, myName, targetUser)));
-        })
-        .catch(()=>{});
-    load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
-  }, [targetUser?.id, myId, myName, targetUser]);
+    setMsgs([]);
+    systemFetch(`/api/comms/messages/${targetUser.id}`, { headers: commIdentityHeaders })
+      .then(r=>r.json())
+      .then(d => {
+        const list = Array.isArray(d) ? d : d?.messages ?? [];
+        console.log("[CommsHub][messages:load]", {
+          me: myId,
+          peer: targetUser.id,
+          count: list.length,
+        });
+        setMsgs(list.map((m: any) => normalizeChatMsg(m, myId, myName, targetUser)));
+      })
+      .catch((err)=>{
+        console.error("[CommsHub][messages:load:error]", {
+          me: myId,
+          peer: targetUser.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, [targetUser?.id, myId, myName, targetUser, commIdentityHeaders]);
+
+  useEffect(() => {
+    if (!targetUser) return;
+    const socket = wsRef.current;
+    if (!socket) return;
+
+    const onNewMessage = (data: {
+      id?: string;
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+    }) => {
+      if (data.senderId !== targetUser.id) return;
+      const normalized = normalizeChatMsg(
+        {
+          id: data.id ?? `msg-${Date.now()}`,
+          senderId: data.senderId,
+          senderName: data.senderName,
+          content: data.message,
+          createdAt: data.timestamp,
+        },
+        myId,
+        myName,
+        targetUser,
+      );
+      setMsgs((prev) => (prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]));
+      console.log("[CommsHub][messages:recv:socket]", {
+        me: myId,
+        peer: targetUser.id,
+        messageId: normalized.id,
+      });
+    };
+
+    socket.on("new-message", onNewMessage);
+    return () => {
+      socket.off("new-message", onNewMessage);
+    };
+  }, [targetUser?.id, myId, myName, targetUser, wsRef]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [msgs]);
 
-  const send = async () => {
+  const send = () => {
     if (!input.trim()||!targetUser||sending) return;
     setSending(true);
     const text = input.trim(); setInput("");
@@ -357,9 +409,19 @@ function ChatPanel({ myId, myName, targetUser }:
       targetUser
     )]);
     try {
-      await systemFetch("/api/comms/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({recipientId:targetUser.id,content:text})});
-    } catch{/*silent*/}
+      console.log("[CommsHub][messages:send:socket]", {
+        me: myId,
+        peer: targetUser.id,
+        size: text.length,
+      });
+      sendMessage(targetUser.id, text);
+    } catch(err){
+      console.error("[CommsHub][messages:send:error]", {
+        me: myId,
+        peer: targetUser.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
     setSending(false);
   };
 

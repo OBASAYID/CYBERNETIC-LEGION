@@ -464,8 +464,18 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const { recipientId } = req.params;
+    const requestId = `comms-msg-read-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log("[Comms][messages:read:start]", {
+      requestId,
+      userId,
+      recipientId,
+      headerUserId: req.headers["x-user-id"] || null,
+      headerDeviceId: req.headers["x-device-id"] || null,
+    });
 
     if (!userId) {
+      console.warn("[Comms][messages:read:skip:no-user]", { requestId, recipientId });
       return res.json([]);
     }
 
@@ -477,6 +487,13 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
         )
       )
       .orderBy(asc(directMessages.createdAt));
+
+    console.log("[Comms][messages:read:result]", {
+      requestId,
+      userId,
+      recipientId,
+      count: messages.length,
+    });
 
     const formattedMessages = messages.map(msg => ({
       id: msg.id,
@@ -510,8 +527,19 @@ router.post("/api/comms/messages", async (req: any, res) => {
   try {
     const userId = getUserId(req) || `anon_${Date.now()}`;
     const { recipientId, content } = req.body;
+    const requestId = `comms-msg-send-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log("[Comms][messages:send:start]", {
+      requestId,
+      senderId: userId,
+      recipientId: recipientId || "broadcast",
+      contentLength: typeof content === "string" ? content.length : 0,
+      headerUserId: req.headers["x-user-id"] || null,
+      headerDeviceId: req.headers["x-device-id"] || null,
+    });
 
     if (!content?.trim()) {
+      console.warn("[Comms][messages:send:reject-empty]", { requestId, senderId: userId });
       return res.status(400).json({ error: "Message content required" });
     }
 
@@ -520,6 +548,14 @@ router.post("/api/comms/messages", async (req: any, res) => {
       recipientId: recipientId || 'broadcast',
       content,
     }).returning();
+
+    console.log("[Comms][messages:send:persisted]", {
+      requestId,
+      messageId: message.id,
+      senderId: message.senderId,
+      recipientId: message.recipientId,
+      createdAt: message.createdAt?.toISOString?.() || null,
+    });
 
     res.json({
       id: message.id,
