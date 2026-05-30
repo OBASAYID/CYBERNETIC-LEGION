@@ -692,7 +692,7 @@ function GroupCallHub({
 
   /* ── INCOMING CALL ── */
   if (incomingGroupCall) {
-    const caller = incomingGroupCall.initiatorName??"Unknown";
+    const caller = incomingGroupCall.callerName ?? incomingGroupCall.initiatorName ?? "Unknown";
     const c = colorForName(caller);
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 relative overflow-hidden">
@@ -1347,12 +1347,12 @@ export default function CommsHubPage() {
 
   const {
     onlineUsers, isConnected, myUserId, incomingCall, activeCall,
-    localStream, remoteStream, callDuration,
+    localStream, remoteStream, callDuration, notifications,
     callUser, acceptCall, declineCall, endCall,
     toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
     mediaControls, wsRef, isScreenSharing, screenShareStream,
     remoteScreenSharerName, startScreenShare, stopScreenShare,
-    sendCallChatMessage,
+    sendCallChatMessage, recoverCallMedia, reportRemoteMediaPlayback,
   } = usePresence();
 
   const myId = myUserId || `local-${Date.now()}`;
@@ -1410,9 +1410,29 @@ export default function CommsHubPage() {
 
   const tabCfg = TABS.find(t=>t.id===activeTab)!;
 
+  const callAlert = useMemo(() => {
+    const err = [...notifications].reverse().find((n) => n.type === "error");
+    const warn = [...notifications].reverse().find((n) => n.type === "warning");
+    return err ?? warn ?? null;
+  }, [notifications]);
+
   return (
     <>
       <style>{ANIM_CSS}</style>
+
+      {callAlert && !activeCall && !incomingCall && (
+        <div
+          className="fixed top-3 left-1/2 z-[210] max-w-md -translate-x-1/2 rounded-xl px-4 py-2 text-center text-[11px] font-medium shadow-lg"
+          style={{
+            background: callAlert.type === "error" ? "rgba(239,68,68,0.15)" : "rgba(234,179,8,0.12)",
+            border: `1px solid ${callAlert.type === "error" ? "rgba(239,68,68,0.35)" : "rgba(234,179,8,0.3)"}`,
+            color: callAlert.type === "error" ? "#fca5a5" : "#fde68a",
+          }}
+          role="status"
+        >
+          {callAlert.message}
+        </div>
+      )}
 
       {/* Incoming P2P call overlay */}
       {incomingCall && !activeCall && (
@@ -1427,23 +1447,42 @@ export default function CommsHubPage() {
         <CallView
           roomId={activeCall.roomId}
           callType={activeCall.callType}
-          participants={[{ id: activeCall.peerId, displayName: activeCall.peerName, isMuted: false, isVideoEnabled: activeCall.callType==="video" }]}
-          localStream={localStream??null}
+          participants={[{
+            id: activeCall.peerId || "remote-peer",
+            displayName: activeCall.peerName,
+            stream: remoteStream ?? undefined,
+            isMuted: false,
+            isVideoEnabled: activeCall.callType === "video",
+          }]}
+          localStream={localStream ?? null}
           currentUserId={myId}
           currentUserName={displayName}
           isMuted={isMuted}
-          isVideoEnabled={!isVideoOff}
+          isVideoEnabled={!isVideoOff && (mediaControls?.isVideoEnabled ?? true)}
           callDuration={callDuration}
+          mediaEstablishing={activeCall.status !== "connected"}
           onEndCall={endCall}
           onToggleMute={handleToggleMute}
           onToggleVideo={handleToggleVideo}
           isScreenSharing={isScreenSharing}
-          screenShareStream={screenShareStream??null}
-          screenSharerName={remoteScreenSharerName??undefined}
+          screenShareStream={screenShareStream ?? null}
+          screenSharerName={remoteScreenSharerName ?? undefined}
           onStartScreenShare={startScreenShare}
           onStopScreenShare={stopScreenShare}
-          onSendChatMessage={(msg:string)=>sendCallChatMessage({message:msg,messageType:"text"})}
+          onSendChatMessage={(msg: string) => sendCallChatMessage({ message: msg, messageType: "text" })}
+          onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
+          socketRef={wsRef}
         />
+      )}
+
+      {activeCall && activeCall.status === "connected" && !remoteStream?.getTracks().length && (
+        <button
+          type="button"
+          className="fixed bottom-24 left-1/2 z-[95] -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-[11px] font-semibold text-amber-100"
+          onClick={() => void recoverCallMedia()}
+        >
+          No remote audio? Tap to recover media
+        </button>
       )}
 
       <div className="flex flex-col overflow-hidden text-white"
@@ -1495,7 +1534,12 @@ export default function CommsHubPage() {
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[8px] text-white/30">{users.filter(u=>u.isOnline).length} online</span>
+              <span
+                className={`text-[8px] ${isConnected ? "text-emerald-400/80" : "text-amber-300/70"}`}
+                title={isConnected ? "Presence connected" : "Connecting to call signaling…"}
+              >
+                {isConnected ? "● live" : "○ connecting"} · {users.filter(u=>u.isOnline).length} online
+              </span>
             </div>
           </div>
         </header>
