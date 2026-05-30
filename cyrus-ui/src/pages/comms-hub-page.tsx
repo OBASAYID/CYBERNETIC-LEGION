@@ -1455,13 +1455,22 @@ export default function CommsHubPage() {
         <CallView
           roomId={activeCall.roomId}
           callType={activeCall.callType}
-          participants={[{
-            id: activeCall.peerId || "remote-peer",
-            displayName: activeCall.peerName,
-            stream: remoteStream ?? undefined,
-            isMuted: false,
-            isVideoEnabled: activeCall.callType === "video",
-          }]}
+          participants={[
+            {
+              id: myId,
+              displayName,
+              stream: localStream ?? undefined,
+              isMuted,
+              isVideoEnabled: !isVideoOff && (mediaControls?.isVideoEnabled ?? true),
+            },
+            {
+              id: activeCall.peerId || "remote-peer",
+              displayName: activeCall.peerName,
+              stream: remoteStream ?? undefined,
+              isMuted: false,
+              isVideoEnabled: activeCall.callType === "video",
+            },
+          ]}
           localStream={localStream ?? null}
           remoteStream={remoteStream ?? null}
           currentUserId={myId}
