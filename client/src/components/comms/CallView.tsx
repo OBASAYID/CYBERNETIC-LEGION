@@ -79,6 +79,7 @@ interface CallViewProps {
   socketRef?: React.MutableRefObject<any>;
   /** Fires when remote media `play()` is blocked (autoplay policy). */
   onRemotePlaybackDiagnostics?: (detail: { blocked: boolean; scope: "remote_video" }) => void;
+  onRecoverMedia?: () => void;
   isRecording?: boolean;
   isRecordingUploading?: boolean;
   recordingDurationSec?: number;
@@ -170,17 +171,36 @@ export function IncomingCallOverlay({
   );
 }
 
-function RemoteAudioSink({ stream }: { stream: MediaStream | null | undefined }) {
+function RemoteAudioSink({
+  stream,
+  onPlaybackBlocked,
+}: {
+  stream: MediaStream | null | undefined;
+  onPlaybackBlocked?: () => void;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    void attachMediaStreamToAudio(audioRef.current, extractAudioOnlyStream(stream ?? null), {
-      volume: 1,
-    });
-  }, [stream]);
+    const el = audioRef.current;
+    if (!el) return;
 
-  if (!stream?.getAudioTracks().length) return null;
-  return <audio ref={audioRef} autoPlay playsInline className="sr-only" />;
+    const attach = () => {
+      void attachMediaStreamToAudio(el, extractAudioOnlyStream(stream ?? null), {
+        volume: 1,
+        onPlaybackBlocked,
+      });
+    };
+
+    attach();
+    const ms = stream ?? null;
+    if (!ms) return;
+    ms.onaddtrack = () => attach();
+    return () => {
+      ms.onaddtrack = null;
+    };
+  }, [stream, onPlaybackBlocked]);
+
+  return <audio ref={audioRef} autoPlay playsInline data-cyrus-remote-call="1" className="sr-only" aria-hidden />;
 }
 
 function ParticipantVideo({
@@ -335,6 +355,7 @@ export function CallView({
   reactions = [],
   socketRef,
   onRemotePlaybackDiagnostics,
+  onRecoverMedia,
   isRecording = false,
   isRecordingUploading = false,
   recordingDurationSec = 0,
@@ -345,6 +366,7 @@ export function CallView({
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaFilterMode, setMediaFilterMode] = useState<CommsMediaFilterMode>(getCommsMediaFilterMode);
   const [pipPosition, setPipPosition] = useState({ x: 16, y: 16 });
@@ -428,25 +450,46 @@ export function CallView({
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
   const remoteParticipant = participants.find((p) => p.id !== currentUserId);
-  const remoteAudioStream = remoteParticipant?.stream ?? remoteStreamProp ?? null;
-  const remoteVideoStream = videoOnlyStream(remoteParticipant?.stream ?? remoteStreamProp);
+  const remoteMediaStream = remoteParticipant?.stream ?? remoteStreamProp ?? null;
+  const remoteAudioStream = remoteMediaStream;
+  const remoteVideoStream = videoOnlyStream(remoteMediaStream);
   const remoteDisplayName = remoteParticipant?.displayName ?? "Participant";
-  const isOneToOne = callType === "video" && participants.filter((p) => p.id !== currentUserId).length <= 1;
+  const isOneToOne = participants.filter((p) => p.id !== currentUserId).length <= 1;
+  /** macOS/Safari: play remote audio on the main <video> when video tracks exist. */
+  const playRemoteAudioOnMainVideo = isOneToOne && Boolean(remoteVideoStream);
   const remoteMainRef = useRef<HTMLVideoElement>(null);
+
+  const handleRemotePlaybackBlocked = useCallback(() => {
+    setRemoteAudioBlocked(true);
+    onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" });
+  }, [onRemotePlaybackDiagnostics]);
+
+  const handleRemotePlaybackStarted = useCallback(() => {
+    setRemoteAudioBlocked(false);
+    onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" });
+  }, [onRemotePlaybackDiagnostics]);
 
   useEffect(() => {
     if (!isOneToOne) return;
-    void attachMediaStreamToVideo(remoteMainRef.current, remoteVideoStream, {
-      muted: false,
+    void attachMediaStreamToVideo(remoteMainRef.current, remoteMediaStream, {
+      muted: !playRemoteAudioOnMainVideo,
       volume: 1,
-      onPlaybackStarted: () => onRemotePlaybackDiagnostics?.({ blocked: false, scope: "remote_video" }),
-      onPlaybackBlocked: () => onRemotePlaybackDiagnostics?.({ blocked: true, scope: "remote_video" }),
+      onPlaybackStarted: handleRemotePlaybackStarted,
+      onPlaybackBlocked: handleRemotePlaybackBlocked,
     });
-  }, [isOneToOne, remoteVideoStream, onRemotePlaybackDiagnostics]);
+  }, [
+    isOneToOne,
+    remoteMediaStream,
+    playRemoteAudioOnMainVideo,
+    handleRemotePlaybackStarted,
+    handleRemotePlaybackBlocked,
+  ]);
 
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-gray-950">
-      <RemoteAudioSink stream={remoteAudioStream} />
+      {!playRemoteAudioOnMainVideo && (
+        <RemoteAudioSink stream={remoteAudioStream} onPlaybackBlocked={handleRemotePlaybackBlocked} />
+      )}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -519,8 +562,8 @@ export function CallView({
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 relative p-3">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           <FloatingReactions
             reactions={reactions}
             onSendReaction={onSendReaction}
@@ -548,17 +591,19 @@ export function CallView({
               </div>
             </div>
           ) : isOneToOne ? (
-            <div className="relative h-full w-full">
+            <div className="absolute inset-0 bg-black">
               {remoteVideoStream ? (
                 <video
                   ref={remoteMainRef}
                   autoPlay
                   playsInline
-                  className="h-full w-full object-cover [transform:translateZ(0)]"
+                  muted={!playRemoteAudioOnMainVideo}
+                  data-cyrus-remote-call="1"
+                  className="absolute inset-0 h-full w-full object-contain sm:object-cover [transform:translateZ(0)]"
                 />
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/30 to-blue-600/30 text-2xl font-bold text-white">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+                  <div className="flex h-28 w-28 items-center justify-center rounded-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/30 to-blue-600/30 text-3xl font-bold text-white">
                     {remoteDisplayName
                       .split(" ")
                       .map((w) => w[0])
@@ -566,15 +611,39 @@ export function CallView({
                       .toUpperCase()
                       .slice(0, 2)}
                   </div>
-                  <p className="mt-4 text-sm font-medium text-white/80">{remoteDisplayName}</p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    {mediaEstablishing ? "Connecting video…" : "Waiting for remote camera…"}
+                  <p className="mt-4 text-base font-medium text-white/85">{remoteDisplayName}</p>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {callType === "audio"
+                      ? mediaEstablishing
+                        ? "Connecting audio…"
+                        : "Voice call active"
+                      : mediaEstablishing
+                        ? "Connecting video…"
+                        : "Waiting for remote camera…"}
                   </p>
                 </div>
               )}
-              <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/50 px-2 py-1">
-                <span className="text-xs font-medium text-white">{remoteDisplayName}</span>
+              <div className="pointer-events-none absolute bottom-4 left-4 z-[5] rounded-lg bg-black/55 px-3 py-1.5 backdrop-blur-sm">
+                <span className="text-sm font-medium text-white">{remoteDisplayName}</span>
               </div>
+              {remoteAudioBlocked && (
+                <button
+                  type="button"
+                  className="absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2.5 text-sm font-semibold text-amber-100 shadow-lg backdrop-blur-sm"
+                  onClick={() => {
+                    void (async () => {
+                      onRecoverMedia?.();
+                      try {
+                        await remoteMainRef.current?.play();
+                      } catch {
+                        /* retry via recover */
+                      }
+                    })();
+                  }}
+                >
+                  Tap to enable sound
+                </button>
+              )}
             </div>
           ) : (
             <div className={`grid ${gridClass} gap-2 h-full`}>
@@ -595,8 +664,12 @@ export function CallView({
 
           {localStream && callType === "video" && isOneToOne && (
             <div
-              className="absolute w-36 h-28 rounded-xl overflow-hidden border-2 border-gray-700/60 shadow-2xl cursor-grab active:cursor-grabbing z-10"
-              style={{ bottom: `${pipPosition.y}px`, right: `${pipPosition.x}px` }}
+              className="absolute z-20 w-40 max-w-[36vw] overflow-hidden rounded-xl border-2 border-white/25 shadow-2xl cursor-grab active:cursor-grabbing"
+              style={{
+                aspectRatio: "4 / 3",
+                bottom: `${pipPosition.y + 12}px`,
+                right: `${pipPosition.x + 12}px`,
+              }}
               onMouseDown={handlePipMouseDown}
             >
               <video
@@ -604,7 +677,8 @@ export function CallView({
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                data-cyrus-local-pip="1"
+                className="h-full w-full object-cover"
               />
               <div className="absolute top-1 right-1">
                 <Move className="w-3 h-3 text-white/50" />
