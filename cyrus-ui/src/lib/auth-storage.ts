@@ -47,6 +47,14 @@ export function clearAuthSessionStorage(): void {
     localStorage.removeItem(SESSION_TOKEN_KEY);
     localStorage.removeItem("cyrus-user-role");
     localStorage.removeItem("cyrus-display-name");
+    // Critical comms/session isolation cleanup: remove persisted identity/cursors
+    // so account switching cannot inherit previous transport/message state.
+    localStorage.removeItem("cyrus_comm_user_id");
+    localStorage.removeItem("cyrus_device_id");
+    localStorage.removeItem("cyrus-device-id");
+    localStorage.removeItem("cyrus_comms_event_seq_v1");
+    localStorage.removeItem("cyrus_comms_client_seq_v1");
+    localStorage.removeItem("cyrus-force-relay");
   } catch {
     /* ignore */
   }

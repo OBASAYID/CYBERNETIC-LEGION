@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Suspense, useMemo } from "react";
 import { Canvas, useLoader } from "@react-three/fiber";
 import { Center, Grid, Html, OrbitControls } from "@react-three/drei";

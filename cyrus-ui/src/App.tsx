@@ -13,7 +13,6 @@ import { AppRoutes } from "./app-routes";
 import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
-import { CallProvider } from "@/contexts/CallContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { GameSidebar } from "@/components/game-sidebar";
@@ -92,12 +91,7 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // Derive a stable userId from localStorage device ID (same key used by PresenceContext)
-  const callUserId =
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus_device_id")) ||
-    (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-device-id")) ||
-    `device_${Math.random().toString(36).substr(2, 9)}`;
-  const callDisplayName = gateUsername || readStoredDisplayName() || "User";
+  const displayName = gateUsername || readStoredDisplayName() || "User";
   // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -138,19 +132,11 @@ function App() {
                 <TooltipProvider>
                   <Toaster />
                   <AppErrorBoundary>
-                    {/* CallProvider wraps all authenticated routes so incoming/active
-                        call overlays are globally available regardless of current page. */}
-                    <CallProvider
-                      webRTCOptions={{
-                        userId: callUserId,
-                        userName: callDisplayName,
-                        isAuthenticated,
-                      }}
-                    >
+                    <div data-cyrus-call-stack="presence-only">
                       <GameSidebar
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed((v) => !v)}
-                        displayName={callDisplayName}
+                        displayName={displayName}
                         mobileOpen={mobileSidebarOpen}
                         onMobileClose={() => setMobileSidebarOpen(false)}
                       />
@@ -171,7 +157,7 @@ function App() {
                           <AppRoutes />
                         </div>
                       </div>
-                    </CallProvider>
+                    </div>
                   </AppErrorBoundary>
                   <PwaInstallPrompt />
                   <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
