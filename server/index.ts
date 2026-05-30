@@ -13,32 +13,38 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import { logger } from "./observability/logger.js";
+import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
+import { parseExpressJsonBodyLimit } from "../shared/cyrus-document-limits.js";
 
 
 const dotenvResult = dotenv.config();
 syncFusedStackPortEnv();
 
+const CYRUS_JSON_BODY_LIMIT = parseExpressJsonBodyLimit();
+
 // Validate required environment variables at startup
 function validateEnvironment(): string[] {
   const missing: string[] = [];
+  // OPENAI_API_KEY check is deferred — key normalization runs at module top-level
+  // before this function is called, so the check happens after integration keys are resolved.
+  return missing;
+}
+
+function warnOptionalEnv(): void {
   const warnings: string[] = [];
-
-  // Optional but recommended
-  if (!process.env.OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
+  if (!process.env.OPENAI_API_KEY && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.USE_LOCAL_LLM !== 'true') {
     warnings.push('⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
+    warnings.push('[Environment] ⚠️ OPENAI_API_KEY not set. AI features disabled, using local LLM fallback.');
   }
-
   if (!process.env.DATABASE_URL) {
-    warnings.push('⚠️ DATABASE_URL not set. Using in-memory storage.');
+    warnings.push('⚠️ DATABASE_URL not set. Comms persistence and session store may fall back to in-memory mode.');
   }
-
   if (warnings.length > 0) {
+    warnings.forEach((w) => console.warn(`[Environment] ${w}`));
     warnings.forEach(w => console.warn(`[Environment] ${w}`));
   }
-
-  return missing;
 }
 
 // Keep both OpenAI key env names aligned to avoid stale-key mismatches across modules.
@@ -61,7 +67,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 
-if (process.env.TRUST_PROXY === "1" || /^true$/i.test(String(process.env.TRUST_PROXY || ""))) {
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.TRUST_PROXY === "1" ||
+  /^true$/i.test(String(process.env.TRUST_PROXY || ""))
+) {
   app.set("trust proxy", 1);
 }
 
@@ -120,7 +130,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   let headersSent = false;
 
   const maybeInit = () => {
-    if (gz || headersSent) return;
+    if (gz || headersSent || res.headersSent) return;
     const ct = String(res.getHeader("content-type") ?? "");
     if (!compressible(ct)) return;
     headersSent = true;
@@ -166,6 +176,13 @@ function findDistPublic(): string | null {
     if (fs.existsSync(path.join(dir, "index.html"))) return dir;
   }
   return null;
+}
+
+/** Avoid CDN/browser caching the Vite shell across deploys (stale HTML → broken lazy chunks). */
+function setHtmlShellCacheHeaders(res: Response) {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
 }
 
 export function log(message: string, source = "express") {
@@ -226,8 +243,26 @@ How can I assist you today? Please specify the type of help you need (medical, t
 app.get("/__health", (_req, res) => res.status(200).send("ok"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
 app.get("/health/live", (_req, res) => res.status(200).json({ status: "alive" }));
-app.get("/health/ready", (_req, res) => {
-  res.status(systemReady ? 200 : 503).json({ status: systemReady ? "ready" : "initializing" });
+app.get("/health/ready", async (_req, res) => {
+  if (!systemReady) {
+    return res.status(503).json({ status: "initializing" });
+  }
+  // Verify database connectivity as part of readiness
+  let dbOk = false;
+  try {
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+  const status = dbOk ? "ready" : "degraded";
+  return res.status(dbOk ? 200 : 503).json({
+    status,
+    database: dbOk ? "connected" : "unavailable",
+    uptime: process.uptime(),
+  });
 });
 /** Same semantics as `/health/ready` for clients that only probe `/api/*` (single-channel stacks). */
 app.get("/api/ready", (_req, res) => {
@@ -250,11 +285,11 @@ app.get("/api/status", (_req, res) => {
       "Industrial device control and protocols",
       "AI teaching and learning systems",
     ],
-    accuracy: "99.999%",
-    uptime: "100%",
+    uptime: process.uptime(),
+    metrics: getMetrics(),
   });
 });
-app.post("/api/cyrus", express.json({ limit: "2mb" }), (req, res, next) => {
+app.post("/api/cyrus", express.json({ limit: CYRUS_JSON_BODY_LIMIT }), (req, res, next) => {
   // Keep the old canned demo response only when explicitly requested.
   // Otherwise, pass through so the richer handler in `server/routes.ts` can run.
   if (process.env.CYRUS_ENABLE_LEGACY_DEMO_ROUTE !== "true") {
@@ -346,14 +381,26 @@ if (distPublic) {
       maxAge: STATIC_ASSET_MAX_AGE,
       immutable: true,
       setHeaders: (res, filePath) => {
-        // HTML must never be cached so users always get the latest shell
-        if (filePath.endsWith(".html")) {
+        const base = path.basename(filePath);
+        // HTML + PWA bootstrap must never be long-cached (stale shell/SW → old lazy chunks).
+        if (
+          filePath.endsWith(".html") ||
+          base === "sw.js" ||
+          base === "registerSW.js" ||
+          base === "manifest.webmanifest" ||
+          base.startsWith("workbox-")
+        ) {
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
         }
       },
     })(req, res, next);
   });
-  app.get("/", (_req, res) => res.status(200).sendFile(path.join(distPublic, "index.html")));
+  app.get("/", (_req, res) => {
+    setHtmlShellCacheHeaders(res);
+    return res.status(200).sendFile(path.join(distPublic, "index.html"));
+  });
 } else if (process.env.NODE_ENV === "production") {
   app.get("/", (_req, res) => res.status(200).json({ service: "CYRUS", status: "online" }));
 }
@@ -423,7 +470,7 @@ declare module "http" {
   }
 }
 
-app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: CYRUS_JSON_BODY_LIMIT, verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use("/api", (req, res, next) => {
@@ -457,6 +504,7 @@ app.use((req, res, next) => {
         response: capturedJsonResponse,
         summary: logLine,
       });
+      recordApiRequest(`${req.method} ${reqPath}`, res.statusCode, duration);
     }
   });
   next();
@@ -482,6 +530,7 @@ async function bootstrapServer(): Promise<void> {
     console.error("[Environment] Critical environment variables missing:", envErrors);
     process.exit(1);
   }
+  warnOptionalEnv();
 
   try {
     await initializeSystem();
@@ -496,8 +545,15 @@ async function bootstrapServer(): Promise<void> {
   }
 
   httpServer.listen(listenOptions, () => {
+    let publicUrl = BASE_URL;
+    try {
+      const { getPublicBaseUrl } = require("./config/deployment.js") as { getPublicBaseUrl: () => string };
+      publicUrl = getPublicBaseUrl();
+    } catch {
+      /* deployment module optional at boot */
+    }
     const loopbackUrl = `http://127.0.0.1:${port}/`;
-    console.log(`Server running at ${loopbackUrl} (bind ${serverHost}:${port})`);
+    console.log(`Server running — public ${publicUrl} (bind ${serverHost}:${port}, local ${loopbackUrl})`);
     for (const line of formatStackStartupBanner()) {
       console.log(line);
     }
@@ -515,35 +571,32 @@ void bootstrapServer().catch((err) => {
 async function initializeSystem() {
   const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 5));
   let isAuthenticatedMiddleware: any = null;
+  const commsOnlyMode = process.env.CYRUS_COMMS_ONLY === "1";
 
   // Auth setup — critical; failure here means API auth middleware is absent
+  // Always use standalone (access-code) auth — the frontend's PasswordGate posts
+  // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    if (process.env.REPL_ID) {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("./replit_integrations/auth");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Hosted environment auth initialized (Replit)");
-    } else {
-      const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
-      await setupAuth(app);
-      registerAuthRoutes(app);
-      isAuthenticatedMiddleware = isAuthenticated;
-      log("Standalone Auth initialized");
-    }
+    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
+    await setupAuth(app);
+    registerAuthRoutes(app);
+    isAuthenticatedMiddleware = isAuthenticated;
+    log("Standalone Auth initialized");
   } catch (e) {
     console.error("[Init] Auth setup failed:", e);
   }
 
-  // Optional fusion demo routes (non-fatal)
-  if (process.env.CYRUS_DISABLE_FUSION_STUBS !== "true") {
+  // Fusion bootstrap (honest capability map for gate UI)
+  if (!commsOnlyMode) {
     try {
       const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
       app.use("/api", completeFusionApi);
-      log("[Fusion] Public demo routes from complete-fusion-api (before /api auth)");
+      log("[Fusion] Bootstrap routes registered (honest capability map)");
     } catch (e) {
       console.warn("[Fusion] complete-fusion-api not loaded:", (e instanceof Error ? e.message : String(e)));
     }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping Fusion bootstrap routes");
   }
 
   // Security middleware — non-fatal so the server still starts without it
@@ -562,81 +615,98 @@ async function initializeSystem() {
   }
 
   // Core API routes — each wrapped individually so one failure doesn't block the rest
-  try {
-    const { default: settingsRoutes } = await import("./settings/routes");
-    app.use("/api/settings", settingsRoutes);
-    log("[Routes] Settings registered");
-  } catch (e) {
-    console.warn("[Init] Settings routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+  if (!commsOnlyMode) {
+    try {
+      const { default: settingsRoutes } = await import("./settings/routes");
+      app.use("/api/settings", settingsRoutes);
+      log("[Routes] Settings registered");
+    } catch (e) {
+      console.warn("[Init] Settings routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: sysdbRoutes } = await import("./sysdb/routes");
-    app.use("/api/sysdb", sysdbRoutes);
-    log("[Routes] SysDB registered");
-  } catch (e) {
-    console.warn("[Init] SysDB routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: sysdbRoutes } = await import("./sysdb/routes");
+      app.use("/api/sysdb", sysdbRoutes);
+      log("[Routes] SysDB registered");
+    } catch (e) {
+      console.warn("[Init] SysDB routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: queryRoutes } = await import("./query/router");
-    app.use("/api/query", queryRoutes);
-    log("[Routes] Query registered");
-  } catch (e) {
-    console.warn("[Init] Query routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: queryRoutes } = await import("./query/router");
+      app.use("/api/query", queryRoutes);
+      log("[Routes] Query registered");
+    } catch (e) {
+      console.warn("[Init] Query routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: trainRoutes } = await import("./train/routes");
-    app.use("/api/train", trainRoutes);
-    log("[Routes] Train registered");
-  } catch (e) {
-    console.warn("[Init] Train routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: trainRoutes } = await import("./train/routes");
+      app.use("/api/train", trainRoutes);
+      log("[Routes] Train registered");
+    } catch (e) {
+      console.warn("[Init] Train routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
-    app.use("/api", intelligenceCoreRoutes);
-    log("[Routes] Intelligence core registered");
-  } catch (e) {
-    console.warn("[Init] Intelligence core routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
+      app.use("/api", intelligenceCoreRoutes);
+      log("[Routes] Intelligence core registered");
+    } catch (e) {
+      console.warn("[Init] Intelligence core routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: stackRoutes } = await import("./routes/stack-routes.js");
-    app.use("/api", stackRoutes);
-    log("[Routes] Stack routes registered");
-  } catch (e) {
-    console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
+    try {
+      const { default: stackRoutes } = await import("./routes/stack-routes.js");
+      app.use("/api", stackRoutes);
+      log("[Routes] Stack routes registered");
+    } catch (e) {
+      console.warn("[Init] Stack routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
 
-  try {
-    const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
-    app.use("/api", algorithmsRoutes);
-    log("[Routes] Algorithms routes registered");
-  } catch (e) {
-    console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    try {
+      const { default: algorithmsRoutes } = await import("./routes/algorithms-routes.js");
+      app.use("/api", algorithmsRoutes);
+      log("[Routes] Algorithms routes registered");
+    } catch (e) {
+      console.warn("[Init] Algorithms routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+
+    try {
+      const { mcpRouter } = await import("./mcp/mcp-routes.js");
+      app.use("/api", mcpRouter);
+      const { initializeMcpOnBoot } = await import("./mcp/mcp-health.js");
+      await initializeMcpOnBoot();
+    } catch (e) {
+      console.warn("[Init] MCP routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping non-comms API bundles (settings/sysdb/query/train/intelligence/stack/algorithms/mcp)");
   }
 
   await tick();
 
-  try {
-    const { default: humanoidRoutes } = await import("./humanoid/routes");
-    app.use("/api/humanoid", humanoidRoutes);
-    log("[Humanoid] Registered");
-  } catch (e) {
-    console.warn("[Init] Humanoid routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
-  }
-  await tick();
+  if (!commsOnlyMode) {
+    try {
+      const { default: humanoidRoutes } = await import("./humanoid/routes");
+      app.use("/api/humanoid", humanoidRoutes);
+      log("[Humanoid] Registered");
+    } catch (e) {
+      console.warn("[Init] Humanoid routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+    await tick();
 
-  try {
-    const { default: visionRoutes } = await import("./humanoid/vision-analysis");
-    app.use("/api/vision", visionRoutes);
-    log("[Vision] Registered");
-  } catch (e) {
-    console.warn("[Init] Vision routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    try {
+      const { default: visionRoutes } = await import("./humanoid/vision-analysis");
+      app.use("/api/vision", visionRoutes);
+      log("[Vision] Registered");
+    } catch (e) {
+      console.warn("[Init] Vision routes not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    }
+    await tick();
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping humanoid and vision APIs");
   }
-  await tick();
 
   try {
     const { registerRoutes } = await import("./routes");
@@ -661,13 +731,31 @@ async function initializeSystem() {
   systemReady = true;
   log("All systems initialized - accepting API traffic");
 
-  if (process.env.NODE_ENV === "production" && process.env.CYRUS_ENABLE_PYTHON === "1") {
+  if (!commsOnlyMode) {
+    try {
+      const { startIntelligenceAutomationScheduler } = await import("./ai/intelligence-automation-core.js");
+      startIntelligenceAutomationScheduler();
+    } catch (e) {
+      console.warn("[Init] Intelligence automation scheduler not loaded (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
+  } else {
+    log("[Boot] CYRUS_COMMS_ONLY=1 — skipping intelligence automation scheduler");
+  }
+
+  const enableFullPython = process.env.CYRUS_ENABLE_PYTHON === "1";
+  /** Lightweight Comms ML only (ml_service.py); does not start the heavy quantum bridge. */
+  const enableCommsMl = process.env.CYRUS_ENABLE_COMMS_ML === "1";
+
+  if (process.env.NODE_ENV === "production" && (enableFullPython || enableCommsMl)) {
     try {
       const { spawn } = await import("child_process");
-      const pythonServices = [
-        ["python3", ["server/quantum_ai/quantum_bridge.py"]],
-        ["python3", ["server/comms/ml_service.py"]],
-      ] as const;
+      const pythonServices: [string, string[]][] = [];
+      if (enableFullPython) {
+        pythonServices.push(["python3", ["server/quantum_ai/quantum_bridge.py"]]);
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      } else if (enableCommsMl) {
+        pythonServices.push(["python3", ["server/comms/ml_service.py"]]);
+      }
 
       for (const [command, args] of pythonServices) {
         const alreadyRunning = managedChildProcesses.some(
@@ -699,7 +787,14 @@ async function setupFrontendRoutes() {
   if (dp) {
     app.use("/*path", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
-      res.sendFile(path.join(dp, "index.html"));
+      // Missing hashed bundles must not receive index.html (wrong MIME → "Failed to fetch dynamically imported module").
+      if (req.path.startsWith("/assets/") || req.path.startsWith("/node_modules/")) {
+        return res.status(404).type("text/plain").send("Not found");
+      }
+      setHtmlShellCacheHeaders(res);
+      res.sendFile(path.join(dp, "index.html"), (err) => {
+        if (err) next(err);
+      });
     });
   }
 

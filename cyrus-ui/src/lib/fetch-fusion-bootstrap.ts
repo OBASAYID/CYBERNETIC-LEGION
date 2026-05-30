@@ -52,10 +52,19 @@ export function installFusedApiFetch(): void {
   if (typeof window === "undefined") return;
   const w = window as unknown as Record<string, unknown>;
   if (w[FLAG]) return;
-  if (!getCyrusApiBase()) return;
+
+  const apiBase = getCyrusApiBase();
+  const credentials = systemCredentials();
+  console.log("[CYRUS] fetch-fusion-bootstrap: apiBase =", apiBase || "(same-origin)", "| credentials =", credentials);
+
+  if (!apiBase) {
+    console.log("[CYRUS] fetch-fusion-bootstrap: no VITE_CYRUS_API_BASE set — fetch passthrough, no rewrite installed.");
+    return;
+  }
 
   w[FLAG] = true;
   const orig = window.fetch.bind(window);
+  console.log("[CYRUS] fetch-fusion-bootstrap: installing fused fetch rewrite for", apiBase);
 
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const path = fusedRelativePath(window, input);

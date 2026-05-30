@@ -30,6 +30,10 @@ function engineItems(): AlgorithmCatalogItem[] {
     ["emotional-cognition", "Emotion, sentiment, and empathy templates"],
     ["universal-language", "Language detection, translation, simplification"],
     ["decentralized-intelligence", "Distributed task workers and queue"],
+    [
+      "iot-ntn-connectivity",
+      "3GPP NTN satellite IoT + integrated CYRUS Comm P2P signaling (/cyrus-comm-io, /api/cyrus-comm/config/webrtc)",
+    ],
     ["ethical-governance", "Ethics assessment and moderation"],
     ["self-evolution", "Self-improvement and knowledge synthesis"],
     ["quantum-neural", "Quantum circuit simulation and inference"],
@@ -204,7 +208,7 @@ function upgradeApiFamilies(): AlgorithmFamily[] {
           id: "ar",
           name: "Hyperlinked reality",
           description: "Scenes, objects, holograms, environment analysis.",
-          uiRoute: "/design",
+          uiRoute: "/scan",
           apis: [
             { method: "GET", path: "/api/upgrades/ar/status" },
             { method: "POST", path: "/api/upgrades/ar/analyze-environment" },
@@ -258,6 +262,39 @@ function pythonCoreAlgorithms(): AlgorithmFamily {
   };
 }
 
+function assetMlFamily(): AlgorithmFamily {
+  return {
+    id: "asset-intelligence",
+    title: "Asset intelligence (ML / data mining)",
+    description:
+      "Ridge-calibrated web asset scoring, TF-IDF tag mining, domain clustering, and ML-prioritized ingestion — OpenAI-free.",
+    items: [
+      {
+        id: "asset-ml-scoring",
+        name: "Asset ML scoring",
+        description: "Ridge regression calibration for relevance, trust, license safety, retrieval priority.",
+        uiRoute: "/intelligence",
+        apis: [
+          { method: "GET", path: "/api/assets/ml/status", summary: "ML model + mining status" },
+          { method: "POST", path: "/api/assets/train", summary: "Train asset intelligence model" },
+          { method: "POST", path: "/api/assets/mine", summary: "ML-guided bulk mining (ml: true)" },
+          { method: "GET", path: "/api/assets/search", summary: "Search with ML-ranked retrieval" },
+        ],
+      },
+      {
+        id: "asset-data-mining",
+        name: "Web asset data mining",
+        description: "Wikimedia + DuckDuckGo crawl, tag vocabulary mining, query expansion, knowledge sync.",
+        uiRoute: "/intelligence",
+        apis: [
+          { method: "POST", path: "/api/assets/resume", summary: "Resume failed downloads" },
+          { method: "POST", path: "/api/assets/ingest/url", summary: "Ingest URL" },
+        ],
+      },
+    ],
+  };
+}
+
 export function getAlgorithmCatalog() {
   return {
     version: "1.0.0",
@@ -268,5 +305,41 @@ export function getAlgorithmCatalog() {
     },
     upgradeApis: upgradeApiFamilies(),
     pythonCore: pythonCoreAlgorithms(),
+    assetIntelligence: assetMlFamily(),
+    mcp: {
+      id: "cyrus-mcp",
+      title: "CYRUS MCP integration",
+      description: "Model Context Protocol servers for asset ingestion and data collection — stdio (Cursor) + REST (/api/mcp).",
+      items: [
+        {
+          id: "mcp-catalog",
+          name: "MCP catalog",
+          description: "Discover integrated MCP servers and tools.",
+          apis: [
+            { method: "GET", path: "/api/mcp/catalog" },
+            { method: "GET", path: "/api/mcp/status" },
+            { method: "GET", path: "/api/mcp/health" },
+            { method: "POST", path: "/api/mcp/invoke" },
+          ],
+        },
+        {
+          id: "mcp-asset-ingest",
+          name: "MCP asset ingest",
+          description: "Cursor MCP: cyrus-asset-ingest (8 tools).",
+          uiRoute: "/intelligence",
+        },
+        {
+          id: "mcp-intelligence",
+          name: "MCP intelligence automation",
+          description: "Cursor MCP: cyrus-intelligence (status, run, grow).",
+          uiRoute: "/intelligence",
+        },
+        {
+          id: "mcp-data-collection",
+          name: "MCP data collection",
+          description: "Cursor MCP: cyrus-data-collection (3 tools).",
+        },
+      ],
+    },
   };
 }

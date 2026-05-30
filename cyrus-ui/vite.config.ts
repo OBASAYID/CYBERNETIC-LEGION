@@ -80,6 +80,7 @@ export default defineConfig(async ({ mode }) => {
       "/api": { target: apiTarget, changeOrigin: true },
       "/health": { target: apiTarget, changeOrigin: true },
       "/cyrus-io": wsProxy(apiTarget),
+      "/cyrus-comm-io": wsProxy(apiTarget),
       "/socket.io": wsProxy(apiTarget),
       "/ws": wsProxy(apiTarget),
     },

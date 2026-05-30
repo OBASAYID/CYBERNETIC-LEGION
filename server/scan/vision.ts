@@ -8,10 +8,12 @@ const useLocalVision = process.env.USE_LOCAL_VISION !== 'false';
 let visionClient: any = null;
 
 async function initVisionClient() {
-  if (!visionClient && !useLocalVision && openaiApiKey) {
-    const OpenAI = (await import("openai")).default;
-    visionClient = new OpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl });
-  }
+  if (visionClient || !openaiApiKey) return;
+  const OpenAI = (await import("openai")).default;
+  const base = typeof openaiBaseUrl === "string" ? openaiBaseUrl.trim() : "";
+  visionClient = base
+    ? new OpenAI({ apiKey: openaiApiKey, baseURL: base })
+    : new OpenAI({ apiKey: openaiApiKey });
 }
 
 export interface VisionResult {
@@ -21,29 +23,38 @@ export interface VisionResult {
 }
 
 export async function visionOcr(buffer: Buffer): Promise<VisionResult> {
-  // Initialize vision client if needed
-  await initVisionClient();
-
   const warnings: string[] = [];
 
-  // Try local vision first
+  // Try local vision first (e.g. Tesseract). If it yields no text — common when
+  // tesseract is missing on the host — fall through to OpenAI so scan+translate still works.
   if (useLocalVision) {
     try {
       const localResult = await localVision.ocr(buffer);
-      return {
-        ocrText: localResult.ocrText,
-        notes: localResult.notes,
-        warnings: [...warnings, ...localResult.warnings]
-      };
+      const trimmed = (localResult.ocrText || "").trim();
+      if (trimmed) {
+        return {
+          ocrText: localResult.ocrText,
+          notes: localResult.notes,
+          warnings: [...warnings, ...localResult.warnings],
+        };
+      }
+      warnings.push(...localResult.warnings);
+      warnings.push("Local OCR returned no text; using cloud vision if API key is set.");
     } catch (error) {
       warnings.push(`Local vision failed: ${error}`);
       console.warn("[LocalVision] OCR failed, falling back to OpenAI:", error);
     }
   }
 
+  await initVisionClient();
+
   // Fallback to OpenAI
   if (!visionClient) {
-    warnings.push("Vision not configured (missing OpenAI env and local vision disabled).");
+    if (!openaiApiKey) {
+      warnings.push("Vision not configured (set OPENAI_API_KEY or install local OCR).");
+    } else {
+      warnings.push("OpenAI vision client failed to initialize.");
+    }
     return { ocrText: "", notes: "Vision unavailable", warnings };
   }
   const b64 = buffer.toString("base64");

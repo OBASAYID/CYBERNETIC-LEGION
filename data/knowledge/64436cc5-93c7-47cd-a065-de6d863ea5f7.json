@@ -1,0 +1,18 @@
+{
+  "content": "A large language model (LLM) is a neural network trained on a vast amount of text for natural language processing tasks, especially language generation. LLMs can generate, summarize, translate and parse text in many contexts, and are a foundational technology behind modern chatbots. Biased or inaccurate training data can make an LLM's output less reliable.",
+  "metadata": {
+    "title": "Large language model",
+    "url": "https://en.wikipedia.org/wiki/Large_language_model",
+    "domain": "science"
+  },
+  "source": "https://en.wikipedia.org/wiki/Large_language_model",
+  "category": "ai",
+  "tags": [
+    "llm",
+    "transformer",
+    "wikipedia",
+    "ai"
+  ],
+  "id": "64436cc5-93c7-47cd-a065-de6d863ea5f7",
+  "timestamp": "2026-05-23T18:04:20.286Z"
+}

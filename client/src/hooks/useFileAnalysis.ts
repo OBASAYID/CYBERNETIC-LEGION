@@ -115,8 +115,13 @@ export function useFileAnalysis() {
     },
   });
 
+  const primeHandoffFile = (file: File | null) => {
+    setCurrentFile(file);
+  };
+
   return {
     currentFile,
+    primeHandoffFile,
     lastReport,
     detectFile,
     extractFile,

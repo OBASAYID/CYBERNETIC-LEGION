@@ -2,11 +2,18 @@ import { Router } from "express";
 import axios from "axios";
 
 import { getCyrusAiBaseUrl, getStackPortsPayload } from "../config/stack-ports.js";
+import { getDeploymentPayload } from "../config/deployment.js";
+import { getMcpIntegrationStatus } from "../mcp/mcp-registry.js";
+import { checkAllMcpHealth } from "../mcp/mcp-health.js";
 
 const router = Router();
 
 router.get("/stack/ports", (_req, res) => {
   res.json({ success: true, ...getStackPortsPayload(), ts: Date.now() });
+});
+
+router.get("/stack/deployment", (_req, res) => {
+  res.json({ success: true, ...getDeploymentPayload(), ts: Date.now() });
 });
 
 router.get("/stack/summary", async (_req, res) => {
@@ -29,7 +36,11 @@ router.get("/stack/summary", async (_req, res) => {
   };
   try {
     const mo = await import("../ai/upgrades/module-orchestrator.js");
-    await mo.moduleOrchestrator.init();
+    // Keep summary responsive even if deep module init is slow or blocked.
+    await Promise.race([
+      mo.moduleOrchestrator.init(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("module orchestrator init timeout")), 1200)),
+    ]);
     orchestrator = {
       totalModules: mo.moduleOrchestrator.getAllModuleStatus().length,
       initialized: true,
@@ -42,11 +53,35 @@ router.get("/stack/summary", async (_req, res) => {
     };
   }
 
+  let mcpHealth: Awaited<ReturnType<typeof checkAllMcpHealth>> | null = null;
+  try {
+    mcpHealth = await checkAllMcpHealth();
+  } catch {
+    mcpHealth = null;
+  }
+
   res.json({
     success: true,
     stack,
     cyrusAiReachable,
     orchestrator,
+    mcp: {
+      ...getMcpIntegrationStatus(),
+      health: mcpHealth
+        ? {
+            operational: mcpHealth.operational,
+            activeCount: mcpHealth.activeCount,
+            totalServers: mcpHealth.totalServers,
+            totalTools: mcpHealth.totalTools,
+            servers: mcpHealth.servers.map((s) => ({
+              id: s.id,
+              active: s.active,
+              stdio: s.stdioOperational,
+              rest: s.restOperational,
+            })),
+          }
+        : null,
+    },
     ts: Date.now(),
   });
 });

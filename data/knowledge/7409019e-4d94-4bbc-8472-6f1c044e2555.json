@@ -1,0 +1,18 @@
+{
+  "content": "Control theory is a field of control engineering and applied mathematics that deals with the control of dynamical systems. The aim is to develop a model or algorithm governing the application of system inputs to drive the system to a desired state, while minimizing any delay, overshoot, or steady-state error and ensuring a level of control stability; often with the aim to achieve a degree of optimality.",
+  "metadata": {
+    "title": "Control theory",
+    "url": "https://en.wikipedia.org/wiki/Control_theory",
+    "domain": "engineering"
+  },
+  "source": "https://en.wikipedia.org/wiki/Control_theory",
+  "category": "engineering",
+  "tags": [
+    "control",
+    "systems",
+    "wikipedia",
+    "engineering"
+  ],
+  "id": "7409019e-4d94-4bbc-8472-6f1c044e2555",
+  "timestamp": "2026-05-23T18:08:43.844Z"
+}

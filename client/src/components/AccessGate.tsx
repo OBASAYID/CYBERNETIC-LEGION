@@ -12,7 +12,7 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [currentDate, setCurrentDate] = useState("");
   const [error, setError] = useState("");
-  const [backgroundVersion] = useState(() => Date.now());
+  const loginBackgroundImage = "/images/botswana-dashboard-wildlife.jpg";
 
   useEffect(() => {
     const now = new Date();
@@ -38,25 +38,53 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
     setIsInitializing(true);
     setError("");
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      // Call backend /api/login endpoint
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // CRITICAL: Send cookies
+        body: JSON.stringify({
+          username: username.trim(),
+          code: accessCode.trim(),
+        }),
+      });
 
-    const isAdmin = username.trim() === "DELTA UNIFORM 00";
-    const validAdminCode = accessCode === "71580019";
-    const validUserCode = accessCode === "170392";
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.message || "Login failed";
+        setError(`ACCESS DENIED - ${message}`);
+        setIsInitializing(false);
+        return;
+      }
 
-    if ((isAdmin && validAdminCode) || (!isAdmin && validUserCode)) {
+      const data = await response.json();
+
+      // DEBUG: Log the login response
+      console.log("[AccessGate] Login response:", data);
+      console.log("[AccessGate] User role from response:", data.user?.role);
+
+      // Store auth data in localStorage
       localStorage.setItem("cyrus_authenticated", "true");
       localStorage.setItem("cyrus-display-name", username.trim());
-      localStorage.setItem("cyrus-user-role", isAdmin ? "admin" : "user");
+      localStorage.setItem("cyrus-user-role", data.user?.role || "user");
+
+      // DEBUG: Verify it was stored
+      console.log("[AccessGate] Stored role in localStorage:", localStorage.getItem("cyrus-user-role"));
+
+      // Store session token if provided
+      if (data.sessionToken) {
+        localStorage.setItem("cyrus_session_token", data.sessionToken);
+        window.dispatchEvent(new CustomEvent("cyrus-auth-session-changed"));
+      }
+
+      // Success - call onAuthenticated
       onAuthenticated();
-    } else if (isAdmin && !validAdminCode) {
-      setError("ACCESS DENIED - Invalid ADMIN authorization code");
-      setIsInitializing(false);
-    } else if (!isAdmin && !validUserCode) {
-      setError("ACCESS DENIED - Invalid OPERATOR authorization code");
-      setIsInitializing(false);
-    } else {
-      setError("ACCESS DENIED - Invalid authorization code");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error";
+      setError(`ACCESS DENIED - ${message}`);
       setIsInitializing(false);
     }
   };
@@ -72,10 +100,10 @@ export function AccessGate({ onAuthenticated }: AccessGateProps) {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url('/images/login-background.png?v=${backgroundVersion}')`,
+          backgroundImage: `url("${loginBackgroundImage}")`,
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/50" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/32 to-black/50" />
 
       <div className="relative z-10 flex-1 flex flex-col px-6 py-4">
         <div className="flex justify-between items-center">

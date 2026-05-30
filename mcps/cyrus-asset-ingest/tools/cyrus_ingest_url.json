@@ -1,0 +1,19 @@
+{
+  "name": "cyrus_ingest_url",
+  "description": "Download and register a single image or 3D model URL into the local CYRUS asset library.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "url": { "type": "string", "description": "Direct URL to image or model file" },
+      "title": { "type": "string" },
+      "domain": {
+        "type": "string",
+        "enum": ["education", "health", "military", "anatomy", "engineering", "science", "communication", "general"]
+      },
+      "tags": { "type": "array", "items": { "type": "string" } },
+      "license": { "type": "string" }
+    },
+    "required": ["url"],
+    "additionalProperties": false
+  }
+}

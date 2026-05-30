@@ -5,6 +5,12 @@ import { translateText } from "./translate.js";
 import { interpretText } from "./interpret.js";
 import { ScanReport } from "./report.js";
 import { detectFile } from "../ingestion/detect.js";
+import {
+  applyVisionCalibration,
+  buildScanSignalsFromReport,
+  buildVisionCalibrationMeta,
+} from "./vision-scoring-core.js";
+import { loadVisionModel } from "./vision-model.js";
 
 export interface ScanOptions {
   targetLanguage?: string;
@@ -122,6 +128,18 @@ export async function analyzeScan(buffer: Buffer, declaredMime?: string, opts: S
     nextSteps: hasContent ? [] : ["Try higher-quality scan or supported format; ensure OpenAI env is configured."],
   };
 
-  return report;
+  const signals = buildScanSignalsFromReport(report, opts.mode || "business");
+  const { scores: qualityScores, calibrated, algorithmVersion } = applyVisionCalibration(signals);
+
+  return {
+    ...report,
+    qualityScores,
+    calibration: {
+      algorithmVersion,
+      calibrated,
+      overallScanQuality: qualityScores.overall_scan_quality,
+      ...(calibrated ? buildVisionCalibrationMeta(loadVisionModel()) : {}),
+    },
+  };
 }
 

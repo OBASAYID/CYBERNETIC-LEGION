@@ -98,6 +98,7 @@ function getEmotionStyle(emotion: string) {
 }
 
 export function Dashboard() {
+  const dashboardBackgroundImage = "/images/botswana-dashboard-wildlife.jpg";
   const [input, setInput] = useState("");
   const [micActive, setMicActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -127,6 +128,10 @@ export function Dashboard() {
     const saved = localStorage.getItem("cyrus-voice-enabled");
     return saved !== null ? saved === "true" : true;
   });
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+  const userRole = localStorage.getItem("cyrus-user-role") || "user";
+  console.log("[Dashboard] User role from localStorage:", userRole);
+  console.log("[Dashboard] Should show logout all button:", userRole === "admin");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -259,6 +264,37 @@ export function Dashboard() {
   }, [voiceEnabled]);
 
   const toggleVoice = () => { setVoiceEnabled(prev => !prev); };
+
+  const handleLogoutAll = async () => {
+    if (isLoggingOutAll) return;
+    setIsLoggingOutAll(true);
+    try {
+      const sessionToken = localStorage.getItem("cyrus_session_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessionToken) headers["x-cyrus-session-token"] = sessionToken;
+      const response = await fetch("/api/logout-all", {
+        method: "POST",
+        headers,
+        credentials: "include",
+      });
+      if (response.ok) {
+        // Clear local auth state and redirect to login
+        localStorage.removeItem("cyrus_authenticated");
+        localStorage.removeItem("cyrus-display-name");
+        localStorage.removeItem("cyrus-user-role");
+        localStorage.removeItem("cyrus_session_token");
+        sessionStorage.removeItem("cyrus_intro_watched");
+        window.location.href = "/";
+      } else {
+        const data = await response.json().catch(() => ({}));
+        console.error("[LogoutAll] Failed:", data.error || response.statusText);
+      }
+    } catch (err) {
+      console.error("[LogoutAll] Error:", err);
+    } finally {
+      setIsLoggingOutAll(false);
+    }
+  };
 
   const speakWithEmotion = async (text: string, emotion: string = "neutral", retryCount = 0) => {
     if (isSpeakingRef.current && retryCount === 0) return;
@@ -744,6 +780,34 @@ export function Dashboard() {
     }
   };
 
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+
+  const handleLogoutAll = async () => {
+    if (!confirm("This will logout all your connected devices. Continue?")) {
+      return;
+    }
+    setIsLoggingOutAll(true);
+    try {
+      const sessionToken = localStorage.getItem("cyrus-session-token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessionToken) headers["x-cyrus-session-token"] = sessionToken;
+      const response = await fetch("/api/logout-all", { method: "POST", headers, credentials: "include" });
+      if (response.ok) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/";
+      } else {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || "Failed to logout from all devices");
+        setIsLoggingOutAll(false);
+      }
+    } catch (error) {
+      console.error("Logout all error:", error);
+      alert("Error logging out from all devices");
+      setIsLoggingOutAll(false);
+    }
+  };
+
   const sortedMessages = [...messages].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
@@ -765,11 +829,19 @@ export function Dashboard() {
   const currentUserEmotion = getEmotionStyle(emotionState.dominant);
 
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden">
+    <div className="relative h-full flex flex-col lg:flex-row overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute inset-0 bg-center bg-cover bg-no-repeat"
+          style={{ backgroundImage: `url("${dashboardBackgroundImage}")` }}
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/45 via-black/25 to-black/45" />
+      </div>
       {/* Main Chat Panel */}
-      <div className="flex-1 flex flex-col min-w-0 bg-black overflow-hidden">
+      <div className="relative z-10 flex-1 lg:flex-[1.85] flex flex-col min-w-0 bg-black/18 backdrop-blur-[1px] overflow-hidden">
         {/* Panel Header */}
-        <div className="px-4 py-3 border-b border-[rgba(84,84,88,0.65)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-cyan-500/30 bg-black/18 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-colors duration-700 ${
@@ -822,7 +894,7 @@ export function Dashboard() {
 
         {/* Emotion Awareness Panel */}
         {showEmotionPanel && (
-          <div className="px-4 py-3 border-b border-[rgba(84,84,88,0.4)] bg-[rgba(20,20,25,0.8)]">
+          <div className="relative z-10 px-4 py-3 border-b border-cyan-500/25 bg-black/22 backdrop-blur-[1px]">
             <div className="flex items-center gap-2 mb-2">
               <Brain className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-[10px] text-cyan-400 font-medium uppercase tracking-wider">Emotional Awareness</span>
@@ -877,7 +949,7 @@ export function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4 max-w-2xl mx-auto">
+            <div className="space-y-4 max-w-cyrus-prose mx-auto">
               {sortedMessages.map((msg) => (
                 <div
                   key={msg.id}
@@ -1038,7 +1110,7 @@ export function Dashboard() {
         )}
 
         {/* Bottom Action Bar */}
-        <div className="px-4 py-2 border-t border-[rgba(84,84,88,0.65)]">
+        <div className="px-4 py-2 border-t border-cyan-500/30 bg-black/16">
           <div className="flex justify-center gap-2">
             <button
               onClick={toggleCamera}
@@ -1087,11 +1159,16 @@ export function Dashboard() {
               <Upload className="w-5 h-5" />
               <span className="text-[10px]">Upload</span>
             </button>
-            <button className="flex flex-col items-center gap-1 px-4 py-2 rounded-xl bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+            <button
+              onClick={handleLogoutAll}
+              disabled={isLoggingOutAll}
+              className="flex flex-col items-center gap-1 px-4 py-2 rounded-xl bg-gray-800 text-red-400 hover:text-white hover:bg-red-700/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Logout all devices"
+            >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              <span className="text-[10px]">Security</span>
+              <span className="text-[10px]">{isLoggingOutAll ? "Logging out..." : "Logout All"}</span>
             </button>
             <a
               href="/comms"
@@ -1108,13 +1185,26 @@ export function Dashboard() {
               </svg>
               <span className="text-[10px]">Export</span>
             </button>
+            {userRole === "admin" && (
+              <button
+                onClick={handleLogoutAll}
+                disabled={isLoggingOutAll}
+                className="flex flex-col items-center gap-1 px-4 py-2 rounded-xl bg-gray-800 text-red-400 hover:text-white hover:bg-red-700/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Logout all devices (admin only)"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span className="text-[10px]">{isLoggingOutAll ? "Logging out..." : "Logout All"}</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Input Bar */}
-        <div className="p-4 border-t border-[rgba(84,84,88,0.65)]">
+        <div className="p-4 border-t border-cyan-500/30 bg-black/14">
           <form onSubmit={handleSubmit}>
-            <div className="flex items-center gap-2 bg-[#2c2c2e] rounded-xl px-3 py-2">
+            <div className="flex items-center gap-2 bg-black/35 rounded-xl px-3 py-2 border border-cyan-500/30 backdrop-blur-sm">
               <input type="file" ref={chatFileInputRef} onChange={handleChatFileUpload} className="hidden" />
               <button
                 type="button"
@@ -1154,9 +1244,9 @@ export function Dashboard() {
       </div>
 
       {/* Right Panel */}
-      <div className="hidden xl:flex w-[420px] flex-col bg-[#1c1c1e] border-l border-[rgba(84,84,88,0.65)]">
+      <div className="relative z-10 hidden xl:flex w-[420px] flex-col bg-black/20 backdrop-blur-[1px] border-l border-cyan-500/35">
         {/* Research Panel */}
-        <div className="p-4 border-b border-[rgba(84,84,88,0.65)]">
+        <div className="p-4 border-b border-cyan-500/30 bg-black/14">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">Research Portal</h3>
           </div>
@@ -1190,7 +1280,7 @@ export function Dashboard() {
         </div>
 
         {/* Files Panel */}
-        <div className="h-[45%] p-4 flex flex-col overflow-hidden border-b border-[rgba(84,84,88,0.65)]">
+        <div className="h-[45%] p-4 flex flex-col overflow-hidden border-b border-cyan-500/30 bg-black/12">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">File Workspace</h3>
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
@@ -1227,7 +1317,7 @@ export function Dashboard() {
         </div>
 
         {/* CYRUS Vision Panel */}
-        <div className="flex-1 p-4 flex flex-col overflow-hidden">
+        <div className="flex-1 p-4 flex flex-col overflow-hidden bg-black/16">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-semibold text-[rgba(235,235,245,0.5)] uppercase tracking-wide">CYRUS Vision</h3>

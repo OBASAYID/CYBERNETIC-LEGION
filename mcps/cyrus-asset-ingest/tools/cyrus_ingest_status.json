@@ -1,0 +1,9 @@
+{
+  "name": "cyrus_ingest_status",
+  "description": "Get asset library stats, ML model status, failed downloads, and active ingestion jobs.",
+  "arguments": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}

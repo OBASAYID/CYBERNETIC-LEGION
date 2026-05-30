@@ -254,6 +254,11 @@ export const psharePosts = pgTable("pshare_posts", {
   fileUrl: varchar("file_url"),
   fileName: varchar("file_name"),
   fileMimeType: varchar("file_mime_type"),
+  /** general | listing — listings can show price/title for marketplace-style posts */
+  postKind: varchar("post_kind").notNull().default("general"),
+  listingTitle: varchar("listing_title"),
+  listingPrice: varchar("listing_price"),
+  listingCurrency: varchar("listing_currency"),
   /** "all" = every signed-in comms user, "selected" = author + `allowedUserIds` */
   visibility: varchar("visibility").notNull().default("all"),
   allowComments: boolean("allow_comments").notNull().default(true),
@@ -281,6 +286,48 @@ export const pshareLikes = pgTable(
   (t) => [primaryKey({ columns: [t.postId, t.userId] })]
 );
 
+// ---------------------------------------------------------------------------
+// calls — canonical call record (one row per call attempt)
+// ---------------------------------------------------------------------------
+
+export const calls = pgTable("calls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callerId: varchar("caller_id").notNull(),
+  callerName: varchar("caller_name"),
+  recipientId: varchar("recipient_id").notNull(),
+  recipientName: varchar("recipient_name"),
+  roomId: varchar("room_id").notNull(),
+  /** "audio" | "video" */
+  callType: varchar("call_type").notNull().default("audio"),
+  /** "ringing" | "connected" | "ended" | "missed" | "rejected" | "failed" */
+  status: varchar("status").notNull().default("ringing"),
+  startTime: timestamp("start_time").defaultNow(),
+  endTime: timestamp("end_time"),
+  /** Duration in seconds — populated on call end */
+  durationSeconds: integer("duration_seconds"),
+  /** Peak connection quality observed during the call */
+  peakQuality: varchar("peak_quality"),
+  /** Network type hint from the client (wifi / cellular / unknown) */
+  networkType: varchar("network_type"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// call_logs — granular event log for analytics / debugging
+// ---------------------------------------------------------------------------
+
+export const callLogs = pgTable("call_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callId: varchar("call_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  /** e.g. "initiated" | "ringing" | "accepted" | "rejected" | "connected" |
+   *       "ice_failed" | "reconnected" | "ended" | "error" */
+  event: varchar("event").notNull(),
+  /** Free-form JSON payload (ICE state, error message, quality metrics, …) */
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type OnlineUser = typeof onlineUsers.$inferSelect;
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type CallHistory = typeof callHistory.$inferSelect;
@@ -300,3 +347,54 @@ export type CommsMlModel = typeof commsMlModels.$inferSelect;
 export type PsharePost = typeof psharePosts.$inferSelect;
 export type PshareComment = typeof pshareComments.$inferSelect;
 export type PshareLike = typeof pshareLikes.$inferSelect;
+export type Call = typeof calls.$inferSelect;
+export type CallLog = typeof callLogs.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Group Work Assessment (GWA) — timed team scenarios with AI grading
+// ---------------------------------------------------------------------------
+
+export const gwaSessions = pgTable("gwa_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull(),
+  title: varchar("title").notNull(),
+  scenarioBrief: text("scenario_brief"),
+  /** scheduled | active | completed | cancelled */
+  status: varchar("status").notNull().default("scheduled"),
+  currentPhase: varchar("current_phase").notNull().default("individual_preparation"),
+  phaseStartedAt: timestamp("phase_started_at"),
+  sessionStartedAt: timestamp("session_started_at"),
+  sessionEndedAt: timestamp("session_ended_at"),
+  totalDurationMinutes: integer("total_duration_minutes").default(120),
+  phaseDurations: jsonb("phase_durations").default({}),
+  participantIds: jsonb("participant_ids").notNull().default([]),
+  assessorIds: jsonb("assessor_ids").default([]),
+  createdBy: varchar("created_by").notNull(),
+  liveMetrics: jsonb("live_metrics").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const gwaObservations = pgTable("gwa_observations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  userId: varchar("user_id"),
+  phase: varchar("phase"),
+  eventType: varchar("event_type").notNull(),
+  payload: jsonb("payload").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const gwaReports = pgTable("gwa_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().unique(),
+  groupId: varchar("group_id").notNull(),
+  teamScore: varchar("team_score"),
+  reportJson: jsonb("report_json").notNull().default({}),
+  htmlReport: text("html_report"),
+  syncedToIntelligence: boolean("synced_to_intelligence").default(false),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+});
+
+export type GwaSession = typeof gwaSessions.$inferSelect;
+export type GwaObservation = typeof gwaObservations.$inferSelect;
+export type GwaReport = typeof gwaReports.$inferSelect;

@@ -1,8 +1,16 @@
+# GitHub Pages (Jekyll) — requires one-time repo setup or this job will fail at "Setup Pages":
+# Settings → Pages → Build and deployment → Source: "GitHub Actions" (not "Deploy from a branch").
+# First deploy may ask you to create/approve the `github-pages` environment.
+#
+# Runs only when you start it from the Actions tab so pushes to main do not fail CI
+# before Pages is configured. To auto-deploy on doc changes, add a push trigger, e.g.:
+#   push:
+#     branches: [main]
+#     paths: ['docs/**', '.github/workflows/pages.yml']
+
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -19,24 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          pip install flask flask-cors requests
+        uses: actions/checkout@v6
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
@@ -56,4 +50,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

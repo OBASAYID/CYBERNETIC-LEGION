@@ -48,21 +48,19 @@ async function ensureModules() {
     modulesRef.bioNeuralInterface = bni.bioNeuralInterface;
     modulesRef.adaptiveHardwareController = ahc.adaptiveHardwareController;
 
-    const [bm, es, md, ri, tm, se2, bs] = await Promise.all([
-      import("../interactive/biology-module"),
+    const [es, md, ri, tm, bs] = await Promise.all([
       import("../interactive/environmental-sensing"),
       import("../interactive/medical-diagnostics"),
       import("../interactive/robotic-integration"),
       import("../interactive/teaching-module"),
-      import("../interactive/security-encryption"),
       import("../interactive/blood-sampling-system"),
     ]);
-    modulesRef.biologyModule = bm.biologyModule;
+    modulesRef.biologyModule = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.environmentalSensing = es.environmentalSensing;
     modulesRef.medicalDiagnostics = md.medicalDiagnostics;
     modulesRef.roboticIntegration = ri.roboticIntegration;
     modulesRef.teachingModule = tm.teachingModule;
-    modulesRef.securityEncryption = se2.securityEncryption;
+    modulesRef.securityEncryption = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.bloodSamplingSystem = bs.bloodSamplingSystem;
 
     const qbM = await import("../quantum-bridge-client");
@@ -102,12 +100,10 @@ class ModuleOrchestrator {
     this.modules.set("hyperlinked-reality", { instance: modulesRef.hyperlinkedReality, category: "advanced", name: "Hyperlinked Reality" });
     this.modules.set("bio-neural", { instance: modulesRef.bioNeuralInterface, category: "advanced", name: "Bio-Neural Interface" });
     this.modules.set("adaptive-hardware", { instance: modulesRef.adaptiveHardwareController, category: "advanced", name: "Adaptive Hardware Controller" });
-    this.modules.set("biology", { instance: modulesRef.biologyModule, category: "interactive", name: "Biology Interactive" });
     this.modules.set("environmental", { instance: modulesRef.environmentalSensing, category: "interactive", name: "Environmental Sensing" });
     this.modules.set("medical", { instance: modulesRef.medicalDiagnostics, category: "interactive", name: "Medical Diagnostics" });
     this.modules.set("robotic", { instance: modulesRef.roboticIntegration, category: "interactive", name: "Robotic Integration" });
     this.modules.set("teaching", { instance: modulesRef.teachingModule, category: "interactive", name: "Teaching & Learning" });
-    this.modules.set("security", { instance: modulesRef.securityEncryption, category: "interactive", name: "Security & Encryption" });
     this.modules.set("blood-sampling", { instance: modulesRef.bloodSamplingSystem, category: "interactive", name: "Blood Sampling System" });
 
     const nexusBridgeModule = {

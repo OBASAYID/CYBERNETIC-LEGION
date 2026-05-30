@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { useToast } from "@/hooks/use-toast";
 import { systemFetch } from "@/lib/system-api";
 
@@ -40,6 +41,28 @@ export type FileAnalysisJob = {
   error?: string;
 };
 
+export type GeneratedDocument = {
+  rendered: string;
+  htmlRendered?: string;
+  title: string;
+  docType?: string;
+  audience?: string;
+  confidence?: "High" | "Medium" | "Low";
+  wordCount: number;
+  estimatedPages: number;
+  sections: { title: string; content: string }[];
+  attachments?: Array<{
+    id: string;
+    kind: "image";
+    style: "realistic_3d" | "graphical" | "schematic";
+    sectionTitle?: string;
+    caption: string;
+    prompt: string;
+    url?: string;
+    dataUrl?: string;
+  }>;
+};
+
 export type IntelOptions = {
   jurisdiction: string;
   mode: "standard" | "legal" | "audit" | "compliance" | undefined;
@@ -56,7 +79,7 @@ const defaultIntel: IntelOptions = {
   docHint: "",
   analysisCommand: "",
   strictLegalReview: true,
-  maxChunks: 80,
+  maxChunks: Math.min(1024, parseMaxAnalysisChunks()),
 };
 
 function appendFormFields(form: FormData, o: IntelOptions) {
@@ -157,6 +180,8 @@ export function useDocumentsIntelligence() {
       audience: string;
       targetPages: number;
       purpose?: string;
+      includeImages?: boolean;
+      imageStyle?: "realistic_3d" | "graphical" | "schematic";
     }) => {
       const res = await systemFetch("/api/docgen/generate", {
         method: "POST",
@@ -167,22 +192,47 @@ export function useDocumentsIntelligence() {
           rawText: input.content,
           targetPages: input.targetPages,
           purpose: input.purpose,
+          includeImages: input.includeImages ?? false,
+          imageStyle: input.imageStyle ?? "schematic",
         }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error || "Document generation failed");
       }
-      return res.json() as Promise<{
-        rendered: string;
-        title: string;
-        wordCount: number;
-        estimatedPages: number;
-        sections: { title: string; content: string }[];
-      }>;
+      return res.json() as Promise<GeneratedDocument>;
     },
     [],
   );
+
+  const exportDocument = useCallback(async (format: "pdf" | "docx" | "html" | "md" | "txt" | "json", doc: GeneratedDocument) => {
+    const res = await systemFetch("/api/docgen/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        format,
+        title: doc.title,
+        rendered: doc.rendered,
+        htmlRendered: doc.htmlRendered,
+        docType: doc.docType,
+        audience: doc.audience,
+        confidence: doc.confidence,
+        sections: doc.sections,
+        attachments: doc.attachments,
+        wordCount: doc.wordCount,
+        estimatedPages: doc.estimatedPages,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error((j as { error?: string }).error || "Document export failed");
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") || "";
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = filenameMatch?.[1] || `${doc.title || "cyrus-document"}.${format}`;
+    return { blob, filename };
+  }, []);
 
   const clearResults = useCallback(() => {
     setSyncReport(null);
@@ -190,16 +240,22 @@ export function useDocumentsIntelligence() {
     setCurrentFile(null);
   }, []);
 
+  const setHandoffStagedFile = useCallback((file: File | null) => {
+    setCurrentFile(file);
+  }, []);
+
   return {
     intel,
     setIntel,
     currentFile,
+    setHandoffStagedFile,
     syncReport,
     job: jobQuery.data,
     isSubmitting: isSubmitting || jobQuery.isFetching,
     runSyncFull,
     runAsync,
     generateDocument,
+    exportDocument,
     clearResults,
   };
 }

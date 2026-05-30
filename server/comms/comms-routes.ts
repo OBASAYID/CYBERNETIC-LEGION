@@ -2,20 +2,49 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, callHistory, meetingRooms, reminders, newsItems, contacts, incomingCalls, groupChats, callSessions, liveStreams, sharedMedia, callMessages } from "../../shared/schema";
 import { commsInteractionEvents } from "../../shared/models/comms";
-import { eq, or, and, desc, asc, ilike, inArray, sql } from "drizzle-orm";
+import { eq, or, and, desc, asc, ilike, inArray, sql, isNotNull } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { getConnectedUsers } from "./signaling.js";
 import { communicationEngine } from "./communication-engine.js";
 import { commsIntelligence } from "./comms-intelligence.js";
-import { refreshCommsUserAvatar } from "./socket-signaling.js";
+import { refreshCommsUserAvatar, getLiveCommsUserIds, getCommsRuntimeMetrics, getActiveCalls } from "./socket-signaling.js";
+import {
+  parseDeviceInfo,
+  mergeDeviceInfoForOnlineTransition,
+  setLocationShareEnabled,
+  persistLastKnownLocation,
+  invalidateLocationShareCache,
+} from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
+import { gwaRouter } from "./gwa-routes.js";
+import { getDeliveryHubStats } from "./delivery-hub.js";
+import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
+import {
+  completeChunkUpload,
+  getChunkUploadSession,
+  getCommsChunkSizeBytes,
+  getCommsChunksDir,
+  getCommsMaxUploadBytes,
+  initChunkUpload,
+  writeUploadChunk,
+} from "./comms-chunk-upload.js";
+import { serveCommsMediaWithRange } from "./comms-media-serve.js";
+import {
+  avatarImageExtensionForSave,
+  isAllowedAvatarImage,
+} from "../../shared/comms/avatar-image-formats.js";
+import { AVATAR_SERVE_MIME } from "../../shared/comms/avatar-image-formats.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 
 const COMMS_UPLOAD_DIR = path.join(process.cwd(), "uploads", "comms");
+const COMMS_RECORDINGS_DIR = path.join(COMMS_UPLOAD_DIR, "recordings");
 if (!fs.existsSync(COMMS_UPLOAD_DIR)) {
   fs.mkdirSync(COMMS_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(COMMS_RECORDINGS_DIR)) {
+  fs.mkdirSync(COMMS_RECORDINGS_DIR, { recursive: true });
 }
 
 const commsUpload = multer({
@@ -26,23 +55,133 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
+
+const recordingUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, COMMS_RECORDINGS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || ".webm";
+      cb(null, `recording-${Date.now()}-${uuid()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 512 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      file.mimetype.startsWith("audio/") ||
+      file.mimetype.startsWith("video/") ||
+      file.mimetype === "application/octet-stream";
+    cb(null, ok);
+  },
+});
+
+/** Served with correct Content-Type so PDF/HTML open in-browser; ?download=1 forces attachment. */
+const COMMS_SERVE_MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".xml": "application/xml",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".svgz": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".avif": "image/avif",
+  ".jfif": "image/jpeg",
+  ".apng": "image/png",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".m4a": "audio/mp4",
+  ".m4b": "audio/mp4",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".wmv": "video/x-msvideo",
+  ".mov": "video/quicktime",
+  ".mpeg": "video/mpeg",
+  ".mpg": "video/mpeg",
+  ".3gp": "video/3gpp",
+  ".epub": "application/epub+zip",
+  ".mobi": "application/x-mobipocket-ebook",
+  ".azw": "application/vnd.amazon.ebook",
+  ".azw3": "application/vnd.amazon.ebook",
+  ".fb2": "application/x-fictionbook+xml",
+  ".opus": "audio/opus",
+  ".flac": "audio/flac",
+  ".wma": "audio/x-ms-wma",
+  ".7z": "application/x-7z-compressed",
+  ".rar": "application/vnd.rar",
+  ".tar": "application/x-tar",
+  ".gz": "application/gzip",
+  ".bz2": "application/x-bzip2",
+  ".rtf": "application/rtf",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".aac": "audio/aac",
+  ".stl": "model/stl",
+  ".obj": "model/obj",
+  ".step": "application/step",
+  ".stp": "application/step",
+  ".iges": "model/iges",
+  ".igs": "model/iges",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".ply": "application/ply",
+  ".3mf": "application/3mf",
+  ".fbx": "application/octet-stream",
+  ".dae": "model/vnd.collada+xml",
+  ".x_t": "application/octet-stream",
+  ".x_b": "application/octet-stream",
+  ".sldprt": "application/octet-stream",
+  ".sldasm": "application/octet-stream",
+  ".slddrw": "application/octet-stream",
+  ".jt": "application/octet-stream",
+  ".amf": "application/amf+xml",
+  ".off": "application/octet-stream",
+  ".wrl": "model/vrml",
+  ".vrml": "model/vrml",
+};
 
 const avatarUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, COMMS_UPLOAD_DIR),
     filename: (_req, file, cb) => {
-      const uniqueName = `avatar-${Date.now()}-${uuid()}${path.extname(file.originalname)}`;
+      const ext = avatarImageExtensionForSave(file.originalname, file.mimetype);
+      const uniqueName = `avatar-${Date.now()}-${uuid()}${ext}`;
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 16 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    if (isAllowedAvatarImage(file.originalname, file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Only image files are allowed for avatars"));
+      cb(
+        new Error(
+          "Unsupported image type. Use JPG, PNG, WebP, GIF, HEIC, AVIF, SVG, or other common photo formats.",
+        ),
+      );
     }
   },
 });
@@ -65,26 +204,65 @@ const voiceNoteUpload = multer({
   },
 });
 
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: getCommsChunkSizeBytes() + 1024 * 1024 },
+});
+
 const router = Router();
 
 function getUserId(req: any): string | null {
+  // Prefer per-device identity for comms so two devices on the same account
+  // can exchange direct chat/call payloads without colliding on account id.
+  const deviceIdHeader =
+    (typeof req.headers["x-device-id"] === "string" ? req.headers["x-device-id"] : null) ||
+    (typeof req.headers["X-Device-Id"] === "string" ? req.headers["X-Device-Id"] : null);
+  if (deviceIdHeader && deviceIdHeader.trim()) return deviceIdHeader.trim();
+
   return (
     req.user?.claims?.sub ||
     (typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : null) ||
     (typeof req.headers["X-User-Id"] === "string" ? req.headers["X-User-Id"] : null) ||
-    (typeof req.headers["x-device-id"] === "string" ? req.headers["x-device-id"] : null) ||
-    (typeof req.headers["X-Device-Id"] === "string" ? req.headers["X-Device-Id"] : null) ||
     null
   );
 }
+
+router.get("/api/comms/delivery/stats", (_req, res) => {
+  res.json(getDeliveryHubStats());
+});
 
 router.get("/api/comms/users", async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const users = await db.select().from(onlineUsers).where(eq(onlineUsers.isOnline, true));
-    const filteredUsers = users.filter(u => u.id !== userId);
+    const wsConnectedUsers = getConnectedUsers();
+    const dbById = new Map(users.map((u) => [u.id, u]));
+
+    for (const wsUser of wsConnectedUsers) {
+      if (!dbById.has(wsUser.id)) {
+        dbById.set(wsUser.id, {
+          id: wsUser.id,
+          displayName: wsUser.displayName,
+          email: null,
+          profileImageUrl: null,
+          lastSeen: wsUser.lastActivity,
+          isOnline: true,
+          socketId: null,
+          status: wsUser.inCall ? "in_call" : "online",
+          location: null,
+          deviceInfo: null,
+        } as any);
+      }
+    }
+
+    const filteredUsers = Array.from(dbById.values()).filter((u) => u.id !== userId);
     res.json(filteredUsers);
-  } catch (error) {
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching online users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -95,17 +273,60 @@ router.get("/api/comms/users/all", async (req: any, res) => {
     const userId = getUserId(req);
     const includeSelf = String(req.query.includeSelf) === "1" || String(req.query.includeSelf) === "true";
     const allUsers = await db.select().from(onlineUsers);
-    const mapRow = (u: typeof allUsers[number]) => ({
-      id: u.id,
-      displayName: u.displayName || "Unknown User",
-      isOnline: u.isOnline || false,
-      lastSeen: u.lastSeen?.toISOString() || null,
-      profileImageUrl: u.profileImageUrl || null,
-      status: u.status || "offline",
-    });
-    const filteredUsers = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
-    res.json(filteredUsers);
-  } catch (error) {
+    const liveCommsIds = getLiveCommsUserIds();
+    const wsConnectedUsers = getConnectedUsers();
+    const wsLiveIds = new Set(wsConnectedUsers.map((u) => u.id));
+    const liveIds = new Set<string>([...Array.from(liveCommsIds), ...Array.from(wsLiveIds)]);
+
+    const mapRow = (u: (typeof allUsers)[number]) => {
+      const live = liveIds.has(u.id);
+      const di = parseDeviceInfo(u.deviceInfo);
+      const lastLocation =
+        di.locationShareEnabled && di.lastLocation
+          ? {
+              lat: di.lastLocation.lat,
+              lng: di.lastLocation.lng,
+              accuracy: di.lastLocation.accuracy ?? null,
+              at: di.lastLocation.at,
+            }
+          : null;
+      return {
+        id: u.id,
+        displayName: u.displayName || "Unknown User",
+        isOnline: live || u.isOnline || false,
+        lastSeen: u.lastSeen?.toISOString() || null,
+        profileImageUrl: u.profileImageUrl || null,
+        status: live ? (u.status === "in_call" ? "in_call" : "online") : u.status || "offline",
+        onlineSince: di.onlineSince || null,
+        lastLocation,
+        locationShareEnabled: !!di.locationShareEnabled,
+      };
+    };
+
+    const dbMapped = (includeSelf ? allUsers : allUsers.filter(u => u.id !== userId)).map(mapRow);
+    const seen = new Set(dbMapped.map((u) => u.id));
+    const wsOnly = wsConnectedUsers
+      .filter((u) => !seen.has(u.id))
+      .filter((u) => includeSelf || u.id !== userId)
+      .map((u) => ({
+        id: u.id,
+        displayName: u.displayName || "Unknown User",
+        isOnline: true,
+        lastSeen: u.lastActivity?.toISOString?.() || new Date().toISOString(),
+        profileImageUrl: null,
+        status: u.inCall ? "in_call" : "online",
+        onlineSince: null,
+        lastLocation: null,
+        locationShareEnabled: false,
+      }));
+
+    res.json([...dbMapped, ...wsOnly]);
+  } catch (error: any) {
+    const isTableMissing = error?.message?.includes("does not exist") || error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] online_users table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching all users:", error);
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -116,30 +337,80 @@ router.post("/api/comms/user/status", async (req: any, res) => {
     const userId = getUserId(req) || `anon_${Date.now()}`;
     const { isOnline, socketId, displayName } = req.body;
     const claims = req.user?.claims || {};
+    const nextOnline = isOnline !== false;
+    const dn =
+      displayName ||
+      `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() ||
+      claims?.email ||
+      "Anonymous";
 
-    await db.insert(onlineUsers).values({
-      id: userId,
-      displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
-      email: claims?.email,
-      profileImageUrl: claims?.profile_image_url,
-      lastSeen: new Date(),
-      isOnline: isOnline !== false,
-      socketId,
-    }).onConflictDoUpdate({
-      target: onlineUsers.id,
-      set: {
-        lastSeen: new Date(),
-        isOnline: isOnline !== false,
-        socketId,
-        displayName: displayName || `${claims?.first_name || ""} ${claims?.last_name || ""}`.trim() || claims?.email || "Anonymous",
+    const [existing] = await db.select().from(onlineUsers).where(eq(onlineUsers.id, userId)).limit(1);
+    const mergedDevice = mergeDeviceInfoForOnlineTransition(existing?.deviceInfo, nextOnline);
+
+    await db
+      .insert(onlineUsers)
+      .values({
+        id: userId,
+        displayName: dn,
+        email: claims?.email,
         profileImageUrl: claims?.profile_image_url,
-      },
-    });
+        lastSeen: new Date(),
+        isOnline: nextOnline,
+        socketId,
+        deviceInfo: mergedDevice,
+      })
+      .onConflictDoUpdate({
+        target: onlineUsers.id,
+        set: {
+          lastSeen: new Date(),
+          isOnline: nextOnline,
+          socketId,
+          displayName: dn,
+          profileImageUrl: claims?.profile_image_url,
+          deviceInfo: mergedDevice,
+        },
+      });
 
     res.json({ success: true });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.post("/api/comms/user/location-share", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required (X-User-Id or X-Device-Id)" });
+    }
+    const enabled = Boolean(req.body?.enabled);
+    await setLocationShareEnabled(userId, enabled);
+    invalidateLocationShareCache(userId);
+    res.json({ success: true, locationShareEnabled: enabled });
+  } catch (error: any) {
+    console.error("Error updating location share:", error);
+    res.status(500).json({ error: "Failed to update location share" });
+  }
+});
+
+router.post("/api/comms/user/location", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "User id required" });
+    }
+    const lat = Number(req.body?.latitude);
+    const lng = Number(req.body?.longitude);
+    const accuracy = typeof req.body?.accuracy === "number" ? req.body.accuracy : undefined;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: "latitude and longitude required" });
+    }
+    await persistLastKnownLocation(userId, lat, lng, accuracy);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Error persisting location:", error);
+    res.status(500).json({ error: "Failed to persist location" });
   }
 });
 
@@ -175,7 +446,15 @@ router.get("/api/comms/messages", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: if the table doesn't exist yet, return empty array
+    // instead of a 500 so the UI doesn't break on first boot.
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -185,8 +464,18 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
   try {
     const userId = getUserId(req);
     const { recipientId } = req.params;
+    const requestId = `comms-msg-read-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log("[Comms][messages:read:start]", {
+      requestId,
+      userId,
+      recipientId,
+      headerUserId: req.headers["x-user-id"] || null,
+      headerDeviceId: req.headers["x-device-id"] || null,
+    });
 
     if (!userId) {
+      console.warn("[Comms][messages:read:skip:no-user]", { requestId, recipientId });
       return res.json([]);
     }
 
@@ -198,6 +487,13 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
         )
       )
       .orderBy(asc(directMessages.createdAt));
+
+    console.log("[Comms][messages:read:result]", {
+      requestId,
+      userId,
+      recipientId,
+      count: messages.length,
+    });
 
     const formattedMessages = messages.map(msg => ({
       id: msg.id,
@@ -214,7 +510,14 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
     }));
 
     res.json(formattedMessages);
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready yet — returning empty list");
+      return res.json([]);
+    }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
@@ -224,8 +527,19 @@ router.post("/api/comms/messages", async (req: any, res) => {
   try {
     const userId = getUserId(req) || `anon_${Date.now()}`;
     const { recipientId, content } = req.body;
+    const requestId = `comms-msg-send-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.log("[Comms][messages:send:start]", {
+      requestId,
+      senderId: userId,
+      recipientId: recipientId || "broadcast",
+      contentLength: typeof content === "string" ? content.length : 0,
+      headerUserId: req.headers["x-user-id"] || null,
+      headerDeviceId: req.headers["x-device-id"] || null,
+    });
 
     if (!content?.trim()) {
+      console.warn("[Comms][messages:send:reject-empty]", { requestId, senderId: userId });
       return res.status(400).json({ error: "Message content required" });
     }
 
@@ -235,6 +549,14 @@ router.post("/api/comms/messages", async (req: any, res) => {
       content,
     }).returning();
 
+    console.log("[Comms][messages:send:persisted]", {
+      requestId,
+      messageId: message.id,
+      senderId: message.senderId,
+      recipientId: message.recipientId,
+      createdAt: message.createdAt?.toISOString?.() || null,
+    });
+
     res.json({
       id: message.id,
       senderId: message.senderId,
@@ -243,7 +565,23 @@ router.post("/api/comms/messages", async (req: any, res) => {
       timestamp: message.createdAt?.toISOString() || new Date().toISOString(),
       read: false
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Graceful fallback: table may not exist on first boot
+    const isTableMissing = error?.message?.includes("does not exist") ||
+      error?.code === "42P01";
+    if (isTableMissing) {
+      console.warn("[Comms] direct_messages table not ready — message not persisted");
+      // Return a synthetic response so the UI doesn't break
+      return res.json({
+        id: `tmp_${Date.now()}`,
+        senderId: getUserId(req) || "unknown",
+        recipientId: req.body?.recipientId || "broadcast",
+        content: req.body?.content || "",
+        timestamp: new Date().toISOString(),
+        read: false,
+        _persisted: false,
+      });
+    }
     console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
   }
@@ -975,9 +1313,196 @@ router.get("/api/comms/status", (req, res) => {
       messageReactions: true,
       readReceipts: true,
     },
-    websocket: '/ws',
+    websocket: '/cyrus-io',
     ...stats,
   });
+});
+
+/** SFU runtime status (mediasoup vs star relay fallback). */
+router.get("/api/comms/sfu/status", (_req, res) => {
+  try {
+    const { getSfuStatus } = require("./sfu/sfu-manager.js") as {
+      getSfuStatus: () => import("../../shared/comms/sfu-types.js").SfuStatusResponse;
+    };
+    res.json(getSfuStatus());
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "sfu status failed" });
+  }
+});
+
+/** Phase 4: lightweight WebRTC readiness probe for ops / dashboards (no secrets). */
+router.get("/api/comms/webrtc-health", (_req, res) => {
+  try {
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({
+      ok: true,
+      relayConfigured: cfg.relayConfigured,
+      iceServerCount: Array.isArray(cfg.iceServers) ? cfg.iceServers.length : 0,
+      iceTransportPolicy: cfg.iceTransportPolicy,
+      encodingProfile: cfg.linkHints?.encodingProfile,
+      satelliteBackhaulCapable: cfg.linkHints?.satelliteBackhaulCapable,
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "webrtc-health failed" });
+  }
+});
+
+router.get("/api/comms/runtime-metrics", (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      signaling: {
+        websocket: "/cyrus-io",
+      },
+      runtime: getCommsRuntimeMetrics(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "runtime-metrics failed" });
+  }
+});
+
+router.get("/api/comms/metrics/prometheus", (_req, res) => {
+  try {
+    const runtime = getCommsRuntimeMetrics();
+    const activeCallCount = getActiveCalls().length;
+    const setupTotal = runtime.callSetupSucceeded + runtime.callSetupFailed;
+    const setupSuccessRate = setupTotal > 0 ? runtime.callSetupSucceeded / setupTotal : 1;
+    const lines = [
+      "# HELP cyrus_comms_qos_samples_received_total QoS samples received from clients",
+      "# TYPE cyrus_comms_qos_samples_received_total counter",
+      `cyrus_comms_qos_samples_received_total ${runtime.qosSamplesReceived}`,
+      "# HELP cyrus_comms_qos_samples_rejected_invalid_total QoS samples rejected due to invalid payload values",
+      "# TYPE cyrus_comms_qos_samples_rejected_invalid_total counter",
+      `cyrus_comms_qos_samples_rejected_invalid_total ${runtime.qosSamplesRejectedInvalid}`,
+      "# HELP cyrus_comms_qos_samples_rate_limited_total QoS samples dropped by server-side rate limiting",
+      "# TYPE cyrus_comms_qos_samples_rate_limited_total counter",
+      `cyrus_comms_qos_samples_rate_limited_total ${runtime.qosSamplesRateLimited}`,
+      "# HELP cyrus_comms_signaling_invalid_payload_rejected_total Signaling events rejected due to invalid payload schema",
+      "# TYPE cyrus_comms_signaling_invalid_payload_rejected_total counter",
+      `cyrus_comms_signaling_invalid_payload_rejected_total ${runtime.signalingInvalidPayloadRejected}`,
+      "# HELP cyrus_comms_signaling_event_rate_limited_total Signaling events dropped by per-socket control-plane rate limiting",
+      "# TYPE cyrus_comms_signaling_event_rate_limited_total counter",
+      `cyrus_comms_signaling_event_rate_limited_total ${runtime.signalingEventRateLimited}`,
+      "# HELP cyrus_comms_qos_actions_issued_total QoS recovery actions emitted",
+      "# TYPE cyrus_comms_qos_actions_issued_total counter",
+      `cyrus_comms_qos_actions_issued_total ${runtime.qosActionsIssued}`,
+      "# HELP cyrus_comms_qos_degraded_samples_total Degraded QoS samples observed",
+      "# TYPE cyrus_comms_qos_degraded_samples_total counter",
+      `cyrus_comms_qos_degraded_samples_total ${runtime.degradedSamples}`,
+      "# HELP cyrus_comms_qos_critical_samples_total Critical QoS samples observed",
+      "# TYPE cyrus_comms_qos_critical_samples_total counter",
+      `cyrus_comms_qos_critical_samples_total ${runtime.criticalSamples}`,
+      "# HELP cyrus_comms_active_calls Number of active calls tracked",
+      "# TYPE cyrus_comms_active_calls gauge",
+      `cyrus_comms_active_calls ${activeCallCount}`,
+      "# HELP cyrus_comms_qos_tracked_peers Number of peers with recent QoS samples",
+      "# TYPE cyrus_comms_qos_tracked_peers gauge",
+      `cyrus_comms_qos_tracked_peers ${runtime.qosTrackedPeers}`,
+      "# HELP cyrus_comms_qos_room_profiles_tracked Number of room-level adaptive QoS baseline profiles tracked",
+      "# TYPE cyrus_comms_qos_room_profiles_tracked gauge",
+      `cyrus_comms_qos_room_profiles_tracked ${runtime.qosRoomProfilesTracked}`,
+      "# HELP cyrus_comms_qos_adaptive_degraded_samples_total QoS samples classified degraded by adaptive room policy",
+      "# TYPE cyrus_comms_qos_adaptive_degraded_samples_total counter",
+      `cyrus_comms_qos_adaptive_degraded_samples_total ${runtime.qosAdaptiveDegradedSamples}`,
+      "# HELP cyrus_comms_qos_adaptive_critical_samples_total QoS samples classified critical by adaptive room policy",
+      "# TYPE cyrus_comms_qos_adaptive_critical_samples_total counter",
+      `cyrus_comms_qos_adaptive_critical_samples_total ${runtime.qosAdaptiveCriticalSamples}`,
+      "# HELP cyrus_comms_qos_actions_suppressed_hysteresis_total QoS actions suppressed by hysteresis guard",
+      "# TYPE cyrus_comms_qos_actions_suppressed_hysteresis_total counter",
+      `cyrus_comms_qos_actions_suppressed_hysteresis_total ${runtime.qosActionsSuppressedHysteresis}`,
+      "# HELP cyrus_comms_qos_actions_suppressed_cooldown_total QoS actions suppressed by cooldown guard",
+      "# TYPE cyrus_comms_qos_actions_suppressed_cooldown_total counter",
+      `cyrus_comms_qos_actions_suppressed_cooldown_total ${runtime.qosActionsSuppressedCooldown}`,
+      "# HELP cyrus_comms_qos_action_state_tracked Number of room-user QoS actuator states tracked",
+      "# TYPE cyrus_comms_qos_action_state_tracked gauge",
+      `cyrus_comms_qos_action_state_tracked ${runtime.qosActionStateTracked}`,
+      "# HELP cyrus_comms_fanout_published_total Cross-node comms fanout events published",
+      "# TYPE cyrus_comms_fanout_published_total counter",
+      `cyrus_comms_fanout_published_total ${runtime.commsFanoutPublished}`,
+      "# HELP cyrus_comms_fanout_received_total Cross-node comms fanout events received",
+      "# TYPE cyrus_comms_fanout_received_total counter",
+      `cyrus_comms_fanout_received_total ${runtime.commsFanoutReceived}`,
+      "# HELP cyrus_comms_fanout_delivered_total Cross-node comms fanout events delivered to local sockets",
+      "# TYPE cyrus_comms_fanout_delivered_total counter",
+      `cyrus_comms_fanout_delivered_total ${runtime.commsFanoutDelivered}`,
+      "# HELP cyrus_comms_call_setup_started_total Call setup attempts started",
+      "# TYPE cyrus_comms_call_setup_started_total counter",
+      `cyrus_comms_call_setup_started_total ${runtime.callSetupStarted}`,
+      "# HELP cyrus_comms_call_setup_succeeded_total Call setup attempts succeeded",
+      "# TYPE cyrus_comms_call_setup_succeeded_total counter",
+      `cyrus_comms_call_setup_succeeded_total ${runtime.callSetupSucceeded}`,
+      "# HELP cyrus_comms_call_setup_failed_total Call setup attempts failed",
+      "# TYPE cyrus_comms_call_setup_failed_total counter",
+      `cyrus_comms_call_setup_failed_total ${runtime.callSetupFailed}`,
+      "# HELP cyrus_comms_call_setup_success_ratio Ratio of successful call setups",
+      "# TYPE cyrus_comms_call_setup_success_ratio gauge",
+      `cyrus_comms_call_setup_success_ratio ${setupSuccessRate}`,
+      "# HELP cyrus_comms_session_rehydrates_total Session rehydrate events after reconnect",
+      "# TYPE cyrus_comms_session_rehydrates_total counter",
+      `cyrus_comms_session_rehydrates_total ${runtime.sessionRehydrates}`,
+      "# HELP cyrus_comms_reconnect_under_2s_total Reconnects completed under 2 seconds",
+      "# TYPE cyrus_comms_reconnect_under_2s_total counter",
+      `cyrus_comms_reconnect_under_2s_total ${runtime.reconnectUnder2s}`,
+      "# HELP cyrus_comms_reconnect_2_to_5s_total Reconnects completed between 2 and 5 seconds",
+      "# TYPE cyrus_comms_reconnect_2_to_5s_total counter",
+      `cyrus_comms_reconnect_2_to_5s_total ${runtime.reconnect2to5s}`,
+      "# HELP cyrus_comms_reconnect_5_to_10s_total Reconnects completed between 5 and 10 seconds",
+      "# TYPE cyrus_comms_reconnect_5_to_10s_total counter",
+      `cyrus_comms_reconnect_5_to_10s_total ${runtime.reconnect5to10s}`,
+      "# HELP cyrus_comms_reconnect_over_10s_total Reconnects completed over 10 seconds",
+      "# TYPE cyrus_comms_reconnect_over_10s_total counter",
+      `cyrus_comms_reconnect_over_10s_total ${runtime.reconnectOver10s}`,
+      "# HELP cyrus_comms_ice_restart_attempts_total ICE restart attempts reported by clients",
+      "# TYPE cyrus_comms_ice_restart_attempts_total counter",
+      `cyrus_comms_ice_restart_attempts_total ${runtime.iceRestartAttempts}`,
+      "# HELP cyrus_comms_ice_restart_succeeded_total ICE restart successes reported by clients",
+      "# TYPE cyrus_comms_ice_restart_succeeded_total counter",
+      `cyrus_comms_ice_restart_succeeded_total ${runtime.iceRestartSucceeded}`,
+      "# HELP cyrus_comms_ice_restart_failed_total ICE restart failures reported by clients",
+      "# TYPE cyrus_comms_ice_restart_failed_total counter",
+      `cyrus_comms_ice_restart_failed_total ${runtime.iceRestartFailed}`,
+      "# HELP cyrus_comms_relay_restart_attempts_total Relay restart attempts reported by clients",
+      "# TYPE cyrus_comms_relay_restart_attempts_total counter",
+      `cyrus_comms_relay_restart_attempts_total ${runtime.relayRestartAttempts}`,
+      "# HELP cyrus_comms_relay_restart_succeeded_total Relay restart successes reported by clients",
+      "# TYPE cyrus_comms_relay_restart_succeeded_total counter",
+      `cyrus_comms_relay_restart_succeeded_total ${runtime.relayRestartSucceeded}`,
+      "# HELP cyrus_comms_relay_restart_failed_total Relay restart failures reported by clients",
+      "# TYPE cyrus_comms_relay_restart_failed_total counter",
+      `cyrus_comms_relay_restart_failed_total ${runtime.relayRestartFailed}`,
+      "# HELP cyrus_comms_recovery_latency_avg_ms Average media recovery latency in milliseconds",
+      "# TYPE cyrus_comms_recovery_latency_avg_ms gauge",
+      `cyrus_comms_recovery_latency_avg_ms ${runtime.recoveryLatencyAvgMs}`,
+      "# HELP cyrus_comms_recovery_latency_under_1s_total Recovery events under 1 second",
+      "# TYPE cyrus_comms_recovery_latency_under_1s_total counter",
+      `cyrus_comms_recovery_latency_under_1s_total ${runtime.recoveryLatencyUnder1s}`,
+      "# HELP cyrus_comms_recovery_latency_1_to_2s_total Recovery events between 1 and 2 seconds",
+      "# TYPE cyrus_comms_recovery_latency_1_to_2s_total counter",
+      `cyrus_comms_recovery_latency_1_to_2s_total ${runtime.recoveryLatency1to2s}`,
+      "# HELP cyrus_comms_recovery_latency_2_to_5s_total Recovery events between 2 and 5 seconds",
+      "# TYPE cyrus_comms_recovery_latency_2_to_5s_total counter",
+      `cyrus_comms_recovery_latency_2_to_5s_total ${runtime.recoveryLatency2to5s}`,
+      "# HELP cyrus_comms_recovery_latency_over_5s_total Recovery events over 5 seconds",
+      "# TYPE cyrus_comms_recovery_latency_over_5s_total counter",
+      `cyrus_comms_recovery_latency_over_5s_total ${runtime.recoveryLatencyOver5s}`,
+      "# HELP cyrus_comms_chaos_injections_total Chaos test hooks executed",
+      "# TYPE cyrus_comms_chaos_injections_total counter",
+      `cyrus_comms_chaos_injections_total ${runtime.chaosInjections}`,
+      "# HELP cyrus_comms_pending_call_timeouts_total Pending calls expired without answer",
+      "# TYPE cyrus_comms_pending_call_timeouts_total counter",
+      `cyrus_comms_pending_call_timeouts_total ${runtime.pendingCallTimeouts}`,
+      "# HELP cyrus_comms_active_call_drift_reconciles_total Active calls reconciled after participant drift",
+      "# TYPE cyrus_comms_active_call_drift_reconciles_total counter",
+      `cyrus_comms_active_call_drift_reconciles_total ${runtime.activeCallDriftReconciles}`,
+      "# HELP cyrus_comms_active_call_drift_pruned_total Active calls pruned after full participant drift",
+      "# TYPE cyrus_comms_active_call_drift_pruned_total counter",
+      `cyrus_comms_active_call_drift_pruned_total ${runtime.activeCallDriftPruned}`,
+    ];
+    res.setHeader("Content-Type", "text/plain; version=0.0.4");
+    res.send(`${lines.join("\n")}\n`);
+  } catch (e: any) {
+    res.status(500).send(`# cyrus_comms_metrics_error ${JSON.stringify(e?.message || "unknown")}\n`);
+  }
 });
 
 router.post(
@@ -999,8 +1524,8 @@ router.post(
       if (!req.file) {
         return res.status(400).json({ error: "No image file uploaded" });
       }
-      const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-      const fileUrl = `/api/comms/media/${fileId}`;
+      const safeFilename = path.basename(req.file.filename);
+      const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
 
       await db
         .insert(onlineUsers)
@@ -1029,13 +1554,108 @@ router.post(
   }
 );
 
+router.get("/api/comms/upload/capabilities", (_req, res) => {
+  res.json({
+    maxUploadBytes: getCommsMaxUploadBytes(),
+    chunkSizeBytes: getCommsChunkSizeBytes(),
+    directUploadMaxBytes: 6 * 1024 * 1024,
+    supportsChunkedUpload: true,
+    supportsRangeStreaming: true,
+  });
+});
+
+router.post("/api/comms/upload/init", async (req: any, res) => {
+  try {
+    const userId = getUserId(req) || "unknown";
+    const { fileName, fileSize, mimeType } = req.body || {};
+    const size = parseInt(String(fileSize), 10);
+    if (!fileName || !Number.isFinite(size) || size <= 0) {
+      return res.status(400).json({ error: "fileName and fileSize are required" });
+    }
+    const session = initChunkUpload(getCommsChunksDir(COMMS_UPLOAD_DIR), {
+      fileName: String(fileName),
+      fileSize: size,
+      mimeType: typeof mimeType === "string" ? mimeType : undefined,
+      userId,
+    });
+    res.json({
+      uploadId: session.uploadId,
+      chunkSize: session.chunkSize,
+      totalChunks: session.totalChunks,
+      fileName: session.fileName,
+      mimeType: session.mimeType,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Failed to init upload" });
+  }
+});
+
+router.post("/api/comms/upload/chunk", chunkUpload.single("chunk"), async (req: any, res) => {
+  try {
+    const uploadId = String(req.body.uploadId || "");
+    const chunkIndex = parseInt(String(req.body.chunkIndex), 10);
+    if (!uploadId || !Number.isFinite(chunkIndex)) {
+      return res.status(400).json({ error: "uploadId and chunkIndex required" });
+    }
+    if (!req.file?.buffer) {
+      return res.status(400).json({ error: "No chunk data" });
+    }
+    const progress = await writeUploadChunk(
+      getCommsChunksDir(COMMS_UPLOAD_DIR),
+      uploadId,
+      chunkIndex,
+      req.file.buffer,
+    );
+    res.json({ success: true, ...progress });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Chunk upload failed" });
+  }
+});
+
+router.get("/api/comms/upload/:uploadId/status", (req, res) => {
+  const session = getChunkUploadSession(String(req.params.uploadId || ""));
+  if (!session) return res.status(404).json({ error: "Upload session not found" });
+  res.json({
+    uploadId: session.uploadId,
+    fileName: session.fileName,
+    fileSize: session.fileSize,
+    chunkSize: session.chunkSize,
+    totalChunks: session.totalChunks,
+    receivedChunks: session.receivedChunks.size,
+  });
+});
+
+router.post("/api/comms/upload/complete", async (req: any, res) => {
+  try {
+    const uploadId = String(req.body.uploadId || "");
+    if (!uploadId) return res.status(400).json({ error: "uploadId required" });
+    const merged = await completeChunkUpload(
+      getCommsChunksDir(COMMS_UPLOAD_DIR),
+      COMMS_UPLOAD_DIR,
+      uploadId,
+    );
+    const safeFilename = path.basename(merged.fileName);
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
+    res.json({
+      success: true,
+      fileUrl,
+      fileName: safeFilename,
+      fileSize: merged.fileSize,
+      mimeType: merged.mimeType,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Failed to complete upload" });
+  }
+});
+
 router.post("/api/comms/upload", commsUpload.single("file"), async (req: any, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     res.json({
       success: true,
       fileId,
@@ -1055,8 +1675,9 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
     if (!req.file) {
       return res.status(400).json({ error: "No audio file uploaded" });
     }
-    const fileId = path.basename(req.file.filename, path.extname(req.file.filename));
-    const fileUrl = `/api/comms/media/${fileId}`;
+    const safeFilename = path.basename(req.file.filename);
+    const fileId = path.basename(safeFilename, path.extname(safeFilename));
+    const fileUrl = `/api/comms/media/${encodeURIComponent(safeFilename)}`;
     const duration = req.body.duration || null;
     res.json({
       success: true,
@@ -1074,18 +1695,184 @@ router.post("/api/comms/voice-note", voiceNoteUpload.single("file"), async (req:
 
 router.get("/api/comms/media/:id", (req, res) => {
   try {
-    const { id } = req.params;
-    const safeId = path.basename(id);
-    const files = fs.readdirSync(COMMS_UPLOAD_DIR);
-    const match = files.find(f => f.startsWith(safeId));
-    if (!match) {
+    const raw = decodeURIComponent(String(req.params.id || ""));
+    const safeName = path.basename(raw);
+    if (!safeName) {
       return res.status(404).json({ error: "Media not found" });
     }
-    const filePath = path.join(COMMS_UPLOAD_DIR, match);
-    res.sendFile(filePath);
+    let filePath = path.join(COMMS_UPLOAD_DIR, safeName);
+    let resolvedName = safeName;
+    if (!fs.existsSync(filePath)) {
+      const files = fs.readdirSync(COMMS_UPLOAD_DIR);
+      const match = files.find((f) => f === safeName || f.startsWith(safeName));
+      if (!match) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      resolvedName = match;
+      filePath = path.join(COMMS_UPLOAD_DIR, match);
+    }
+    const ext = path.extname(resolvedName).toLowerCase();
+    const mime = COMMS_SERVE_MIME[ext] || AVATAR_SERVE_MIME[ext] || "application/octet-stream";
+    serveCommsMediaWithRange(req, res, filePath, mime, path.basename(resolvedName));
   } catch (error: any) {
     console.error("Error serving media:", error);
     res.status(500).json({ error: "Failed to serve media" });
+  }
+});
+
+router.get("/api/comms/recordings", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    const limit = Math.min(parseInt(String(req.query.limit || "30"), 10) || 30, 100);
+
+    let rows;
+    if (userId) {
+      rows = await db
+        .select()
+        .from(callSessions)
+        .where(
+          and(
+            isNotNull(callSessions.recordingUrl),
+            sql`${callSessions.participants}::jsonb @> ${JSON.stringify([{ userId }])}::jsonb`,
+          ),
+        )
+        .orderBy(desc(callSessions.startTime))
+        .limit(limit);
+    } else {
+      rows = await db
+        .select()
+        .from(callSessions)
+        .where(isNotNull(callSessions.recordingUrl))
+        .orderBy(desc(callSessions.startTime))
+        .limit(limit);
+    }
+
+    const recordings = rows.map((s) => {
+      const mediaConfig = (s.mediaConfig || {}) as { video?: boolean };
+      const meta = (s.metadata || {}) as { recordedBy?: string; fileSizeBytes?: number };
+      return {
+        id: s.id,
+        callId: s.callId,
+        type: s.type,
+        participants: s.participants,
+        callType: mediaConfig.video ? "video" : "audio",
+        quality: s.quality,
+        startTime: s.startTime?.toISOString() || null,
+        endTime: s.endTime?.toISOString() || null,
+        durationSeconds: s.durationSeconds,
+        recordingUrl: s.recordingUrl,
+        recordedBy: meta.recordedBy || null,
+        fileSizeBytes: meta.fileSizeBytes || null,
+      };
+    });
+
+    res.json({ recordings });
+  } catch (error: any) {
+    console.error("Error listing recordings:", error);
+    res.status(500).json({ error: "Failed to list recordings" });
+  }
+});
+
+router.post(
+  "/api/comms/sessions/:roomId/recording",
+  recordingUpload.single("file"),
+  async (req: any, res) => {
+    try {
+      const roomId = String(req.params.roomId || "").trim();
+      if (!roomId) return res.status(400).json({ error: "roomId required" });
+      if (!req.file) return res.status(400).json({ error: "No recording file uploaded" });
+
+      const userId = getUserId(req) || req.body.recordedBy || "unknown";
+      const displayName = typeof req.body.displayName === "string" ? req.body.displayName : undefined;
+      const callType = req.body.callType === "video" ? "video" : "audio";
+      const durationSeconds = parseInt(String(req.body.durationSeconds || "0"), 10) || null;
+
+      const safeFilename = path.basename(req.file.filename);
+      const recordingUrl = `/api/comms/media/recordings/${encodeURIComponent(safeFilename)}`;
+
+      const [existing] = await db
+        .select()
+        .from(callSessions)
+        .where(eq(callSessions.callId, roomId))
+        .limit(1);
+
+      const metadata = {
+        ...((existing?.metadata as Record<string, unknown>) || {}),
+        recordedBy: userId,
+        recordedByName: displayName,
+        fileSizeBytes: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      if (existing) {
+        await db
+          .update(callSessions)
+          .set({
+            recordingUrl,
+            durationSeconds: durationSeconds ?? existing.durationSeconds,
+            metadata,
+          })
+          .where(eq(callSessions.callId, roomId));
+      } else {
+        await db.insert(callSessions).values({
+          callId: roomId,
+          type: "p2p",
+          participants: [{ userId, displayName, joinedAt: new Date().toISOString() }],
+          mediaConfig: { audio: true, video: callType === "video", screen: false },
+          quality: "HD",
+          startTime: new Date(),
+          durationSeconds,
+          recordingUrl,
+          metadata,
+        });
+      }
+
+      try {
+        await db
+          .update(callHistory)
+          .set({ isRecording: false, recordingUrl })
+          .where(eq(callHistory.roomId, roomId));
+      } catch {
+        /* optional */
+      }
+
+      res.json({
+        success: true,
+        recordingUrl,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        durationSeconds,
+      });
+    } catch (error: any) {
+      console.error("Error uploading session recording:", error);
+      res.status(500).json({ error: "Failed to save recording" });
+    }
+  },
+);
+
+router.get("/api/comms/media/recordings/:id", (req, res) => {
+  try {
+    const raw = decodeURIComponent(String(req.params.id || ""));
+    const safeName = path.basename(raw);
+    if (!safeName) return res.status(404).json({ error: "Recording not found" });
+    const filePath = path.join(COMMS_RECORDINGS_DIR, safeName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+    const ext = path.extname(safeName).toLowerCase();
+    const mime = COMMS_SERVE_MIME[ext] || "video/webm";
+    res.setHeader("Content-Type", mime);
+    const forceDownload = String(req.query.download || "") === "1";
+    if (forceDownload) {
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeName)}"`);
+    } else {
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(safeName)}"`);
+    }
+    res.sendFile(filePath);
+  } catch (error: any) {
+    console.error("Error serving recording:", error);
+    res.status(500).json({ error: "Failed to serve recording" });
   }
 });
 
@@ -1219,16 +2006,31 @@ router.get("/api/comms/users/search", async (req: any, res) => {
       .limit(20);
 
     const filtered = results
-      .filter(u => u.id !== userId)
-      .map(u => ({
-        id: u.id,
-        displayName: u.displayName || "Unknown User",
-        email: u.email,
-        isOnline: u.isOnline || false,
-        lastSeen: u.lastSeen?.toISOString() || null,
-        profileImageUrl: u.profileImageUrl || null,
-        status: u.status || "offline",
-      }));
+      .filter((u) => u.id !== userId)
+      .map((u) => {
+        const di = parseDeviceInfo(u.deviceInfo);
+        const lastLocation =
+          di.locationShareEnabled && di.lastLocation
+            ? {
+                lat: di.lastLocation.lat,
+                lng: di.lastLocation.lng,
+                accuracy: di.lastLocation.accuracy ?? null,
+                at: di.lastLocation.at,
+              }
+            : null;
+        return {
+          id: u.id,
+          displayName: u.displayName || "Unknown User",
+          email: u.email,
+          isOnline: u.isOnline || false,
+          lastSeen: u.lastSeen?.toISOString() || null,
+          profileImageUrl: u.profileImageUrl || null,
+          status: u.status || "offline",
+          onlineSince: di.onlineSince || null,
+          lastLocation,
+          locationShareEnabled: !!di.locationShareEnabled,
+        };
+      });
 
     res.json(filtered);
   } catch (error: any) {
@@ -1612,18 +2414,8 @@ router.post("/api/comms/shared-media/:mediaId/annotate", async (req: any, res) =
 
 router.get("/api/comms/ice-servers", (_req: any, res) => {
   try {
-    const iceServers = [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun2.l.google.com:19302" },
-      { urls: "stun:stun3.l.google.com:19302" },
-      { urls: "stun:stun4.l.google.com:19302" },
-      { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-      { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
-    ];
-
-    res.json({ iceServers });
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({ iceServers: cfg.iceServers, relayConfigured: cfg.relayConfigured });
   } catch (error: any) {
     console.error("Error fetching ICE servers:", error);
     res.status(500).json({ error: "Failed to fetch ICE servers" });
@@ -1775,7 +2567,9 @@ router.post("/api/comms/intelligence/detect-anomalies-ml", async (req: any, res)
 
 export function registerCommsRoutes(app: any) {
   app.use(pshareRouter);
+  app.use(gwaRouter);
   app.use(router);
   console.log("[Comms] Registered communication routes (60+ endpoints)");
   console.log("[Comms Intelligence] 12 intelligence API endpoints active (8 core + 4 ML-enhanced)");
+  console.log("[Comms GWA] Group Work Assessment routes active (timed team analytics + reports)");
 }

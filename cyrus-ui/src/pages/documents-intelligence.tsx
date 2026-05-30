@@ -3,6 +3,7 @@ import { useDocumentsIntelligence, type IntelOptions } from "@/hooks/useDocument
 import { Button } from "@/components/ui/button";
 import {
   Brain,
+  ChevronDown,
   FileText,
   Gavel,
   Loader2,
@@ -14,9 +15,20 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { readHandoff } from "@shared/module-handoff";
+import {
+  encodeFileAsHandoffAttachment,
+  readCommandSearchShare,
+  readHandoff,
+  registerLargeHandoffFile,
+  resolveHandoffPayloadToFiles,
+  revokeHandoffPayloadBlobs,
+  type ModuleHandoffAttachment,
+  type ModuleHandoffLargeRef,
+} from "@shared/module-handoff";
+import { maxDocgenTargetPages, parseLargeUploadThresholdBytes, parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 const DOC_CATEGORIES: { value: string; label: string }[] = [
   { value: "auto", label: "Auto-detect (no hint)" },
@@ -41,8 +53,6 @@ const GEN_TYPES: { value: string; label: string }[] = [
   { value: "technical", label: "Technical document" },
 ];
 
-const BYTES_LARGE = 12 * 1024 * 1024;
-
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
   const a = document.createElement("a");
@@ -52,18 +62,37 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(a.href);
 }
 
+function downloadBlob(filename: string, blob: Blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const EXPORT_FORMATS: Array<{ value: "pdf" | "docx" | "html" | "md" | "txt" | "json"; label: string }> = [
+  { value: "pdf", label: "PDF (.pdf)" },
+  { value: "docx", label: "Word (.docx)" },
+  { value: "html", label: "HTML (.html)" },
+  { value: "md", label: "Markdown (.md)" },
+  { value: "txt", label: "Plain text (.txt)" },
+  { value: "json", label: "Structured JSON (.json)" },
+];
+
 export default function DocumentsIntelligence() {
   const { toast } = useToast();
   const {
     intel,
     setIntel,
     currentFile,
+    setHandoffStagedFile,
     syncReport,
     job,
     isSubmitting,
     runSyncFull,
     runAsync,
     generateDocument,
+    exportDocument,
     clearResults,
   } = useDocumentsIntelligence();
 
@@ -72,9 +101,15 @@ export default function DocumentsIntelligence() {
   const [genType, setGenType] = useState("legal");
   const [genAudience, setGenAudience] = useState("legal_counsel");
   const [genBody, setGenBody] = useState("");
-  const [targetPages, setTargetPages] = useState(48);
+  const [targetPages, setTargetPages] = useState(2000);
   const [genPurpose, setGenPurpose] = useState("");
+  const [includeImages, setIncludeImages] = useState(false);
+  const [imageStyle, setImageStyle] = useState<"realistic_3d" | "graphical" | "schematic">("schematic");
+  const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
+  const [isExporting, setIsExporting] = useState(false);
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
+  const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
+  const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
 
   const docHintText =
     category === "auto"
@@ -92,7 +127,7 @@ export default function DocumentsIntelligence() {
   const runStagedAnalyse = () => {
     if (!stagedAnalyseFile) return;
     const override: Partial<IntelOptions> = { ...intel, docHint: docHintText };
-    if (stagedAnalyseFile.size > BYTES_LARGE) {
+    if (stagedAnalyseFile.size > parseLargeUploadThresholdBytes()) {
       void runAsync(stagedAnalyseFile, override);
     } else {
       void runSyncFull(stagedAnalyseFile, override);
@@ -101,6 +136,9 @@ export default function DocumentsIntelligence() {
 
   const handleClearResults = () => {
     setStagedAnalyseFile(null);
+    setHandoffStagedFile(null);
+    setHandoffEncoded(undefined);
+    setHandoffLargeRefs([]);
     clearResults();
   };
 
@@ -109,15 +147,36 @@ export default function DocumentsIntelligence() {
     const p = new URLSearchParams(window.location.search);
     if (p.get("handoff") !== "1") return;
     const h = readHandoff(true);
-    if (!h?.text) return;
-    setGenBody(h.text);
-    setGenPurpose(
-      `Cross-module pipeline from ${h.sourceModule}. ${h.note ?? "Research / group collaboration follow-up."}`,
-    );
-    setGenType("report");
-    setGenAudience("technical");
-    toast({ title: "Pipeline content ready", description: "Review and tap Generate — or run analysis on a file." });
-  }, [toast]);
+    if (!h) return;
+
+    void (async () => {
+      try {
+        if (h.text?.trim()) setGenBody(h.text);
+        const files = await resolveHandoffPayloadToFiles(h);
+        if (files[0]) {
+          setStagedAnalyseFile(files[0]);
+          setHandoffStagedFile(files[0]);
+        }
+      } finally {
+        await revokeHandoffPayloadBlobs(h);
+      }
+
+      if (h.text?.trim() || h.attachments?.length || h.largeAttachments?.length) {
+        setGenPurpose(
+          `Cross-module pipeline from ${h.sourceModule}. ${h.note ?? "Research / group collaboration follow-up."}`,
+        );
+        setGenType("report");
+        setGenAudience("technical");
+        toast({
+          title: "Pipeline content ready",
+          description:
+            h.largeAttachments?.length || h.attachments?.length
+              ? "Review text and staged file — run analysis or Generate."
+              : "Review and tap Generate — or run analysis on a file.",
+        });
+      }
+    })();
+  }, [toast, setHandoffStagedFile]);
 
   const genMut = useMutation({
     mutationFn: async () => {
@@ -125,39 +184,117 @@ export default function DocumentsIntelligence() {
         docType: genType,
         content: genBody,
         audience: genAudience,
-        targetPages: Math.max(1, Math.min(2000, targetPages)),
+        targetPages: Math.max(1, Math.min(maxDocgenTargetPages(), targetPages)),
         purpose: genPurpose || undefined,
+        includeImages,
+        imageStyle,
       });
     },
   });
 
+  const fileForPipelineHandoff = stagedAnalyseFile ?? currentFile;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!fileForPipelineHandoff) {
+      setHandoffEncoded(undefined);
+      setHandoffLargeRefs([]);
+      return;
+    }
+    const INLINE_MAX = 900_000;
+    if (fileForPipelineHandoff.size <= INLINE_MAX) {
+      setHandoffLargeRefs([]);
+      void encodeFileAsHandoffAttachment(fileForPipelineHandoff).then((a) => {
+        if (!cancelled) setHandoffEncoded(a ? [a] : undefined);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setHandoffEncoded(undefined);
+    void registerLargeHandoffFile(fileForPipelineHandoff).then((ref) => {
+      if (cancelled) return;
+      setHandoffLargeRefs(ref ? [ref] : []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileForPipelineHandoff]);
+
+  const commandHandoffText = () => {
+    const rendered = genMut.data?.rendered?.trim();
+    if (rendered) return rendered;
+    const body = genBody.trim();
+    if (body) return body;
+    if (syncReport) {
+      const parts = [
+        syncReport.extractedSummary,
+        ...(syncReport.keyFindings || []),
+        syncReport.issues?.length ? `Issues: ${syncReport.issues.join("; ")}` : "",
+      ].filter(Boolean);
+      if (parts.length) return parts.join("\n\n");
+    }
+    if (job?.status === "completed" && job.result?.analysis) {
+      const a = job.result.analysis;
+      const parts = [
+        a.executiveBrief,
+        ...(a.keyFindings || []),
+        a.interpretation,
+      ].filter(Boolean);
+      if (parts.length) return parts.join("\n\n");
+    }
+    const cmd = intel.analysisCommand?.trim();
+    if (cmd) return `Document analysis command:\n${cmd}`;
+    return undefined;
+  };
+
   return (
     <ModuleWorkspacePageShell
+      theme="dashboard"
+      backdropTextureUrl={TSODILO_HUNT_SYMBOLS_URL}
+      backdropPixelated
       kicker="Cyrus · Documents"
       title="Document intelligence"
       subtitle="Analysis and long-form output"
       icon={Gavel}
+      commandHandoffText={commandHandoffText}
+      commandHandoffSource="documents-intelligence"
+      commandHandoffAttachments={() => handoffEncoded}
+      commandHandoffLargeRefs={() => (handoffLargeRefs.length ? handoffLargeRefs : undefined)}
       headerEnd={
         <>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-mono text-emerald-200/85">
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
             Pipeline online
           </span>
-          <Button type="button" variant="ghost" className="text-sm text-white/75" onClick={handleClearResults}>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/18 bg-white/[0.07] text-xs text-slate-100 hover:bg-white/[0.13]"
+            onClick={() => {
+              const t = readCommandSearchShare()?.trim();
+              if (!t) return;
+              setGenBody((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${t}` : t));
+              toast({ title: "Command search loaded", description: "Merged into the generation body." });
+            }}
+          >
+            Last command search
+          </Button>
+          <Button type="button" variant="ghost" className="text-sm text-slate-200/85 hover:bg-white/[0.08]" onClick={handleClearResults}>
             Clear
           </Button>
         </>
       }
     >
         <div className="text-base">
-        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2 lg:max-h-[calc(100dvh-2.75rem)] lg:items-stretch lg:gap-6 lg:overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto sm:gap-5 lg:h-full lg:max-h-full">
-          <section className="shrink-0 rounded-2xl border border-cyan-500/25 bg-slate-950/55 p-4 sm:p-5">
+        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4 sm:gap-5">
+          <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
             <h2
-              className="mb-3 flex items-center gap-2.5 text-base font-semibold text-cyan-100/90 sm:text-lg"
+              className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-100 sm:text-lg"
               style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
             >
-              <Brain className="h-5 w-5 text-cyan-400" />
+              <Brain className="h-5 w-5 text-sky-200" />
               Document analysis and examination
             </h2>
 
@@ -218,12 +355,15 @@ export default function DocumentsIntelligence() {
                   <input
                     type="number"
                     min={1}
-                    max={120}
+                    max={parseMaxAnalysisChunks()}
                     value={intel.maxChunks}
                     onChange={(e) =>
-                      setIntel((s) => ({ ...s, maxChunks: Math.min(120, Math.max(1, +e.target.value)) }))
+                      setIntel((s) => ({
+                        ...s,
+                        maxChunks: Math.min(parseMaxAnalysisChunks(), Math.max(1, +e.target.value)),
+                      }))
                     }
-                    className="w-20 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-right text-sm"
+                    className="w-24 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-right text-sm"
                   />
                 </div>
               </div>
@@ -252,11 +392,11 @@ export default function DocumentsIntelligence() {
                     rows={3}
                     maxLength={8000}
                     placeholder="What should the analysis focus on?"
-                    className="w-full rounded-lg border border-cyan-500/25 bg-slate-900/85 px-3 py-2.5 text-base leading-relaxed text-white/95 shadow-inner placeholder:text-white/45"
+                    className="w-full rounded-lg border border-sky-300/25 bg-slate-950/70 px-3 py-2.5 text-base leading-relaxed text-white/95 shadow-inner placeholder:text-white/45"
                   />
                 </div>
 
-                <div className="rounded-xl border border-dashed border-cyan-500/30 bg-cyan-950/20 p-4">
+                <div className="rounded-xl border border-dashed border-sky-300/28 bg-slate-950/45 p-4">
                   <p className="mb-2 text-xs font-mono uppercase tracking-widest text-cyan-200/85">Source file</p>
                   <input
                     ref={analyseFileInputRef}
@@ -274,7 +414,7 @@ export default function DocumentsIntelligence() {
                     onClick={() => analyseFileInputRef.current?.click()}
                   >
                     <Upload className="mr-2 h-5 w-5" />
-                    Upload document
+                    Upload document (PDF, Word, text, image)
                   </Button>
                   {(stagedAnalyseFile || currentFile) && (
                     <p className="mt-2 text-sm text-white/75">
@@ -288,7 +428,7 @@ export default function DocumentsIntelligence() {
                 <div className="space-y-1.5">
                   <Button
                     type="button"
-                    className="h-11 w-full bg-gradient-to-r from-cyan-600 to-cyan-800 text-base text-white shadow-md shadow-cyan-900/25 disabled:opacity-50"
+                    className="h-11 w-full bg-gradient-to-r from-slate-300/25 to-sky-300/35 text-base text-white shadow-md shadow-black/25 disabled:opacity-50"
                     disabled={!stagedAnalyseFile || isSubmitting}
                     onClick={runStagedAnalyse}
                   >
@@ -309,16 +449,20 @@ export default function DocumentsIntelligence() {
               </div>
             </section>
 
-            <section className="shrink-0 rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-indigo-950/30 to-slate-950/55 p-4 sm:p-5">
+            <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
               <h2
-                className="mb-2 flex items-center gap-2 text-base font-semibold text-indigo-100/90 sm:text-lg"
+                className="mb-2 flex items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
-                <Wand2 className="h-5 w-5" />
+                <Wand2 className="h-5 w-5 text-sky-200" />
                 Generate long output
               </h2>
               <p className="mb-3 text-sm leading-relaxed text-white/60">
-                Long-form draft. Cap <code className="rounded bg-indigo-950/50 px-1.5 py-0.5 text-sm text-indigo-200/90">CYRUS_DOCGEN_MAX_PAGES</code> (default 2000).
+                Long-form draft — target pages up to{" "}
+                <code className="rounded bg-indigo-950/50 px-1.5 py-0.5 text-sm text-indigo-200/90">
+                  CYRUS_DOCGEN_MAX_PAGES
+                </code>{" "}
+                (cap {maxDocgenTargetPages()}).
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                 <div>
@@ -359,14 +503,47 @@ export default function DocumentsIntelligence() {
                   <span>{targetPages} pg</span>
                 </div>
                 <input
+                  type="number"
+                  min={1}
+                  max={maxDocgenTargetPages()}
+                  step={10}
+                  value={targetPages}
+                  onChange={(e) =>
+                    setTargetPages(Math.max(1, Math.min(maxDocgenTargetPages(), Number(e.target.value || 1))))
+                  }
+                  className="mb-2 w-full rounded-lg border border-white/12 bg-slate-900/85 px-3 py-2 text-base text-white"
+                />
+                <input
                   type="range"
-                  min={4}
-                  max={2000}
-                  step={4}
+                  min={1}
+                  max={maxDocgenTargetPages()}
+                  step={10}
                   value={targetPages}
                   onChange={(e) => setTargetPages(+e.target.value)}
                   className="h-2 w-full"
                 />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={includeImages}
+                    onChange={(e) => setIncludeImages(e.target.checked)}
+                    className="rounded border-white/20"
+                  />
+                  Include reference images (DALL-E / local)
+                </label>
+                {includeImages ? (
+                  <select
+                    value={imageStyle}
+                    onChange={(e) => setImageStyle(e.target.value as typeof imageStyle)}
+                    className="rounded-lg border border-white/12 bg-slate-900/85 px-2 py-1.5 text-sm"
+                  >
+                    <option value="schematic">Schematic / anatomy</option>
+                    <option value="graphical">Graphical infographic</option>
+                    <option value="realistic_3d">Realistic 3D</option>
+                  </select>
+                ) : null}
               </div>
               <textarea
                 value={genBody}
@@ -376,7 +553,7 @@ export default function DocumentsIntelligence() {
                 className="mt-2 w-full rounded-lg border border-white/12 bg-slate-900/70 px-3 py-2.5 text-base leading-relaxed text-white/95 placeholder:text-white/40"
               />
               <Button
-                className="mt-3 h-11 w-full bg-gradient-to-r from-indigo-600 to-indigo-800 text-base text-white"
+                className="mt-3 h-11 w-full bg-gradient-to-r from-slate-300/22 to-sky-300/33 text-base text-white"
                 type="button"
                 disabled={!genBody.trim() || genMut.isPending}
                 onClick={() => genMut.mutate()}
@@ -394,12 +571,12 @@ export default function DocumentsIntelligence() {
           </div>
 
           <aside
-            className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-2xl border border-indigo-500/30 bg-slate-950/70 shadow-[0_0_32px_-12px_rgba(99,102,241,0.32)] backdrop-blur-sm sm:min-h-[300px] lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:min-h-0 lg:h-full lg:max-h-full"
+            className="flex min-h-[300px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm"
             aria-label="Output and generated documents"
           >
             <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">
               <h2
-                className="text-base font-semibold tracking-wide text-indigo-100/95 sm:text-lg"
+                className="text-base font-semibold tracking-wide text-slate-100 sm:text-lg"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
                 Output &amp; files
@@ -409,9 +586,9 @@ export default function DocumentsIntelligence() {
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
               {syncReport && (
-                <section className="rounded-xl border border-cyan-500/30 bg-slate-900/60 p-3.5 sm:p-4">
+                <section className="rounded-xl border border-sky-300/28 bg-slate-950/55 p-3.5 sm:p-4">
                   <h3
-                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-cyan-200"
+                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-sky-200"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
                     <Scale className="h-5 w-5" />
@@ -419,13 +596,13 @@ export default function DocumentsIntelligence() {
                   </h3>
                   <p className="text-sm text-white/75">{syncReport.sourceDescription}</p>
                   <div className="mt-2 text-base leading-relaxed text-white/90">{syncReport.extractedSummary}</div>
-                  <ul className="mt-3 list-inside list-disc text-sm text-cyan-100/85">
+                  <ul className="mt-3 list-inside list-disc text-sm text-sky-100/85">
                     {(syncReport.keyFindings || []).map((f, i) => (
                       <li key={i}>{f}</li>
                     ))}
                   </ul>
                   {syncReport.issues?.length > 0 && (
-                    <div className="mt-2 text-sm text-amber-200/85">Issues: {syncReport.issues.join("; ")}</div>
+                    <div className="mt-2 text-sm text-[#e11d48]/80">Issues: {syncReport.issues.join("; ")}</div>
                   )}
                   <p className="mt-2 text-sm text-white/80">Confidence: {syncReport.confidence}</p>
                 </section>
@@ -438,16 +615,16 @@ export default function DocumentsIntelligence() {
               )}
 
               {job && !["completed", "failed"].includes(job.status) && (
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3.5 text-sm text-cyan-100/85">
+                <div className="rounded-xl border border-sky-300/24 bg-slate-950/50 p-3.5 text-sm text-sky-100/85">
                   <div className="mb-1 font-mono text-sm">Job {job.id}</div>
                   {job.stageLabel} — {job.progress}%
                 </div>
               )}
 
               {job?.result?.analysis && job.status === "completed" && (
-                <section className="rounded-xl border border-amber-500/30 bg-gradient-to-b from-amber-950/35 to-slate-950/55 p-3.5 sm:p-4">
+                <section className="rounded-xl p-3.5 sm:p-4" style={{ background: "rgba(225,29,72,0.06)", border: "1px solid rgba(225,29,72,0.2)" }}>
                   <h3
-                    className="mb-2 flex items-center gap-2.5 text-base font-medium text-amber-100"
+                    className="mb-2 flex items-center gap-2.5 text-base font-bold text-white"
                     style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                   >
                     <Sparkles className="h-5 w-5" />
@@ -466,7 +643,7 @@ export default function DocumentsIntelligence() {
                     ))}
                   </ul>
                   {job.result.analysis.knowledgeApplied && job.result.analysis.knowledgeApplied.length > 0 && (
-                    <p className="mt-2 text-sm text-cyan-200/85">
+                    <p className="mt-2 text-sm text-sky-200/85">
                       Knowledge signals: {job.result.analysis.knowledgeApplied.join(" · ")}
                     </p>
                   )}
@@ -487,7 +664,7 @@ export default function DocumentsIntelligence() {
               )}
 
               {genMut.data && (
-                <section className="flex min-h-0 flex-col gap-2 rounded-xl border border-indigo-500/35 bg-slate-900/50 p-3.5 sm:p-4">
+                <section className="flex min-h-0 flex-col gap-2 rounded-xl border border-sky-300/25 bg-slate-950/55 p-3.5 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3
                       className="text-base font-medium text-indigo-100"
@@ -495,15 +672,44 @@ export default function DocumentsIntelligence() {
                     >
                       Generated document
                     </h3>
-                    <Button
-                      type="button"
-                      size="default"
-                      variant="outline"
-                      className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
-                      onClick={() => downloadText(`${genMut.data.title || "cyrus-doc"}.md`, genMut.data.rendered)}
-                    >
-                      Download .md
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <select
+                          value={exportFormat}
+                          onChange={(e) => setExportFormat(e.target.value as (typeof EXPORT_FORMATS)[number]["value"])}
+                          className="h-10 appearance-none rounded-md border border-indigo-400/30 bg-slate-900 pl-3 pr-8 text-sm text-indigo-100"
+                        >
+                          {EXPORT_FORMATS.map((fmt) => (
+                            <option key={fmt.value} value={fmt.value}>
+                              {fmt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-200/80" />
+                      </div>
+                      <Button
+                        type="button"
+                        size="default"
+                        variant="outline"
+                        disabled={isExporting}
+                        className="border-cyan-500/40 text-base text-cyan-200 hover:bg-cyan-500/10"
+                        onClick={async () => {
+                          try {
+                            setIsExporting(true);
+                            const file = await exportDocument(exportFormat, genMut.data);
+                            downloadBlob(file.filename, file.blob);
+                            toast({ title: "Download ready", description: `Exported as ${exportFormat.toUpperCase()}` });
+                          } catch (e: unknown) {
+                            const msg = e instanceof Error ? e.message : "Export failed";
+                            toast({ title: "Export failed", description: msg, variant: "destructive" });
+                          } finally {
+                            setIsExporting(false);
+                          }
+                        }}
+                      >
+                        {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Download ${exportFormat.toUpperCase()}`}
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm text-white/70">{genMut.data.title}</p>
                   <div className="min-h-0 max-h-[min(28dvh,260px)] flex-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2.5 sm:p-3">

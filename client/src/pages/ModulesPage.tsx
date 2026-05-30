@@ -24,6 +24,7 @@ import {
   XCircle,
   Droplets,
   LayoutGrid,
+  Satellite,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { systemFetch } from "@shared/cyrus-api-client";
@@ -61,6 +62,7 @@ const moduleIcons: Record<string, any> = {
   "emotional-cognition": Activity,
   "universal-language": Globe,
   "decentralized-intelligence": Boxes,
+  "iot-ntn-connectivity": Satellite,
   "ethical-governance": Shield,
   "self-evolution": TrendingUp,
   "quantum-neural": Atom,
@@ -84,6 +86,7 @@ const moduleColors: Record<string, string> = {
   "emotional-cognition": "from-pink-500 to-rose-600",
   "universal-language": "from-blue-500 to-cyan-600",
   "decentralized-intelligence": "from-green-500 to-emerald-600",
+  "iot-ntn-connectivity": "from-sky-500 to-indigo-600",
   "ethical-governance": "from-amber-500 to-orange-600",
   "self-evolution": "from-teal-500 to-cyan-600",
   "quantum-neural": "from-violet-500 to-purple-600",
@@ -158,7 +161,7 @@ export function ModulesPage() {
         </button>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-cyrus-page space-y-6">
         <section
           className="rounded-xl border border-[rgba(84,84,88,0.65)] bg-[#1c1c1e] overflow-hidden"
           aria-label="Module console"

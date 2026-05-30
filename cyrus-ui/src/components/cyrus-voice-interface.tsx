@@ -223,7 +223,7 @@ export function CyrusVoiceInterface() {
   const getStatusColor = () => {
     switch (status) {
       case "listening": return "from-green-500 to-emerald-600";
-      case "thinking": return "from-amber-500 to-orange-600";
+      case "thinking": return "from-[#e11d48] to-[#be123c]";
       case "speaking": return "from-cyan-500 to-blue-600";
       default: return "from-cyan-600 to-cyan-700";
     }
@@ -232,7 +232,7 @@ export function CyrusVoiceInterface() {
   const getGlowColor = () => {
     switch (status) {
       case "listening": return "rgba(34, 197, 94, 0.5)";
-      case "thinking": return "rgba(245, 158, 11, 0.5)";
+      case "thinking": return "rgba(225, 29, 72, 0.5)";
       case "speaking": return "rgba(6, 182, 212, 0.6)";
       default: return "rgba(6, 182, 212, 0.3)";
     }
@@ -293,12 +293,12 @@ export function CyrusVoiceInterface() {
             <>
               <span className={`absolute -inset-4 rounded-full border-2 border-current animate-ping opacity-30 ${
                 status === "listening" ? "text-green-400" :
-                status === "thinking" ? "text-amber-400" :
+                status === "thinking" ? "text-[#e11d48]" :
                 "text-cyan-400"
               }`} />
               <span className={`absolute -inset-6 rounded-full border border-current animate-pulse opacity-20 ${
                 status === "listening" ? "text-green-400" :
-                status === "thinking" ? "text-amber-400" :
+                status === "thinking" ? "text-[#e11d48]" :
                 "text-cyan-400"
               }`} />
             </>
@@ -329,12 +329,12 @@ export function CyrusVoiceInterface() {
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full animate-pulse ${
               status === "listening" ? "bg-green-400" :
-              status === "thinking" ? "bg-amber-400" :
+              status === "thinking" ? "bg-[#e11d48]" :
               "bg-cyan-400"
             }`} />
             <span className={`text-xs font-bold tracking-[0.3em] uppercase ${
               status === "listening" ? "text-green-400" :
-              status === "thinking" ? "text-amber-400" :
+              status === "thinking" ? "text-[#e11d48]" :
               "text-cyan-400"
             }`} style={{ fontFamily: "'Orbitron', sans-serif" }}>
               {status === "listening" ? "LISTENING" :

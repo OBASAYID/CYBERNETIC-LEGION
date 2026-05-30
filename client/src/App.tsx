@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Link, useLocation } from "wouter";
 import {
   Menu,
@@ -6,17 +6,12 @@ import {
   MessageSquare,
   Scan,
   FileText,
-  MapPin,
   Phone,
   Monitor,
-  Plane,
   ChevronRight,
   Cpu,
   Activity,
   Zap,
-  Shield,
-  Microscope,
-  Droplets,
   LogIn,
   LogOut,
   User,
@@ -30,34 +25,26 @@ import { IntroSequence } from "./components/IntroSequence";
 import { Dashboard } from "./components/Dashboard";
 import { ScanPage } from "./pages/ScanPage";
 import { FileAnalysisPage } from "./pages/FileAnalysisPage";
-import { NavigationPage } from "./pages/NavigationPage";
-import { CommsPage } from "./pages/CommsPage";
+const CommsHubPage = lazy(() =>
+  import("../../cyrus-ui/src/pages/comms-hub-page").then((m) => ({ default: m.default })),
+);
 import { DeviceControlPage } from "./pages/DeviceControlPage";
-import { DronePage } from "./pages/DronePage";
 import { ModulesPage } from "./pages/ModulesPage";
 import { MedicalPage } from "./pages/MedicalPage";
 import { QuantumPage } from "./pages/QuantumPage";
-import { SecurityPage } from "./pages/SecurityPage";
-import { BiologyPage } from "./pages/BiologyPage";
-import { BloodSamplingPage } from "./pages/BloodSamplingPage";
 
 const navItems = [
   { path: "/", label: "Command", sublabel: "Primary Interface", icon: MessageSquare },
   { path: "/modules", label: "Modules", sublabel: "AI Orchestrator", icon: Cpu },
   { path: "/scan", label: "Vision", sublabel: "Optical Analysis", icon: Scan },
   { path: "/files", label: "Documents", sublabel: "File Processing", icon: FileText },
-  { path: "/nav", label: "Navigation", sublabel: "Geospatial", icon: MapPin },
   { path: "/comms", label: "Communications", sublabel: "Secure Channels", icon: Phone },
   { path: "/device", label: "Systems", sublabel: "Hardware Control", icon: Monitor },
-  { path: "/drone", label: "Aerospace", sublabel: "UAV Operations", icon: Plane },
 ];
 
 const moduleItems = [
   { path: "/medical", label: "Medical", sublabel: "Diagnostics", icon: Activity },
   { path: "/quantum", label: "Quantum", sublabel: "Neural Net", icon: Zap },
-  { path: "/security", label: "Security", sublabel: "Encryption", icon: Shield },
-  { path: "/biology", label: "Biology", sublabel: "Lab Analysis", icon: Microscope },
-  { path: "/blood", label: "Blood", sublabel: "Sampling", icon: Droplets },
 ];
 
 export default function App() {
@@ -118,6 +105,7 @@ export default function App() {
 
   const localUsername = localStorage.getItem("cyrus-display-name") || "OPERATOR";
   const userRole = localStorage.getItem("cyrus-user-role") || "user";
+  console.log("[App] User role:", userRole);
 
   if (!isAuthenticated) {
     return <AccessGate onAuthenticated={handleAuthenticated} />;
@@ -468,15 +456,14 @@ function AppContent({
             <Route path="/modules" component={ModulesPage} />
             <Route path="/scan" component={ScanPage} />
             <Route path="/files" component={FileAnalysisPage} />
-            <Route path="/nav" component={NavigationPage} />
-            <Route path="/comms" component={CommsPage} />
+            <Route path="/comms">
+              <Suspense fallback={<div className="p-8 text-sm text-cyan-200/70">Loading comms…</div>}>
+                <CommsHubPage />
+              </Suspense>
+            </Route>
             <Route path="/device" component={DeviceControlPage} />
-            <Route path="/drone" component={DronePage} />
             <Route path="/medical" component={MedicalPage} />
             <Route path="/quantum" component={QuantumPage} />
-            <Route path="/security" component={SecurityPage} />
-            <Route path="/biology" component={BiologyPage} />
-            <Route path="/blood" component={BloodSamplingPage} />
           </Switch>
         </main>
       </div>

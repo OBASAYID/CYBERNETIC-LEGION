@@ -197,8 +197,15 @@ except Exception as e:
   }
 
   async storeKnowledge(knowledge: any): Promise<void> {
-    if (knowledge.relevance < this.config.relevanceFilter.minRelevanceScore) {
-      return; // Skip irrelevant knowledge
+    const minScore = this.config.relevanceFilter?.minRelevanceScore ?? 0;
+    const relevance = typeof knowledge.relevance === "number" ? knowledge.relevance : 1;
+    if (relevance < minScore) {
+      return;
+    }
+
+    if (!this.config.vectorDb?.enabled || !this.vectorDb) {
+      console.log(`✅ Stored knowledge (local KB): ${knowledge.title || knowledge.source || "Untitled"}`);
+      return;
     }
 
     try {
