@@ -71,8 +71,9 @@ export async function acquireCommsUserMedia(
       { video: MEDIA_CONSTRAINTS.video.sd, audio: audioConstraints },
       { video: MEDIA_CONSTRAINTS.video.mobile, audio: audioConstraints },
     );
+  } else {
+    attempts.push({ video: false, audio: audioConstraints });
   }
-  attempts.push({ video: false, audio: audioConstraints });
 
   let lastError: unknown;
   for (const constraints of attempts) {

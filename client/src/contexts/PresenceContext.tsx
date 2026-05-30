@@ -64,6 +64,75 @@ function sameSessionDescription(
   return a.sdp === b.sdp && (a.type || "") === (b.type || "");
 }
 
+const WEBRTC_OFFER_EVENTS = ["webrtc:offer", "webrtc-offer"] as const;
+const WEBRTC_ANSWER_EVENTS = ["webrtc:answer", "webrtc-answer"] as const;
+const WEBRTC_ICE_EVENTS = ["webrtc:ice-candidate", "webrtc-ice-candidate"] as const;
+
+function emitWebRtcSignal(
+  socket: Socket,
+  kind: "offer" | "answer" | "ice",
+  payload: unknown,
+): void {
+  const events =
+    kind === "offer"
+      ? WEBRTC_OFFER_EVENTS
+      : kind === "answer"
+        ? WEBRTC_ANSWER_EVENTS
+        : WEBRTC_ICE_EVENTS;
+  for (const eventName of events) {
+    socket.emit(eventName, payload);
+  }
+}
+
+function bindWebRtcSignalHandlers(
+  socket: Socket,
+  kind: "offer" | "answer" | "ice",
+  handler: (...args: any[]) => void,
+): void {
+  const events =
+    kind === "offer"
+      ? WEBRTC_OFFER_EVENTS
+      : kind === "answer"
+        ? WEBRTC_ANSWER_EVENTS
+        : WEBRTC_ICE_EVENTS;
+  for (const eventName of events) {
+    socket.on(eventName, handler);
+  }
+}
+
+function unbindWebRtcSignalHandlers(
+  socket: Socket,
+  kind: "offer" | "answer" | "ice",
+  handler: (...args: any[]) => void,
+): void {
+  const events =
+    kind === "offer"
+      ? WEBRTC_OFFER_EVENTS
+      : kind === "answer"
+        ? WEBRTC_ANSWER_EVENTS
+        : WEBRTC_ICE_EVENTS;
+  for (const eventName of events) {
+    socket.off(eventName, handler);
+  }
+}
+
+function mergeInboundRemoteTracks(event: RTCTrackEvent, inbound: MediaStream): MediaStreamTrack[] {
+  const toAdd: MediaStreamTrack[] = [];
+  if (event.streams?.[0]) {
+    for (const track of event.streams[0].getTracks()) {
+      if (track.readyState === "ended") continue;
+      if (!inbound.getTracks().some((t) => t.id === track.id)) toAdd.push(track);
+    }
+  } else if (
+    event.track &&
+    event.track.readyState !== "ended" &&
+    !inbound.getTracks().some((t) => t.id === event.track.id)
+  ) {
+    toAdd.push(event.track);
+  }
+  return toAdd;
+}
+
 export interface OnlineUser {
   id: string;
   displayName: string;
@@ -250,11 +319,19 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   /** Invalidates in-flight setupWebRTCMedia when a new call starts or teardown runs. */
   const webrtcSessionGenerationRef = useRef(0);
   /** Answerer: SDP may arrive before the peer connection exists. */
-  const pendingRemoteOfferRef = useRef<{ offer: RTCSessionDescriptionInit; roomId: string } | null>(null);
+  const pendingRemoteOfferRef = useRef<{
+    offer: RTCSessionDescriptionInit;
+    roomId: string;
+    fromPeerId?: string;
+  } | null>(null);
   const webRtcHandlersRef = useRef<{
-    offer?: (data: { offer: RTCSessionDescriptionInit; roomId: string }) => void;
-    answer?: (data: { answer: RTCSessionDescriptionInit; roomId: string }) => void;
-    ice?: (data: { candidate: unknown; roomId: string }) => void;
+    offer?: (data: {
+      offer: RTCSessionDescriptionInit;
+      roomId: string;
+      fromPeerId?: string;
+    }) => void;
+    answer?: (data: { answer: RTCSessionDescriptionInit; roomId: string; fromPeerId?: string }) => void;
+    ice?: (data: { candidate: unknown; roomId: string; fromPeerId?: string }) => void;
   }>({});
   /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
   const negotiationBusyRef = useRef(false);
@@ -462,8 +539,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
           await pc.setLocalDescription(offer);
           if (socket.connected) {
-            socket.emit(
-              "webrtc:offer",
+            emitWebRtcSignal(
+              socket,
+              "offer",
               withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId),
             );
           }
@@ -552,18 +630,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
     if (socketRef.current) {
       const h = webRtcHandlersRef.current;
-      if (h.offer) {
-        socketRef.current.off("webrtc-offer", h.offer);
-        socketRef.current.off("webrtc:offer", h.offer);
-      }
-      if (h.answer) {
-        socketRef.current.off("webrtc-answer", h.answer);
-        socketRef.current.off("webrtc:answer", h.answer);
-      }
-      if (h.ice) {
-        socketRef.current.off("webrtc-ice-candidate", h.ice);
-        socketRef.current.off("webrtc:ice-candidate", h.ice);
-      }
+      if (h.offer) unbindWebRtcSignalHandlers(socketRef.current, "offer", h.offer);
+      if (h.answer) unbindWebRtcSignalHandlers(socketRef.current, "answer", h.answer);
+      if (h.ice) unbindWebRtcSignalHandlers(socketRef.current, "ice", h.ice);
       webRtcHandlersRef.current = {};
     }
     pendingCandidatesRef.current = [];
@@ -718,16 +787,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           localStreamRef.current = null;
         }
         if (webRtcHandlersRef.current.offer) {
-          socket.off("webrtc-offer", webRtcHandlersRef.current.offer);
-          socket.off("webrtc:offer", webRtcHandlersRef.current.offer);
+          unbindWebRtcSignalHandlers(socket, "offer", webRtcHandlersRef.current.offer);
         }
         if (webRtcHandlersRef.current.answer) {
-          socket.off("webrtc-answer", webRtcHandlersRef.current.answer);
-          socket.off("webrtc:answer", webRtcHandlersRef.current.answer);
+          unbindWebRtcSignalHandlers(socket, "answer", webRtcHandlersRef.current.answer);
         }
         if (webRtcHandlersRef.current.ice) {
-          socket.off("webrtc-ice-candidate", webRtcHandlersRef.current.ice);
-          socket.off("webrtc:ice-candidate", webRtcHandlersRef.current.ice);
+          unbindWebRtcSignalHandlers(socket, "ice", webRtcHandlersRef.current.ice);
         }
         webRtcHandlersRef.current = {};
         pendingCandidatesRef.current = [];
@@ -751,7 +817,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 if (data.roomId !== roomId || !alive() || isInitiator) return;
                 const p = peerConnectionRef.current;
                 if (!p) {
-                  pendingRemoteOfferRef.current = { offer: data.offer, roomId: data.roomId };
+                  pendingRemoteOfferRef.current = {
+                    offer: data.offer,
+                    roomId: data.roomId,
+                    fromPeerId: data.fromPeerId,
+                  };
                   if (typeof localStorage !== "undefined" && localStorage.getItem("cyrus-call-debug") === "1") {
                     console.log("[CYRUS-Call] Buffered offer (PC not ready)");
                   }
@@ -784,7 +854,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                     diag?.logSdpFlow("setLocalAnswer", true);
                     if (alive() && socket.connected) {
                       const ansPayload = withWebRtcTarget({ roomId, answer }, answerTarget);
-                      socket.emit("webrtc:answer", ansPayload);
+                      emitWebRtcSignal(socket, "answer", ansPayload);
                     }
                   } catch (e) {
                     diag?.logSdpFlow("createAnswer", false, { error: String(e) });
@@ -803,7 +873,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         if (!isInitiator) {
           webRtcHandlersRef.current.offer = handleRemoteOffer;
-          socket.on("webrtc:offer", handleRemoteOffer);
+          bindWebRtcSignalHandlers(socket, "offer", handleRemoteOffer);
         }
 
         const rtcConfig = await fetchCyrusCommRtcConfiguration();
@@ -854,6 +924,24 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         webrtcDiagSessionRef.current = diagSession;
         void diagSession.probeAudioContext();
 
+        pc.ontrack = (event) => {
+          webrtcDiagSessionRef.current?.logOnTrack(event);
+          const inbound = remoteStreamRef.current;
+          const toAdd = mergeInboundRemoteTracks(event, inbound);
+          if (!toAdd.length) return;
+          for (const track of toAdd) inbound.addTrack(track);
+          const playback = new MediaStream(inbound.getTracks());
+          remoteStreamRef.current = playback;
+          setRemoteStream(playback);
+          if (toAdd.some((t) => t.kind === "audio")) {
+            promoteMediaConnected();
+            void resumeCyrusAudioPipeline();
+          }
+          if (callType === "video" && toAdd.some((t) => t.kind === "video")) {
+            promoteMediaConnected();
+          }
+        };
+
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
           diagSession.logAddTrack(track);
@@ -889,8 +977,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 await p.setLocalDescription(answer);
                 diag?.logSdpFlow("setLocalAnswer", true, { buffered: true });
                 if (alive() && socket.connected) {
-                  const ansPayload = withWebRtcTarget({ roomId, answer }, rtcPeerId());
-                  socket.emit("webrtc:answer", ansPayload);
+                  const answerTarget =
+                    rtcPeerId()?.trim() || pending.fromPeerId?.trim() || undefined;
+                  const ansPayload = withWebRtcTarget({ roomId, answer }, answerTarget);
+                  emitWebRtcSignal(socket, "answer", ansPayload);
                 }
               } finally {
                 negotiationBusyRef.current = false;
@@ -899,37 +989,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               diag?.setNegotiationLocked(false);
             }
           });
-        };
-
-        pc.ontrack = (event) => {
-          webrtcDiagSessionRef.current?.logOnTrack(event);
-          const localTrackIds = new Set(
-            localStreamRef.current?.getTracks().map((t) => t.id) ?? [],
-          );
-          const inbound = remoteStreamRef.current;
-          const toAdd: MediaStreamTrack[] = [];
-          if (event.streams?.[0]) {
-            for (const track of event.streams[0].getTracks()) {
-              if (localTrackIds.has(track.id)) continue;
-              if (!inbound.getTracks().some((t) => t.id === track.id)) toAdd.push(track);
-            }
-          } else if (
-            event.track &&
-            !localTrackIds.has(event.track.id) &&
-            !inbound.getTracks().some((t) => t.id === event.track.id)
-          ) {
-            toAdd.push(event.track);
-          }
-          if (!toAdd.length) return;
-          for (const track of toAdd) inbound.addTrack(track);
-          setRemoteStream(new MediaStream(inbound.getTracks()));
-          if (toAdd.some((t) => t.kind === "audio")) {
-            promoteMediaConnected();
-            void resumeCyrusAudioPipeline();
-          }
-          if (callType === "video" && toAdd.some((t) => t.kind === "video")) {
-            promoteMediaConnected();
-          }
         };
 
         pc.onicecandidate = (event) => {
@@ -942,7 +1001,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             diag?.logIceCandidate("local", plain);
             if (socket.connected && alive()) {
               const icePayload = withWebRtcTarget({ roomId, candidate: plain }, rtcPeerId());
-              socket.emit("webrtc:ice-candidate", icePayload);
+              emitWebRtcSignal(socket, "ice", icePayload);
             }
           } else {
             diag?.logIceCandidate("local", { candidate: "" });
@@ -1054,7 +1113,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           });
         };
         webRtcHandlersRef.current.answer = handleRemoteAnswer;
-        socket.on("webrtc:answer", handleRemoteAnswer);
+        bindWebRtcSignalHandlers(socket, "answer", handleRemoteAnswer);
 
         const handleRemoteIce = async (data: { candidate: unknown; roomId: string }) => {
           try {
@@ -1072,7 +1131,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
         };
         webRtcHandlersRef.current.ice = handleRemoteIce;
-        socket.on("webrtc:ice-candidate", handleRemoteIce);
+        bindWebRtcSignalHandlers(socket, "ice", handleRemoteIce);
 
         await applyPendingOfferIfAny();
         if (!alive()) return;
@@ -1099,7 +1158,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", true);
                     if (alive() && socket.connected) {
                       const offerPayload = withWebRtcTarget({ roomId, offer }, rtcPeerId());
-                      socket.emit("webrtc:offer", offerPayload);
+                      emitWebRtcSignal(socket, "offer", offerPayload);
                     }
                   } catch (e2) {
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", false, { error: String(e2) });
@@ -1260,16 +1319,24 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       addNotification("info", `Incoming ${data.callType} call from ${data.callerName}`);
     });
 
-    const bufferWebRtcOfferIfEarly = (data: { offer: RTCSessionDescriptionInit; roomId: string }) => {
+    const bufferWebRtcOfferIfEarly = (data: {
+      offer: RTCSessionDescriptionInit;
+      roomId: string;
+      fromPeerId?: string;
+    }) => {
       if (peerConnectionRef.current) return;
       const call = activeCallRef.current;
       const incoming = incomingCallRef.current;
       const roomId = call?.roomId ?? incoming?.roomId;
       if (!roomId || data.roomId !== roomId) return;
       if (call?.isInitiator) return;
-      pendingRemoteOfferRef.current = { offer: data.offer, roomId: data.roomId };
+      pendingRemoteOfferRef.current = {
+        offer: data.offer,
+        roomId: data.roomId,
+        fromPeerId: data.fromPeerId,
+      };
     };
-    socket.on("webrtc:offer", bufferWebRtcOfferIfEarly);
+    bindWebRtcSignalHandlers(socket, "offer", bufferWebRtcOfferIfEarly);
 
     socket.on('call-ringing', (data: { roomId: string; targetName: string; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call ringing:", data.targetName, "type:", data.callType);
@@ -1762,7 +1829,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
         await pc.setLocalDescription(offer);
         const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
-        socket.emit("webrtc:offer", payload);
+        emitWebRtcSignal(socket, "offer", payload);
       });
     } catch (e) {
       console.warn("[Presence] call media renegotiation failed:", e);
@@ -2005,7 +2072,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   { roomId: call.roomId, offer },
                   call.peerId,
                 );
-                socketRef.current.emit("webrtc:offer", offerPayload);
+                emitWebRtcSignal(socketRef.current, "offer", offerPayload);
               }
               emitCommsTelemetry("relay_restart", {
                 outcome: "success",
