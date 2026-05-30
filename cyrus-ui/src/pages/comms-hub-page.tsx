@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
 import { useCyrusGroupCall } from "../../../client/src/hooks/useCyrusGroupCall";
-import { CallView } from "../../../client/src/components/comms/CallView";
 import { PshareTabPanel } from "@/components/comms/PshareTabPanel";
 import { systemFetch } from "@shared/cyrus-api-client";
 
@@ -1278,53 +1277,6 @@ function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
 }
 
 /* ══════════════════════════════════════════════════════════════
-   INCOMING P2P CALL OVERLAY
-══════════════════════════════════════════════════════════════ */
-function IncomingCallOverlay({ call, onAccept, onDecline }:
-  { call:any; onAccept:()=>void; onDecline:()=>void }) {
-  const c = colorForName(call.callerName??"Unknown");
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center"
-      style={{ background:"rgba(8,8,16,0.88)", backdropFilter:"blur(8px)" }}>
-      <div className="flex flex-col items-center gap-6 rounded-3xl p-10"
-        style={{ background:C.card, border:`1px solid ${c}30`,
-          boxShadow:`0 0 60px ${c}20, 0 0 0 1px ${c}15` }}>
-        {[120,180,240].map((r,i)=>(
-          <div key={r} className="absolute rounded-full"
-            style={{ width:r, height:r,
-              border:`1px solid ${C.cyan}${i===0?"35":i===1?"20":"10"}`,
-              animation:`cy-pulse ${1.2+i*0.5}s ease-in-out ${i*0.3}s infinite` }} />
-        ))}
-        <p className="text-[8px] font-mono tracking-[0.5em] text-white/30 uppercase z-10">
-          INCOMING {call.callType?.toUpperCase()??"VOICE"} CALL
-        </p>
-        <div className="z-10" style={{ animation:"cy-float 3s ease-in-out infinite" }}>
-          <Avatar name={call.callerName??"Unknown"} size={80} ring speaking />
-        </div>
-        <div className="text-center z-10">
-          <p className="text-xl font-black text-white" style={{ fontFamily:"'Orbitron',system-ui" }}>
-            {call.callerName??"Unknown"}
-          </p>
-          <p className="text-[9px] font-mono text-white/35 mt-1">Requesting secure connection</p>
-        </div>
-        <div className="flex gap-4 z-10">
-          <button type="button" onClick={onDecline}
-            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
-            style={{ background:"#ef444418", border:"1px solid #ef444430", color:"#ef4444", fontFamily:"'Orbitron',system-ui" }}>
-            <PhoneOff className="h-4 w-4" strokeWidth={2} />DECLINE
-          </button>
-          <button type="button" onClick={onAccept}
-            className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[11px] transition-all hover:scale-105"
-            style={{ background:`${C.green}18`, border:`1px solid ${C.green}32`, color:C.green, fontFamily:"'Orbitron',system-ui" }}>
-            <PhoneCall className="h-4 w-4" strokeWidth={2} />ACCEPT
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════
    TAB CONFIG
 ══════════════════════════════════════════════════════════════ */
 const TABS: Array<{ id:CommsTab; label:string; icon:typeof MessageSquare; color:string; sub:string }> = [
@@ -1346,14 +1298,9 @@ export default function CommsHubPage() {
     "CYRUS OPERATOR";
 
   const {
-    onlineUsers, isConnected, myUserId, incomingCall, activeCall,
-    localStream, remoteStream, callDuration, notifications,
-    callUser, acceptCall, declineCall, endCall,
-    toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
-    mediaControls, wsRef, isScreenSharing, screenShareStream,
-    remoteScreenSharerName, startScreenShare, stopScreenShare,
-    sendCallChatMessage, recoverCallMedia, reportRemoteMediaPlayback,
-    callChatMessages,
+    onlineUsers, isConnected, myUserId, notifications,
+    callUser,
+    wsRef,
   } = usePresence();
 
   const myId = useMemo(() => {
@@ -1387,8 +1334,6 @@ export default function CommsHubPage() {
   });
 
   const [targetUser, setTargetUser] = useState<{id:string;name:string}|null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
 
   const handleCallVoice = useCallback((userId:string, name:string) => {
     setActiveTab("voice"); callUser(userId, name, "audio");
@@ -1401,9 +1346,6 @@ export default function CommsHubPage() {
   const handleMessage = useCallback((userId:string, name:string) => {
     setTargetUser({id:userId, name}); setActiveTab("chat");
   }, []);
-
-  const handleToggleMute = useCallback(() => { toggleP2PMute(); setIsMuted(v=>!v); }, [toggleP2PMute]);
-  const handleToggleVideo = useCallback(() => { toggleP2PVideo(); setIsVideoOff(v=>!v); }, [toggleP2PVideo]);
 
   const users: OnlineUser[] = useMemo(()=>
     (onlineUsers??[]).map((u:any)=>({
@@ -1428,7 +1370,7 @@ export default function CommsHubPage() {
     <>
       <style>{ANIM_CSS}</style>
 
-      {callAlert && !activeCall && !incomingCall && (
+      {callAlert && (
         <div
           className="fixed top-3 left-1/2 z-[210] max-w-md -translate-x-1/2 rounded-xl px-4 py-2 text-center text-[11px] font-medium shadow-lg"
           style={{
@@ -1440,62 +1382,6 @@ export default function CommsHubPage() {
         >
           {callAlert.message}
         </div>
-      )}
-
-      {/* Incoming P2P call overlay */}
-      {incomingCall && !activeCall && (
-        <IncomingCallOverlay
-          call={incomingCall}
-          onAccept={()=>acceptCall()}
-          onDecline={()=>declineCall()} />
-      )}
-
-      {/* Active P2P call overlay */}
-      {activeCall && (
-        <CallView
-          roomId={activeCall.roomId}
-          callType={activeCall.callType}
-          participants={[
-            {
-              id: activeCall.peerId || "remote-peer",
-              displayName: activeCall.peerName,
-              stream: remoteStream ?? undefined,
-              isMuted: false,
-              isVideoEnabled: activeCall.callType === "video",
-            },
-          ]}
-          localStream={localStream ?? null}
-          remoteStream={remoteStream ?? null}
-          currentUserId={myUserId ?? myId}
-          currentUserName={displayName}
-          isMuted={isMuted}
-          isVideoEnabled={!isVideoOff && (mediaControls?.isVideoEnabled ?? true)}
-          callDuration={callDuration}
-          mediaEstablishing={activeCall.status !== "connected"}
-          onEndCall={endCall}
-          onToggleMute={handleToggleMute}
-          onToggleVideo={handleToggleVideo}
-          isScreenSharing={isScreenSharing}
-          screenShareStream={screenShareStream ?? null}
-          screenSharerName={remoteScreenSharerName ?? undefined}
-          onStartScreenShare={startScreenShare}
-          onStopScreenShare={stopScreenShare}
-          onSendChatMessage={(msg: string) => sendCallChatMessage({ message: msg, messageType: "text" })}
-          chatMessages={callChatMessages}
-          onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
-          onRecoverMedia={() => void recoverCallMedia()}
-          socketRef={wsRef}
-        />
-      )}
-
-      {activeCall && activeCall.status === "connected" && !remoteStream?.getTracks().length && (
-        <button
-          type="button"
-          className="fixed bottom-24 left-1/2 z-[95] -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-[11px] font-semibold text-amber-100"
-          onClick={() => void recoverCallMedia()}
-        >
-          No remote audio? Tap to recover media
-        </button>
       )}
 
       <div className="flex flex-col overflow-hidden text-white"

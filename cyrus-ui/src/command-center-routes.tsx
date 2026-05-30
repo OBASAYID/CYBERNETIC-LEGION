@@ -14,9 +14,6 @@ const ScanPage = lazy(() =>
 const DocumentsIntelligence = lazy(() =>
   import("./pages/documents-intelligence").then((m) => ({ default: m.default })),
 );
-const CommsPage = lazy(() =>
-  import("./pages/comms-hub-page").then((m) => ({ default: m.default })),
-);
 const DeviceControlPage = lazy(() =>
   import("../../client/src/pages/DeviceControlPage").then((m) => ({ default: m.DeviceControlPage })),
 );
@@ -90,7 +87,6 @@ export function CommandCenterRoutes() {
       <SuspenseRoute path="/intelligence" C={IntelligenceHubPage} />
       <SuspenseRoute path="/files" C={DocumentsIntelligence} />
       <SuspenseRoute path="/scan" C={ScanPage} />
-      <SuspenseRoute path="/comms" C={CommsPage} />
       <SuspenseRoute path="/modules" C={ModulesPage} />
       <SuspenseRoute path="/algorithms" C={AlgorithmsPage} />
       <SuspenseRoute path="/document-builder" C={DocumentBuilder} />
