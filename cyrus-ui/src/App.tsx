@@ -13,8 +13,6 @@ import { AppRoutes } from "./app-routes";
 import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
-import { CallProvider } from "@/contexts/CallContext";
-import { PresenceProvider } from "../../client/src/contexts/PresenceContext";
 import { AtmosphericSmokeBackground } from "@/components/atmospheric-smoke-background";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { GameSidebar } from "@/components/game-sidebar";
@@ -93,7 +91,7 @@ function App() {
     prevAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  const callDisplayName = gateUsername || readStoredDisplayName() || "User";
+  const displayName = gateUsername || readStoredDisplayName() || "User";
 
   // Global keyboard shortcut: Ctrl+Shift+K / Cmd+Shift+K
   useEffect(() => {
@@ -135,20 +133,11 @@ function App() {
                 <TooltipProvider>
                   <Toaster />
                   <AppErrorBoundary>
-                    {/* PresenceProvider must be an ancestor of CallProvider because
-                        CallProvider now calls usePresence() internally. It is placed
-                        at the authenticated-section level so all authenticated routes
-                        have access to both contexts. */}
-                    <PresenceProvider>
-                    {/* CallProvider wraps all authenticated routes so incoming/active
-                        call overlays are globally available regardless of current page.
-                        All signaling flows through PresenceContext (/cyrus-io) — the
-                        legacy webRTCService (/ws) is no longer connected here. */}
-                    <CallProvider>
+                    <div data-cyrus-call-stack="presence-only">
                       <GameSidebar
                         collapsed={sidebarCollapsed}
                         onToggle={() => setSidebarCollapsed((v) => !v)}
-                        displayName={callDisplayName}
+                        displayName={displayName}
                         mobileOpen={mobileSidebarOpen}
                         onMobileClose={() => setMobileSidebarOpen(false)}
                       />
@@ -169,8 +158,7 @@ function App() {
                           <AppRoutes />
                         </div>
                       </div>
-                    </CallProvider>
-                    </PresenceProvider>
+                    </div>
                   </AppErrorBoundary>
                   <PwaInstallPrompt />
                   <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
