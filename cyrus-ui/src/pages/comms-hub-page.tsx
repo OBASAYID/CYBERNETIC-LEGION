@@ -1457,13 +1457,6 @@ export default function CommsHubPage() {
           callType={activeCall.callType}
           participants={[
             {
-              id: myId,
-              displayName,
-              stream: localStream ?? undefined,
-              isMuted,
-              isVideoEnabled: !isVideoOff && (mediaControls?.isVideoEnabled ?? true),
-            },
-            {
               id: activeCall.peerId || "remote-peer",
               displayName: activeCall.peerName,
               stream: remoteStream ?? undefined,
@@ -1473,7 +1466,7 @@ export default function CommsHubPage() {
           ]}
           localStream={localStream ?? null}
           remoteStream={remoteStream ?? null}
-          currentUserId={myId}
+          currentUserId={myUserId ?? myId}
           currentUserName={displayName}
           isMuted={isMuted}
           isVideoEnabled={!isVideoOff && (mediaControls?.isVideoEnabled ?? true)}

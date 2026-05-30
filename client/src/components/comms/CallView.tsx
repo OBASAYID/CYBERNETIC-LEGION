@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Mic,
   MicOff,
@@ -330,10 +330,7 @@ function resolveRemoteStageStream(
 ): MediaStream | null {
   if (!remote) return null;
   if (local && remote === local) return null;
-  const localTrackIds = new Set(local?.getTracks().map((t) => t.id) ?? []);
-  const inboundTracks = remote.getTracks().filter((t) => !localTrackIds.has(t.id));
-  if (!inboundTracks.length) return null;
-  return new MediaStream(inboundTracks);
+  return remote;
 }
 
 function getGridClass(count: number): string {
@@ -468,13 +465,18 @@ export function CallView({
   const isLocalScreenSharing = isScreenSharing && screenShareStream;
 
   const remoteParticipant = participants.find((p) => p.id !== currentUserId);
+  const remoteTrackSignature =
+    remoteStreamProp?.getTracks().map((t) => `${t.id}:${t.readyState}:${t.muted}`).join("|") ?? "";
   /** Presence `remoteStream` is the single source of truth for inbound media. */
-  const remoteMediaStream = resolveRemoteStageStream(
-    remoteStreamProp ?? remoteParticipant?.stream ?? null,
-    localStream,
+  const remoteMediaStream = useMemo(
+    () => resolveRemoteStageStream(remoteStreamProp ?? null, localStream),
+    [remoteStreamProp, localStream, remoteTrackSignature],
   );
   const remoteAudioStream = remoteMediaStream;
-  const remoteVideoStream = videoOnlyStream(remoteMediaStream);
+  const remoteVideoStream = useMemo(
+    () => videoOnlyStream(remoteMediaStream),
+    [remoteMediaStream, remoteTrackSignature],
+  );
   const remoteDisplayName = remoteParticipant?.displayName ?? "Participant";
   const isOneToOne = participants.filter((p) => p.id !== currentUserId).length <= 1;
   const isFullScreenVideoCall = isOneToOne && callType === "video" && !isLocalScreenSharing;
@@ -493,8 +495,11 @@ export function CallView({
     if (!isOneToOne || callType !== "video") return;
 
     const attach = () => {
-      const stageStream = videoOnlyStream(remoteMediaStream) ?? remoteMediaStream;
-      void attachMediaStreamToVideo(remoteMainRef.current, stageStream, {
+      if (!remoteVideoStream) {
+        if (remoteMainRef.current) remoteMainRef.current.srcObject = null;
+        return;
+      }
+      void attachMediaStreamToVideo(remoteMainRef.current, remoteVideoStream, {
         muted: true,
         volume: 1,
         onPlaybackStarted: handleRemotePlaybackStarted,
@@ -515,6 +520,7 @@ export function CallView({
     ms.onremovetrack = onTracksChanged;
     for (const track of ms.getVideoTracks()) {
       track.onunmute = onTracksChanged;
+      track.onended = onTracksChanged;
     }
 
     return () => {
@@ -522,12 +528,14 @@ export function CallView({
       ms.onremovetrack = null;
       for (const track of ms.getVideoTracks()) {
         track.onunmute = null;
+        track.onended = null;
       }
     };
   }, [
     isOneToOne,
     callType,
     remoteMediaStream,
+    remoteVideoStream,
     handleRemotePlaybackStarted,
     handleRemotePlaybackBlocked,
     onRecoverMedia,
@@ -668,14 +676,16 @@ export function CallView({
             </div>
           ) : isOneToOne ? (
             <div className="absolute inset-0 bg-black">
-              {callType === "video" && remoteVideoStream && (
+              {callType === "video" && (
                 <video
                   ref={remoteMainRef}
                   autoPlay
                   playsInline
                   muted
                   data-cyrus-remote-call="1"
-                  className="absolute inset-0 z-0 h-full w-full object-cover [transform:translateZ(0)]"
+                  className={`absolute inset-0 z-0 h-full w-full object-cover [transform:translateZ(0)] ${
+                    remoteVideoStream ? "opacity-100" : "opacity-0 pointer-events-none"
+                  }`}
                 />
               )}
               {!remoteVideoStream && (
