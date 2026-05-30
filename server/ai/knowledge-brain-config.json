@@ -24,6 +24,28 @@
     "updateInterval": 3600
   },
   "dataSources": {
+    "web": {
+      "enabled": false
+    },
+    "youtube": {
+      "enabled": false
+    },
+    "academic": {
+      "enabled": false
+    },
+    "news": {
+      "enabled": false
+    }
+  },
+  "relevanceFilter": {
+    "domains": [
+      "artificial intelligence",
+      "machine learning",
+      "neural networks",
+      "cognitive science"
+    ],
+    "minRelevanceScore": 0.7,
+    "maxNoiseWords": 0.3
     "web": { "enabled": false },
     "youtube": { "enabled": false },
     "academic": { "enabled": false },

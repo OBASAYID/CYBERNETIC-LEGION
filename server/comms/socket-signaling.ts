@@ -754,6 +754,24 @@ export function initSocketSignaling(server: HttpServer) {
 
   const ensurePresenceSchema = async () => {
     try {
+      // Create online_users table if it doesn't exist yet (some deployments may not have run migrations)
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS online_users (
+          id varchar PRIMARY KEY,
+          display_name varchar,
+          email varchar,
+          profile_image_url varchar,
+          last_seen timestamp DEFAULT now(),
+          is_online boolean DEFAULT true,
+          socket_id varchar,
+          status varchar(32) DEFAULT 'online',
+          current_call_id varchar,
+          current_conference_id varchar,
+          device_info jsonb,
+          network_latency_ms varchar DEFAULT '0',
+          connection_quality varchar DEFAULT '1.0'
+        )
+      `);
       // Some deployments created online_users without status; self-heal before presence updates.
       await db.execute(sql`ALTER TABLE online_users ADD COLUMN IF NOT EXISTS status varchar(32) DEFAULT 'online'`);
       await db.execute(sql`
