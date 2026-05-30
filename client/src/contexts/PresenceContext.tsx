@@ -24,7 +24,9 @@ import {
 } from "../lib/comms-call-media";
 import { AudioProcessor } from "../lib/webrtc-config";
 import type { CallSessionStatus } from "@shared/calls/call-session-types";
+import { assertCallTransition } from "@shared/calls/call-fsm";
 import { isIcePathLive } from "@shared/calls/call-session-types";
+import type { CyrusWebRtcRelayPayload } from "@shared/comms/cyrus-comms-envelope";
 import { fetchCyrusCommRtcConfiguration } from "../realtime/fetch-rtc-config";
 import { CYRUS_ICE_RESTART_VERIFY_MS } from "../realtime/ice-recovery-policy";
 import { addIceCandidateSafe, toIceCandidateInit } from "../realtime/webrtc-ice-utils";
@@ -39,6 +41,13 @@ import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinat
 import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
 import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
+import {
+  createSealedSignalingContext,
+  disposeSealedSignalingContext,
+  emitSealedWebRtcSignal,
+  resolveWebRtcRelayPayload,
+  type SealedSignalingContext,
+} from "../realtime/comms-sealed-signaling";
 import { buildPresenceSendMessagePayload } from "../lib/comms-outbound";
 import {
   enqueueOutboundMessage,
@@ -116,21 +125,59 @@ function unbindWebRtcSignalHandlers(
   }
 }
 
-function mergeInboundRemoteTracks(event: RTCTrackEvent, inbound: MediaStream): MediaStreamTrack[] {
+function mergeInboundRemoteTracks(
+  event: RTCTrackEvent,
+  inbound: MediaStream,
+  local: MediaStream | null | undefined,
+): MediaStreamTrack[] {
+  const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
   const toAdd: MediaStreamTrack[] = [];
   if (event.streams?.[0]) {
     for (const track of event.streams[0].getTracks()) {
       if (track.readyState === "ended") continue;
+      if (localIds.has(track.id)) continue;
       if (!inbound.getTracks().some((t) => t.id === track.id)) toAdd.push(track);
     }
   } else if (
     event.track &&
     event.track.readyState !== "ended" &&
+    !localIds.has(event.track.id) &&
     !inbound.getTracks().some((t) => t.id === event.track.id)
   ) {
     toAdd.push(event.track);
   }
   return toAdd;
+}
+
+function publishRemotePlayback(inbound: MediaStream, local: MediaStream | null | undefined): MediaStream {
+  const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
+  const remoteTracks = inbound.getTracks().filter((t) => !localIds.has(t.id));
+  return new MediaStream(remoteTracks.length ? remoteTracks : inbound.getTracks());
+}
+
+async function emitSmartWebRtcSignal(
+  sealedCtx: SealedSignalingContext | null,
+  socket: Socket,
+  kind: "offer" | "answer" | "ice",
+  payload: CyrusWebRtcRelayPayload,
+): Promise<void> {
+  const body =
+    kind === "offer" && payload.offer
+      ? ({ kind: "offer", offer: payload.offer } as const)
+      : kind === "answer" && payload.answer
+        ? ({ kind: "answer", answer: payload.answer } as const)
+        : kind === "ice" && payload.candidate !== undefined
+          ? ({ kind: "ice-candidate", candidate: payload.candidate } as const)
+          : null;
+  if (sealedCtx?.crypto.isReady && body) {
+    try {
+      await emitSealedWebRtcSignal(sealedCtx, body);
+      return;
+    } catch (e) {
+      console.warn("[WebRTC-Presence] Sealed emit failed — legacy relay:", e);
+    }
+  }
+  emitWebRtcSignal(socket, kind, payload);
 }
 
 export interface OnlineUser {
@@ -325,14 +372,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     fromPeerId?: string;
   } | null>(null);
   const webRtcHandlersRef = useRef<{
-    offer?: (data: {
-      offer: RTCSessionDescriptionInit;
-      roomId: string;
-      fromPeerId?: string;
-    }) => void;
-    answer?: (data: { answer: RTCSessionDescriptionInit; roomId: string; fromPeerId?: string }) => void;
-    ice?: (data: { candidate: unknown; roomId: string; fromPeerId?: string }) => void;
+    offer?: (data: CyrusWebRtcRelayPayload) => void;
+    answer?: (data: CyrusWebRtcRelayPayload) => void;
+    ice?: (data: CyrusWebRtcRelayPayload) => void;
   }>({});
+  const sealedSignalingRef = useRef<SealedSignalingContext | null>(null);
   /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
   const negotiationBusyRef = useRef(false);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
@@ -539,7 +583,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
           await pc.setLocalDescription(offer);
           if (socket.connected) {
-            emitWebRtcSignal(
+            await emitSmartWebRtcSignal(
+              sealedSignalingRef.current,
               socket,
               "offer",
               withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId),
@@ -635,6 +680,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       if (h.ice) unbindWebRtcSignalHandlers(socketRef.current, "ice", h.ice);
       webRtcHandlersRef.current = {};
     }
+    disposeSealedSignalingContext(sealedSignalingRef.current);
+    sealedSignalingRef.current = null;
     pendingCandidatesRef.current = [];
     remoteStreamRef.current = new MediaStream();
     setLocalStream(null);
@@ -724,7 +771,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         setActiveCall((prev) => {
           if (!prev || prev.roomId !== roomId) return prev;
           if (prev.status === "connected") return prev;
-          return { ...prev, status: "connected" as CallSessionStatus };
+          return { ...prev, status: assertCallTransition(prev.status, "connected") };
         });
         startCallTimer();
         const pcNow = peerConnectionRef.current;
@@ -803,22 +850,38 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         negotiationBusyRef.current = false;
         remoteStreamRef.current = new MediaStream();
 
+        disposeSealedSignalingContext(sealedSignalingRef.current);
+        sealedSignalingRef.current = null;
+        void createSealedSignalingContext(socket, roomId, rtcPeerId())
+          .then((ctx) => {
+            if (!alive()) {
+              disposeSealedSignalingContext(ctx);
+              return;
+            }
+            sealedSignalingRef.current = ctx;
+          })
+          .catch((e) => console.warn("[WebRTC-Presence] Sealed signaling unavailable:", e));
+
         setActiveCall((prev) =>
-          prev && prev.roomId === roomId ? { ...prev, status: "negotiating" } : prev
+          prev && prev.roomId === roomId
+            ? { ...prev, status: assertCallTransition(prev.status, "negotiating") }
+            : prev,
         );
 
-        const handleRemoteOffer = (data: {
-          offer: RTCSessionDescriptionInit;
-          roomId: string;
-          fromPeerId?: string;
-        }) => {
+        const handleRemoteOffer = (data: CyrusWebRtcRelayPayload) => {
             void negotiationCoordinatorRef.current.runExclusive(async () => {
               try {
                 if (data.roomId !== roomId || !alive() || isInitiator) return;
+                const resolved = await resolveWebRtcRelayPayload(
+                  sealedSignalingRef.current?.crypto ?? null,
+                  data,
+                );
+                if (!resolved || resolved.kind !== "offer") return;
+                const offer = resolved.offer;
                 const p = peerConnectionRef.current;
                 if (!p) {
                   pendingRemoteOfferRef.current = {
-                    offer: data.offer,
+                    offer,
                     roomId: data.roomId,
                     fromPeerId: data.fromPeerId,
                   };
@@ -827,7 +890,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   }
                   return;
                 }
-                if (sameSessionDescription(p.remoteDescription, data.offer)) {
+                if (sameSessionDescription(p.remoteDescription, offer)) {
                   return;
                 }
                 if (p.signalingState === "have-local-offer") {
@@ -839,7 +902,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 diag?.setNegotiationLocked(true, "remote_offer");
                 try {
                   try {
-                    await p.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    await p.setRemoteDescription(new RTCSessionDescription(offer));
                     diag?.logSdpFlow("setRemoteOffer", true);
                   } catch (e) {
                     diag?.logSdpFlow("setRemoteOffer", false, { error: String(e) });
@@ -854,7 +917,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                     diag?.logSdpFlow("setLocalAnswer", true);
                     if (alive() && socket.connected) {
                       const ansPayload = withWebRtcTarget({ roomId, answer }, answerTarget);
-                      emitWebRtcSignal(socket, "answer", ansPayload);
+                      await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "answer", ansPayload);
                     }
                   } catch (e) {
                     diag?.logSdpFlow("createAnswer", false, { error: String(e) });
@@ -927,10 +990,11 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         pc.ontrack = (event) => {
           webrtcDiagSessionRef.current?.logOnTrack(event);
           const inbound = remoteStreamRef.current;
-          const toAdd = mergeInboundRemoteTracks(event, inbound);
+          const local = localStreamRef.current;
+          const toAdd = mergeInboundRemoteTracks(event, inbound, local);
           if (!toAdd.length) return;
           for (const track of toAdd) inbound.addTrack(track);
-          const playback = new MediaStream(inbound.getTracks());
+          const playback = publishRemotePlayback(inbound, local);
           remoteStreamRef.current = playback;
           setRemoteStream(playback);
           if (toAdd.some((t) => t.kind === "audio")) {
@@ -980,7 +1044,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   const answerTarget =
                     rtcPeerId()?.trim() || pending.fromPeerId?.trim() || undefined;
                   const ansPayload = withWebRtcTarget({ roomId, answer }, answerTarget);
-                  emitWebRtcSignal(socket, "answer", ansPayload);
+                  await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "answer", ansPayload);
                 }
               } finally {
                 negotiationBusyRef.current = false;
@@ -1001,7 +1065,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             diag?.logIceCandidate("local", plain);
             if (socket.connected && alive()) {
               const icePayload = withWebRtcTarget({ roomId, candidate: plain }, rtcPeerId());
-              emitWebRtcSignal(socket, "ice", icePayload);
+              void emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "ice", icePayload);
             }
           } else {
             diag?.logIceCandidate("local", { candidate: "" });
@@ -1032,7 +1096,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               maxAttempts
             );
             setActiveCall((prev) =>
-              prev && prev.roomId === roomId ? { ...prev, status: "reconnecting" } : prev
+              prev && prev.roomId === roomId
+                ? { ...prev, status: assertCallTransition(prev.status, "reconnecting") }
+                : prev,
             );
             addNotification("warning", `Recovering media (${iceRestartAttemptsRef.current}/${maxAttempts})…`);
             try {
@@ -1083,22 +1149,25 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
         };
 
-        const handleRemoteAnswer = (data: {
-          answer: RTCSessionDescriptionInit;
-          roomId: string;
-        }) => {
+        const handleRemoteAnswer = (data: CyrusWebRtcRelayPayload) => {
           void negotiationCoordinatorRef.current.runExclusive(async () => {
             try {
               if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
               if (!isInitiator) return;
+              const resolved = await resolveWebRtcRelayPayload(
+                sealedSignalingRef.current?.crypto ?? null,
+                data,
+              );
+              if (!resolved || resolved.kind !== "answer") return;
+              const answer = resolved.answer;
               const diag = webrtcDiagSessionRef.current;
               const p = peerConnectionRef.current;
-              if (sameSessionDescription(p.remoteDescription, data.answer)) {
+              if (sameSessionDescription(p.remoteDescription, answer)) {
                 return;
               }
               diag?.setNegotiationLocked(true, "webrtc_answer");
               try {
-                await p.setRemoteDescription(new RTCSessionDescription(data.answer));
+                await p.setRemoteDescription(new RTCSessionDescription(answer));
                 diag?.logSdpFlow("setRemoteAnswer", true);
                 await flushIce();
               } catch (e) {
@@ -1115,15 +1184,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         webRtcHandlersRef.current.answer = handleRemoteAnswer;
         bindWebRtcSignalHandlers(socket, "answer", handleRemoteAnswer);
 
-        const handleRemoteIce = async (data: { candidate: unknown; roomId: string }) => {
+        const handleRemoteIce = async (data: CyrusWebRtcRelayPayload) => {
           try {
             if (data.roomId !== roomId || !peerConnectionRef.current || !alive()) return;
+            const resolved = await resolveWebRtcRelayPayload(
+              sealedSignalingRef.current?.crypto ?? null,
+              data,
+            );
+            if (!resolved || resolved.kind !== "ice-candidate") return;
             const p = peerConnectionRef.current;
-            webrtcDiagSessionRef.current?.logIceCandidate("remote", data.candidate);
+            webrtcDiagSessionRef.current?.logIceCandidate("remote", resolved.candidate);
             if (p.remoteDescription) {
-              await addIceCandidateSafe(p, data.candidate);
+              await addIceCandidateSafe(p, resolved.candidate);
             } else {
-              const init = toIceCandidateInit(data.candidate);
+              const init = toIceCandidateInit(resolved.candidate);
               if (init) pendingCandidatesRef.current.push(init);
             }
           } catch (e) {
@@ -1158,7 +1232,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", true);
                     if (alive() && socket.connected) {
                       const offerPayload = withWebRtcTarget({ roomId, offer }, rtcPeerId());
-                      emitWebRtcSignal(socket, "offer", offerPayload);
+                      await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "offer", offerPayload);
                     }
                   } catch (e2) {
                     webrtcDiagSessionRef.current?.logSdpFlow("setLocalOffer", false, { error: String(e2) });
@@ -1179,7 +1253,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         addNotification("error", "Failed to access camera/microphone or start call");
         if (alive()) {
           setActiveCall((prev) =>
-            prev && prev.roomId === roomId ? { ...prev, status: "failed" } : prev
+            prev && prev.roomId === roomId
+              ? { ...prev, status: assertCallTransition(prev.status, "failed") }
+              : prev,
           );
         }
       }
@@ -1319,22 +1395,25 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       addNotification("info", `Incoming ${data.callType} call from ${data.callerName}`);
     });
 
-    const bufferWebRtcOfferIfEarly = (data: {
-      offer: RTCSessionDescriptionInit;
-      roomId: string;
-      fromPeerId?: string;
-    }) => {
+    const bufferWebRtcOfferIfEarly = (data: CyrusWebRtcRelayPayload) => {
       if (peerConnectionRef.current) return;
       const call = activeCallRef.current;
       const incoming = incomingCallRef.current;
       const roomId = call?.roomId ?? incoming?.roomId;
       if (!roomId || data.roomId !== roomId) return;
       if (call?.isInitiator) return;
-      pendingRemoteOfferRef.current = {
-        offer: data.offer,
-        roomId: data.roomId,
-        fromPeerId: data.fromPeerId,
-      };
+      void (async () => {
+        const resolved = await resolveWebRtcRelayPayload(
+          sealedSignalingRef.current?.crypto ?? null,
+          data,
+        );
+        if (!resolved || resolved.kind !== "offer") return;
+        pendingRemoteOfferRef.current = {
+          offer: resolved.offer,
+          roomId: data.roomId,
+          fromPeerId: data.fromPeerId,
+        };
+      })();
     };
     bindWebRtcSignalHandlers(socket, "offer", bufferWebRtcOfferIfEarly);
 
@@ -1829,7 +1908,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.offer);
         await pc.setLocalDescription(offer);
         const payload = withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId);
-        emitWebRtcSignal(socket, "offer", payload);
+        await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "offer", payload);
       });
     } catch (e) {
       console.warn("[Presence] call media renegotiation failed:", e);
@@ -2072,7 +2151,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                   { roomId: call.roomId, offer },
                   call.peerId,
                 );
-                emitWebRtcSignal(socketRef.current, "offer", offerPayload);
+                await emitSmartWebRtcSignal(
+                  sealedSignalingRef.current,
+                  socketRef.current,
+                  "offer",
+                  offerPayload,
+                );
               }
               emitCommsTelemetry("relay_restart", {
                 outcome: "success",
