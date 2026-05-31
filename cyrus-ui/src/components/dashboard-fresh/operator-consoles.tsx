@@ -460,21 +460,30 @@ export function SystemSpotlightConsole() {
             blend="normal"
           />
           <div className="min-w-0 flex-1 py-0.5">
-            <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
-            <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-200/78">
-              Heritage and mining strength in one command surface — Tsodilo ceremonial art paired with Botswana&apos;s
-              national mining emblem.
+            <p className="text-[9px] uppercase tracking-[0.28em] text-amber-200/55">Botswana · heritage &amp; governance</p>
+            <h3
+              className="mt-1 bg-gradient-to-r from-amber-100 via-white to-sky-200/90 bg-clip-text text-[1.65rem] font-semibold leading-[1.15] tracking-[0.14em] text-transparent sm:text-[1.85rem]"
+              style={{ fontFamily: "'Cinzel', 'Times New Roman', serif" }}
+            >
+              CORE OF PEACE
+            </h3>
+            <p
+              className="mt-2 text-[12px] leading-relaxed text-slate-200/82 sm:text-[13px]"
+              style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+            >
+              Since independence in 1966, Botswana has guarded one of Africa&apos;s longest unbroken democracies —
+              peaceful handovers of power, unity across peoples, and the calm strength that Pula symbolises: rain,
+              blessing, and a nation choosing dialogue over division.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
-                Story mode
+                Since 1966
               </span>
               <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
-                Live graphics
+                Peaceful democracy
               </span>
               <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
-                Debswana
+                Pula · rain &amp; blessing
               </span>
             </div>
           </div>
