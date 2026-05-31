@@ -142,6 +142,17 @@ function getUserId(req: any): string | null {
   );
 }
 
+function getUserRole(req: any): "admin" | "user" | null {
+  const raw =
+    (typeof req.headers["x-user-role"] === "string" ? req.headers["x-user-role"] : null) ||
+    (typeof req.headers["X-User-Role"] === "string" ? req.headers["X-User-Role"] : null);
+  return raw === "admin" ? "admin" : raw === "user" ? "user" : null;
+}
+
+function canDeletePsharePost(req: any, authorId: string, userId: string): boolean {
+  return authorId === userId || getUserRole(req) === "admin";
+}
+
 function visibleToUserSafe(userId: string) {
   const j = JSON.stringify([userId]);
   return or(
@@ -731,8 +742,8 @@ router.delete("/api/comms/pshare/posts/:id", async (req: any, res) => {
     if (!row) {
       return res.status(404).json({ error: "Not found" });
     }
-    if (row.authorId !== userId) {
-      return res.status(403).json({ error: "Only the author can delete this post" });
+    if (!canDeletePsharePost(req, row.authorId, userId)) {
+      return res.status(403).json({ error: "Only the author or an admin can delete this post" });
     }
     await db.delete(psharePosts).where(eq(psharePosts.id, id));
     res.json({ success: true });

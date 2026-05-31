@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ImagePlus, Loader2, Radio, Send, Share2, X } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
+import { getStoredUserRole } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
 import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
@@ -35,7 +36,11 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [readingHold, setReadingHold] = useState(false);
+  const [interactionHold, setInteractionHold] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const isAdmin = getStoredUserRole() === "admin";
+  const rollPaused = readingHold || interactionHold;
 
   const postsQuery = useQuery<PsharePost[]>({
     queryKey: ["/api/comms/pshare/posts", "dashboard-feed"],
@@ -52,8 +57,8 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   const activePost = posts[activeIndex];
 
   useEffect(() => {
-    if (posts.length <= 1) {
-      setActiveIndex(0);
+    if (posts.length <= 1 || rollPaused) {
+      if (posts.length <= 1) setActiveIndex(0);
       return;
     }
     const ticker = window.setInterval(() => {
@@ -64,7 +69,19 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       }, 220);
     }, 5200);
     return () => window.clearInterval(ticker);
-  }, [posts.length]);
+  }, [posts.length, rollPaused]);
+
+  const handleInteractionHold = useCallback((holding: boolean) => {
+    setInteractionHold(holding);
+  }, []);
+
+  const handlePostDeleted = useCallback(
+    (postId: string) => {
+      if (activePost?.id === postId) setActiveIndex(0);
+      void queryClient.invalidateQueries({ queryKey: ["/api/comms/pshare/posts", "dashboard-feed"] });
+    },
+    [activePost?.id, queryClient],
+  );
 
   useEffect(() => {
     if (activeIndex >= posts.length) setActiveIndex(0);
@@ -288,9 +305,23 @@ export function PshareFeedConsole({ className }: { className?: string }) {
           className="flex min-h-0 flex-1 flex-col transition-opacity duration-200 cyrus-xs-pshare-item"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
+          onMouseEnter={() => setReadingHold(true)}
+          onMouseLeave={() => setReadingHold(false)}
+          onFocusCapture={() => setReadingHold(true)}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setReadingHold(false);
+          }}
         >
           <div className="min-h-0 flex-1 overflow-hidden">
-            <PsharePostCard post={activePost} myUserId={myUserId} variant="console" fixedLayout />
+            <PsharePostCard
+              post={activePost}
+              myUserId={myUserId}
+              variant="console"
+              fixedLayout
+              isAdmin={isAdmin}
+              onInteractionHold={handleInteractionHold}
+              onDeleted={handlePostDeleted}
+            />
           </div>
           {posts.length > 1 && (
             <div className="mt-2.5 flex shrink-0 items-center gap-1.5">

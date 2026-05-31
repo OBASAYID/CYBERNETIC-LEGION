@@ -8,8 +8,10 @@ import {
   MessageCircle,
   Radio,
   Share2,
+  Trash2,
   Zap,
 } from "lucide-react";
+import { getStoredUserRole } from "@/lib/auth-storage";
 import { systemFetch } from "@/lib/system-api";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
 import { formatPshareRelativeTime } from "../../../../client/src/lib/pshare-utils";
@@ -31,18 +33,33 @@ type PsharePostCardProps = {
   variant?: "feed" | "console";
   /** Lock card height for dashboard console ticker. */
   fixedLayout?: boolean;
+  isAdmin?: boolean;
+  /** Pause dashboard ticker while user reads or engages. */
+  onInteractionHold?: (holding: boolean) => void;
+  onDeleted?: (postId: string) => void;
 };
 
-function pshareHeaders(userId: string): HeadersInit {
-  return {
+function pshareHeaders(userId: string, role?: "admin" | "user" | null): HeadersInit {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Device-Id": getCommsDeviceId(),
     "X-User-Id": userId,
   };
+  if (role === "admin") headers["X-User-Role"] = "admin";
+  return headers;
 }
 
-export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout = false }: PsharePostCardProps) {
+export function PsharePostCard({
+  post,
+  myUserId,
+  variant = "feed",
+  fixedLayout = false,
+  isAdmin = false,
+  onInteractionHold,
+  onDeleted,
+}: PsharePostCardProps) {
   const qc = useQueryClient();
+  const userRole = isAdmin ? "admin" : getStoredUserRole();
   const [local, setLocal] = useState(post);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState<PshareComment[]>([]);
@@ -64,6 +81,8 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     return () => window.clearInterval(id);
   }, [local.postKind, local.liveStatus, local.fileUrl]);
 
+  const canDelete = local.authorId === myUserId || isAdmin || userRole === "admin";
+
   const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
   }, [qc]);
@@ -76,7 +95,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     mutationFn: async () => {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/like`, {
         method: "POST",
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
       });
       if (!res.ok) throw new Error("Like failed");
       return res.json();
@@ -95,7 +114,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     mutationFn: async (emoji: string) => {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/reaction`, {
         method: "POST",
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
         body: JSON.stringify({ emoji }),
       });
       if (!res.ok) throw new Error("Reaction failed");
@@ -117,7 +136,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     mutationFn: async () => {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/share`, {
         method: "POST",
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
       });
       if (!res.ok) throw new Error("Share failed");
       return res.json();
@@ -156,7 +175,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     mutationFn: async () => {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/hype`, {
         method: "POST",
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
       });
       if (!res.ok) throw new Error("Hype failed");
       return res.json();
@@ -177,7 +196,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     mutationFn: async (body: string) => {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/comments`, {
         method: "POST",
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
         body: JSON.stringify({ body }),
       });
       if (!res.ok) {
@@ -194,12 +213,61 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
     },
   });
 
+  const deleteMut = useMutation({
+    mutationFn: async () => {
+      const res = await systemFetch(`/api/comms/pshare/posts/${local.id}`, {
+        method: "DELETE",
+        headers: pshareHeaders(myUserId, userRole),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Delete failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
+      void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/history"] });
+      onDeleted?.(local.id);
+    },
+  });
+
+  useEffect(() => {
+    if (!onInteractionHold) return;
+    const holding =
+      commentsOpen ||
+      emojiOpen ||
+      likeMut.isPending ||
+      reactionMut.isPending ||
+      shareMut.isPending ||
+      hypeMut.isPending ||
+      commentMut.isPending ||
+      loadingComments ||
+      deleteMut.isPending;
+    onInteractionHold(holding);
+  }, [
+    onInteractionHold,
+    commentsOpen,
+    emojiOpen,
+    likeMut.isPending,
+    reactionMut.isPending,
+    shareMut.isPending,
+    hypeMut.isPending,
+    commentMut.isPending,
+    loadingComments,
+    deleteMut.isPending,
+  ]);
+
+  useEffect(() => {
+    return () => onInteractionHold?.(false);
+  }, [onInteractionHold]);
+
   const loadComments = async () => {
     if (loadingComments) return;
     setLoadingComments(true);
     try {
       const res = await systemFetch(`/api/comms/pshare/posts/${local.id}/comments`, {
-        headers: pshareHeaders(myUserId),
+        headers: pshareHeaders(myUserId, userRole),
       });
       if (res.ok) {
         const data = await res.json();
@@ -232,7 +300,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
 
   return (
     <div
-      className={`overflow-hidden rounded-xl ${local.isTrending ? "ring-1 ring-rose-500/40" : ""} ${compactConsole ? "flex h-[200px] flex-col" : ""}`}
+      className={`overflow-hidden rounded-xl ${local.isTrending ? "ring-1 ring-rose-500/40" : ""} ${compactConsole ? "flex h-[240px] flex-col" : ""}`}
       style={{
         background: "rgba(255,255,255,0.04)",
         border: `1px solid ${local.isTrending ? "rgba(231,0,17,0.35)" : C.border}`,
@@ -301,10 +369,25 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
               </span>
             )}
           </div>
-          <PshareDiamondBadge grade={grade} variant={isConsole ? "compact" : "full"} />
+          <div className="flex shrink-0 items-center gap-1">
+            {canDelete && (
+              <button
+                type="button"
+                title={isAdmin || userRole === "admin" ? "Delete post (admin)" : "Delete your post"}
+                disabled={deleteMut.isPending}
+                onClick={() => {
+                  if (window.confirm("Delete this Pshare post?")) deleteMut.mutate();
+                }}
+                className="rounded-lg p-1.5 text-white/40 transition hover:bg-rose-500/15 hover:text-rose-300 disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <PshareDiamondBadge grade={grade} variant={isConsole ? "compact" : "full"} />
+          </div>
         </div>
         {local.body?.trim() && (
-          <p className={`mt-1 text-white/85 whitespace-pre-wrap ${isConsole ? "text-[11px] line-clamp-3" : "text-[12px]"}`}>
+          <p className={`mt-1 text-white/85 whitespace-pre-wrap ${isConsole ? "text-[11px] line-clamp-2" : "text-[12px]"}`}>
             {local.body}
           </p>
         )}
@@ -333,7 +416,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
         </div>
       )}
 
-      {(local.likeCount || local.commentCount || local.shareCount || local.hypeCount || topReactions.length) ? (
+      {(local.likeCount || local.commentCount || local.shareCount || local.hypeCount || topReactions.length) && !compactConsole ? (
         <div className="flex flex-wrap items-center gap-2 px-3 pb-1.5 text-[9px] text-white/40">
           {local.likeCount ? <span>{local.likeCount} likes</span> : null}
           {local.commentCount ? <span>{local.commentCount} comments</span> : null}
@@ -431,8 +514,11 @@ export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout =
         </button>
       </div>
 
-      {commentsOpen && !compactConsole && (
-        <div className="border-t px-3 py-2" style={{ borderColor: C.border, background: "rgba(0,0,0,0.25)" }}>
+      {commentsOpen && (
+        <div
+          className={`border-t px-3 py-2 ${compactConsole ? "max-h-24 shrink-0 overflow-y-auto" : ""}`}
+          style={{ borderColor: C.border, background: "rgba(0,0,0,0.25)" }}
+        >
           {loadingComments && <p className="mb-2 text-[10px] text-white/35">Loading…</p>}
           <ul className="mb-2 max-h-36 space-y-1.5 overflow-y-auto">
             {comments.map((c) => (
