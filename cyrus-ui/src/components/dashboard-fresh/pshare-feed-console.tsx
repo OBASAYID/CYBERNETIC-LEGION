@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Radio, Send, Share2 } from "lucide-react";
+import { ImagePlus, Loader2, Radio, Send, Share2, X } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { cn } from "@/lib/utils";
 import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
-
-type PsharePost = {
-  id: string;
-  authorName: string;
-  body: string;
-  createdAt?: string;
-};
+import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
+import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
+import { uploadCommsFileSmart, type CommsUploadProgress } from "../../../../client/src/lib/comms-chunk-upload";
+import { COMMS_MEDIA_FILE_ACCEPT } from "../../../../client/src/lib/comms-media-upload";
+import { formatCommsFileSize, guessCommsMediaMime } from "@shared/comms/media-formats";
+import {
+  detectPshareMediaKind,
+  resolvePshareMediaUrl,
+} from "../../../../client/src/lib/pshare-utils";
+import { PshareMediaPreview } from "@/components/comms/pshare-media-preview";
+import type { PsharePendingMedia, PsharePost } from "@/components/comms/pshare-types";
 
 function timeAgo(iso?: string): string {
   if (!iso) return "now";
@@ -24,11 +28,26 @@ function timeAgo(iso?: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
+function resolveMyUserId(): string {
+  try {
+    return localStorage.getItem("cyrus_comms_user_id") || "local-operator";
+  } catch {
+    return "local-operator";
+  }
+}
+
 export function PshareFeedConsole({ className }: { className?: string }) {
   const queryClient = useQueryClient();
+  const myUserId = resolveMyUserId();
   const [draft, setDraft] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [fading, setFading] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<PsharePendingMedia | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const postsQuery = useQuery<PsharePost[]>({
     queryKey: ["/api/comms/pshare/posts", "dashboard-feed"],
     queryFn: async () => {
@@ -41,6 +60,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   });
 
   const posts = (postsQuery.data ?? []).slice(0, 8);
+  const activePost = posts[activeIndex];
 
   useEffect(() => {
     if (posts.length <= 1) {
@@ -61,12 +81,69 @@ export function PshareFeedConsole({ className }: { className?: string }) {
     if (activeIndex >= posts.length) setActiveIndex(0);
   }, [activeIndex, posts.length]);
 
+  const clearMedia = useCallback(() => {
+    setPendingMedia((prev) => {
+      if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }, []);
+
+  const uploadFile = useCallback(
+    async (file: File) => {
+      setUploading(true);
+      setUploadError(null);
+      setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "init" });
+      try {
+        const result = await uploadCommsFileSmart(file, {
+          userId: myUserId,
+          fileName: file.name,
+          onProgress: setUploadProgress,
+        });
+        const mime = result.mimeType || guessCommsMediaMime(file.name, file.type);
+        const kind = detectPshareMediaKind(file.name, mime);
+        const previewUrl =
+          kind === "image" ? resolvePshareMediaUrl(result.fileUrl) : URL.createObjectURL(file);
+        setPendingMedia((prev) => {
+          if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+          return {
+            fileUrl: result.fileUrl,
+            fileName: result.fileName || file.name,
+            fileMimeType: mime,
+            fileSize: result.fileSize || file.size,
+            previewUrl,
+          };
+        });
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Media upload failed");
+      } finally {
+        setUploading(false);
+        setUploadProgress(null);
+      }
+    },
+    [myUserId],
+  );
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (f) void uploadFile(f);
+  };
+
   const createPost = useMutation({
-    mutationFn: async (body: string) => {
+    mutationFn: async (payload: { body: string; media: PsharePendingMedia | null }) => {
       const res = await systemFetch("/api/comms/pshare/posts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-Id": getCommsDeviceId(),
+          "X-User-Id": myUserId,
+        },
+        body: JSON.stringify({
+          body: payload.body,
+          fileUrl: payload.media?.fileUrl || null,
+          fileName: payload.media?.fileName || null,
+          fileMimeType: payload.media?.fileMimeType || null,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -76,6 +153,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
     },
     onSuccess: () => {
       setDraft("");
+      clearMedia();
       void queryClient.invalidateQueries({ queryKey: ["/api/comms/pshare/posts", "dashboard-feed"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
     },
@@ -83,9 +161,13 @@ export function PshareFeedConsole({ className }: { className?: string }) {
 
   const submitPost = () => {
     const body = draft.trim();
-    if (!body || createPost.isPending) return;
-    createPost.mutate(body);
+    if ((!body && !pendingMedia) || createPost.isPending || uploading) return;
+    createPost.mutate({ body, media: pendingMedia });
   };
+
+  const pendingKind = pendingMedia
+    ? detectPshareMediaKind(pendingMedia.fileName, pendingMedia.fileMimeType)
+    : "none";
 
   return (
     <section
@@ -136,7 +218,53 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       </div>
 
       <div className="mb-3 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
+        {pendingMedia && (
+          <div className="relative mb-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+            {pendingKind === "image" && pendingMedia.previewUrl && (
+              <img src={pendingMedia.previewUrl} alt="" className="max-h-24 w-full object-contain" />
+            )}
+            {pendingKind === "video" && pendingMedia.previewUrl && (
+              <video src={pendingMedia.previewUrl} controls className="max-h-24 w-full" playsInline />
+            )}
+            {pendingKind === "audio" && pendingMedia.previewUrl && (
+              <div className="p-2">
+                <audio src={pendingMedia.previewUrl} controls className="w-full" />
+              </div>
+            )}
+            {(pendingKind === "file" || pendingKind === "none") && (
+              <p className="truncate p-2 text-[10px] text-white/70">{pendingMedia.fileName}</p>
+            )}
+            <button
+              type="button"
+              onClick={clearMedia}
+              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white hover:bg-rose-600/80"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <CommsUploadProgressBar
+          fileName={pendingMedia?.fileName}
+          progress={uploadProgress}
+          error={uploadError}
+        />
         <div className="flex items-end gap-2 cyrus-xs-pshare-compose">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={COMMS_MEDIA_FILE_ACCEPT}
+            className="hidden"
+            onChange={onPickFile}
+          />
+          <button
+            type="button"
+            title="Attach media"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/60 hover:border-sky-300/35 disabled:opacity-40"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          </button>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -147,7 +275,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
           <button
             type="button"
             onClick={submitPost}
-            disabled={!draft.trim() || createPost.isPending}
+            disabled={(!draft.trim() && !pendingMedia) || createPost.isPending || uploading}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-sky-200/35 bg-sky-500/20 px-3 text-xs text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
           >
             <Send className="h-3.5 w-3.5" />
@@ -161,7 +289,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       ) : postsQuery.isError ? (
         <p className="text-xs text-amber-200/80">Pshare feed unavailable right now.</p>
       ) : posts.length === 0 ? (
-        <p className="text-xs text-white/55">No Pshare posts yet. Open Pshare to publish the first update.</p>
+        <p className="text-xs text-white/55">No Pshare posts yet. Share text or media to publish the first update.</p>
       ) : (
         <article
           className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-slate-700/45 via-slate-900/65 to-slate-950/82 p-3 shadow-[0_10px_22px_rgba(0,0,0,0.3)] cyrus-xs-pshare-item transition-opacity duration-200"
@@ -170,15 +298,23 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <span className="truncate text-[11px] font-semibold text-white/95">
-              {posts[activeIndex]?.authorName || "Operator"}
+              {activePost?.authorName || "Operator"}
             </span>
             <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
-              {timeAgo(posts[activeIndex]?.createdAt)}
+              {timeAgo(activePost?.createdAt ?? undefined)}
             </span>
           </div>
-          <p className="line-clamp-4 text-xs leading-relaxed text-slate-100/80">
-            {posts[activeIndex]?.body || "Shared update"}
-          </p>
+          {activePost?.body?.trim() && (
+            <p className="line-clamp-3 text-xs leading-relaxed text-slate-100/80">{activePost.body}</p>
+          )}
+          {activePost?.fileUrl && (
+            <div className="mt-2">
+              <PshareMediaPreview post={activePost} variant="console" />
+            </div>
+          )}
+          {!activePost?.body?.trim() && !activePost?.fileUrl && (
+            <p className="text-xs text-white/45">Shared update</p>
+          )}
           {posts.length > 1 && (
             <div className="mt-2.5 flex items-center gap-1.5">
               {posts.map((post, i) => (
@@ -192,7 +328,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
                     background: i === activeIndex ? "rgba(125,211,252,0.9)" : "rgba(255,255,255,0.22)",
                   }}
                   aria-label={`Show Pshare story ${i + 1}`}
-                  title={`Story ${i + 1}`}
+                  title={`Story ${i + 1}${post.fileUrl ? " · media" : ""}`}
                 />
               ))}
             </div>
