@@ -10,24 +10,21 @@ import {
 } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
-/** Shared dark console surface — matches Live panel sidebar. */
-export const DASHBOARD_DARK_CONSOLE_BG =
-  "bg-gradient-to-b from-[#070b12]/98 via-[#05080d]/99 to-black/95";
-export const DASHBOARD_DARK_CONSOLE_INNER =
-  "rounded-xl border border-white/10 bg-gradient-to-b from-[#0c1018]/92 via-[#080b10]/96 to-black/90";
-export const DASHBOARD_CONSOLE_SHADOW =
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_22px_46px_rgba(0,0,0,0.52)]";
+/** Shared dashboard console surface — plain white stack. */
+export const DASHBOARD_DARK_CONSOLE_BG = "bg-white";
+export const DASHBOARD_DARK_CONSOLE_INNER = "rounded-xl border border-slate-200 bg-white";
+export const DASHBOARD_CONSOLE_SHADOW = "shadow-[0_8px_24px_rgba(15,23,42,0.08)]";
 
 type ConsoleStack = "standalone" | "top" | "bottom";
 
 function stackShellClass(stack: ConsoleStack) {
   if (stack === "top") {
-    return "rounded-t-2xl rounded-b-none border-x border-t border-white/14 border-b border-b-white/10";
+    return "rounded-t-2xl rounded-b-none border-x border-t border-slate-200 border-b border-b-slate-200";
   }
   if (stack === "bottom") {
-    return "rounded-b-2xl rounded-t-none border-x border-b border-white/14 border-t-0";
+    return "rounded-b-2xl rounded-t-none border-x border-b border-slate-200 border-t-0";
   }
-  return "rounded-2xl border border-white/14";
+  return "rounded-2xl border border-slate-200";
 }
 
 function ConsoleShell({
@@ -57,28 +54,25 @@ function ConsoleShell({
           : "border-cyan-500/25";
   const iconTone =
     accent === "amber"
-      ? "text-amber-300"
+      ? "text-amber-600"
       : accent === "violet"
-        ? "text-violet-300"
+        ? "text-violet-600"
         : accent === "emerald"
-          ? "text-emerald-300"
-          : "text-cyan-300";
+          ? "text-emerald-600"
+          : "text-cyan-600";
 
   return (
     <section
-      className={`relative overflow-hidden ${stackShellClass(stack)} ${DASHBOARD_DARK_CONSOLE_BG} p-4 ${DASHBOARD_CONSOLE_SHADOW} backdrop-blur-xl cyrus-xs-console-shell ${className}`}
+      className={`relative overflow-hidden ${stackShellClass(stack)} ${DASHBOARD_DARK_CONSOLE_BG} p-4 ${DASHBOARD_CONSOLE_SHADOW} cyrus-xs-console-shell ${className}`}
     >
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
-      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
       <div className="mb-3 flex items-center gap-2">
-        <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-white/[0.04]`}>
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-slate-50`}>
           <Icon className={`h-4 w-4 ${iconTone}`} aria-hidden />
         </div>
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-white/45">{kicker}</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-slate-500">{kicker}</p>
           <h2
-            className="text-sm font-semibold text-white/95"
+            className="text-sm font-semibold text-slate-900"
             style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
           >
             {title}
@@ -113,33 +107,33 @@ export function SystemSpotlightConsole({
 
   return (
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber" stack="top">
-      <div className={`mb-3 flex gap-3 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.45)] cyrus-xs-spotlight-hero ${DASHBOARD_DARK_CONSOLE_INNER}`}>
+      <div className={`mb-3 flex gap-3 p-2.5 cyrus-xs-spotlight-hero ${DASHBOARD_DARK_CONSOLE_INNER}`}>
         <img
           src={TSODILO_DANCE_HERO_URL}
           alt="Tsodilo spiritual dance"
-          className="h-36 w-28 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
+          className="h-36 w-28 shrink-0 rounded-xl border border-slate-200 object-cover shadow-sm"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
-          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
-          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence blending Tsodilo spiritual dance art with premium diamond texture in one spotlight surface.</p>
+          <p className="text-[9px] uppercase tracking-[0.28em] text-slate-500">CYRUS Chronicle</p>
+          <h3 className="mt-1 text-2xl font-bold leading-tight text-slate-900">Tsodilo Mission Ledger</h3>
+          <p className="mt-1.5 text-[11px] text-slate-600">Live command intelligence blending Tsodilo spiritual dance art with premium diamond texture in one spotlight surface.</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Story mode</span>
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Live graphics</span>
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Diamond render</span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-600">Story mode</span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-600">Live graphics</span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-600">Diamond render</span>
           </div>
         </div>
         <img
           src={CYRUS_DIAMONDS_LEATHER_URL}
           alt="Diamonds on dark leather surface"
-          className="h-36 w-24 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
+          className="h-36 w-24 shrink-0 rounded-xl border border-slate-200 object-cover shadow-sm"
         />
       </div>
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {pillars.map((pillar) => (
           <article
             key={pillar.title}
-            className={`group relative overflow-hidden p-2 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}
+            className={`group relative overflow-hidden p-2 ${DASHBOARD_DARK_CONSOLE_INNER}`}
           >
             <img
               src={pillar.image}
@@ -148,32 +142,32 @@ export function SystemSpotlightConsole({
             />
             <div className="pointer-events-none absolute inset-x-2 top-2 h-20 rounded-lg bg-gradient-to-t from-black/72 via-black/25 to-transparent" />
             <div className="mt-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/92">{pillar.title}</p>
-              <p className="text-[10px] text-slate-300/80">{pillar.sub}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-900">{pillar.title}</p>
+              <p className="text-[10px] text-slate-600">{pillar.sub}</p>
             </div>
           </article>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-amber-400/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-amber-200/70">Progress</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{healthPercent}</p>
-          <p className="mt-1 text-[10px] text-white/45">Health index</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-amber-300`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-amber-700">Progress</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none text-slate-900">{healthPercent}</p>
+          <p className="mt-1 text-[10px] text-slate-500">Health index</p>
         </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-orange-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-orange-200/70">Time</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{onlineEngines}</p>
-          <p className="mt-1 text-[10px] text-white/45">Online engines</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-orange-300`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-orange-700">Time</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none text-slate-900">{onlineEngines}</p>
+          <p className="mt-1 text-[10px] text-slate-500">Online engines</p>
         </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-cyan-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-200/70">Signal</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{origin}</p>
-          <p className="mt-1 text-[10px] text-white/45">Fused origin</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-cyan-300`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-700">Signal</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-slate-900">{origin}</p>
+          <p className="mt-1 text-[10px] text-slate-500">Fused origin</p>
         </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-emerald-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-200/70">AI state</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{ai}</p>
-          <p className="mt-1 text-[10px] text-white/45">{totalEngines} total engines</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-emerald-300`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-700">AI state</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-slate-900">{ai}</p>
+          <p className="mt-1 text-[10px] text-slate-500">{totalEngines} total engines</p>
         </div>
       </div>
     </ConsoleShell>
