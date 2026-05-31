@@ -37,7 +37,12 @@ const C = {
   slateLight: "#363A40",
   charcoal: "#121212",
   charcoalDeep: "#0B0B0B",
-  sidebar: "#1B1B1B",
+  sidebar: "#161616",
+  sidebarElevated: "#1F1F1F",
+  sidebarHover: "#242424",
+  sidebarSelected: "#2A2A2A",
+  sidebarInput: "#222222",
+  sidebarDivider: "#2E2E2E",
   green: "#3DDC84",
   amber: "#F5A663",
   sky: "#82CFFF",
@@ -52,26 +57,18 @@ const C = {
   border: "rgba(255,255,255,0.06)",
   borderLight: "rgba(255,255,255,0.09)",
   textMuted: "#888888",
-  bubbleMine: "rgba(38,40,44,0.98)",
-  bubbleMineBorder: "rgba(255,255,255,0.08)",
-  bubbleTheirs: "rgba(255,255,255,0.035)",
+  bubbleMine: "#242424",
+  bubbleMineBorder: "#333333",
+  bubbleTheirs: "#1A1A1A",
 } as const;
 
-/** Subtle grain for sidebars / panels — avoids flat plastic look */
-const MATTE_SURFACE: CSSProperties = {
+/** Solid sidebar — no grain, stripes, or glass transparency */
+const SIDEBAR_SURFACE: CSSProperties = {
   backgroundColor: C.sidebar,
-  backgroundImage: [
-    "linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 45%)",
-    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E\")",
-  ].join(", "),
 };
 
 const MAIN_SURFACE: CSSProperties = {
   backgroundColor: C.charcoalDeep,
-  backgroundImage: [
-    "radial-gradient(ellipse 120% 80% at 50% -20%, rgba(231,0,17,0.06) 0%, transparent 55%)",
-    "linear-gradient(180deg, #141414 0%, #0B0B0B 100%)",
-  ].join(", "),
 };
 
 type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote" | "pshare";
@@ -367,11 +364,12 @@ function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVid
   function initials2(n: string) { return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?"; }
 
   return (
-    <aside className="flex flex-col shrink-0 relative"
-      style={{ width:215, borderRight:`1px solid ${C.border}`, ...MATTE_SURFACE }}>
+    <aside className="flex flex-col shrink-0"
+      style={{ width:215, borderRight:`1px solid ${C.sidebarDivider}`, ...SIDEBAR_SURFACE }}>
 
       {/* ── Profile header ── */}
-      <div className="px-4 pt-5 pb-4 shrink-0" style={{ borderBottom:`1px solid ${C.border}` }}>
+      <div className="px-4 pt-5 pb-4 shrink-0"
+        style={{ borderBottom:`1px solid ${C.sidebarDivider}`, background: C.sidebarElevated }}>
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <div className="flex h-11 w-11 items-center justify-center rounded-full font-bold text-sm text-white"
@@ -383,46 +381,47 @@ function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVid
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-white truncate">{myName}</p>
-            <p className="text-[10px] text-white/40">Active now</p>
+            <p className="text-[10px]" style={{ color: C.textMuted }}>Active now</p>
           </div>
         </div>
       </div>
 
       {/* ── Search ── */}
-      <div className="px-4 pt-3 pb-2 shrink-0">
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2"
-          style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
-          <Search className="h-3 w-3 text-white/25 shrink-0" strokeWidth={1.8} />
+      <div className="px-4 pt-3 pb-2 shrink-0" style={{ background: C.sidebar }}>
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2"
+          style={{ background: C.sidebarInput, border:`1px solid ${C.sidebarDivider}` }}>
+          <Search className="h-3 w-3 shrink-0" style={{ color: C.textMuted }} strokeWidth={1.8} />
           <input type="text" placeholder="Search friends…" value={search}
             onChange={e=>setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/25 focus:outline-none" />
+            className="flex-1 bg-transparent text-[11px] text-white/85 placeholder:text-[#666] focus:outline-none" />
         </div>
       </div>
 
       {/* ── Friends list — matches reference Friends section ── */}
-      <div className="px-4 pt-1 pb-1 shrink-0">
+      <div className="px-4 pt-1 pb-1 shrink-0" style={{ background: C.sidebar }}>
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-white/55">Friends</p>
-          <span className="text-[9px] text-green-400/70">{online} online</span>
+          <p className="text-xs font-semibold text-white/70">Friends</p>
+          <span className="text-[9px]" style={{ color: C.green }}>{online} online</span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-3" style={{ scrollbarWidth:"none" }}>
+      <div className="flex-1 overflow-y-auto px-3 pb-3" style={{ scrollbarWidth:"none", background: C.sidebar }}>
         {filtered.length===0 ? (
-          <p className="text-center text-[10px] text-white/25 pt-8 italic">No operators found</p>
+          <p className="text-center text-[10px] pt-8 italic" style={{ color: C.textMuted }}>No operators found</p>
         ) : filtered.map(u => {
           const isOnline = u.isOnline || u.status==="online";
           const isSelected = selectedUserId === u.id;
           return (
             <div key={u.id}
-              className="group relative flex items-center gap-2.5 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.05]"
+              className="group relative flex items-center gap-2.5 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-colors"
               style={{
-                background: isSelected ? "rgba(255,255,255,0.07)" : "transparent",
+                background: isSelected ? C.sidebarSelected : "transparent",
               }}
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = C.sidebarHover; }}
+              onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
               onClick={()=>onMessage(u.id,u.displayName)}>
               {isSelected && (
-                <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
-                  style={{ background: C.red, boxShadow: `0 0 8px ${C.redGlow}` }} />
+                <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: C.red }} />
               )}
               <div className="relative shrink-0">
                 <Avatar name={u.displayName} size={34} />
@@ -437,12 +436,14 @@ function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVid
               </div>
               <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
                 <button type="button" onClick={e=>{e.stopPropagation();onCallVoice(u.id,u.displayName);}}
-                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title="Voice">
-                  <Phone className="h-3 w-3 text-green-400/70" strokeWidth={1.8} />
+                  className="rounded-lg p-1.5 transition-colors" title="Voice"
+                  style={{ background: C.sidebarInput }}>
+                  <Phone className="h-3 w-3" style={{ color: C.green }} strokeWidth={1.8} />
                 </button>
                 <button type="button" onClick={e=>{e.stopPropagation();onCallVideo(u.id,u.displayName);}}
-                  className="rounded-lg p-1.5 hover:bg-white/10 transition-colors" title="Video">
-                  <Video className="h-3 w-3 text-white/40" strokeWidth={1.8} />
+                  className="rounded-lg p-1.5 transition-colors" title="Video"
+                  style={{ background: C.sidebarInput }}>
+                  <Video className="h-3 w-3" style={{ color: C.steel }} strokeWidth={1.8} />
                 </button>
               </div>
             </div>
@@ -458,9 +459,9 @@ function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVid
 
       {/* ── Settings footer ── */}
       <div className="flex items-center gap-2 px-4 py-3 shrink-0"
-        style={{ borderTop:`1px solid ${C.border}` }}>
-        <Settings2 className="h-3.5 w-3.5 text-white/30" strokeWidth={1.8} />
-        <p className="text-[11px] text-white/35">Settings</p>
+        style={{ borderTop:`1px solid ${C.sidebarDivider}`, background: C.sidebarElevated }}>
+        <Settings2 className="h-3.5 w-3.5" style={{ color: C.textMuted }} strokeWidth={1.8} />
+        <p className="text-[11px]" style={{ color: C.textMuted }}>Settings</p>
       </div>
     </aside>
   );
@@ -744,10 +745,10 @@ function ChatPanel({ myId, myName, targetUser }:
 
       {/* Input bar — dark pill, red send */}
       <div className="flex flex-col gap-2 px-5 py-3.5 shrink-0"
-        style={{ borderTop:`1px solid ${C.border}`, background:"rgba(18,18,18,0.92)" }}>
+        style={{ borderTop:`1px solid ${C.sidebarDivider}`, background: C.charcoal }}>
         {attachFile && (
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] text-white/60"
-            style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.borderLight}` }}>
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] text-white/70"
+            style={{ background: C.sidebarInput, border:`1px solid ${C.sidebarDivider}` }}>
             <Paperclip className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate flex-1">{attachFile.name}</span>
             <button type="button" onClick={()=>setAttachFile(null)} className="text-white/40 hover:text-white/70">✕</button>
@@ -762,12 +763,12 @@ function ChatPanel({ myId, myName, targetUser }:
           <input ref={fileRef} type="file" accept={COMMS_MEDIA_FILE_ACCEPT} className="hidden" onChange={handleFilePick} />
           <button type="button" title="Attach file or media" disabled={uploading}
             onClick={()=>fileRef.current?.click()}
-            className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-105 disabled:opacity-30"
-            style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
+            className="flex items-center justify-center h-10 w-10 rounded-lg transition-all hover:scale-105 disabled:opacity-30"
+            style={{ background: C.sidebarInput, border:`1px solid ${C.sidebarDivider}` }}>
             <Paperclip className="h-4 w-4 text-white/50" strokeWidth={1.8} />
           </button>
           <div className="flex-1 flex items-center gap-3 rounded-full px-4 py-2.5"
-            style={{ background:C.slate, border:`1px solid ${C.borderLight}` }}>
+            style={{ background: C.sidebarInput, border:`1px solid ${C.sidebarDivider}` }}>
             <input type="text" value={input} onChange={e=>setInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}}
               placeholder={attachFile ? "Add a caption…" : uploading ? "Uploading…" : "Write a message…"}
@@ -1770,9 +1771,8 @@ export default function CommsHubPage() {
 
         {/* ══ HEADER ══════════════════════════════════════════ */}
         <header className="shrink-0 flex items-center gap-0 px-5"
-          style={{ height:52, background:"rgba(18,18,18,0.95)",
-            borderBottom:`1px solid ${C.border}`,
-            boxShadow:"0 2px 20px rgba(0,0,0,0.45)" }}>
+          style={{ height:52, background: C.sidebarElevated,
+            borderBottom:`1px solid ${C.sidebarDivider}` }}>
 
           {/* Brand */}
           <div className="flex items-center gap-2.5 mr-5 shrink-0">
@@ -1791,8 +1791,8 @@ export default function CommsHubPage() {
                 <button key={id} type="button" onClick={()=>setActiveTab(id)}
                   className="relative flex items-center gap-2 rounded-lg px-3.5 py-2 transition-all duration-200 shrink-0"
                   style={{
-                    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                    border:`1px solid ${isActive ? C.borderLight : "transparent"}`,
+                    background: isActive ? C.sidebarSelected : "transparent",
+                    border:`1px solid ${isActive ? C.sidebarDivider : "transparent"}`,
                   }}>
                   {isActive && (
                     <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full" style={{ background: C.red }} />
@@ -1811,7 +1811,7 @@ export default function CommsHubPage() {
           {/* Right status pills */}
           <div className="flex items-center gap-3 ml-4 shrink-0">
             <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ background:"rgba(255,255,255,0.07)", border:`1px solid ${C.border}` }}>
+              style={{ background: C.sidebarInput, border:`1px solid ${C.sidebarDivider}` }}>
               <span className="h-[5px] w-[5px] rounded-full"
                 style={{ background:isConnected?C.green:"#ef4444", animation:"cy-blink 3s ease-in-out infinite" }} />
               <span className="text-[8px] font-medium text-white/40">
@@ -1845,7 +1845,7 @@ export default function CommsHubPage() {
 
             {/* Sub-header: active tab info */}
             <div className="flex items-center gap-3 px-5 py-2.5 shrink-0"
-              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(18,18,18,0.75)" }}>
+              style={{ borderBottom:`1px solid ${C.sidebarDivider}`, background: C.charcoal }}>
               <tabCfg.icon className="h-3.5 w-3.5" style={{color:tabCfg.color}} strokeWidth={1.8} />
               <span className="text-[9px] font-semibold tracking-widest text-white/50 uppercase">{tabCfg.label}</span>
               <span className="text-[8px] text-white/25">{tabCfg.sub}</span>
