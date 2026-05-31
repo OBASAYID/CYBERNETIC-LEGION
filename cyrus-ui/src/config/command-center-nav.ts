@@ -15,6 +15,7 @@ import {
   Phone,
   Scan,
   Settings,
+  Terminal,
   Zap,
 } from "lucide-react";
 
@@ -153,6 +154,15 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
     sublabel: "Access codes, API keys, admin controls",
     Icon: Settings,
   },
+  {
+    path: "/settings/command",
+    dashboardLabel: "Command",
+    sidebarLabel: "CYRUS Command",
+    dashboardDescription: "AI operator console",
+    surfaceLabel: "CYRUS Command",
+    sublabel: "Launch AI console under system settings",
+    Icon: Terminal,
+  },
 ];
 
 export function getModuleOrchestratorSurfaces(): {
@@ -161,7 +171,7 @@ export function getModuleOrchestratorSurfaces(): {
   sublabel: string;
   Icon: LucideIcon;
 }[] {
-  return COMMAND_CENTER_NAV.map((e) => {
+  return COMMAND_CENTER_NAV.filter((e) => e.path !== "/settings/command").map((e) => {
     const sublabel = e.sublabel ?? e.dashboardDescription ?? e.dashboardLabel;
     return {
       path: e.path,
@@ -182,7 +192,7 @@ export function getDashboardNavItems(): {
   description?: string;
   Icon: LucideIcon;
 }[] {
-  return COMMAND_CENTER_NAV.map((e) => ({
+  return COMMAND_CENTER_NAV.filter((e) => e.path !== "/settings/command").map((e) => ({
     href: e.path,
     label: e.dashboardLabel,
     description: e.dashboardDescription ?? e.sublabel,

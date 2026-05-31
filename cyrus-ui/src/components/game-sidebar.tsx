@@ -45,7 +45,7 @@ const NAV_GROUPS = [
   { label: "INTELLIGENCE", paths: ["/intelligence", "/files", "/scan", "/document-builder", "/algorithms"] },
   { label: "COMMS", paths: ["/comms"] },
   { label: "SYSTEMS", paths: ["/modules", "/device", "/medical", "/quantum", "/ops"] },
-  { label: "ADMIN", paths: ["/settings"] },
+  { label: "ADMIN", paths: ["/settings", "/settings/command"] },
 ];
 
 export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMobileClose }: GameSidebarProps) {
