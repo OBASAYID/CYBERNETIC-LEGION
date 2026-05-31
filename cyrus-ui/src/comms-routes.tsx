@@ -10,6 +10,9 @@ const CommsHubPage = lazy(() =>
 const CommsCallPage = lazy(() =>
   import("./pages/comms-call-page").then((m) => ({ default: m.default })),
 );
+const GroupCallModulePage = lazy(() =>
+  import("./pages/group-call-module-page").then((m) => ({ default: m.default })),
+);
 
 function CommsRouteFallback() {
   const [visible, setVisible] = useState(false);
@@ -50,6 +53,7 @@ export function CommsRoutes() {
   return (
     <>
       <SuspenseCommsRoute path="/comms/call" C={CommsCallPage} />
+      <SuspenseCommsRoute path="/comms/group-module" C={GroupCallModulePage} />
       <SuspenseCommsRoute path="/comms" C={CommsHubPage} />
     </>
   );

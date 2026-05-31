@@ -17,6 +17,7 @@ import {
 } from "./comms-profile-persist.js";
 import { pshareRouter } from "./pshare-routes.js";
 import { gwaRouter } from "./gwa-routes.js";
+import { groupCallIntelligenceRouter } from "./group-call-intelligence-routes.js";
 import { getDeliveryHubStats } from "./delivery-hub.js";
 import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
 import {
@@ -2564,8 +2565,10 @@ router.post("/api/comms/intelligence/detect-anomalies-ml", async (req: any, res)
 export function registerCommsRoutes(app: any) {
   app.use(pshareRouter);
   app.use(gwaRouter);
+  app.use(groupCallIntelligenceRouter);
   app.use(router);
   console.log("[Comms] Registered communication routes (60+ endpoints)");
   console.log("[Comms Intelligence] 12 intelligence API endpoints active (8 core + 4 ML-enhanced)");
   console.log("[Comms GWA] Group Work Assessment routes active (timed team analytics + reports)");
+  console.log("[Comms GroupCall] CYRUS Group Call Intelligence routes active");
 }
