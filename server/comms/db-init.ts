@@ -292,6 +292,28 @@ const DDL_STATEMENTS = [
     PRIMARY KEY (post_id, user_id)
   )`,
 
+  `CREATE TABLE IF NOT EXISTS pshare_reactions (
+    post_id    VARCHAR NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+    user_id    VARCHAR NOT NULL,
+    emoji      VARCHAR NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (post_id, user_id)
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS pshare_shares (
+    id         VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id    VARCHAR NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+    user_id    VARCHAR NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS pshare_hypes (
+    post_id    VARCHAR NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+    user_id    VARCHAR NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (post_id, user_id)
+  )`,
+
   // ── gwa_sessions (Group Work Assessment) ───────────────────────────────────
   `CREATE TABLE IF NOT EXISTS gwa_sessions (
     id                     VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),

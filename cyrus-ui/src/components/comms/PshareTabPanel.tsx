@@ -15,10 +15,9 @@ import {
 import { formatCommsFileSize, guessCommsMediaMime } from "@shared/comms/media-formats";
 import {
   detectPshareMediaKind,
-  formatPshareRelativeTime,
   resolvePshareMediaUrl,
 } from "../../../../client/src/lib/pshare-utils";
-import { PshareMediaPreview } from "./pshare-media-preview";
+import { PsharePostCard } from "./pshare-post-card";
 import type { PsharePendingMedia, PsharePost } from "./pshare-types";
 
 const C = {
@@ -148,7 +147,7 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
       >
         <div>
           <p className="text-sm font-bold text-white">Pshare</p>
-          <p className="text-[10px] text-white/35">Broadcast text, photos, video, and files</p>
+          <p className="text-[10px] text-white/35">Like, react, hype, and climb the diamond tiers</p>
         </div>
         <div
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
@@ -170,40 +169,7 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
           <p className="text-[11px] text-white/35">No broadcasts yet. Post the first update or share media.</p>
         )}
         {posts.map((p) => (
-          <div
-            key={p.id}
-            className="overflow-hidden rounded-xl"
-            style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}
-          >
-            <div className="px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold text-rose-300/90">{p.authorName ?? "Operator"}</p>
-                {p.createdAt && (
-                  <span className="text-[9px] text-white/30">{formatPshareRelativeTime(p.createdAt)}</span>
-                )}
-              </div>
-              {p.body?.trim() && (
-                <p className="mt-1 text-[12px] text-white/85 whitespace-pre-wrap">{p.body}</p>
-              )}
-            </div>
-            {p.fileUrl && (
-              <div className="px-3 pb-2.5">
-                <PshareMediaPreview post={p} variant="feed" />
-              </div>
-            )}
-            {p.linkUrl && (
-              <div className="px-3 pb-2.5">
-                <a
-                  href={p.linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block truncate text-[11px] text-sky-300/90 hover:underline"
-                >
-                  {p.linkUrl}
-                </a>
-              </div>
-            )}
-          </div>
+          <PsharePostCard key={p.id} post={p} myUserId={myUserId} variant="feed" />
         ))}
       </div>
 
