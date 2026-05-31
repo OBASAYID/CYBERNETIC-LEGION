@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Clapperboard,
+  Film,
   Flame,
   Heart,
   MessageCircle,
@@ -11,6 +13,7 @@ import { systemFetch } from "@/lib/system-api";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
 import { formatPshareRelativeTime } from "../../../../client/src/lib/pshare-utils";
 import { PSHARE_REACTION_EMOJIS } from "@shared/comms/pshare-engagement";
+import { normalizePostKind, pshareKindLabel } from "@shared/comms/pshare-studio";
 import { PshareDiamondBadge } from "./pshare-diamond-badge";
 import { PshareMediaPreview } from "./pshare-media-preview";
 import type { PshareComment, PsharePost } from "./pshare-types";
@@ -207,6 +210,13 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
     .slice(0, 4);
 
   const grade = (local.diamondGrade ?? 0) as 0 | 1 | 2 | 3 | 4 | 5;
+  const postKind = normalizePostKind(local.postKind);
+  const isStudioPost = postKind === "clip" || postKind === "story" || postKind === "reel";
+  const kindLabel = pshareKindLabel(postKind);
+  const durationLabel =
+    local.durationSec && local.durationSec > 0
+      ? `${Math.round(local.durationSec)}s`
+      : null;
 
   return (
     <div
@@ -230,6 +240,20 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
                 >
                   <Flame className="h-2.5 w-2.5" />
                   Trending
+                </span>
+              )}
+              {isStudioPost && (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                  style={{ background: "rgba(56,189,248,0.12)", color: "rgb(125,211,252)" }}
+                >
+                  {postKind === "story" ? (
+                    <Clapperboard className="h-2.5 w-2.5" />
+                  ) : (
+                    <Film className="h-2.5 w-2.5" />
+                  )}
+                  {kindLabel}
+                  {durationLabel ? ` · ${durationLabel}` : ""}
                 </span>
               )}
             </div>

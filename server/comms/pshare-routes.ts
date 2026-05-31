@@ -6,6 +6,7 @@ import {
   PSHARE_REACTION_EMOJIS,
   type PshareReactionEmoji,
 } from "../../shared/comms/pshare-engagement.js";
+import { adviseStudioProject, normalizePostKind } from "../../shared/comms/pshare-studio.js";
 import { eq, and, or, desc, asc, sql, inArray, count } from "drizzle-orm";
 
 const router = Router();
@@ -78,6 +79,10 @@ async function ensurePshareTables(): Promise<void> {
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_title varchar`,
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_price varchar`,
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_currency varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS media_manifest jsonb`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS audio_url varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS duration_sec integer`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS polish_preset varchar`,
   ]) {
     try {
       await db.execute(sql.raw(alter));
@@ -273,6 +278,10 @@ function mapPostRow(
     listingTitle: p.listingTitle ?? null,
     listingPrice: p.listingPrice ?? null,
     listingCurrency: p.listingCurrency ?? null,
+    mediaManifest: (p.mediaManifest as Record<string, unknown>) ?? null,
+    audioUrl: p.audioUrl ?? null,
+    durationSec: p.durationSec ?? null,
+    polishPreset: p.polishPreset ?? null,
     visibility: p.visibility,
     allowComments: p.allowComments,
     allowedUserIds: (p.allowedUserIds as string[]) || [],
@@ -389,6 +398,10 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
     listingTitle: listingTitleIn = null,
     listingPrice: listingPriceIn = null,
     listingCurrency: listingCurrencyIn = null,
+    mediaManifest = null,
+    audioUrl = null,
+    durationSec = null,
+    polishPreset = null,
     visibility = "all",
     allowComments = true,
     allowedUserIds = [],
@@ -406,11 +419,16 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
   const text = String(body || "").trim();
   const link = linkUrl ? String(linkUrl).trim() : "";
   const hasFile = !!(fileUrl && String(fileUrl).trim());
-  const postKind = String(postKindIn || "general").toLowerCase() === "listing" ? "listing" : "general";
+  const postKindRaw = String(postKindIn || "general").toLowerCase();
+  const postKind = normalizePostKind(
+    postKindRaw === "listing" ? "listing" : postKindRaw,
+  );
   const listingTitle = postKind === "listing" ? String(listingTitleIn || "").trim() : "";
   const listingPrice = postKind === "listing" ? String(listingPriceIn || "").trim() : "";
   const listingCurrency = postKind === "listing" ? String(listingCurrencyIn || "").trim() : "";
   const hasListingFields = postKind === "listing" && !!(listingTitle || listingPrice);
+  const manifest =
+    mediaManifest && typeof mediaManifest === "object" ? mediaManifest : null;
   if (!text && !link && !hasFile && !hasListingFields) {
     return res.status(400).json({
       error:
@@ -435,6 +453,10 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
         listingTitle: listingTitle || null,
         listingPrice: listingPrice || null,
         listingCurrency: listingCurrency || null,
+        mediaManifest: manifest,
+        audioUrl: audioUrl ? String(audioUrl).trim() : null,
+        durationSec: durationSec != null ? Number(durationSec) || null : null,
+        polishPreset: polishPreset ? String(polishPreset) : null,
         visibility: v,
         allowComments: !!allowComments,
         allowedUserIds: v === "selected" ? allowed : [],
@@ -553,6 +575,25 @@ router.post("/api/comms/pshare/posts/:id/comments", async (req: any, res) => {
     console.error("[Pshare] add comment:", e);
     res.status(500).json({ error: "Failed to add comment" });
   }
+});
+
+router.post("/api/comms/pshare/studio/advise", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const body = req.body || {};
+  const mode = body.mode === "clip" ? "clip" : "story";
+  const slideCount = Math.max(0, Number(body.slideCount) || 0);
+  const audioDurationSec = body.audioDurationSec != null ? Number(body.audioDurationSec) : undefined;
+  const imageCount = Math.max(0, Number(body.imageCount) || 0);
+  const videoCount = Math.max(0, Number(body.videoCount) || 0);
+  const advice = adviseStudioProject({
+    mode,
+    slideCount,
+    audioDurationSec: Number.isFinite(audioDurationSec) ? audioDurationSec : undefined,
+    imageCount,
+    videoCount,
+  });
+  res.json({ advice });
 });
 
 router.post("/api/comms/pshare/posts/:id/like", async (req: any, res) => {

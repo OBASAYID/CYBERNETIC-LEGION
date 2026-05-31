@@ -376,6 +376,10 @@ const ALTER_STATEMENTS = [
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_title VARCHAR`,
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_price VARCHAR`,
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_currency VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS media_manifest JSONB`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS audio_url VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS polish_preset VARCHAR`,
 ];
 
 export async function initCommsDatabase(): Promise<void> {
