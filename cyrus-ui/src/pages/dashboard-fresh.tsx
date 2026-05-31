@@ -12,7 +12,6 @@ import {
   HeroSection,
   MetricsSection,
 } from "@/components/dashboard-fresh/sections";
-import { NewsTrendFeed } from "@/components/dashboard-fresh/news-trend-feed";
 import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-consoles";
 import { OnlineUsersSidebar } from "@/components/dashboard-fresh/online-users-sidebar";
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
@@ -185,11 +184,8 @@ export default function DashboardFresh() {
                 healthPercent={healthPercent}
                 onlineEngines={onlineEngines}
                 totalEngines={totalEngines}
-                degradedEngines={degradedEngines}
-                offlineEngines={offlineEngines}
               />
               <PshareFeedConsole />
-              <NewsTrendFeed />
             </div>
             <div className="xl:sticky xl:top-[5.5rem] xl:h-[calc(100vh-7rem)]">
               <OnlineUsersSidebar />
