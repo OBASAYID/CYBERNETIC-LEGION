@@ -36,9 +36,6 @@ const DocumentBuilder = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./pages/settings-page").then((m) => ({ default: m.default })),
 );
-const SettingsCommandPage = lazy(() =>
-  import("./pages/settings-command-page").then((m) => ({ default: m.default })),
-);
 
 function SuspenseRoute({ path, C }: { path: string; C: React.LazyExoticComponent<ComponentType<unknown>> }) {
   return (
@@ -97,7 +94,6 @@ export function CommandCenterRoutes() {
       <SuspenseRoute path="/medical" C={MedicalPage} />
       <SuspenseRoute path="/quantum" C={QuantumPage} />
       <SuspenseRoute path="/ops" C={OperationsPage} />
-      <SuspenseRoute path="/settings/command" C={SettingsCommandPage} />
       <SuspenseRoute path="/settings" C={SettingsPage} />
     </>
   );

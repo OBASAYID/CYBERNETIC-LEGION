@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, LogOut, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,6 +6,7 @@ import { COMMAND_CENTER_NAV } from "@/config/command-center-nav";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import { useUserRole } from "@/hooks/use-user-role";
 import { CyrusSidebarBrand } from "@/components/cyrus-sidebar-brand";
+import { CyrusCommandSidebarActivate } from "@/components/command-center/command-console-popup";
 
 interface GameSidebarProps {
   collapsed: boolean;
@@ -45,7 +46,7 @@ const NAV_GROUPS = [
   { label: "INTELLIGENCE", paths: ["/intelligence", "/files", "/scan", "/document-builder", "/algorithms"] },
   { label: "COMMS", paths: ["/comms"] },
   { label: "SYSTEMS", paths: ["/modules", "/device", "/medical", "/quantum", "/ops"] },
-  { label: "ADMIN", paths: ["/settings", "/settings/command"] },
+  { label: "ADMIN", paths: ["/settings"] },
 ];
 
 export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMobileClose }: GameSidebarProps) {
@@ -176,67 +177,72 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                 {items.map((item) => {
                   const isActive = location === item.path;
                   return (
-                    <Link key={item.path} href={item.path} onClick={() => onMobileClose?.()}>
-                      <div
-                        className={cn(
-                          "group relative my-0.5 flex cursor-pointer items-center transition-all duration-200",
-                          collapsed
-                            ? "mx-2 justify-center rounded-xl px-0 py-2.5"
-                            : "mx-2 gap-2.5 rounded-xl px-3 py-2.5",
-                        )}
-                        title={collapsed ? item.sidebarLabel : undefined}
-                        style={
-                          isActive
-                            ? {
-                                background:
-                                  "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(30,36,44,0.65) 100%)",
-                                border: `1px solid rgba(255,255,255,0.14)`,
-                                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), 0 0 16px ${P.redGlow}`,
-                              }
-                            : { border: "1px solid transparent" }
-                        }
-                      >
-                        {isActive && (
-                          <div
-                            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full"
-                            style={{ background: P.red, boxShadow: `0 0 10px ${P.redGlow}` }}
+                    <Fragment key={item.path}>
+                      <Link href={item.path} onClick={() => onMobileClose?.()}>
+                        <div
+                          className={cn(
+                            "group relative my-0.5 flex cursor-pointer items-center transition-all duration-200",
+                            collapsed
+                              ? "mx-2 justify-center rounded-xl px-0 py-2.5"
+                              : "mx-2 gap-2.5 rounded-xl px-3 py-2.5",
+                          )}
+                          title={collapsed ? item.sidebarLabel : undefined}
+                          style={
+                            isActive
+                              ? {
+                                  background:
+                                    "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(30,36,44,0.65) 100%)",
+                                  border: `1px solid rgba(255,255,255,0.14)`,
+                                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), 0 0 16px ${P.redGlow}`,
+                                }
+                              : { border: "1px solid transparent" }
+                          }
+                        >
+                          {isActive && (
+                            <div
+                              className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full"
+                              style={{ background: P.red, boxShadow: `0 0 10px ${P.redGlow}` }}
+                            />
+                          )}
+
+                          <item.Icon
+                            className={cn("shrink-0 transition-colors", collapsed ? "h-5 w-5" : "h-[15px] w-[15px]")}
+                            style={{ color: isActive ? P.red : P.textMuted }}
+                            strokeWidth={isActive ? 2.2 : 1.8}
                           />
-                        )}
 
-                        <item.Icon
-                          className={cn("shrink-0 transition-colors", collapsed ? "h-5 w-5" : "h-[15px] w-[15px]")}
-                          style={{ color: isActive ? P.red : P.textMuted }}
-                          strokeWidth={isActive ? 2.2 : 1.8}
-                        />
+                          {!collapsed && (
+                            <span
+                              className="flex-1 text-[11px] font-semibold leading-snug tracking-[0.02em] transition-colors"
+                              style={{
+                                fontFamily: "'Orbitron', system-ui, sans-serif",
+                                color: isActive ? P.text : P.textMuted,
+                                textShadow: isActive ? "0 1px 2px rgba(0,0,0,0.35)" : "none",
+                              }}
+                            >
+                              {item.sidebarLabel}
+                            </span>
+                          )}
 
-                        {!collapsed && (
-                          <span
-                            className="flex-1 text-[11px] font-semibold leading-snug tracking-[0.02em] transition-colors"
-                            style={{
-                              fontFamily: "'Orbitron', system-ui, sans-serif",
-                              color: isActive ? P.text : P.textMuted,
-                              textShadow: isActive ? "0 1px 2px rgba(0,0,0,0.35)" : "none",
-                            }}
-                          >
-                            {item.sidebarLabel}
-                          </span>
-                        )}
+                          {isActive && !collapsed && (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{ background: P.red, boxShadow: `0 0 8px ${P.redGlow}` }}
+                            />
+                          )}
 
-                        {isActive && !collapsed && (
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{ background: P.red, boxShadow: `0 0 8px ${P.redGlow}` }}
-                          />
-                        )}
-
-                        {!isActive && (
-                          <div
-                            className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                            style={{ background: "rgba(231,0,17,0.35)" }}
-                          />
-                        )}
-                      </div>
-                    </Link>
+                          {!isActive && (
+                            <div
+                              className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                              style={{ background: "rgba(231,0,17,0.35)" }}
+                            />
+                          )}
+                        </div>
+                      </Link>
+                      {item.path === "/settings" && role === "admin" ? (
+                        <CyrusCommandSidebarActivate collapsed={collapsed} />
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </div>
