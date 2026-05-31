@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { psharePosts, pshareComments, pshareLikes, onlineUsers } from "../../shared/schema";
+import {
+  enrichPsharePostEngagement,
+  PSHARE_REACTION_EMOJIS,
+  type PshareReactionEmoji,
+} from "../../shared/comms/pshare-engagement.js";
 import { eq, and, or, desc, asc, sql, inArray, count } from "drizzle-orm";
 
 const router = Router();
@@ -44,6 +49,30 @@ async function ensurePshareTables(): Promise<void> {
       PRIMARY KEY (post_id, user_id)
     )`));
   await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS pshare_posts_created_idx ON pshare_posts(created_at DESC)`));
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS pshare_reactions (
+      post_id varchar NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+      user_id varchar NOT NULL,
+      emoji varchar NOT NULL,
+      created_at timestamp NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    )`));
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS pshare_shares (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      post_id varchar NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+      user_id varchar NOT NULL,
+      created_at timestamp NOT NULL DEFAULT now()
+    )`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS pshare_shares_post_id_idx ON pshare_shares(post_id)`));
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS pshare_hypes (
+      post_id varchar NOT NULL REFERENCES pshare_posts(id) ON DELETE CASCADE,
+      user_id varchar NOT NULL,
+      created_at timestamp NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    )`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS pshare_hypes_created_idx ON pshare_hypes(created_at DESC)`));
   for (const alter of [
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS post_kind varchar NOT NULL DEFAULT 'general'`,
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS listing_title varchar`,
@@ -96,6 +125,188 @@ async function displayNameMap(userIds: string[]): Promise<Record<string, string>
   return m;
 }
 
+type EngagementMaps = {
+  likeByPost: Record<string, number>;
+  commentByPost: Record<string, number>;
+  shareByPost: Record<string, number>;
+  hypeByPost: Record<string, number>;
+  recentHypeByPost: Record<string, number>;
+  reactionByPost: Record<string, number>;
+  reactionSummaryByPost: Record<string, Record<string, number>>;
+  myLikes: Set<string>;
+  myHypes: Set<string>;
+  myReactions: Record<string, string>;
+};
+
+async function loadEngagementMaps(postIds: string[], userId: string): Promise<EngagementMaps> {
+  const empty: EngagementMaps = {
+    likeByPost: {},
+    commentByPost: {},
+    shareByPost: {},
+    hypeByPost: {},
+    recentHypeByPost: {},
+    reactionByPost: {},
+    reactionSummaryByPost: {},
+    myLikes: new Set(),
+    myHypes: new Set(),
+    myReactions: {},
+  };
+  if (!postIds.length) return empty;
+
+  const likeRows = await db
+    .select({ postId: pshareLikes.postId, c: count() })
+    .from(pshareLikes)
+    .where(inArray(pshareLikes.postId, postIds))
+    .groupBy(pshareLikes.postId);
+
+  const commentRows = await db
+    .select({ postId: pshareComments.postId, c: count() })
+    .from(pshareComments)
+    .where(inArray(pshareComments.postId, postIds))
+    .groupBy(pshareComments.postId);
+
+  const shareResult = await db.execute<{ post_id: string; c: string }>(sql.raw(`
+    SELECT post_id, COUNT(*)::int AS c FROM pshare_shares
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+    GROUP BY post_id
+  `));
+  const hypeResult = await db.execute<{ post_id: string; c: string }>(sql.raw(`
+    SELECT post_id, COUNT(*)::int AS c FROM pshare_hypes
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+    GROUP BY post_id
+  `));
+  const recentHypeResult = await db.execute<{ post_id: string; c: string }>(sql.raw(`
+    SELECT post_id, COUNT(*)::int AS c FROM pshare_hypes
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+      AND created_at > now() - interval '72 hours'
+    GROUP BY post_id
+  `));
+  const reactionCountResult = await db.execute<{ post_id: string; c: string }>(sql.raw(`
+    SELECT post_id, COUNT(*)::int AS c FROM pshare_reactions
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+    GROUP BY post_id
+  `));
+  const reactionRows = await db.execute<{ post_id: string; emoji: string; c: string }>(sql.raw(`
+    SELECT post_id, emoji, COUNT(*)::int AS c FROM pshare_reactions
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+    GROUP BY post_id, emoji
+  `));
+
+  const liked = await db
+    .select({ postId: pshareLikes.postId })
+    .from(pshareLikes)
+    .where(and(inArray(pshareLikes.postId, postIds), eq(pshareLikes.userId, userId)));
+
+  const hyped = await db.execute<{ post_id: string }>(sql.raw(`
+    SELECT post_id FROM pshare_hypes
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+      AND user_id = '${userId.replace(/'/g, "''")}'
+  `));
+  const myReactionRows = await db.execute<{ post_id: string; emoji: string }>(sql.raw(`
+    SELECT post_id, emoji FROM pshare_reactions
+    WHERE post_id IN (${postIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",")})
+      AND user_id = '${userId.replace(/'/g, "''")}'
+  `));
+
+  const likeByPost = Object.fromEntries(likeRows.map((x) => [x.postId, Number(x.c)]));
+  const commentByPost = Object.fromEntries(commentRows.map((x) => [x.postId, Number(x.c)]));
+  const shareByPost = Object.fromEntries(
+    (shareResult.rows as { post_id: string; c: string }[]).map((x) => [x.post_id, Number(x.c)]),
+  );
+  const hypeByPost = Object.fromEntries(
+    (hypeResult.rows as { post_id: string; c: string }[]).map((x) => [x.post_id, Number(x.c)]),
+  );
+  const recentHypeByPost = Object.fromEntries(
+    (recentHypeResult.rows as { post_id: string; c: string }[]).map((x) => [x.post_id, Number(x.c)]),
+  );
+  const reactionByPost = Object.fromEntries(
+    (reactionCountResult.rows as { post_id: string; c: string }[]).map((x) => [x.post_id, Number(x.c)]),
+  );
+  const reactionSummaryByPost: Record<string, Record<string, number>> = {};
+  for (const row of reactionRows.rows as { post_id: string; emoji: string; c: string }[]) {
+    if (!reactionSummaryByPost[row.post_id]) reactionSummaryByPost[row.post_id] = {};
+    reactionSummaryByPost[row.post_id][row.emoji] = Number(row.c);
+  }
+
+  const myLikes = new Set(liked.map((l) => l.postId));
+  const myHypes = new Set((hyped.rows as { post_id: string }[]).map((r) => r.post_id));
+  const myReactions: Record<string, string> = {};
+  for (const r of myReactionRows.rows as { post_id: string; emoji: string }[]) {
+    myReactions[r.post_id] = r.emoji;
+  }
+
+  return {
+    likeByPost,
+    commentByPost,
+    shareByPost,
+    hypeByPost,
+    recentHypeByPost,
+    reactionByPost,
+    reactionSummaryByPost,
+    myLikes,
+    myHypes,
+    myReactions,
+  };
+}
+
+function mapPostRow(
+  p: (typeof psharePosts.$inferSelect),
+  names: Record<string, string>,
+  maps: EngagementMaps,
+) {
+  const likeCount = maps.likeByPost[p.id] || 0;
+  const commentCount = maps.commentByPost[p.id] || 0;
+  const shareCount = maps.shareByPost[p.id] || 0;
+  const hypeCount = maps.hypeByPost[p.id] || 0;
+  const reactionCount = maps.reactionByPost[p.id] || 0;
+  const recentHypeCount = maps.recentHypeByPost[p.id] || 0;
+  const base = {
+    id: p.id,
+    authorId: p.authorId,
+    authorName: names[p.authorId] || p.authorId,
+    body: p.body,
+    linkUrl: p.linkUrl,
+    fileUrl: p.fileUrl,
+    fileName: p.fileName,
+    fileMimeType: p.fileMimeType,
+    postKind: p.postKind || "general",
+    listingTitle: p.listingTitle ?? null,
+    listingPrice: p.listingPrice ?? null,
+    listingCurrency: p.listingCurrency ?? null,
+    visibility: p.visibility,
+    allowComments: p.allowComments,
+    allowedUserIds: (p.allowedUserIds as string[]) || [],
+    createdAt: p.createdAt,
+    likeCount,
+    likedByMe: maps.myLikes.has(p.id),
+    commentCount,
+    shareCount,
+    hypeCount,
+    recentHypeCount,
+    reactionCount,
+    reactionSummary: maps.reactionSummaryByPost[p.id] || {},
+    myReaction: maps.myReactions[p.id] || null,
+    hypedByMe: maps.myHypes.has(p.id),
+  };
+  return enrichPsharePostEngagement(base, {
+    likeCount,
+    commentCount,
+    shareCount,
+    hypeCount,
+    reactionCount,
+    recentHypeCount,
+  });
+}
+
+async function assertPostVisible(postId: string, userId: string): Promise<boolean> {
+  const canSee = await db
+    .select({ id: psharePosts.id })
+    .from(psharePosts)
+    .where(and(eq(psharePosts.id, postId), visibleToUserSafe(userId)))
+    .limit(1);
+  return canSee.length > 0;
+}
+
 router.use(async (_req, res, next) => {
   try {
     await ensurePshareTables();
@@ -120,59 +331,15 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
       .limit(200);
 
     const ids = rows.map((r) => r.id);
-    let likeRows: { postId: string; c: number }[] = [];
-    let commentRows: { postId: string; c: number }[] = [];
-    const myLikes = new Set<string>();
-
-    if (ids.length) {
-      likeRows = await db
-        .select({ postId: pshareLikes.postId, c: count() })
-        .from(pshareLikes)
-        .where(inArray(pshareLikes.postId, ids))
-        .groupBy(pshareLikes.postId);
-
-      commentRows = await db
-        .select({ postId: pshareComments.postId, c: count() })
-        .from(pshareComments)
-        .where(inArray(pshareComments.postId, ids))
-        .groupBy(pshareComments.postId);
-
-      const liked = await db
-        .select({ postId: pshareLikes.postId })
-        .from(pshareLikes)
-        .where(and(inArray(pshareLikes.postId, ids), eq(pshareLikes.userId, userId)));
-      for (const l of liked) myLikes.add(l.postId);
-    }
-
-    const likeByPost = Object.fromEntries(likeRows.map((x) => [x.postId, Number(x.c)]));
-    const commentByPost = Object.fromEntries(commentRows.map((x) => [x.postId, Number(x.c)]));
-
+    const maps = await loadEngagementMaps(ids, userId);
     const authorIds = rows.map((r) => r.authorId);
     const names = await displayNameMap(authorIds);
 
-    res.json({
-      posts: rows.map((p) => ({
-        id: p.id,
-        authorId: p.authorId,
-        authorName: names[p.authorId] || p.authorId,
-        body: p.body,
-        linkUrl: p.linkUrl,
-        fileUrl: p.fileUrl,
-        fileName: p.fileName,
-        fileMimeType: p.fileMimeType,
-        postKind: p.postKind || "general",
-        listingTitle: p.listingTitle ?? null,
-        listingPrice: p.listingPrice ?? null,
-        listingCurrency: p.listingCurrency ?? null,
-        visibility: p.visibility,
-        allowComments: p.allowComments,
-        allowedUserIds: (p.allowedUserIds as string[]) || [],
-        createdAt: p.createdAt,
-        likeCount: likeByPost[p.id] || 0,
-        likedByMe: myLikes.has(p.id),
-        commentCount: commentByPost[p.id] || 0,
-      })),
-    });
+    const posts = rows
+      .map((p) => mapPostRow(p, names, maps))
+      .sort((a, b) => b.trendScore - a.trendScore || Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
+
+    res.json({ posts });
   } catch (e: any) {
     console.error("[Pshare] list posts:", e);
     res.status(500).json({ error: "Failed to load posts" });
@@ -199,37 +366,8 @@ router.get("/api/comms/pshare/posts/:id", async (req: any, res) => {
       return res.status(404).json({ error: "Not found" });
     }
     const names = await displayNameMap([row.authorId]);
-    const [lc] = await db
-      .select({ c: count() })
-      .from(pshareLikes)
-      .where(eq(pshareLikes.postId, id));
-    const [meL] = await db
-      .select()
-      .from(pshareLikes)
-      .where(and(eq(pshareLikes.postId, id), eq(pshareLikes.userId, userId)))
-      .limit(1);
-    res.json({
-      post: {
-        id: row.id,
-        authorId: row.authorId,
-        authorName: names[row.authorId] || row.authorId,
-        body: row.body,
-        linkUrl: row.linkUrl,
-        fileUrl: row.fileUrl,
-        fileName: row.fileName,
-        fileMimeType: row.fileMimeType,
-        postKind: row.postKind || "general",
-        listingTitle: row.listingTitle ?? null,
-        listingPrice: row.listingPrice ?? null,
-        listingCurrency: row.listingCurrency ?? null,
-        visibility: row.visibility,
-        allowComments: row.allowComments,
-        allowedUserIds: (row.allowedUserIds as string[]) || [],
-        createdAt: row.createdAt,
-        likeCount: Number(lc?.c || 0),
-        likedByMe: !!meL,
-      },
-    });
+    const maps = await loadEngagementMaps([id], userId);
+    res.json({ post: mapPostRow(row, names, maps) });
   } catch (e: any) {
     console.error("[Pshare] get post:", e);
     res.status(500).json({ error: "Failed to load post" });
@@ -304,29 +442,8 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
       .returning();
 
     const names = await displayNameMap([userId]);
-    res.json({
-      post: {
-        id: inserted.id,
-        authorId: inserted.authorId,
-        authorName: names[inserted.authorId] || inserted.authorId,
-        body: inserted.body,
-        linkUrl: inserted.linkUrl,
-        fileUrl: inserted.fileUrl,
-        fileName: inserted.fileName,
-        fileMimeType: inserted.fileMimeType,
-        postKind: inserted.postKind || "general",
-        listingTitle: inserted.listingTitle ?? null,
-        listingPrice: inserted.listingPrice ?? null,
-        listingCurrency: inserted.listingCurrency ?? null,
-        visibility: inserted.visibility,
-        allowComments: inserted.allowComments,
-        allowedUserIds: (inserted.allowedUserIds as string[]) || [],
-        createdAt: inserted.createdAt,
-        likeCount: 0,
-        likedByMe: false,
-        commentCount: 0,
-      },
-    });
+    const maps = await loadEngagementMaps([inserted.id], userId);
+    res.json({ post: mapPostRow(inserted, names, maps) });
   } catch (e: any) {
     console.error("[Pshare] create post:", e);
     res.status(500).json({ error: "Failed to create post" });
@@ -445,12 +562,7 @@ router.post("/api/comms/pshare/posts/:id/like", async (req: any, res) => {
   }
   const { id } = req.params;
   try {
-    const canSee = await db
-      .select()
-      .from(psharePosts)
-      .where(and(eq(psharePosts.id, id), visibleToUserSafe(userId)))
-      .limit(1);
-    if (!canSee.length) {
+    if (!(await assertPostVisible(id, userId))) {
       return res.status(404).json({ error: "Not found" });
     }
     const existing = await db
@@ -463,15 +575,149 @@ router.post("/api/comms/pshare/posts/:id/like", async (req: any, res) => {
     } else {
       await db.insert(pshareLikes).values({ postId: id, userId });
     }
-    const [lc] = await db
-      .select({ c: count() })
-      .from(pshareLikes)
-      .where(eq(pshareLikes.postId, id));
+    const maps = await loadEngagementMaps([id], userId);
     const liked = !existing.length;
-    res.json({ liked, likeCount: Number(lc?.c || 0) });
+    res.json({
+      liked,
+      likeCount: maps.likeByPost[id] || 0,
+      diamondGrade: computeDiamondForPost(id, maps),
+    });
   } catch (e: any) {
     console.error("[Pshare] like:", e);
     res.status(500).json({ error: "Failed to update like" });
+  }
+});
+
+function computeDiamondForPost(postId: string, maps: EngagementMaps) {
+  return enrichPsharePostEngagement(
+    { createdAt: new Date() },
+    {
+      likeCount: maps.likeByPost[postId] || 0,
+      commentCount: maps.commentByPost[postId] || 0,
+      shareCount: maps.shareByPost[postId] || 0,
+      hypeCount: maps.hypeByPost[postId] || 0,
+      reactionCount: maps.reactionByPost[postId] || 0,
+      recentHypeCount: maps.recentHypeByPost[postId] || 0,
+    },
+  ).diamondGrade;
+}
+
+router.post("/api/comms/pshare/posts/:id/reaction", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const { id } = req.params;
+  const emoji = String(req.body?.emoji || "").trim();
+  if (!PSHARE_REACTION_EMOJIS.includes(emoji as PshareReactionEmoji)) {
+    return res.status(400).json({ error: "Invalid reaction emoji" });
+  }
+  try {
+    if (!(await assertPostVisible(id, userId))) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = await db.execute<{ emoji: string }>(sql.raw(`
+      SELECT emoji FROM pshare_reactions
+      WHERE post_id = '${id.replace(/'/g, "''")}' AND user_id = '${userId.replace(/'/g, "''")}'
+      LIMIT 1
+    `));
+    const prev = (existing.rows[0] as { emoji: string } | undefined)?.emoji;
+    if (prev === emoji) {
+      await db.execute(sql.raw(`
+        DELETE FROM pshare_reactions
+        WHERE post_id = '${id.replace(/'/g, "''")}' AND user_id = '${userId.replace(/'/g, "''")}'
+      `));
+    } else if (prev) {
+      await db.execute(sql.raw(`
+        UPDATE pshare_reactions SET emoji = '${emoji.replace(/'/g, "''")}', created_at = now()
+        WHERE post_id = '${id.replace(/'/g, "''")}' AND user_id = '${userId.replace(/'/g, "''")}'
+      `));
+    } else {
+      await db.execute(sql.raw(`
+        INSERT INTO pshare_reactions (post_id, user_id, emoji)
+        VALUES ('${id.replace(/'/g, "''")}', '${userId.replace(/'/g, "''")}', '${emoji.replace(/'/g, "''")}')
+      `));
+    }
+    const maps = await loadEngagementMaps([id], userId);
+    res.json({
+      myReaction: maps.myReactions[id] || null,
+      reactionSummary: maps.reactionSummaryByPost[id] || {},
+      reactionCount: maps.reactionByPost[id] || 0,
+      diamondGrade: computeDiamondForPost(id, maps),
+    });
+  } catch (e: any) {
+    console.error("[Pshare] reaction:", e);
+    res.status(500).json({ error: "Failed to update reaction" });
+  }
+});
+
+router.post("/api/comms/pshare/posts/:id/share", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const { id } = req.params;
+  try {
+    if (!(await assertPostVisible(id, userId))) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    await db.execute(sql.raw(`
+      INSERT INTO pshare_shares (post_id, user_id)
+      VALUES ('${id.replace(/'/g, "''")}', '${userId.replace(/'/g, "''")}')
+    `));
+    const maps = await loadEngagementMaps([id], userId);
+    res.json({
+      shareCount: maps.shareByPost[id] || 0,
+      diamondGrade: computeDiamondForPost(id, maps),
+    });
+  } catch (e: any) {
+    console.error("[Pshare] share:", e);
+    res.status(500).json({ error: "Failed to record share" });
+  }
+});
+
+router.post("/api/comms/pshare/posts/:id/hype", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const { id } = req.params;
+  try {
+    if (!(await assertPostVisible(id, userId))) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = await db.execute(sql.raw(`
+      SELECT 1 FROM pshare_hypes
+      WHERE post_id = '${id.replace(/'/g, "''")}' AND user_id = '${userId.replace(/'/g, "''")}'
+      LIMIT 1
+    `));
+    const had = existing.rows.length > 0;
+    if (had) {
+      await db.execute(sql.raw(`
+        DELETE FROM pshare_hypes
+        WHERE post_id = '${id.replace(/'/g, "''")}' AND user_id = '${userId.replace(/'/g, "''")}'
+      `));
+    } else {
+      await db.execute(sql.raw(`
+        INSERT INTO pshare_hypes (post_id, user_id)
+        VALUES ('${id.replace(/'/g, "''")}', '${userId.replace(/'/g, "''")}')
+      `));
+    }
+    const maps = await loadEngagementMaps([id], userId);
+    res.json({
+      hyped: !had,
+      hypeCount: maps.hypeByPost[id] || 0,
+      recentHypeCount: maps.recentHypeByPost[id] || 0,
+      isTrending: enrichPsharePostEngagement(
+        { createdAt: new Date() },
+        {
+          likeCount: maps.likeByPost[id] || 0,
+          commentCount: maps.commentByPost[id] || 0,
+          shareCount: maps.shareByPost[id] || 0,
+          hypeCount: maps.hypeByPost[id] || 0,
+          reactionCount: maps.reactionByPost[id] || 0,
+          recentHypeCount: maps.recentHypeByPost[id] || 0,
+        },
+      ).isTrending,
+      diamondGrade: computeDiamondForPost(id, maps),
+    });
+  } catch (e: any) {
+    console.error("[Pshare] hype:", e);
+    res.status(500).json({ error: "Failed to update hype" });
   }
 });
 

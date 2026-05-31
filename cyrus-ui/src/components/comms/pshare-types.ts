@@ -1,4 +1,6 @@
 /** Pshare post shape from `/api/comms/pshare/posts`. */
+import type { PshareDiamondGrade } from "@shared/comms/pshare-engagement";
+
 export type PsharePost = {
   id: string;
   authorId?: string;
@@ -10,8 +12,29 @@ export type PsharePost = {
   fileMimeType?: string | null;
   postKind?: string;
   createdAt?: string | null;
+  allowComments?: boolean;
   likeCount?: number;
+  likedByMe?: boolean;
   commentCount?: number;
+  shareCount?: number;
+  hypeCount?: number;
+  recentHypeCount?: number;
+  reactionCount?: number;
+  reactionSummary?: Record<string, number>;
+  myReaction?: string | null;
+  hypedByMe?: boolean;
+  trendScore?: number;
+  diamondGrade?: PshareDiamondGrade;
+  diamondTier?: string;
+  isTrending?: boolean;
+};
+
+export type PshareComment = {
+  id: string;
+  authorId?: string;
+  authorName?: string;
+  body: string;
+  createdAt?: string | null;
 };
 
 export type PsharePendingMedia = {

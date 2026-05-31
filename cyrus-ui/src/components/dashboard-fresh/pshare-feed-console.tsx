@@ -14,19 +14,8 @@ import {
   detectPshareMediaKind,
   resolvePshareMediaUrl,
 } from "../../../../client/src/lib/pshare-utils";
-import { PshareMediaPreview } from "@/components/comms/pshare-media-preview";
+import { PsharePostCard } from "@/components/comms/pshare-post-card";
 import type { PsharePendingMedia, PsharePost } from "@/components/comms/pshare-types";
-
-function timeAgo(iso?: string): string {
-  if (!iso) return "now";
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms) || ms < 60_000) return "now";
-  const m = Math.floor(ms / 60_000);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
 
 function resolveMyUserId(): string {
   try {
@@ -290,31 +279,13 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <p className="text-xs text-amber-200/80">Pshare feed unavailable right now.</p>
       ) : posts.length === 0 ? (
         <p className="text-xs text-white/55">No Pshare posts yet. Share text or media to publish the first update.</p>
-      ) : (
-        <article
-          className="relative min-h-[8.4rem] overflow-hidden rounded-xl border border-white/12 bg-gradient-to-b from-slate-700/45 via-slate-900/65 to-slate-950/82 p-3 shadow-[0_10px_22px_rgba(0,0,0,0.3)] cyrus-xs-pshare-item transition-opacity duration-200"
+      ) : activePost ? (
+        <div
+          className="transition-opacity duration-200 cyrus-xs-pshare-item"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
         >
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] font-semibold text-white/95">
-              {activePost?.authorName || "Operator"}
-            </span>
-            <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-white/45">
-              {timeAgo(activePost?.createdAt ?? undefined)}
-            </span>
-          </div>
-          {activePost?.body?.trim() && (
-            <p className="line-clamp-3 text-xs leading-relaxed text-slate-100/80">{activePost.body}</p>
-          )}
-          {activePost?.fileUrl && (
-            <div className="mt-2">
-              <PshareMediaPreview post={activePost} variant="console" />
-            </div>
-          )}
-          {!activePost?.body?.trim() && !activePost?.fileUrl && (
-            <p className="text-xs text-white/45">Shared update</p>
-          )}
+          <PsharePostCard post={activePost} myUserId={myUserId} variant="console" />
           {posts.length > 1 && (
             <div className="mt-2.5 flex items-center gap-1.5">
               {posts.map((post, i) => (
@@ -328,13 +299,13 @@ export function PshareFeedConsole({ className }: { className?: string }) {
                     background: i === activeIndex ? "rgba(125,211,252,0.9)" : "rgba(255,255,255,0.22)",
                   }}
                   aria-label={`Show Pshare story ${i + 1}`}
-                  title={`Story ${i + 1}${post.fileUrl ? " · media" : ""}`}
+                  title={`Story ${i + 1}${post.diamondGrade ? ` · ${post.diamondGrade}◆` : ""}${post.isTrending ? " · trending" : ""}`}
                 />
               ))}
             </div>
           )}
-        </article>
-      )}
+        </div>
+      ) : null}
     </section>
   );
 }
