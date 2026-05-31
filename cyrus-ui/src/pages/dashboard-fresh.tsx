@@ -211,7 +211,7 @@ export default function DashboardFresh() {
         )}
       </main>
 
-        <DashboardCommandSideRail pageContext="Command Center — home / module workspace" />
+        <DashboardCommandSideRail />
       </div>
     </div>
   );

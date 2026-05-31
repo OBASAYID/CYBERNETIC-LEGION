@@ -1,55 +1,13 @@
-import { useState } from "react";
 import { Link } from "wouter";
-import { Activity, Radio, Share2, Terminal, Users } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Activity, Radio, Share2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ModuleCommandConsole } from "./module-command-console";
 
 const sideIconClass =
   "group relative w-full overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm transition hover:border-white/22 hover:bg-gradient-to-b hover:from-slate-700/62 hover:via-slate-900/78 hover:to-slate-950/88 touch-manipulation";
 
-export function CommandConsolePopup({
-  open,
-  onOpenChange,
-  pageContext,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  pageContext: string;
-}) {
+/** Fixed side rail: Pshare quick launch (CYRUS Command lives under System Settings). */
+export function DashboardCommandSideRail({ className }: { className?: string }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(
-          "max-h-[min(92vh,calc(44rem*var(--cyrus-ui-width-scale)))] w-full max-w-cyrus-console gap-0 overflow-hidden border-white/12 bg-slate-950/95 p-2 sm:p-3",
-          "[&>button:last-of-type]:right-3 [&>button:last-of-type]:top-3 [&>button:last-of-type]:text-white/70 [&>button:last-of-type]:hover:text-white",
-        )}
-        aria-describedby={undefined}
-      >
-        <ModuleCommandConsole
-          pageContext={pageContext}
-          className="max-h-[min(85vh,40rem)] min-h-[20rem] shadow-none"
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Fixed side rail: Pshare link, then CYRUS command popup trigger below. */
-export function DashboardCommandSideRail({
-  pageContext,
-  className,
-}: {
-  pageContext: string;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
       <aside
         className={cn(
           "fixed top-1/2 z-40 w-[15rem] -translate-y-1/2 cyrus-rail-inset-right",
@@ -92,29 +50,8 @@ export function DashboardCommandSideRail({
                 </div>
               </button>
             </Link>
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className={sideIconClass}
-              aria-label="Open CYRUS command console"
-              title="CYRUS command"
-            >
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-slate-100 text-slate-900">
-                  <Terminal className="h-4 w-4" strokeWidth={1.85} />
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-xs font-semibold text-white/95">CYRUS Command</p>
-                  <p className="text-[10px] text-slate-200/78">Launch AI console</p>
-                  <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">Standby</p>
-                </div>
-                <Activity className="h-3.5 w-3.5 text-slate-300/65" aria-hidden />
-              </div>
-            </button>
           </div>
         </div>
       </aside>
-      <CommandConsolePopup open={open} onOpenChange={setOpen} pageContext={pageContext} />
-    </>
   );
 }
