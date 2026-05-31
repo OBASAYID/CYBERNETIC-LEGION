@@ -10,7 +10,6 @@ import { PasswordGate, type GateProfile, readStoredDisplayName } from "@/compone
 import { useAuthSession } from "@/hooks/use-auth-session";
 import { clearGateDraft, readGateDraft, writeGateDraft } from "@/lib/auth-storage";
 import { AppRoutes } from "./app-routes";
-import { isCommsCallRoute } from "@/lib/comms-route-utils";
 import { ArrowLeft, Menu } from "lucide-react";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { useApiKey } from "@/hooks/use-api-key";
@@ -20,7 +19,7 @@ import { GameSidebar } from "@/components/game-sidebar";
 
 function ReturnHomeButton() {
   const [location] = useLocation();
-  if (location === "/" || isCommsCallRoute(location)) return null;
+  if (location === "/") return null;
 
   return (
     <div className="fixed left-0 top-0 z-[100] cyrus-safe-left cyrus-safe-top">
@@ -39,8 +38,6 @@ function ReturnHomeButton() {
 }
 
 function App() {
-  const [location] = useLocation();
-  const callFocusMode = isCommsCallRoute(location);
   const { isAuthenticated, onAuthenticated } = useAuthSession();
   /** Lifted from `PasswordGate`; `sessionStorage` survives full `App` remounts (HMR) in the same tab. */
   const [gateUsername, setGateUsername] = useState(
@@ -109,14 +106,14 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
-  const sidebarW = callFocusMode || isMobile ? "0px" : sidebarCollapsed ? "72px" : "clamp(12.5rem, 16vw, 15rem)";
+  const sidebarW = isMobile ? "0px" : sidebarCollapsed ? "72px" : "clamp(12.5rem, 16vw, 15rem)";
 
   return (
     <ThemeProvider>
       <AppErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <div className="relative isolate min-h-screen min-h-dvh overflow-x-hidden bg-black text-white cyrus-xs-shell">
-            {!callFocusMode && <AtmosphericSmokeBackground />}
+            <AtmosphericSmokeBackground />
             <div className="relative z-10 min-h-screen min-h-dvh">
               <ReturnHomeButton />
               {!isAuthenticated ? (
@@ -136,18 +133,16 @@ function App() {
                 <TooltipProvider>
                   <Toaster />
                   <AppErrorBoundary>
-                    <div data-cyrus-call-stack={callFocusMode ? "call-only" : "presence-only"}>
-                      {!callFocusMode && (
-                        <GameSidebar
-                          collapsed={sidebarCollapsed}
-                          onToggle={() => setSidebarCollapsed((v) => !v)}
-                          displayName={displayName}
-                          mobileOpen={mobileSidebarOpen}
-                          onMobileClose={() => setMobileSidebarOpen(false)}
-                        />
-                      )}
+                    <div data-cyrus-call-stack="presence-only">
+                      <GameSidebar
+                        collapsed={sidebarCollapsed}
+                        onToggle={() => setSidebarCollapsed((v) => !v)}
+                        displayName={displayName}
+                        mobileOpen={mobileSidebarOpen}
+                        onMobileClose={() => setMobileSidebarOpen(false)}
+                      />
 
-                      {!callFocusMode && isMobile && !mobileSidebarOpen && (
+                      {isMobile && !mobileSidebarOpen && (
                         <button
                           type="button"
                           onClick={() => setMobileSidebarOpen(true)}
@@ -158,29 +153,18 @@ function App() {
                         </button>
                       )}
 
-                      <div
-                        className="relative z-10 min-h-screen transition-all duration-300"
-                        style={{ marginLeft: sidebarW }}
-                      >
-                        <div
-                          className={`relative min-h-dvh w-full max-w-cyrus-shell cyrus-xs-shell-inner ${
-                            callFocusMode ? "pl-0 pr-0" : "pl-0 pr-1 sm:pr-2"
-                          }`}
-                        >
+                      <div className="relative z-10 min-h-screen transition-all duration-300" style={{ marginLeft: sidebarW }}>
+                        <div className="relative min-h-dvh w-full max-w-cyrus-shell pl-0 pr-1 sm:pr-2 cyrus-xs-shell-inner">
                           <AppRoutes
-                            onOpenApiKeyModal={
-                              callFocusMode ? undefined : () => setApiKeyModalOpen(true)
-                            }
+                            onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
                             apiKeyConfigured={apiKeyConfigured}
                           />
                         </div>
                       </div>
                     </div>
                   </AppErrorBoundary>
-                  {!callFocusMode && <PwaInstallPrompt />}
-                  {!callFocusMode && (
-                    <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
-                  )}
+                  <PwaInstallPrompt />
+                  <ApiKeyModal open={apiKeyModalOpen} onOpenChange={setApiKeyModalOpen} />
                 </TooltipProvider>
               )}
             </div>
