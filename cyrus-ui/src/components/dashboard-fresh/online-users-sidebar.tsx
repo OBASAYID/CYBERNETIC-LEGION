@@ -4,6 +4,7 @@ import { Activity, Phone, Radio, Users } from "lucide-react";
 import { Link } from "wouter";
 import { usePresence } from "../../../../client/src/contexts/PresenceContext";
 import { systemFetch } from "@/lib/system-api";
+import { cn } from "@/lib/utils";
 
 type OnlineUser = {
   id: string;
@@ -50,7 +51,11 @@ function seenAgo(iso?: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
-export function OnlineUsersSidebar() {
+type OnlineUsersSidebarProps = {
+  className?: string;
+};
+
+export function OnlineUsersSidebar({ className }: OnlineUsersSidebarProps) {
   const { onlineUsers, isConnected } = usePresence();
 
   const usersQuery = useQuery<OnlineUser[]>({
@@ -111,13 +116,16 @@ export function OnlineUsersSidebar() {
 
   return (
     <aside
-      className="relative h-full min-h-[26rem] overflow-hidden rounded-3xl border border-white/14 bg-gradient-to-b from-slate-700/62 via-slate-900/78 to-slate-950/86 p-3.5 shadow-[0_20px_46px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+      className={cn(
+        "relative flex h-full min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-[#070b12]/98 via-[#05080d]/99 to-black/95 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_22px_46px_rgba(0,0,0,0.52)] backdrop-blur-xl cyrus-xs-live-panel-sidebar",
+        className,
+      )}
       aria-label="Online users sidebar"
     >
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
-      <div className="pointer-events-none absolute -left-8 bottom-8 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
-      <div className="mb-2.5 flex items-center justify-between border-b border-white/10 pb-2.5">
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
+      <div className="pointer-events-none absolute -left-8 bottom-8 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="mb-2.5 flex shrink-0 items-center justify-between border-b border-white/10 pb-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/12">
             <Users className="h-4 w-4 text-sky-300" aria-hidden />
@@ -138,9 +146,9 @@ export function OnlineUsersSidebar() {
       ) : users.length === 0 ? (
         <p className="px-1 text-xs text-white/45">No active operators yet.</p>
       ) : (
-        <div className="max-h-[min(66vh,34rem)] space-y-2 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {users.map((u) => (
-            <div key={u.id} className="rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm">
+            <div key={u.id} className="rounded-xl border border-white/10 bg-gradient-to-b from-[#0c1018]/92 via-[#080b10]/96 to-black/90 px-3 py-2.5 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45)]">
               <div className="flex items-center gap-2">
               <div className="relative">
                 <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-slate-100 text-[11px] font-semibold text-slate-900">
