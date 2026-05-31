@@ -17,14 +17,7 @@ import { OnlineUsersSidebar } from "@/components/dashboard-fresh/online-users-si
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
 import { useUserRole } from "@/hooks/use-user-role";
-import {
-  MODULE_RIBBON_LIGHT_URL,
-  TSODILO_CAVE_DANCE_URL,
-  TSODILO_HILLS_SIGNS_URL,
-  TSODILO_MARKINGS_CANVAS_URL,
-  TSODILO_ROCK_ART_WALL_URL,
-  TSODILO_SYMBOLS_STELE_URL,
-} from "@/lib/dashboard-backdrop";
+import { TSODILO_SYMBOLS_STELE_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
 
 export default function DashboardFresh() {
@@ -57,49 +50,7 @@ export default function DashboardFresh() {
   };
 
   return (
-    <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-white text-white">
-      {/* Crack + smoke: global `AtmosphericSmokeBackground`; warm ribbon-style module lighting */}
-      <div className="pointer-events-none fixed inset-0 bg-white" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-slate-100/65 via-white/90 to-slate-100/55" />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_78%_52%_at_50%_-8%,rgba(148,163,184,0.2),rgba(226,232,240,0.2)_44%,transparent_62%)]" />
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.09] mix-blend-multiply"
-        style={{ backgroundImage: `url(${TSODILO_ROCK_ART_WALL_URL})` }}
-      />
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.11] mix-blend-multiply"
-        style={{ backgroundImage: `url(${TSODILO_HILLS_SIGNS_URL})` }}
-      />
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.08] mix-blend-multiply"
-        style={{ backgroundImage: `url(${TSODILO_CAVE_DANCE_URL})` }}
-      />
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.07] mix-blend-multiply"
-        style={{ backgroundImage: `url(${TSODILO_MARKINGS_CANVAS_URL})` }}
-      />
-      <div
-        className="pointer-events-none fixed inset-0 bg-cover bg-center opacity-[0.06] mix-blend-multiply"
-        style={{ backgroundImage: `url(${TSODILO_SYMBOLS_STELE_URL})` }}
-      />
-      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep mix-blend-multiply opacity-20" />
-      <div className="pointer-events-none fixed inset-0 cyrus-ceremonial-sweep-soft mix-blend-multiply opacity-16" />
-      <div className="pointer-events-none fixed inset-0">
-        <div
-          className="cyrus-smoke-animated cyrus-ribbon-float absolute left-1/2 top-[44%] h-[70vh] w-[32vw] min-w-[250px] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.18] mix-blend-screen"
-          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(0.8px)" }}
-        />
-        <div
-          className="cyrus-smoke-animated cyrus-ribbon-float-soft absolute left-1/2 top-[46%] h-[84vh] w-[40vw] min-w-[300px] max-w-[660px] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.12] mix-blend-soft-light"
-          style={{ backgroundImage: `url(${MODULE_RIBBON_LIGHT_URL})`, filter: "blur(3.2px) brightness(0.95)" }}
-        />
-        <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
-        <div className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-slate-400/30 to-transparent" />
-        <div className="absolute left-1/2 top-[8%] h-[min(92vw,540px)] w-[min(92vw,700px)] -translate-x-1/2 rounded-full bg-slate-300/[0.08] blur-3xl" />
-        <div className="absolute left-[46%] top-[20%] h-[min(76vw,420px)] w-[min(42vw,230px)] -translate-x-1/2 rounded-[45%] bg-[radial-gradient(ellipse_at_50%_20%,rgba(186,230,253,0.18),rgba(51,65,85,0.08)_56%,transparent_78%)] blur-2xl" />
-        <div className="absolute bottom-[16%] right-[18%] h-[min(74vw,390px)] w-[min(74vw,390px)] rounded-full bg-slate-300/[0.06] blur-3xl" />
-        <div className="absolute bottom-[10%] left-[14%] h-[min(66vw,330px)] w-[min(66vw,330px)] rounded-full bg-slate-600/[0.08] blur-3xl" />
-      </div>
+    <div className="relative min-h-screen min-h-dvh overflow-x-hidden bg-white text-slate-900">
       <div className="relative z-10">
         <header className="relative sticky top-0 z-30 overflow-hidden border-b border-white/12 bg-slate-950/62 shadow-[0_8px_44px_-12px_rgba(0,0,0,0.58)] backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.22]" />
