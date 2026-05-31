@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { type CSSProperties } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, ChevronRight, LogOut, Zap, Activity } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMMAND_CENTER_NAV } from "@/config/command-center-nav";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import { useUserRole } from "@/hooks/use-user-role";
+import { CyrusSidebarBrand } from "@/components/cyrus-sidebar-brand";
 
 interface GameSidebarProps {
   collapsed: boolean;
@@ -14,12 +15,37 @@ interface GameSidebarProps {
   onMobileClose?: () => void;
 }
 
+/** Platinum silver-grey module rail — brushed metal + fine grain texture */
+const P = {
+  red: "#E70011",
+  redDim: "#B8000E",
+  redGlow: "rgba(231,0,17,0.42)",
+  platinumLight: "#E4E8ED",
+  platinumMid: "#B8BEC6",
+  platinumDark: "#8B939C",
+  charcoal: "#1C2128",
+  text: "#14181E",
+  textMuted: "rgba(20,24,30,0.62)",
+  border: "rgba(255,255,255,0.38)",
+  borderDark: "rgba(0,0,0,0.12)",
+} as const;
+
+const PLATINUM_SIDEBAR: CSSProperties = {
+  backgroundColor: P.platinumMid,
+  backgroundImage: [
+    "linear-gradient(168deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 38%)",
+    "linear-gradient(195deg, #D8DCE2 0%, #B0B7C0 42%, #949CA6 100%)",
+    "repeating-linear-gradient(90deg, transparent 0px, transparent 3px, rgba(255,255,255,0.04) 3px, rgba(0,0,0,0.025) 4px)",
+    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E\")",
+  ].join(", "),
+};
+
 const NAV_GROUPS = [
-  { label: "CORE",        paths: ["/"] },
+  { label: "CORE", paths: ["/"] },
   { label: "INTELLIGENCE", paths: ["/intelligence", "/files", "/scan", "/document-builder", "/algorithms"] },
-  { label: "COMMS",       paths: ["/comms"] },
-  { label: "SYSTEMS",     paths: ["/modules", "/device", "/medical", "/quantum", "/ops"] },
-  { label: "ADMIN",       paths: ["/settings"] },
+  { label: "COMMS", paths: ["/comms"] },
+  { label: "SYSTEMS", paths: ["/modules", "/device", "/medical", "/quantum", "/ops"] },
+  { label: "ADMIN", paths: ["/settings"] },
 ];
 
 export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMobileClose }: GameSidebarProps) {
@@ -35,281 +61,282 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
 
   return (
     <>
-      {/* Mobile backdrop — tap to close */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-[99] md:hidden"
-          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(3px)" }}
           onClick={onMobileClose}
           aria-hidden="true"
         />
       )}
 
-    <aside
-      className={cn(
-        "fixed left-0 top-0 h-screen z-[100] flex flex-col select-none",
-        "transition-all duration-300 ease-in-out overflow-hidden",
-        collapsed ? "w-[72px]" : "w-[240px]",
-        /* Mobile: slide off-screen unless mobileOpen; desktop: always visible */
-        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-      )}
-      style={{
-        background: "linear-gradient(175deg, #111826 0%, #0d1522 45%, #0b121d 100%)",
-        borderRight: "1px solid rgba(255,255,255,0.12)",
-        boxShadow: "4px 0 34px rgba(0,0,0,0.38), 1px 0 0 rgba(255,255,255,0.05)",
-      }}
-    >
-      {/* ── Soft ambient glow ── */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 80% 50% at 0% 30%, rgba(148,163,184,0.12) 0%, transparent 65%)" }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: "radial-gradient(ellipse 60% 40% at 100% 80%, rgba(30,64,175,0.08) 0%, transparent 70%)" }}
-      />
-
-      {/* ── Scanlines ── */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.014]"
-        style={{ backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,1) 0px, rgba(255,255,255,1) 1px, transparent 1px, transparent 4px)" }}
-      />
-
-      {/* ── Right accent line ── */}
-      <div
-        className="pointer-events-none absolute top-0 right-0 bottom-0 w-[1.5px]"
-        style={{ background: "linear-gradient(180deg, transparent 0%, rgba(147,197,253,0.45) 20%, rgba(148,163,184,0.28) 60%, transparent 100%)" }}
-      />
-
-      {/* ── Top accent bar ── */}
-      <div
-        className="pointer-events-none absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: "linear-gradient(90deg, rgba(148,163,184,0.65) 0%, rgba(125,211,252,0.35) 60%, transparent 100%)" }}
-      />
-
-      {/* ══ BRAND ════════════════════════════════════════════════════ */}
-      <div
+      <aside
         className={cn(
-          "relative flex items-center shrink-0 border-b",
-          collapsed ? "px-4 py-5 justify-center" : "px-5 py-5 gap-3",
+          "fixed left-0 top-0 z-[100] flex h-screen flex-col overflow-hidden select-none",
+          "transition-all duration-300 ease-in-out",
+          collapsed ? "w-[76px]" : "w-[272px]",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
-        style={{ borderColor: "rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)" }}
+        style={{
+          ...PLATINUM_SIDEBAR,
+          borderRight: `1px solid ${P.borderDark}`,
+          boxShadow: "4px 0 28px rgba(0,0,0,0.22), inset -1px 0 0 rgba(255,255,255,0.35)",
+        }}
       >
-        {/* Icon */}
-        <div className="relative shrink-0 flex h-9 w-9 items-center justify-center rounded-xl"
+        {/* Brushed highlight sweep */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
           style={{
-            background: "linear-gradient(135deg, rgba(148,163,184,0.22), rgba(30,41,59,0.42))",
-            border: "1px solid rgba(226,232,240,0.35)",
-            boxShadow: "0 0 16px rgba(148,163,184,0.22), inset 0 1px 0 rgba(255,255,255,0.07)",
-          }}>
-          <Zap className="h-4 w-4 text-slate-200" />
-          <div className="absolute -top-px -left-px w-3 h-3 border-l border-t border-white/45 rounded-tl-lg" />
-          <div className="absolute -bottom-px -right-px w-3 h-3 border-r border-b border-white/35 rounded-br-lg" />
-        </div>
+            background:
+              "linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.22) 22%, transparent 44%)",
+          }}
+          aria-hidden
+        />
 
-        {!collapsed && (
-          <div className="min-w-0 flex-1">
-            <span
-              className="block text-[18px] font-black tracking-[0.25em] text-white leading-none"
-              style={{ fontFamily: "'Orbitron', system-ui", textShadow: "0 0 16px rgba(125,211,252,0.25)" }}
-            >
-              CYRUS
-            </span>
-            <div className="flex items-center gap-1.5 mt-1">
-                <span className="h-1 w-1 rounded-full bg-sky-300 animate-pulse shadow-[0_0_6px_rgba(125,211,252,0.8)]" />
-                <span className="text-[8px] text-slate-300/80 tracking-[0.4em] font-black font-mono uppercase">
-                v3.0 OMEGA
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+        {/* Right edge bevel */}
+        <div
+          className="pointer-events-none absolute bottom-0 right-0 top-0 w-px"
+          style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.55), rgba(0,0,0,0.08))" }}
+          aria-hidden
+        />
 
-      {/* ══ NAV ══════════════════════════════════════════════════════ */}
-      <nav className="relative flex-1 overflow-y-auto overflow-x-hidden py-2" style={{ scrollbarWidth: "none" }}>
-        {NAV_GROUPS.map((group) => {
-          const items = group.paths.map((p) => navByPath[p]).filter(Boolean);
-          if (!items.length) return null;
-          return (
-            <div key={group.label} className="mb-0.5">
-              {/* Group label */}
-              {!collapsed ? (
-                <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
-                  <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.14)" }} />
-                  <p
-                    className="text-[7.5px] font-black tracking-[0.45em] uppercase shrink-0"
-                    style={{ color: "rgba(226,232,240,0.55)", fontFamily: "'Orbitron', system-ui" }}
-                  >
-                    {group.label}
-                  </p>
-                  <div className="h-px flex-1" style={{ background: "rgba(255,255,255,0.14)" }} />
-                </div>
-              ) : (
-                <div className="mx-3 my-2 h-px" style={{ background: "rgba(255,255,255,0.12)" }} />
-              )}
+        {/* Top crimson accent */}
+        <div
+          className="pointer-events-none absolute left-0 right-0 top-0 h-[3px]"
+          style={{
+            background: `linear-gradient(90deg, ${P.red} 0%, ${P.redDim} 55%, transparent 100%)`,
+            boxShadow: `0 0 14px ${P.redGlow}`,
+          }}
+          aria-hidden
+        />
 
-              {/* Nav items */}
-              {items.map((item) => {
-                const isActive = location === item.path;
-                return (
-                  <Link key={item.path} href={item.path} onClick={() => onMobileClose?.()}>
-                    <div
-                      className={cn(
-                        "relative flex items-center cursor-pointer group transition-all duration-200 my-0.5",
-                        collapsed
-                          ? "mx-2 rounded-xl px-0 py-2.5 justify-center"
-                          : "mx-2 rounded-xl px-3 py-2.5 gap-2.5",
-                      )}
-                      title={collapsed ? item.dashboardLabel : undefined}
-                      style={isActive ? {
-                        background: "linear-gradient(135deg, rgba(148,163,184,0.18) 0%, rgba(30,41,59,0.12) 100%)",
-                        border: "1px solid rgba(226,232,240,0.25)",
-                        boxShadow: "0 0 16px rgba(148,163,184,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
-                      } : {
-                        border: "1px solid transparent",
-                      }}
-                    >
-                      {/* Active left bar */}
-                      {isActive && (
-                        <div
-                          className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full"
-                          style={{ background: "#93c5fd", boxShadow: "0 0 10px rgba(147,197,253,0.9)" }}
-                        />
-                      )}
+        {/* ══ BRAND ══ */}
+        <div
+          className={cn(
+            "relative flex shrink-0 items-center border-b",
+            collapsed ? "justify-center px-3 py-4" : "gap-3 px-4 py-4",
+          )}
+          style={{
+            borderColor: P.borderDark,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(180,188,198,0.15) 100%)",
+          }}
+        >
+          <CyrusSidebarBrand collapsed={collapsed} />
 
-                      {/* Icon */}
-                      <item.Icon
-                        className={cn(
-                          "shrink-0 transition-colors",
-                          collapsed ? "h-5 w-5" : "h-[14px] w-[14px]",
-                        )}
-                        style={{ color: isActive ? "#e2e8f0" : "rgba(255,255,255,0.38)" }}
-                      />
-
-                      {/* Label */}
-                      {!collapsed && (
-                        <span
-                          className="flex-1 truncate text-[11px] font-semibold tracking-[0.04em] transition-colors"
-                          style={{
-                            fontFamily: "'Orbitron', system-ui",
-                            color: isActive ? "#ffffff" : "rgba(255,255,255,0.5)",
-                            textShadow: isActive ? "0 0 12px rgba(148,163,184,0.35)" : "none",
-                          }}
-                        >
-                          {item.dashboardLabel}
-                        </span>
-                      )}
-
-                      {/* Active dot */}
-                      {isActive && !collapsed && (
-                        <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: "#bfdbfe", boxShadow: "0 0 8px rgba(191,219,254,0.9)" }}
-                        />
-                      )}
-
-                      {/* Hover accent line */}
-                      {!isActive && (
-                        <div
-                          className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{ background: "rgba(148,163,184,0.45)" }}
-                        />
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* ══ FOOTER ═══════════════════════════════════════════════════ */}
-      <div
-        className="relative shrink-0 border-t p-2 space-y-1"
-        style={{ borderColor: "rgba(255,255,255,0.14)", background: "rgba(0,0,0,0.28)" }}
-      >
-        {/* User badge */}
-        {!collapsed && displayName && (
-          <div
-            className="flex items-center gap-2.5 px-3 py-2 rounded-xl mb-1"
-            style={{
-              background: "linear-gradient(135deg, rgba(148,163,184,0.08), rgba(0,0,0,0.3))",
-              border: "1px solid rgba(255,255,255,0.16)",
-            }}
-          >
-            <div
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-              style={{
-                background: "linear-gradient(135deg, rgba(148,163,184,0.24), rgba(30,41,59,0.45))",
-                border: "1px solid rgba(255,255,255,0.28)",
-                boxShadow: "0 0 10px rgba(148,163,184,0.2)",
-              }}
-            >
-              <span className="text-[10px] font-black text-slate-100" style={{ fontFamily: "'Orbitron', system-ui" }}>
-                {displayName.slice(0, 2).toUpperCase()}
-              </span>
-            </div>
+          {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p
-                className="truncate text-[10px] font-black uppercase tracking-wider text-white/80"
-                style={{ fontFamily: "'Orbitron', system-ui" }}
+              <span
+                className="block text-[17px] font-black leading-none tracking-[0.22em] text-[#12161c]"
+                style={{
+                  fontFamily: "'Orbitron', system-ui, sans-serif",
+                  textShadow: "0 1px 0 rgba(255,255,255,0.65)",
+                }}
               >
-                {displayName}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <Activity className="h-2 w-2 text-emerald-400" strokeWidth={2.5} />
+                CYRUS
+              </span>
+              <div className="mt-1.5 flex items-center gap-1.5">
                 <span
-                  className="text-[8px] font-black font-mono tracking-[0.3em] uppercase"
-                  style={{ color: role === "admin" ? "#cbd5e1" : "#bae6fd" }}
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: P.red, boxShadow: `0 0 8px ${P.redGlow}` }}
+                />
+                <span
+                  className="text-[8px] font-bold uppercase tracking-[0.32em]"
+                  style={{ color: P.textMuted, fontFamily: "'Orbitron', system-ui, sans-serif" }}
                 >
-                  {role}
+                  Command v3.0
                 </span>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className={cn(
-            "flex w-full items-center rounded-xl px-3 py-2 transition-all duration-200 group",
-            collapsed ? "justify-center" : "gap-3",
           )}
-          style={{ border: "1px solid transparent" }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "rgba(148,163,184,0.12)";
-            (e.currentTarget as HTMLElement).style.border = "1px solid rgba(255,255,255,0.2)";
+        </div>
+
+        {/* ══ NAV ══ */}
+        <nav className="relative flex-1 overflow-x-hidden overflow-y-auto py-2" style={{ scrollbarWidth: "none" }}>
+          {NAV_GROUPS.map((group) => {
+            const items = group.paths.map((p) => navByPath[p]).filter(Boolean);
+            if (!items.length) return null;
+            return (
+              <div key={group.label} className="mb-0.5">
+                {!collapsed ? (
+                  <div className="flex items-center gap-2 px-4 pb-1.5 pt-3">
+                    <div className="h-px flex-1" style={{ background: P.borderDark }} />
+                    <p
+                      className="shrink-0 text-[7px] font-black uppercase tracking-[0.42em]"
+                      style={{ color: P.textMuted, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                    >
+                      {group.label}
+                    </p>
+                    <div className="h-px flex-1" style={{ background: P.borderDark }} />
+                  </div>
+                ) : (
+                  <div className="mx-3 my-2 h-px" style={{ background: P.borderDark }} />
+                )}
+
+                {items.map((item) => {
+                  const isActive = location === item.path;
+                  return (
+                    <Link key={item.path} href={item.path} onClick={() => onMobileClose?.()}>
+                      <div
+                        className={cn(
+                          "group relative my-0.5 flex cursor-pointer items-center transition-all duration-200",
+                          collapsed
+                            ? "mx-2 justify-center rounded-xl px-0 py-2.5"
+                            : "mx-2 gap-2.5 rounded-xl px-3 py-2.5",
+                        )}
+                        title={collapsed ? item.sidebarLabel : undefined}
+                        style={
+                          isActive
+                            ? {
+                                background:
+                                  "linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(200,206,214,0.35) 100%)",
+                                border: `1px solid rgba(255,255,255,0.55)`,
+                                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.65), 0 0 16px ${P.redGlow}`,
+                              }
+                            : { border: "1px solid transparent" }
+                        }
+                      >
+                        {isActive && (
+                          <div
+                            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full"
+                            style={{ background: P.red, boxShadow: `0 0 10px ${P.redGlow}` }}
+                          />
+                        )}
+
+                        <item.Icon
+                          className={cn("shrink-0 transition-colors", collapsed ? "h-5 w-5" : "h-[15px] w-[15px]")}
+                          style={{ color: isActive ? P.red : P.textMuted }}
+                          strokeWidth={isActive ? 2.2 : 1.8}
+                        />
+
+                        {!collapsed && (
+                          <span
+                            className="flex-1 text-[11px] font-semibold leading-snug tracking-[0.02em] transition-colors"
+                            style={{
+                              fontFamily: "'Orbitron', system-ui, sans-serif",
+                              color: isActive ? P.charcoal : P.textMuted,
+                              textShadow: isActive ? "0 1px 0 rgba(255,255,255,0.5)" : "none",
+                            }}
+                          >
+                            {item.sidebarLabel}
+                          </span>
+                        )}
+
+                        {isActive && !collapsed && (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: P.red, boxShadow: `0 0 8px ${P.redGlow}` }}
+                          />
+                        )}
+
+                        {!isActive && (
+                          <div
+                            className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                            style={{ background: "rgba(231,0,17,0.35)" }}
+                          />
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* ══ FOOTER ══ */}
+        <div
+          className="relative shrink-0 space-y-1 border-t p-2"
+          style={{
+            borderColor: P.borderDark,
+            background: "linear-gradient(180deg, rgba(160,168,178,0.25) 0%, rgba(130,138,148,0.35) 100%)",
           }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "transparent";
-            (e.currentTarget as HTMLElement).style.border = "1px solid transparent";
-          }}
-          title="Logout"
         >
-          <LogOut className="h-4 w-4 shrink-0 text-white/35 group-hover:text-white/80 transition-colors" />
-          {!collapsed && (
-            <span
-              className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/35 group-hover:text-white/80 transition-colors"
-              style={{ fontFamily: "'Orbitron', system-ui" }}
+          {!collapsed && displayName && (
+            <div
+              className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2"
+              style={{
+                background: "linear-gradient(135deg, rgba(255,255,255,0.35), rgba(180,188,198,0.2))",
+                border: `1px solid ${P.border}`,
+              }}
             >
-              LOGOUT
-            </span>
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: "linear-gradient(145deg, #2a3038, #12161c)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  boxShadow: `0 0 10px ${P.redGlow}`,
+                }}
+              >
+                <span
+                  className="text-[10px] font-black text-white"
+                  style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                >
+                  {displayName.slice(0, 2).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p
+                  className="truncate text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: P.charcoal, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                >
+                  {displayName}
+                </p>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <Activity className="h-2 w-2 text-emerald-600" strokeWidth={2.5} />
+                  <span
+                    className="text-[8px] font-bold uppercase tracking-[0.28em]"
+                    style={{ color: P.textMuted, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    {role}
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
-        </button>
 
-        {/* Collapse toggle */}
-        <button
-          onClick={onToggle}
-          className="flex w-full items-center justify-center rounded-xl px-3 py-1.5 text-white/20 transition-all duration-200 hover:text-white/50"
-          style={{ border: "1px solid rgba(255,255,255,0.05)" }}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-        </button>
-      </div>
-    </aside>
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "group flex w-full items-center rounded-xl px-3 py-2 transition-all duration-200",
+              collapsed ? "justify-center" : "gap-3",
+            )}
+            style={{ border: "1px solid transparent" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.28)";
+              e.currentTarget.style.border = `1px solid ${P.border}`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.border = "1px solid transparent";
+            }}
+            title="Logout"
+          >
+            <LogOut
+              className="h-4 w-4 shrink-0 transition-colors"
+              style={{ color: P.textMuted }}
+              strokeWidth={1.8}
+            />
+            {!collapsed && (
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors"
+                style={{ color: P.textMuted, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                Logout
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={onToggle}
+            className="flex w-full items-center justify-center rounded-xl px-3 py-1.5 transition-all duration-200"
+            style={{ border: `1px solid ${P.borderDark}`, color: P.textMuted }}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </aside>
     </>
   );
 }
