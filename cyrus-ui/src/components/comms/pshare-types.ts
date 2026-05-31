@@ -16,6 +16,13 @@ export type PsharePost = {
   audioUrl?: string | null;
   durationSec?: number | null;
   polishPreset?: PsharePolishPreset | string | null;
+  liveStreamId?: string | null;
+  liveStatus?: string | null;
+  broadcastSource?: string | null;
+  expiresAt?: string | null;
+  archivedAt?: string | null;
+  hasPhoto?: boolean;
+  isPhotoPriority?: boolean;
   createdAt?: string | null;
   allowComments?: boolean;
   likeCount?: number;

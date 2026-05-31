@@ -83,12 +83,15 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       setUploadError(null);
       setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "init" });
       try {
+        const mimeGuess = guessCommsMediaMime(file.name, file.type);
+        const mediaKind = detectPshareMediaKind(file.name, mimeGuess);
         const result = await uploadCommsFileSmart(file, {
           userId: myUserId,
           fileName: file.name,
+          priority: mediaKind === "image" ? "photo" : "normal",
           onProgress: setUploadProgress,
         });
-        const mime = result.mimeType || guessCommsMediaMime(file.name, file.type);
+        const mime = result.mimeType || mimeGuess;
         const kind = detectPshareMediaKind(file.name, mime);
         const previewUrl =
           kind === "image" ? resolvePshareMediaUrl(result.fileUrl) : URL.createObjectURL(file);
@@ -161,7 +164,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/60 via-slate-900/78 to-slate-950/90 p-4 shadow-[0_20px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl cyrus-xs-pshare-console",
+        "relative flex h-[min(540px,72vh)] min-h-[540px] max-h-[540px] flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/60 via-slate-900/78 to-slate-950/90 p-4 shadow-[0_20px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
@@ -169,7 +172,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
       <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
+      <div className="mb-3 shrink-0 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200/25 bg-sky-200/10">
             <Share2 className="h-4 w-4 text-sky-100" aria-hidden />
@@ -179,7 +182,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
               <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-sky-100/55">Pshare channel</p>
               <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/30 bg-sky-200/12 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-sky-100/90">
                 <Radio className="h-3 w-3 text-sky-200" />
-                Live
+                24h feed
               </span>
             </div>
             <h2
@@ -206,7 +209,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <div className="mb-3 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
+      <div className="mb-3 shrink-0 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
         {pendingMedia && (
           <div className="relative mb-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
             {pendingKind === "image" && pendingMedia.previewUrl && (
@@ -273,6 +276,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         </div>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {postsQuery.isLoading ? (
         <p className="text-xs text-white/55">Loading live Pshare posts…</p>
       ) : postsQuery.isError ? (
@@ -281,13 +285,15 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         <p className="text-xs text-white/55">No Pshare posts yet. Share text or media to publish the first update.</p>
       ) : activePost ? (
         <div
-          className="transition-opacity duration-200 cyrus-xs-pshare-item"
+          className="flex min-h-0 flex-1 flex-col transition-opacity duration-200 cyrus-xs-pshare-item"
           style={{ opacity: fading ? 0.18 : 1 }}
           aria-live="polite"
         >
-          <PsharePostCard post={activePost} myUserId={myUserId} variant="console" />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <PsharePostCard post={activePost} myUserId={myUserId} variant="console" fixedLayout />
+          </div>
           {posts.length > 1 && (
-            <div className="mt-2.5 flex items-center gap-1.5">
+            <div className="mt-2.5 flex shrink-0 items-center gap-1.5">
               {posts.map((post, i) => (
                 <button
                   key={post.id}
@@ -306,6 +312,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
           )}
         </div>
       ) : null}
+      </div>
     </section>
   );
 }

@@ -1,5 +1,6 @@
-import { Download, FileText, Volume2 } from "lucide-react";
+import { Download, FileText, Radio, Volume2 } from "lucide-react";
 import { guessCommsMediaMime, inferCommsMediaCategory } from "@shared/comms/media-formats";
+import { isHlsOrDashUrl, pshareBroadcastSourceLabel } from "@shared/comms/pshare-engine";
 import { polishCssFilter, type PsharePolishPreset } from "@shared/comms/pshare-studio";
 import {
   detectPshareMediaKind,
@@ -10,24 +11,34 @@ import {
 import type { PsharePost } from "./pshare-types";
 
 type PshareMediaPreviewProps = {
-  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset"> & {
+  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset" | "postKind" | "liveStatus" | "broadcastSource"> & {
     mediaManifest?: { polishPreset?: PsharePolishPreset; polishIntensity?: number } | null;
   };
   /** Full-width feed card vs compact command-console ticker. */
   variant?: "feed" | "console";
   className?: string;
+  /** Bust cache for live segment playback. */
+  liveRefreshKey?: number;
 };
 
 export function PshareMediaPreview({
   post,
   variant = "feed",
   className = "",
+  liveRefreshKey = 0,
 }: PshareMediaPreviewProps) {
   if (!post.fileUrl) return null;
 
   const mime = guessCommsMediaMime(post.fileName, post.fileMimeType);
-  const kind = detectPshareMediaKind(post.fileName, mime);
-  const url = resolvePshareMediaUrl(post.fileUrl);
+  const isLive = post.postKind === "live" && post.liveStatus === "live";
+  const kind = isLive || mime.startsWith("video/") || post.fileMimeType === "application/x-pshare-live"
+    ? "video"
+    : detectPshareMediaKind(post.fileName, mime);
+  const baseUrl = resolvePshareMediaUrl(post.fileUrl);
+  const url =
+    isLive && liveRefreshKey > 0
+      ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}t=${liveRefreshKey}`
+      : baseUrl;
   const downloadUrl = pshareMediaDownloadUrl(post.fileUrl);
   const isConsole = variant === "console";
   const manifest = post.mediaManifest as { polishPreset?: PsharePolishPreset; polishIntensity?: number } | undefined;
@@ -42,7 +53,7 @@ export function PshareMediaPreview({
           alt={post.fileName || "Shared photo"}
           className={
             isConsole
-              ? "max-h-28 w-full object-cover"
+              ? "h-20 w-full object-cover"
               : "max-h-[min(60vh,420px)] w-full object-contain"
           }
           style={{ filter: polish }}
@@ -52,17 +63,41 @@ export function PshareMediaPreview({
     );
   }
 
-  if (kind === "video") {
+  if (kind === "video" || isLive) {
+    const hls = isHlsOrDashUrl(post.fileUrl);
     return (
-      <div className={`overflow-hidden rounded-lg bg-black/50 ${className}`}>
+      <div className={`relative overflow-hidden rounded-lg bg-black/50 ${className}`}>
+        {isLive && (
+          <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-rose-400/40 bg-rose-600/80 px-2 py-0.5 text-[9px] font-bold uppercase text-white">
+            <Radio className="h-3 w-3 animate-pulse" />
+            Live
+            {post.broadcastSource ? (
+              <span className="font-normal normal-case opacity-80">
+                · {pshareBroadcastSourceLabel(post.broadcastSource)}
+              </span>
+            ) : null}
+          </span>
+        )}
         <video
+          key={url}
           src={url}
-          controls
+          controls={!isLive}
+          autoPlay={isLive}
+          muted={isLive}
           playsInline
-          preload="metadata"
-          className={isConsole ? "max-h-28 w-full object-cover" : "max-h-[min(60vh,400px)] w-full"}
+          preload={isLive ? "auto" : "metadata"}
+          className={
+            isConsole
+              ? "h-20 w-full object-cover"
+              : isLive
+                ? "max-h-[min(60vh,400px)] w-full object-contain"
+                : "max-h-[min(60vh,400px)] w-full"
+          }
           style={{ filter: polish }}
         />
+        {isLive && hls && !isConsole && (
+          <p className="px-2 py-1 text-[9px] text-white/45">HLS drone feed — use controls if autoplay is blocked.</p>
+        )}
       </div>
     );
   }

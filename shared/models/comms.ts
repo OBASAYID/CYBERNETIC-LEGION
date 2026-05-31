@@ -254,7 +254,7 @@ export const psharePosts = pgTable("pshare_posts", {
   fileUrl: varchar("file_url"),
   fileName: varchar("file_name"),
   fileMimeType: varchar("file_mime_type"),
-  /** general | listing | clip | story | reel */
+  /** general | listing | clip | story | reel | live */
   postKind: varchar("post_kind").notNull().default("general"),
   listingTitle: varchar("listing_title"),
   listingPrice: varchar("listing_price"),
@@ -263,6 +263,12 @@ export const psharePosts = pgTable("pshare_posts", {
   audioUrl: varchar("audio_url"),
   durationSec: integer("duration_sec"),
   polishPreset: varchar("polish_preset"),
+  liveStreamId: varchar("live_stream_id"),
+  liveStatus: varchar("live_status"),
+  broadcastSource: varchar("broadcast_source"),
+  expiresAt: timestamp("expires_at"),
+  /** Set when post leaves the 24h live feed and moves to chat history. */
+  archivedAt: timestamp("archived_at"),
   /** "all" = every signed-in comms user, "selected" = author + `allowedUserIds` */
   visibility: varchar("visibility").notNull().default("all"),
   allowComments: boolean("allow_comments").notNull().default(true),

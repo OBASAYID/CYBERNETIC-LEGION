@@ -380,6 +380,11 @@ const ALTER_STATEMENTS = [
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS audio_url VARCHAR`,
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER`,
   `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS polish_preset VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS live_stream_id VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS live_status VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS broadcast_source VARCHAR`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`,
+  `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`,
 ];
 
 export async function initCommsDatabase(): Promise<void> {

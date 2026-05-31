@@ -3,6 +3,10 @@ import {
   COMMS_DEFAULT_CHUNK_BYTES,
   COMMS_DIRECT_UPLOAD_MAX_BYTES,
 } from "@shared/comms/media-formats";
+import {
+  isPsharePhotoUpload,
+  PSHARE_PHOTO_DIRECT_UPLOAD_MAX_BYTES,
+} from "@shared/comms/pshare-engine";
 import { getCommsDeviceId } from "./comms-device-id";
 
 export type CommsUploadProgress = {
@@ -19,8 +23,13 @@ export type ChunkedUploadResult = {
   fileSize: number;
 };
 
-function commsUploadHeaders(userId: string): HeadersInit {
-  return { "X-Device-Id": getCommsDeviceId(), "X-User-Id": userId };
+function commsUploadHeaders(userId: string, priority?: "photo" | "normal"): HeadersInit {
+  const headers: Record<string, string> = {
+    "X-Device-Id": getCommsDeviceId(),
+    "X-User-Id": userId,
+  };
+  if (priority === "photo") headers["X-Cyrus-Upload-Priority"] = "photo";
+  return headers;
 }
 
 async function uploadChunkWithRetry(
@@ -28,6 +37,7 @@ async function uploadChunkWithRetry(
   chunkIndex: number,
   blob: Blob,
   userId: string,
+  priority?: "photo" | "normal",
   retries = 3,
 ): Promise<void> {
   let lastErr: unknown;
@@ -40,7 +50,7 @@ async function uploadChunkWithRetry(
       const res = await systemFetch("/api/comms/upload/chunk", {
         method: "POST",
         body: form,
-        headers: commsUploadHeaders(userId),
+        headers: commsUploadHeaders(userId, priority),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -62,6 +72,7 @@ export async function uploadCommsFileChunked(
     fileName?: string;
     mimeType?: string;
     chunkSize?: number;
+    priority?: "photo" | "normal";
     onProgress?: (p: CommsUploadProgress) => void;
   },
 ): Promise<ChunkedUploadResult> {
@@ -70,6 +81,8 @@ export async function uploadCommsFileChunked(
     options.mimeType ||
     (file instanceof File ? file.type : "") ||
     "application/octet-stream";
+  const priority =
+    options.priority ?? (isPsharePhotoUpload(name, mime) ? "photo" : "normal");
   const total = file.size;
   const chunkSize = options.chunkSize || COMMS_DEFAULT_CHUNK_BYTES;
 
@@ -77,8 +90,8 @@ export async function uploadCommsFileChunked(
 
   const initRes = await systemFetch("/api/comms/upload/init", {
     method: "POST",
-    headers: { ...commsUploadHeaders(options.userId), "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName: name, fileSize: total, mimeType: mime }),
+    headers: { ...commsUploadHeaders(options.userId, priority), "Content-Type": "application/json" },
+    body: JSON.stringify({ fileName: name, fileSize: total, mimeType: mime, priority }),
   });
   if (!initRes.ok) {
     const err = await initRes.json().catch(() => ({}));
@@ -96,7 +109,7 @@ export async function uploadCommsFileChunked(
     const start = i * init.chunkSize;
     const end = Math.min(start + init.chunkSize, total);
     const slice = file.slice(start, end);
-    await uploadChunkWithRetry(init.uploadId, i, slice, options.userId);
+    await uploadChunkWithRetry(init.uploadId, i, slice, options.userId, priority);
     loaded = end;
     options.onProgress?.({
       loaded,
@@ -110,7 +123,7 @@ export async function uploadCommsFileChunked(
 
   const completeRes = await systemFetch("/api/comms/upload/complete", {
     method: "POST",
-    headers: { ...commsUploadHeaders(options.userId), "Content-Type": "application/json" },
+    headers: { ...commsUploadHeaders(options.userId, priority), "Content-Type": "application/json" },
     body: JSON.stringify({ uploadId: init.uploadId }),
   });
   if (!completeRes.ok) {
@@ -127,31 +140,33 @@ export async function uploadCommsFileChunked(
   };
 }
 
-export function shouldUseChunkedCommsUpload(fileSize: number): boolean {
-  return fileSize > COMMS_DIRECT_UPLOAD_MAX_BYTES;
+export function shouldUseChunkedCommsUpload(
+  fileSize: number,
+  priority: "photo" | "normal" = "normal",
+): boolean {
+  const directMax =
+    priority === "photo" ? PSHARE_PHOTO_DIRECT_UPLOAD_MAX_BYTES : COMMS_DIRECT_UPLOAD_MAX_BYTES;
+  return fileSize > directMax;
 }
 
-export async function uploadCommsFileSmart(
+async function uploadCommsFileDirect(
   file: File | Blob,
   options: {
     userId: string;
-    fileName?: string;
+    fileName: string;
+    mimeType: string;
+    priority?: "photo" | "normal";
     onProgress?: (p: CommsUploadProgress) => void;
   },
 ): Promise<ChunkedUploadResult> {
-  if (shouldUseChunkedCommsUpload(file.size)) {
-    return uploadCommsFileChunked(file, options);
-  }
-
-  const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
   options.onProgress?.({ loaded: 0, total: file.size, percent: 0, phase: "uploading" });
 
   const form = new FormData();
-  form.append("file", file, name);
+  form.append("file", file, options.fileName);
   const res = await systemFetch("/api/comms/upload", {
     method: "POST",
     body: form,
-    headers: commsUploadHeaders(options.userId),
+    headers: commsUploadHeaders(options.userId, options.priority),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -166,8 +181,40 @@ export async function uploadCommsFileSmart(
   options.onProgress?.({ loaded: file.size, total: file.size, percent: 100, phase: "done" });
   return {
     fileUrl: data.fileUrl,
-    fileName: data.fileName || name,
-    mimeType: data.mimeType || (file instanceof File ? file.type : "") || "application/octet-stream",
+    fileName: data.fileName || options.fileName,
+    mimeType: data.mimeType || options.mimeType,
     fileSize: data.fileSize || file.size,
   };
+}
+
+export async function uploadCommsFileSmart(
+  file: File | Blob,
+  options: {
+    userId: string;
+    fileName?: string;
+    priority?: "photo" | "normal";
+    onProgress?: (p: CommsUploadProgress) => void;
+  },
+): Promise<ChunkedUploadResult> {
+  const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
+  const mime = (file instanceof File ? file.type : "") || "application/octet-stream";
+  const priority =
+    options.priority ?? (isPsharePhotoUpload(name, mime) ? "photo" : "normal");
+
+  if (!shouldUseChunkedCommsUpload(file.size, priority)) {
+    return uploadCommsFileDirect(file, {
+      userId: options.userId,
+      fileName: name,
+      mimeType: mime,
+      priority,
+      onProgress: options.onProgress,
+    });
+  }
+
+  return uploadCommsFileChunked(file, {
+    ...options,
+    fileName: name,
+    mimeType: mime,
+    priority,
+  });
 }
