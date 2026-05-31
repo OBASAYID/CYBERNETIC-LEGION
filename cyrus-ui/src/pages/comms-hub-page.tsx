@@ -1899,7 +1899,7 @@ export default function CommsHubPage() {
                 <VideoNotePanel targetUser={targetUser} />
               )}
               {activeTab==="pshare" && (
-                <PshareTabPanel />
+                <PshareTabPanel myUserId={myId} />
               )}
             </div>
           </main>
