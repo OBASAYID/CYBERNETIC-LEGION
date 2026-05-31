@@ -20,6 +20,7 @@ import {
   Globe,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 export function ScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,10 +183,14 @@ export function ScanPage() {
 
   return (
     <ModuleWorkspacePageShell
+      theme="dashboard"
+      backdropTextureUrl={TSODILO_HUNT_SYMBOLS_URL}
+      backdropPixelated
       kicker="Optical analysis"
       title="Vision & Optical"
       subtitle="Scenes, objects, and codes: capture with the camera, then Vision, OCR, or QR. Full CYRUS analysis can decode and report in your chosen output language."
       icon={Eye}
+      commandContext="Vision Analysis — optical pipeline"
       commandHandoffText={commandHandoffText}
       commandHandoffSource="vision-optical"
       commandHandoffAttachments={() => imageHandoffAttachments}

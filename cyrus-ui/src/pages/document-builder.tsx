@@ -77,6 +77,7 @@ export default function DocumentBuilder() {
       title="Document builder"
       subtitle="Structured drafting with professional output controls"
       icon={ScrollText}
+      commandContext="Document Builder — structured drafting"
     >
       <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5">
         <section className="flex min-h-0 min-w-0 flex-col gap-4 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">

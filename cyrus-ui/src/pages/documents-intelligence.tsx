@@ -261,6 +261,7 @@ export default function DocumentsIntelligence() {
       commandHandoffSource="documents-intelligence"
       commandHandoffAttachments={() => handoffEncoded}
       commandHandoffLargeRefs={() => (handoffLargeRefs.length ? handoffLargeRefs : undefined)}
+      commandContext="Document Intelligence — analysis pipeline"
       headerEnd={
         <>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-mono text-emerald-200/85">
