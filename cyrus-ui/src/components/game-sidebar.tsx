@@ -15,28 +15,28 @@ interface GameSidebarProps {
   onMobileClose?: () => void;
 }
 
-/** Platinum-charcoal module rail — brushed metal + fine grain (darkened for console stack). */
+/** Deep console module rail — aligned with System Spotlight / Pshare stack. */
 const P = {
   red: "#E70011",
   redDim: "#B8000E",
   redGlow: "rgba(231,0,17,0.42)",
-  platinumLight: "#C4C9D0",
-  platinumMid: "#7A828C",
-  platinumDark: "#525A63",
+  platinumLight: "#9CA3AF",
+  platinumMid: "#2A3038",
+  platinumDark: "#080b10",
   charcoal: "#ECEFF3",
   text: "#F4F6F8",
-  textMuted: "rgba(228,232,238,0.78)",
-  border: "rgba(255,255,255,0.22)",
-  borderDark: "rgba(0,0,0,0.22)",
+  textMuted: "rgba(212,218,226,0.72)",
+  border: "rgba(255,255,255,0.12)",
+  borderDark: "rgba(0,0,0,0.45)",
 } as const;
 
 const PLATINUM_SIDEBAR: CSSProperties = {
-  backgroundColor: P.platinumDark,
+  backgroundColor: "#030508",
   backgroundImage: [
-    "linear-gradient(168deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 38%)",
-    "linear-gradient(195deg, #8E969F 0%, #6B737C 42%, #4F565E 100%)",
-    "repeating-linear-gradient(90deg, transparent 0px, transparent 3px, rgba(255,255,255,0.03) 3px, rgba(0,0,0,0.04) 4px)",
-    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E\")",
+    "linear-gradient(168deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 38%)",
+    "linear-gradient(195deg, #12161c 0%, #0a0e14 46%, #030508 100%)",
+    "repeating-linear-gradient(90deg, transparent 0px, transparent 3px, rgba(255,255,255,0.02) 3px, rgba(0,0,0,0.06) 4px)",
+    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E\")",
   ].join(", "),
 };
 
@@ -80,15 +80,15 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
         style={{
           ...PLATINUM_SIDEBAR,
           borderRight: `1px solid ${P.borderDark}`,
-          boxShadow: "4px 0 32px rgba(0,0,0,0.38), inset -1px 0 0 rgba(255,255,255,0.18)",
+          boxShadow: "4px 0 40px rgba(0,0,0,0.55), inset -1px 0 0 rgba(255,255,255,0.08)",
         }}
       >
         {/* Brushed highlight sweep */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-60"
+          className="pointer-events-none absolute inset-0 opacity-35"
           style={{
             background:
-              "linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.12) 22%, transparent 44%)",
+              "linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.06) 22%, transparent 44%)",
           }}
           aria-hidden
         />
@@ -119,7 +119,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           style={{
             borderColor: P.borderDark,
             background:
-              "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(60,66,74,0.35) 100%)",
+              "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(12,16,22,0.72) 100%)",
           }}
         >
           <CyrusSidebarBrand collapsed={collapsed} />
@@ -189,9 +189,9 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                           isActive
                             ? {
                                 background:
-                                  "linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(110,118,128,0.45) 100%)",
-                                border: `1px solid rgba(255,255,255,0.28)`,
-                                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 0 16px ${P.redGlow}`,
+                                  "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(30,36,44,0.65) 100%)",
+                                border: `1px solid rgba(255,255,255,0.14)`,
+                                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.1), 0 0 16px ${P.redGlow}`,
                               }
                             : { border: "1px solid transparent" }
                         }
@@ -249,14 +249,14 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           className="relative shrink-0 space-y-1 border-t p-2"
           style={{
             borderColor: P.borderDark,
-            background: "linear-gradient(180deg, rgba(70,76,84,0.55) 0%, rgba(45,50,56,0.72) 100%)",
+            background: "linear-gradient(180deg, rgba(18,22,28,0.92) 0%, rgba(6,8,12,0.98) 100%)",
           }}
         >
           {!collapsed && displayName && (
             <div
               className="mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2"
               style={{
-                background: "linear-gradient(135deg, rgba(255,255,255,0.14), rgba(70,76,84,0.35))",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(24,28,34,0.55))",
                 border: `1px solid ${P.border}`,
               }}
             >
