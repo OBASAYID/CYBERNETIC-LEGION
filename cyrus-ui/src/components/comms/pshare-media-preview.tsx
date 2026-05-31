@@ -47,13 +47,17 @@ export function PshareMediaPreview({
 
   if (kind === "image") {
     return (
-      <div className={`overflow-hidden rounded-lg bg-black/40 ${className}`}>
+      <div
+        className={`overflow-hidden rounded-lg bg-black/60 ${
+          isConsole ? "flex h-full min-h-[7.5rem] items-center justify-center" : ""
+        } ${className}`}
+      >
         <img
           src={url}
           alt={post.fileName || "Shared photo"}
           className={
             isConsole
-              ? "h-20 w-full object-cover"
+              ? "max-h-full max-w-full object-contain"
               : "max-h-[min(60vh,420px)] w-full object-contain"
           }
           style={{ filter: polish }}
@@ -66,7 +70,11 @@ export function PshareMediaPreview({
   if (kind === "video" || isLive) {
     const hls = isHlsOrDashUrl(post.fileUrl);
     return (
-      <div className={`relative overflow-hidden rounded-lg bg-black/50 ${className}`}>
+      <div
+        className={`relative overflow-hidden rounded-lg bg-black/50 ${
+          isConsole ? "flex h-full min-h-[7.5rem] items-center justify-center" : ""
+        } ${className}`}
+      >
         {isLive && (
           <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-rose-400/40 bg-rose-600/80 px-2 py-0.5 text-[9px] font-bold uppercase text-white">
             <Radio className="h-3 w-3 animate-pulse" />
@@ -88,7 +96,7 @@ export function PshareMediaPreview({
           preload={isLive ? "auto" : "metadata"}
           className={
             isConsole
-              ? "h-20 w-full object-cover"
+              ? "max-h-full max-w-full object-contain"
               : isLive
                 ? "max-h-[min(60vh,400px)] w-full object-contain"
                 : "max-h-[min(60vh,400px)] w-full"

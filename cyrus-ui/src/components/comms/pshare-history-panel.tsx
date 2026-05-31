@@ -13,9 +13,10 @@ const C = {
 
 type PshareHistoryPanelProps = {
   myUserId: string;
+  isAdmin?: boolean;
 };
 
-export function PshareHistoryPanel({ myUserId }: PshareHistoryPanelProps) {
+export function PshareHistoryPanel({ myUserId, isAdmin = false }: PshareHistoryPanelProps) {
   const historyQuery = useQuery<PsharePost[]>({
     queryKey: ["/api/comms/pshare/history"],
     queryFn: async () => {
@@ -53,7 +54,13 @@ export function PshareHistoryPanel({ myUserId }: PshareHistoryPanelProps) {
           <p className="text-[11px] text-white/35">No archived Pshare posts yet.</p>
         )}
         {posts.map((post) => (
-          <PsharePostCard key={post.id} post={post} myUserId={myUserId} variant="feed" />
+          <PsharePostCard
+            key={post.id}
+            post={post}
+            myUserId={myUserId}
+            variant="feed"
+            isAdmin={isAdmin}
+          />
         ))}
       </div>
     </div>

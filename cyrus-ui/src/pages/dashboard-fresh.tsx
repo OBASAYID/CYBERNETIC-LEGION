@@ -177,7 +177,7 @@ export default function DashboardFresh() {
 
         <main className="mx-auto flex w-full max-w-full flex-col gap-4 px-4 py-6 pb-10 sm:px-5 lg:px-8 xl:px-10 cyrus-xs-main">
         {(headerOperator || !isAdmin) && (
-          <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem]">
+          <section className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem]">
             <div className="space-y-3">
               <OperatorConsoleCluster
                 stackSummary={stackSummary}
@@ -187,8 +187,8 @@ export default function DashboardFresh() {
               />
               <PshareFeedConsole />
             </div>
-            <div className="xl:sticky xl:top-[5.5rem] xl:h-[calc(100vh-7rem)]">
-              <OnlineUsersSidebar />
+            <div className="flex min-h-0 flex-col xl:sticky xl:top-[5.5rem] xl:max-h-[calc(100vh-7rem)] xl:self-stretch">
+              <OnlineUsersSidebar className="min-h-0 flex-1" />
             </div>
           </section>
         )}

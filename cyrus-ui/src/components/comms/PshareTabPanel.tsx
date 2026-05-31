@@ -5,6 +5,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clapperboard, History, ImagePlus, Loader2, Paperclip, Radio, Send, Video, X } from "lucide-react";
+import { useUserRole } from "@/hooks/use-user-role";
 import { systemFetch } from "@/lib/system-api";
 import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
@@ -38,6 +39,8 @@ type PshareTabPanelProps = {
 
 export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
   const qc = useQueryClient();
+  const userRole = useUserRole();
+  const isAdmin = userRole === "admin";
   const [view, setView] = useState<PshareView>("feed");
   const [draft, setDraft] = useState("");
   const [pendingMedia, setPendingMedia] = useState<PsharePendingMedia | null>(null);
@@ -219,7 +222,7 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
 
       {view === "history" ? (
         <div className="flex-1 overflow-y-auto py-3">
-          <PshareHistoryPanel myUserId={myUserId} />
+          <PshareHistoryPanel myUserId={myUserId} isAdmin={isAdmin} />
         </div>
       ) : null}
 
@@ -235,7 +238,13 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
           <p className="text-[11px] text-white/35">No broadcasts yet. Post the first update or share media.</p>
         )}
         {posts.map((p) => (
-          <PsharePostCard key={p.id} post={p} myUserId={myUserId} variant="feed" />
+          <PsharePostCard
+            key={p.id}
+            post={p}
+            myUserId={myUserId}
+            variant="feed"
+            isAdmin={isAdmin}
+          />
         ))}
       </div>
       ) : null}
