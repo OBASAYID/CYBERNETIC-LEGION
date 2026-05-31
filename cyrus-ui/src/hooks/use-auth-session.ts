@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, startTransition } from "react";
 import { clearAuthWarmSessionFlag, markAuthWarmSession } from "@/lib/auth-session";
 import { systemFetch } from "@/lib/system-api";
-import { checkAuthValidity, clearAuthSessionStorage, persistAuthSession } from "@/lib/auth-storage";
+import { checkAuthValidity, clearAuthSessionStorage, persistAuthSession, USER_ID_KEY } from "@/lib/auth-storage";
 import { getApiFetchTimeoutMs } from "@/lib/api-timing";
 import type { GateProfile } from "@/components/password-gate";
 
@@ -86,6 +86,12 @@ export function useAuthSession() {
             console.log("[CYRUS] useAuthSession: /api/auth/user attempt", attempt + 1, "→ status", res.status);
 
             if (res.ok) {
+              try {
+                const who = (await res.json()) as { id?: string };
+                if (who?.id) localStorage.setItem(USER_ID_KEY, String(who.id));
+              } catch {
+                /* ignore */
+              }
               outcome = "ok";
               break;
             }

@@ -16,6 +16,7 @@ import { CallView } from "../../../client/src/components/comms/CallView";
 import { InCallChat, type InCallChatMessage } from "../../../client/src/components/comms/InCallChat";
 import { CommsIncomingCallOverlay } from "@/components/comms/comms-call-chrome";
 import { PshareTabPanel } from "@/components/comms/PshareTabPanel";
+import { getAuthenticatedUserId } from "@/lib/auth-storage";
 import { systemFetch, systemApiUrl } from "@shared/cyrus-api-client";
 import {
   COMMS_MEDIA_FILE_ACCEPT,
@@ -1616,11 +1617,7 @@ export default function CommsHubPage() {
 
   const myId = useMemo(() => {
     if (myUserId) return myUserId;
-    try {
-      return localStorage.getItem("cyrus_comms_user_id") || "local-operator";
-    } catch {
-      return "local-operator";
-    }
+    return getAuthenticatedUserId();
   }, [myUserId]);
 
   const {

@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   BOTSWANA_BEEF_EXPORTS_HERO_URL,
+  BOTSWANA_COAT_OF_ARMS_DEBSWANA_URL,
   BOTSWANA_TECHNOLOGY_HERO_URL,
   BOTSWANA_TOURISM_WILDLIFE_URL,
   CYRUS_MINING_DIAMOND_URL,
@@ -134,6 +135,74 @@ const PILLAR_RENDER: Record<
   },
 };
 
+/** Hero flank art — vignette + console-toned glow so PNGs feel embedded, not pasted. */
+function SpotlightHeroFlank({
+  src,
+  alt,
+  side,
+  tone = "neutral",
+  blend = "normal",
+}: {
+  src: string;
+  alt: string;
+  side: "left" | "right";
+  tone?: "heritage" | "mining" | "neutral";
+  blend?: "normal" | "lighten";
+}) {
+  const toneGlow =
+    tone === "heritage"
+      ? "from-amber-500/12 via-transparent to-cyan-400/8"
+      : tone === "mining"
+        ? "from-cyan-300/14 via-transparent to-amber-400/10"
+        : "from-white/8 via-transparent to-white/4";
+
+  const edgeFade =
+    side === "left"
+      ? "bg-gradient-to-r from-transparent via-transparent to-[#080b10]/95"
+      : "bg-gradient-to-l from-transparent via-transparent to-[#080b10]/95";
+
+  return (
+    <div
+      className={cn(
+        "relative h-36 shrink-0 overflow-hidden",
+        side === "left" ? "w-[7.25rem] sm:w-28" : "w-[6.75rem] sm:w-[6.5rem]",
+      )}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,rgba(7,11,18,0)_38%,rgba(7,11,18,0.72)_88%,rgba(7,11,18,0.98)_100%)]"
+        aria-hidden
+      />
+      <div className={cn("pointer-events-none absolute inset-0 z-[2] mix-blend-soft-light", edgeFade)} aria-hidden />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b opacity-80",
+          toneGlow,
+        )}
+        aria-hidden
+      />
+      <img
+        src={src}
+        alt={alt}
+        className={cn(
+          "relative z-0 h-full w-full object-contain object-center",
+          blend === "lighten" && "mix-blend-lighten",
+          side === "left" ? "object-[center_42%]" : "object-[center_38%]",
+          "brightness-[1.08] contrast-[1.12] saturate-[1.06]",
+          "drop-shadow-[0_12px_28px_rgba(0,0,0,0.55)]",
+          tone === "heritage"
+            ? "drop-shadow-[0_0_22px_rgba(251,191,36,0.12)]"
+            : "drop-shadow-[0_0_20px_rgba(125,211,252,0.14)]",
+        )}
+        loading="lazy"
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] h-10 bg-gradient-to-t from-[#080b10] via-[#080b10]/80 to-transparent"
+        aria-hidden
+      />
+    </div>
+  );
+}
+
 function SpotlightPillarCard({ pillar }: { pillar: SpotlightPillar }) {
   const variant = pillar.variant ?? "default";
   const refined = variant !== "default" ? PILLAR_RENDER[variant] : null;
@@ -256,27 +325,48 @@ export function SystemSpotlightConsole({
 
   return (
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber" stack="top">
-      <div className={`mb-3 flex gap-3 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.45)] cyrus-xs-spotlight-hero ${DASHBOARD_DARK_CONSOLE_INNER}`}>
-        <img
-          src={TSODILO_DANCE_HERO_URL}
-          alt="Tsodilo spiritual dance"
-          className="h-36 w-28 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
+      <div
+        className={`relative mb-3 overflow-hidden p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.45)] cyrus-xs-spotlight-hero ${DASHBOARD_DARK_CONSOLE_INNER}`}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_18%_50%,rgba(251,191,36,0.07),transparent_42%),radial-gradient(ellipse_at_82%_50%,rgba(56,189,248,0.08),transparent_40%)]"
+          aria-hidden
         />
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
-          <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
-          <p className="mt-1.5 text-[11px] text-slate-200/78">Live command intelligence blending Tsodilo spiritual dance art with premium diamond texture in one spotlight surface.</p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Story mode</span>
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Live graphics</span>
-            <span className="rounded-full border border-white/20 bg-black/25 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">Diamond render</span>
+        <div className="relative flex items-stretch gap-2 sm:gap-3">
+          <SpotlightHeroFlank
+            src={TSODILO_DANCE_HERO_URL}
+            alt="Tsodilo spiritual dance"
+            side="left"
+            tone="heritage"
+            blend="normal"
+          />
+          <div className="min-w-0 flex-1 py-0.5">
+            <p className="text-[9px] uppercase tracking-[0.28em] text-slate-200/70">CYRUS Chronicle</p>
+            <h3 className="mt-1 text-2xl font-bold leading-tight text-white">Tsodilo Mission Ledger</h3>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-200/78">
+              Heritage and mining strength in one command surface — Tsodilo ceremonial art paired with Botswana&apos;s
+              national mining emblem.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
+                Story mode
+              </span>
+              <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
+                Live graphics
+              </span>
+              <span className="rounded-full border border-white/15 bg-black/20 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-100/85">
+                Debswana
+              </span>
+            </div>
           </div>
+          <SpotlightHeroFlank
+            src={BOTSWANA_COAT_OF_ARMS_DEBSWANA_URL}
+            alt="Botswana coat of arms and Debswana mining emblem"
+            side="right"
+            tone="mining"
+            blend="lighten"
+          />
         </div>
-        <img
-          src={CYRUS_MINING_DIAMOND_URL}
-          alt="Brilliant-cut diamonds on dark leather"
-          className="h-36 w-24 shrink-0 rounded-xl border border-white/18 object-cover object-[center_42%] shadow-[0_10px_20px_rgba(0,0,0,0.36)] brightness-[1.06] contrast-[1.14]"
-        />
       </div>
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {pillars.map((pillar) => (

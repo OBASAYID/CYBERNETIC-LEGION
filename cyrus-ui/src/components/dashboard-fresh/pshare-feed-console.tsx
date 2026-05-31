@@ -23,13 +23,7 @@ import {
   DASHBOARD_DARK_CONSOLE_INNER,
 } from "@/components/dashboard-fresh/operator-consoles";
 
-function resolveMyUserId(): string {
-  try {
-    return localStorage.getItem("cyrus_comms_user_id") || "local-operator";
-  } catch {
-    return "local-operator";
-  }
-}
+import { getAuthenticatedUserId } from "@/lib/auth-storage";
 
 export function PshareFeedConsole({
   className,
@@ -39,7 +33,7 @@ export function PshareFeedConsole({
   stack?: "standalone" | "top" | "bottom";
 }) {
   const queryClient = useQueryClient();
-  const myUserId = resolveMyUserId();
+  const myUserId = getAuthenticatedUserId();
   const [draft, setDraft] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [fading, setFading] = useState(false);

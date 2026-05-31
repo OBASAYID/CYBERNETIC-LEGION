@@ -9,6 +9,7 @@ import {
   COMMS_THEME,
   CommsIncomingCallOverlay,
 } from "@/components/comms/comms-call-chrome";
+import { getAuthenticatedUserId } from "@/lib/auth-storage";
 
 export default function CommsCallPage() {
   const displayName =
@@ -42,11 +43,7 @@ export default function CommsCallPage() {
 
   const myId = useMemo(() => {
     if (myUserId) return myUserId;
-    try {
-      return localStorage.getItem("cyrus_comms_user_id") || "local-operator";
-    } catch {
-      return "local-operator";
-    }
+    return getAuthenticatedUserId();
   }, [myUserId]);
 
   const [isMuted, setIsMuted] = useState(false);

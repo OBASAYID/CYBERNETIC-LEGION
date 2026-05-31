@@ -6,7 +6,7 @@ import { postFusionHandshake } from "@/lib/advanced-fusion-client";
 import { isSystemInitializingResponse, systemFetch } from "@/lib/system-api";
 import { getApiFetchTimeoutMs } from "@/lib/api-timing";
 
-export type GateProfile = { displayName: string; role: "admin" | "user" };
+export type GateProfile = { displayName: string; role: "admin" | "user"; userId?: string };
 
 /** Max attempts and delay between attempts when `/api/login` returns 503 (system initializing). */
 const LOGIN_503_MAX_ATTEMPTS = 8;
@@ -113,7 +113,7 @@ export function PasswordGate({
         hint?: string;
         code?: string;
         status?: string;
-        user?: { role?: string };
+        user?: { id?: string; role?: string };
         sessionToken?: string;
       };
       let loginJson: LoginJson = {};
@@ -232,6 +232,7 @@ export function PasswordGate({
       onAuthenticated(issuedSessionToken, {
         displayName: loginUsername,
         role,
+        userId: typeof loginJson.user?.id === "string" ? loginJson.user.id : undefined,
       });
     } catch {
       setError("ACCESS DENIED");

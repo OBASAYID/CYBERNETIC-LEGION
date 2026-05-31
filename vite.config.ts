@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,10 +13,28 @@ const uiRoot = process.env.CYRUS_UI_ROOT
 
 /** Force lazy `client/` chunks to use the same react-query instance as `cyrus-ui/` (avoids "No QueryClient set"). */
 const rootReactQuery = path.resolve(__dirname, "node_modules/@tanstack/react-query");
+const rootPublicImagesDir = path.resolve(__dirname, "public/images");
+
+/** Merge repo-root dashboard art into Vite build output (Express also serves these in dev). */
+function copyRootPublicImagesPlugin() {
+  return {
+    name: "copy-root-public-images",
+    closeBundle() {
+      if (!fs.existsSync(rootPublicImagesDir)) return;
+      const outImagesDir = path.resolve(__dirname, "dist/public/images");
+      fs.mkdirSync(outImagesDir, { recursive: true });
+      for (const name of fs.readdirSync(rootPublicImagesDir)) {
+        if (name.startsWith(".")) continue;
+        fs.copyFileSync(path.join(rootPublicImagesDir, name), path.join(outImagesDir, name));
+      }
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    copyRootPublicImagesPlugin(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "pwa-icon.svg", "pwa-icon-192.png", "pwa-icon-512.png", "apple-touch-icon.png"],
