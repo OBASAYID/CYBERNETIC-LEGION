@@ -191,10 +191,10 @@ export function PshareFeedConsole({
 
   const stackClass =
     stack === "top"
-      ? "rounded-t-2xl rounded-b-none border-x border-t border-slate-200 border-b border-b-slate-200"
+      ? "rounded-t-2xl rounded-b-none border-x border-t border-white/14 border-b border-b-white/10"
       : stack === "bottom"
-        ? "rounded-b-2xl rounded-t-none border-x border-b border-slate-200 border-t-0"
-        : "rounded-2xl border border-slate-200";
+        ? "rounded-b-2xl rounded-t-none border-x border-b border-white/14 border-t-0"
+        : "rounded-2xl border border-white/14";
 
   return (
     <section
@@ -204,26 +204,29 @@ export function PshareFeedConsole({
         DASHBOARD_DARK_CONSOLE_BG,
         "p-4",
         DASHBOARD_CONSOLE_SHADOW,
-        "cyrus-xs-pshare-console",
+        "backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="mb-3 shrink-0 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200 bg-sky-50">
-            <Share2 className="h-4 w-4 text-sky-600" aria-hidden />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200/25 bg-sky-200/10">
+            <Share2 className="h-4 w-4 text-sky-100" aria-hidden />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-slate-500">Pshare channel</p>
-              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-sky-700">
-                <Radio className="h-3 w-3 text-sky-600" />
+              <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-sky-100/55">Pshare channel</p>
+              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/30 bg-sky-200/12 px-2 py-0.5 text-[9px] font-mono uppercase tracking-wider text-sky-100/90">
+                <Radio className="h-3 w-3 text-sky-200" />
                 24h feed
               </span>
             </div>
             <h2
-              className="text-sm font-semibold text-slate-900"
+              className="text-sm font-semibold text-white/95"
               style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
             >
               Pshare post feeds console
@@ -231,7 +234,7 @@ export function PshareFeedConsole({
           </div>
         </div>
         <div
-          className="pointer-events-none hidden h-10 w-10 rounded-full border border-slate-200 bg-cover bg-center opacity-30 sm:block cyrus-symbol-watermark"
+          className="pointer-events-none hidden h-10 w-10 rounded-full border border-violet-300/30 bg-cover bg-center opacity-40 mix-blend-screen sm:block cyrus-symbol-watermark"
           style={{ backgroundImage: `url(${TSODILO_HUNT_SYMBOLS_URL})` }}
           aria-hidden
         />
@@ -239,7 +242,7 @@ export function PshareFeedConsole({
         <Link href="/comms?tab=pshare">
           <button
             type="button"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-[11px] text-slate-700 touch-manipulation hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 cyrus-xs-pshare-open"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-white/12 bg-slate-950/40 px-3 text-[11px] text-white/75 touch-manipulation hover:border-sky-300/35 hover:text-white cyrus-xs-pshare-open"
           >
             Open Pshare
           </button>
@@ -248,7 +251,7 @@ export function PshareFeedConsole({
 
       <div className={`mb-3 shrink-0 p-2.5 cyrus-xs-pshare-compose-wrap ${DASHBOARD_DARK_CONSOLE_INNER}`}>
         {pendingMedia && (
-          <div className="relative mb-2 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+          <div className="relative mb-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
             {pendingKind === "image" && pendingMedia.previewUrl && (
               <img src={pendingMedia.previewUrl} alt="" className="max-h-24 w-full object-contain" />
             )}
@@ -261,7 +264,7 @@ export function PshareFeedConsole({
               </div>
             )}
             {(pendingKind === "file" || pendingKind === "none") && (
-              <p className="truncate p-2 text-[10px] text-slate-600">{pendingMedia.fileName}</p>
+              <p className="truncate p-2 text-[10px] text-white/70">{pendingMedia.fileName}</p>
             )}
             <button
               type="button"
@@ -290,7 +293,7 @@ export function PshareFeedConsole({
             title="Attach media"
             disabled={uploading}
             onClick={() => fileRef.current?.click()}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:border-sky-300 hover:bg-sky-50 disabled:opacity-40"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/60 hover:border-sky-300/35 disabled:opacity-40"
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
           </button>
@@ -299,13 +302,13 @@ export function PshareFeedConsole({
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Broadcast to Pshare..."
             rows={2}
-            className="min-h-11 flex-1 resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400"
+            className="min-h-11 flex-1 resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-sky-300/35"
           />
           <button
             type="button"
             onClick={submitPost}
             disabled={(!draft.trim() && !pendingMedia) || createPost.isPending || uploading}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 text-xs text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-sky-200/35 bg-sky-500/20 px-3 text-xs text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-45 cyrus-xs-pshare-post"
           >
             <Send className="h-3.5 w-3.5" />
             Post
@@ -315,11 +318,11 @@ export function PshareFeedConsole({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {postsQuery.isLoading ? (
-        <p className="text-xs text-slate-500">Loading live Pshare posts…</p>
+        <p className="text-xs text-white/55">Loading live Pshare posts…</p>
       ) : postsQuery.isError ? (
-        <p className="text-xs text-amber-700">Pshare feed unavailable right now.</p>
+        <p className="text-xs text-amber-200/80">Pshare feed unavailable right now.</p>
       ) : posts.length === 0 ? (
-        <p className="text-xs text-slate-500">No Pshare posts yet. Share text or media to publish the first update.</p>
+        <p className="text-xs text-white/55">No Pshare posts yet. Share text or media to publish the first update.</p>
       ) : activePost ? (
         <div
           className="flex min-h-0 flex-1 flex-col transition-opacity duration-200 cyrus-xs-pshare-item"
