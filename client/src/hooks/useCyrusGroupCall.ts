@@ -7,6 +7,11 @@ import type { CyrusSfuMode, GroupCallSessionInfo } from "@shared/comms/sfu-types
 import { CyrusSfuClient } from "../realtime/cyrus-sfu-client";
 import { CyrusStarGroupCall } from "../realtime/cyrus-star-group-call";
 import { systemFetch } from "@shared/cyrus-api-client";
+import type { InCallChatMessage } from "../components/comms/InCallChat";
+import {
+  uploadAndBuildCommsMediaPayload,
+  type CommsUploadProgress,
+} from "../lib/comms-media-upload";
 
 export type GroupCallParticipantView = {
   peerId: string;
@@ -44,6 +49,7 @@ export function useCyrusGroupCall({
   const [sfuStatus, setSfuStatus] = useState<CyrusSfuMode>("star");
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [groupCallChatMessages, setGroupCallChatMessages] = useState<InCallChatMessage[]>([]);
 
   const sfuRef = useRef<CyrusSfuClient | null>(null);
   const starRef = useRef<CyrusStarGroupCall | null>(null);
@@ -70,6 +76,7 @@ export function useCyrusGroupCall({
     starRef.current = null;
     setLocalStream(null);
     setActiveGroupCall(null);
+    setGroupCallChatMessages([]);
     setIsMuted(false);
     setIsVideoEnabled(true);
   }, []);
@@ -243,6 +250,78 @@ export function useCyrusGroupCall({
     });
   }, [localStream]);
 
+  const appendGroupCallChatMessage = useCallback((msg: InCallChatMessage) => {
+    setGroupCallChatMessages((prev) => {
+      const key = `${msg.senderId}:${msg.timestamp}:${msg.message}:${msg.fileUrl || ""}`;
+      if (prev.some((m) => `${m.senderId}:${m.timestamp}:${m.message}:${m.fileUrl || ""}` === key)) {
+        return prev;
+      }
+      return [...prev, msg];
+    });
+  }, []);
+
+  const sendGroupCallChatMessage = useCallback(
+    (message: string) => {
+      const active = activeGroupCallRef.current;
+      const socket = socketRef.current;
+      if (!active || !socket?.connected || !selfId) return;
+      const timestamp = new Date().toISOString();
+      appendGroupCallChatMessage({
+        senderId: selfId,
+        senderName: displayName,
+        message,
+        timestamp,
+        messageType: "text",
+      });
+      socket.emit("call-chat-message", {
+        roomId: active.roomId,
+        message,
+        timestamp,
+        messageType: "text",
+      });
+    },
+    [socketRef, selfId, displayName, appendGroupCallChatMessage],
+  );
+
+  const sendGroupCallMedia = useCallback(
+    async (file: File, caption: string, onProgress?: (progress: CommsUploadProgress) => void) => {
+      const active = activeGroupCallRef.current;
+      const socket = socketRef.current;
+      if (!active || !socket?.connected || !selfId) {
+        throw new Error("No active group call");
+      }
+      const payload = await uploadAndBuildCommsMediaPayload(
+        file,
+        caption,
+        selfId,
+        file.name,
+        onProgress,
+      );
+      if (!payload) throw new Error("Upload failed");
+      const timestamp = new Date().toISOString();
+      appendGroupCallChatMessage({
+        senderId: selfId,
+        senderName: displayName,
+        message: payload.message,
+        timestamp,
+        messageType: payload.messageType,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileMimeType: payload.fileMimeType,
+      });
+      socket.emit("call-chat-message", {
+        roomId: active.roomId,
+        message: payload.message,
+        messageType: payload.messageType,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileMimeType: payload.fileMimeType,
+        timestamp,
+      });
+    },
+    [socketRef, selfId, displayName, appendGroupCallChatMessage],
+  );
+
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !isConnected) return;
@@ -307,12 +386,38 @@ export function useCyrusGroupCall({
       });
     };
 
+    const onCallChatMessage = (data: {
+      senderId: string;
+      senderName: string;
+      message: string;
+      timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+      roomId?: string;
+    }) => {
+      const active = activeGroupCallRef.current;
+      if (!active || data.roomId !== active.roomId) return;
+      appendGroupCallChatMessage({
+        senderId: data.senderId,
+        senderName: data.senderName,
+        message: data.message,
+        timestamp: data.timestamp || new Date().toISOString(),
+        messageType: data.messageType,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName,
+        fileMimeType: data.fileMimeType,
+      });
+    };
+
     socket.on("incoming-group-call", onIncoming);
     socket.on("group-call-joined", onJoined);
     socket.on("group-call-started", onJoined);
     socket.on("peer-joined", onPeerJoined);
     socket.on("call-ended", onCallEnded);
     socket.on("peer-left", onPeerLeft);
+    socket.on("call-chat-message", onCallChatMessage);
 
     return () => {
       socket.off("incoming-group-call", onIncoming);
@@ -321,8 +426,9 @@ export function useCyrusGroupCall({
       socket.off("peer-joined", onPeerJoined);
       socket.off("call-ended", onCallEnded);
       socket.off("peer-left", onPeerLeft);
+      socket.off("call-chat-message", onCallChatMessage);
     };
-  }, [socketRef, isConnected, selfId, sfuStatus, startMediaSession, teardown]);
+  }, [socketRef, isConnected, selfId, sfuStatus, startMediaSession, teardown, appendGroupCallChatMessage]);
 
   useEffect(() => () => teardown(), [teardown]);
 
@@ -340,5 +446,8 @@ export function useCyrusGroupCall({
     endGroupCall,
     toggleMute,
     toggleVideo,
+    groupCallChatMessages,
+    sendGroupCallChatMessage,
+    sendGroupCallMedia,
   };
 }

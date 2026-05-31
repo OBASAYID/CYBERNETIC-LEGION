@@ -45,10 +45,13 @@ import {
   createSealedSignalingContext,
   disposeSealedSignalingContext,
   emitSealedWebRtcSignal,
+  isCommsSealedSignalingEnabled,
   resolveWebRtcRelayPayload,
   type SealedSignalingContext,
 } from "../realtime/comms-sealed-signaling";
 import { buildPresenceSendMessagePayload } from "../lib/comms-outbound";
+import { CommsSessionRecorder } from "../lib/comms-session-recorder";
+import { uploadAndBuildCommsMediaPayload, type CommsUploadProgress } from "../lib/comms-media-upload";
 import {
   enqueueOutboundMessage,
   flushOutboundQueue,
@@ -169,7 +172,7 @@ async function emitSmartWebRtcSignal(
         : kind === "ice" && payload.candidate !== undefined
           ? ({ kind: "ice-candidate", candidate: payload.candidate } as const)
           : null;
-  if (sealedCtx?.crypto.isReady && body) {
+  if (isCommsSealedSignalingEnabled() && sealedCtx?.crypto.isReady && body) {
     try {
       await emitSealedWebRtcSignal(sealedCtx, body);
       return;
@@ -272,6 +275,17 @@ interface PresenceContextType {
   stopScreenShare: () => Promise<void>;
   sendCallChatMessage: (payload: ChatOutboundPayload) => void;
   callChatMessages: InCallChatMessage[];
+  isCallRecording: boolean;
+  isCallRecordingUploading: boolean;
+  callRecordingDurationSec: number;
+  remoteRecordingActive: boolean;
+  remoteRecordingBy?: string;
+  toggleCallRecording: () => void;
+  sendCallMedia: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: CommsUploadProgress) => void,
+  ) => Promise<void>;
 }
 
 const PresenceContext = createContext<PresenceContextType | null>(null);
@@ -387,6 +401,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenShareStream, setScreenShareStream] = useState<MediaStream | null>(null);
   const [remoteScreenSharerName, setRemoteScreenSharerName] = useState<string | null>(null);
+  const [isCallRecording, setIsCallRecording] = useState(false);
+  const [isCallRecordingUploading, setIsCallRecordingUploading] = useState(false);
+  const [callRecordingDurationSec, setCallRecordingDurationSec] = useState(0);
+  const [remoteRecordingActive, setRemoteRecordingActive] = useState(false);
+  const [remoteRecordingBy, setRemoteRecordingBy] = useState<string | undefined>();
+  const sessionRecorderRef = useRef<CommsSessionRecorder | null>(null);
   const iceRestartAttemptsRef = useRef(0);
   const iceRestartVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Ignore spurious ICE "disconnected" before we have ever reached a live path. */
@@ -689,6 +709,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setCallDuration(0);
     setMediaControls({ isMuted: false, isVideoEnabled: true });
     setCallChatMessages([]);
+    sessionRecorderRef.current?.cancel();
+    sessionRecorderRef.current = null;
+    setIsCallRecording(false);
+    setIsCallRecordingUploading(false);
+    setCallRecordingDurationSec(0);
+    setRemoteRecordingActive(false);
+    setRemoteRecordingBy(undefined);
   }, []);
 
   const applyReplayedCommsEvent = useCallback(
@@ -852,15 +879,17 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         disposeSealedSignalingContext(sealedSignalingRef.current);
         sealedSignalingRef.current = null;
-        void createSealedSignalingContext(socket, roomId, rtcPeerId())
-          .then((ctx) => {
-            if (!alive()) {
-              disposeSealedSignalingContext(ctx);
-              return;
-            }
-            sealedSignalingRef.current = ctx;
-          })
-          .catch((e) => console.warn("[WebRTC-Presence] Sealed signaling unavailable:", e));
+        if (isCommsSealedSignalingEnabled()) {
+          void createSealedSignalingContext(socket, roomId, rtcPeerId())
+            .then((ctx) => {
+              if (!alive()) {
+                disposeSealedSignalingContext(ctx);
+                return;
+              }
+              sealedSignalingRef.current = ctx;
+            })
+            .catch((e) => console.warn("[WebRTC-Presence] Sealed signaling unavailable:", e));
+        }
 
         setActiveCall((prev) =>
           prev && prev.roomId === roomId
@@ -1512,6 +1541,27 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       addNotification("info", `Call ended${data.reason ? `: ${data.reason}` : ""}`);
     });
 
+    socket.on("peer-left", (data: { roomId: string; peerId?: string }) => {
+      const call = activeCallRef.current;
+      if (!call || call.roomId !== data.roomId) return;
+      console.log("[Presence] Peer left call — ending session");
+      setActiveCall(null);
+      activeCallRef.current = null;
+      cleanupMedia();
+      addNotification("info", "Call ended — other participant left");
+    });
+
+    socket.on(
+      "session-recording-state",
+      (data: { roomId: string; isRecording: boolean; userId?: string; displayName?: string }) => {
+        const call = activeCallRef.current;
+        if (!call || call.roomId !== data.roomId) return;
+        if (data.userId && data.userId === currentUserIdRef.current) return;
+        setRemoteRecordingActive(Boolean(data.isRecording));
+        setRemoteRecordingBy(data.isRecording ? data.displayName || "Participant" : undefined);
+      },
+    );
+
     socket.on('call-failed', (data: { reason: string }) => {
       console.log("[Presence] Call failed:", data.reason);
       setActiveCall(null);
@@ -1559,7 +1609,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         roomId?: string;
       }) => {
         const call = activeCallRef.current;
-        if (call && data.roomId && data.roomId !== call.roomId) return;
+        if (!call || (data.roomId && data.roomId !== call.roomId)) return;
         setCallChatMessages((prev) => {
           const next: InCallChatMessage = {
             senderId: data.senderId,
@@ -1915,6 +1965,65 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const toggleCallRecording = useCallback(() => {
+    const call = activeCallRef.current;
+    const socket = socketRef.current;
+    if (!call) return;
+
+    if (!sessionRecorderRef.current) {
+      sessionRecorderRef.current = new CommsSessionRecorder((state, detail) => {
+        setIsCallRecording(state === "recording");
+        setIsCallRecordingUploading(state === "uploading");
+        if (detail?.durationSec != null) {
+          setCallRecordingDurationSec(detail.durationSec);
+        }
+        if (state === "error") {
+          addNotification("error", detail?.error || "Recording failed");
+        } else if (state === "saved") {
+          addNotification("success", "Call recording saved");
+        }
+      });
+    }
+
+    const recorder = sessionRecorderRef.current;
+
+    if (recorder.isRecording()) {
+      socket?.emit("session-recording-state", {
+        roomId: call.roomId,
+        isRecording: false,
+        userId: currentUserIdRef.current || undefined,
+        displayName: displayNameRef.current,
+        clientSeq: nextClientSeq(),
+      });
+      void recorder.stop(true, true);
+      return;
+    }
+
+    const remoteStreams =
+      remoteStreamRef.current.getTracks().length > 0 ? [remoteStreamRef.current] : [];
+
+    const started = recorder.start({
+      roomId: call.roomId,
+      callType: call.callType,
+      localStream: localStreamRef.current,
+      remoteStreams,
+      screenShareStream: screenStreamRef.current,
+      recordedBy: currentUserIdRef.current || undefined,
+      displayName: displayNameRef.current,
+    });
+
+    if (started) {
+      socket?.emit("session-recording-state", {
+        roomId: call.roomId,
+        isRecording: true,
+        userId: currentUserIdRef.current || undefined,
+        displayName: displayNameRef.current,
+        clientSeq: nextClientSeq(),
+      });
+      addNotification("info", "Call recording started");
+    }
+  }, [addNotification, nextClientSeq]);
+
   const sendCallChatMessage = useCallback((payload: ChatOutboundPayload) => {
     const call = activeCallRef.current;
     const uid = currentUserIdRef.current;
@@ -1948,6 +2057,30 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       timestamp,
     });
   }, [addNotification]);
+
+  const sendCallMedia = useCallback(
+    async (file: File, caption: string, onProgress?: (progress: CommsUploadProgress) => void) => {
+      const call = activeCallRef.current;
+      const uid = currentUserIdRef.current;
+      if (!call || !uid) {
+        addNotification("error", "Join an active call before sharing media.");
+        throw new Error("No active call");
+      }
+      const payload = await uploadAndBuildCommsMediaPayload(
+        file,
+        caption,
+        uid,
+        file.name,
+        onProgress,
+      );
+      if (!payload) {
+        addNotification("error", "Media upload failed");
+        throw new Error("Upload failed");
+      }
+      sendCallChatMessage(payload);
+    },
+    [addNotification, sendCallChatMessage],
+  );
 
   const stopScreenShare = useCallback(async () => {
     const pc = peerConnectionRef.current;
@@ -2297,6 +2430,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         stopScreenShare,
         sendCallChatMessage,
         callChatMessages,
+        isCallRecording,
+        isCallRecordingUploading,
+        callRecordingDurationSec,
+        remoteRecordingActive,
+        remoteRecordingBy,
+        toggleCallRecording,
+        sendCallMedia,
       }}
     >
       {children}

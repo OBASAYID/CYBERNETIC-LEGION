@@ -2,7 +2,6 @@ import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { PresenceProvider } from "../../client/src/contexts/PresenceContext";
 import { CommsPresenceBootstrap } from "../../client/src/hooks/usePresenceBootstrap";
-import { CommsCallRouteWatcher } from "./hooks/use-comms-call-route";
 import { CommsRoutes } from "./comms-routes";
 import { CommandCenterRoutes } from "./command-center-routes";
 import NotFound from "@/pages/not-found";
@@ -23,7 +22,6 @@ export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRo
   return (
     <PresenceProvider>
       <CommsPresenceBootstrap />
-      <CommsCallRouteWatcher />
       {onOpenApiKeyModal && (
         <div className="fixed bottom-4 right-4 z-[90]">
           <ApiKeyTriggerButton onClick={onOpenApiKeyModal} isConfigured={apiKeyConfigured} />

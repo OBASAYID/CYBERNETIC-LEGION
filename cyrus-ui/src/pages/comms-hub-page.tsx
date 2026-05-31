@@ -3,27 +3,76 @@
  * Tabs: CHAT · VOICE · VIDEO · GROUP · VOICE NOTE · VIDEO NOTE
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type MutableRefObject, type CSSProperties } from "react";
 import {
   MessageSquare, Phone, Video, Users, Mic, Film, MicOff, VideoOff,
   PhoneOff, Send, Search, Shield, SignalHigh, Radio, Zap, Camera,
   StopCircle, Trash2, ChevronRight, PhoneCall, Wifi, Lock, Volume2,
-  Monitor, Signal, Activity, Globe, Settings2, Antenna,
+  Monitor, Signal, Activity, Globe, Settings2, Antenna, Paperclip,
 } from "lucide-react";
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
 import { useCyrusGroupCall } from "../../../client/src/hooks/useCyrusGroupCall";
+import { CallView } from "../../../client/src/components/comms/CallView";
+import { InCallChat, type InCallChatMessage } from "../../../client/src/components/comms/InCallChat";
+import { CommsIncomingCallOverlay } from "@/components/comms/comms-call-chrome";
 import { PshareTabPanel } from "@/components/comms/PshareTabPanel";
-import { systemFetch } from "@shared/cyrus-api-client";
+import { systemFetch, systemApiUrl } from "@shared/cyrus-api-client";
+import {
+  COMMS_MEDIA_FILE_ACCEPT,
+  uploadAndBuildCommsMediaPayload,
+  type CommsUploadProgress,
+} from "../../../client/src/lib/comms-media-upload";
+import { isCommsCad3dFile } from "../../../client/src/lib/comms-cad-formats";
+import { formatCommsFileSize } from "@shared/comms/media-formats";
 
 /* ══════════════════════════════════════════════════════════════
-   THEME
+   THEME — charcoal matte + red accent (Epic / launcher style)
 ══════════════════════════════════════════════════════════════ */
 const C = {
-  crimson: "#e11d48", cyan: "#06b6d4", purple: "#7c3aed",
-  green: "#22c55e", orange: "#f97316", yellow: "#eab308",
-  bg: "#1c1c21", card: "rgba(42,42,52,0.88)",
-  border: "rgba(255,255,255,0.08)",
+  red: "#E70011",
+  redDim: "#B8000E",
+  redGlow: "rgba(231,0,17,0.35)",
+  steel: "#8B949E",
+  slate: "#2A2D32",
+  slateLight: "#363A40",
+  charcoal: "#121212",
+  charcoalDeep: "#0B0B0B",
+  sidebar: "#1B1B1B",
+  green: "#3DDC84",
+  amber: "#F5A663",
+  sky: "#82CFFF",
+  /** legacy aliases used across panels */
+  crimson: "#E70011",
+  cyan: "#82CFFF",
+  purple: "#6B7280",
+  orange: "#F5A663",
+  yellow: "#F9D466",
+  bg: "#0B0B0B",
+  card: "rgba(27,27,27,0.94)",
+  border: "rgba(255,255,255,0.06)",
+  borderLight: "rgba(255,255,255,0.09)",
+  textMuted: "#888888",
+  bubbleMine: "rgba(38,40,44,0.98)",
+  bubbleMineBorder: "rgba(255,255,255,0.08)",
+  bubbleTheirs: "rgba(255,255,255,0.035)",
 } as const;
+
+/** Subtle grain for sidebars / panels — avoids flat plastic look */
+const MATTE_SURFACE: CSSProperties = {
+  backgroundColor: C.sidebar,
+  backgroundImage: [
+    "linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 45%)",
+    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E\")",
+  ].join(", "),
+};
+
+const MAIN_SURFACE: CSSProperties = {
+  backgroundColor: C.charcoalDeep,
+  backgroundImage: [
+    "radial-gradient(ellipse 120% 80% at 50% -20%, rgba(231,0,17,0.06) 0%, transparent 55%)",
+    "linear-gradient(180deg, #141414 0%, #0B0B0B 100%)",
+  ].join(", "),
+};
 
 type CommsTab = "chat" | "voice" | "video" | "group" | "vnote" | "vidnote" | "pshare";
 
@@ -35,6 +84,8 @@ interface OnlineUser {
 interface ChatMsg {
   id: string; senderId: string; senderName: string;
   content: string; createdAt: string; messageType?: string;
+  fileUrl?: string; fileName?: string; fileMimeType?: string;
+  voiceDurationSeconds?: number; fileSizeBytes?: number;
 }
 
 function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { id: string; name: string } | null): ChatMsg {
@@ -45,6 +96,17 @@ function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { 
       : senderId && targetUser && senderId === targetUser.id
         ? targetUser.name
         : "Operator";
+  let voiceDurationSeconds: number | undefined;
+  if (raw?.voiceDurationSeconds != null) {
+    voiceDurationSeconds = Number(raw.voiceDurationSeconds);
+  } else if (raw?.messageType === "voice-note" && raw?.content) {
+    try {
+      const parsed = JSON.parse(String(raw.content)) as { d?: number };
+      if (typeof parsed.d === "number") voiceDurationSeconds = parsed.d;
+    } catch {
+      /* legacy plain duration */
+    }
+  }
   return {
     id: String(raw?.id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
     senderId,
@@ -52,6 +114,11 @@ function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { 
     content: String(raw?.content ?? raw?.message ?? ""),
     createdAt: String(raw?.createdAt ?? raw?.timestamp ?? new Date().toISOString()),
     messageType: typeof raw?.messageType === "string" ? raw.messageType : undefined,
+    fileUrl: typeof raw?.fileUrl === "string" ? raw.fileUrl : undefined,
+    fileName: typeof raw?.fileName === "string" ? raw.fileName : undefined,
+    fileMimeType: typeof raw?.fileMimeType === "string" ? raw.fileMimeType : undefined,
+    voiceDurationSeconds,
+    fileSizeBytes: raw?.fileSizeBytes != null ? Number(raw.fileSizeBytes) : undefined,
   };
 }
 
@@ -84,7 +151,7 @@ const ANIM_CSS = `
 ══════════════════════════════════════════════════════════════ */
 function initials(n: string) { return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?"; }
 function colorForName(n: string) {
-  const c = [C.crimson,C.cyan,C.purple,C.green,C.orange,C.yellow];
+  const c = [C.red, C.sky, C.amber, C.green, C.steel, "#C4A882"];
   let h = 0; for(let i=0;i<n.length;i++) h = n.charCodeAt(i)+((h<<5)-h);
   return c[Math.abs(h)%c.length];
 }
@@ -92,6 +159,76 @@ function fmtDur(s: number) { const m=Math.floor(s/60),sec=s%60; return `${String
 function timeAgo(iso: string) {
   const d = Date.now()-new Date(iso).getTime(), m=Math.floor(d/60000);
   if(m<1) return "now"; if(m<60) return `${m}m`; return `${Math.floor(m/60)}h`;
+}
+
+function renderDirectChatBody(msg: ChatMsg) {
+  const mediaUrl = msg.fileUrl ? systemApiUrl(msg.fileUrl) : null;
+  const mt = msg.messageType || "text";
+  const mime = msg.fileMimeType || "";
+
+  if (mediaUrl && mt === "voice-note") {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">Voice note</p>
+        <audio src={mediaUrl} controls className="w-full max-w-sm rounded-lg" preload="metadata" />
+        {msg.voiceDurationSeconds != null && msg.voiceDurationSeconds > 0 && (
+          <p className="text-[9px] text-white/30">{fmtDur(msg.voiceDurationSeconds)}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (mediaUrl && (mt === "cad-3d" || isCommsCad3dFile(msg.fileName, mime))) {
+    return (
+      <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-[12px] underline"
+        style={{ color: "rgba(130,207,255,0.85)" }}>
+        🧊 {msg.fileName || "CAD file"}
+        {msg.content.trim() ? ` — ${msg.content}` : ""}
+      </a>
+    );
+  }
+
+  if (mediaUrl && mime.startsWith("image/")) {
+    return (
+      <div className="space-y-1.5">
+        <a href={mediaUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg">
+          <img src={mediaUrl} alt={msg.fileName || "Shared image"} className="max-h-48 w-full object-cover rounded-lg" />
+        </a>
+        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
+      </div>
+    );
+  }
+
+  if (mediaUrl && (mime.startsWith("video/") || mt === "media" && mime.startsWith("video"))) {
+    return (
+      <div className="space-y-1.5">
+        <video src={mediaUrl} controls playsInline className="w-full max-w-sm rounded-lg" preload="metadata" />
+        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
+      </div>
+    );
+  }
+
+  if (mediaUrl && mime.startsWith("audio/")) {
+    return (
+      <div className="space-y-1.5">
+        <audio src={mediaUrl} controls className="w-full max-w-sm rounded-lg" preload="metadata" />
+        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
+      </div>
+    );
+  }
+
+  if (mediaUrl) {
+    return (
+      <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-[12px] underline"
+        style={{ color: "rgba(130,207,255,0.85)" }}>
+        📎 {msg.fileName || "Shared file"}
+        {msg.fileSizeBytes ? ` · ${formatCommsFileSize(msg.fileSizeBytes)}` : ""}
+        {msg.content.trim() ? ` — ${msg.content}` : ""}
+      </a>
+    );
+  }
+
+  return <p className="text-[12px] text-white/70 leading-relaxed">{msg.content || ""}</p>;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -219,8 +356,9 @@ function StatPill({ label, value, color=C.cyan }:
 /* ══════════════════════════════════════════════════════════════
    USERS RAIL  — matches reference Friends sidebar exactly
 ══════════════════════════════════════════════════════════════ */
-function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
-  { users:OnlineUser[]; myId:string; myName:string; onCallVoice:(id:string,name:string)=>void;
+function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVideo, onMessage }:
+  { users:OnlineUser[]; myId:string; myName:string; selectedUserId?:string|null;
+    onCallVoice:(id:string,name:string)=>void;
     onCallVideo:(id:string,name:string)=>void; onMessage:(id:string,name:string)=>void; }) {
   const [search, setSearch] = useState("");
   const filtered = users.filter(u => u.id!==myId && u.displayName.toLowerCase().includes(search.toLowerCase()));
@@ -229,15 +367,15 @@ function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
   function initials2(n: string) { return n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?"; }
 
   return (
-    <aside className="flex flex-col shrink-0"
-      style={{ width:215, borderRight:`1px solid ${C.border}`, background:"rgba(30,30,36,0.97)" }}>
+    <aside className="flex flex-col shrink-0 relative"
+      style={{ width:215, borderRight:`1px solid ${C.border}`, ...MATTE_SURFACE }}>
 
-      {/* ── Profile header — matches "Amy Winnar" in reference ── */}
+      {/* ── Profile header ── */}
       <div className="px-4 pt-5 pb-4 shrink-0" style={{ borderBottom:`1px solid ${C.border}` }}>
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <div className="flex h-11 w-11 items-center justify-center rounded-full font-bold text-sm text-white"
-              style={{ background:"linear-gradient(135deg, #7c3aed, #4f46e5)", boxShadow:"0 4px 16px rgba(124,58,237,0.4)" }}>
+              style={{ background:`linear-gradient(145deg, ${C.red}, ${C.redDim})`, boxShadow:`0 4px 14px ${C.redGlow}` }}>
               {initials2(myName)}
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2"
@@ -274,17 +412,26 @@ function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
           <p className="text-center text-[10px] text-white/25 pt-8 italic">No operators found</p>
         ) : filtered.map(u => {
           const isOnline = u.isOnline || u.status==="online";
+          const isSelected = selectedUserId === u.id;
           return (
             <div key={u.id}
-              className="group flex items-center gap-2.5 rounded-xl px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.06]"
+              className="group relative flex items-center gap-2.5 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all hover:bg-white/[0.05]"
+              style={{
+                background: isSelected ? "rgba(255,255,255,0.07)" : "transparent",
+              }}
               onClick={()=>onMessage(u.id,u.displayName)}>
+              {isSelected && (
+                <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
+                  style={{ background: C.red, boxShadow: `0 0 8px ${C.redGlow}` }} />
+              )}
               <div className="relative shrink-0">
                 <Avatar name={u.displayName} size={34} />
                 <StatusDot status={u.status??(u.isOnline?"online":"offline")} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-medium text-white/80 truncate">{u.displayName}</p>
-                <p className="text-[9px] text-white/30 capitalize">
+                <p className="text-[12px] font-medium truncate"
+                  style={{ color: isSelected ? "#fff" : "rgba(255,255,255,0.78)" }}>{u.displayName}</p>
+                <p className="text-[9px] capitalize" style={{ color: C.textMuted }}>
                   {u.status==="in_call"?"in call":isOnline?"online":"offline"}
                 </p>
               </div>
@@ -324,11 +471,15 @@ function UsersRail({ users, myId, myName, onCallVoice, onCallVideo, onMessage }:
 ══════════════════════════════════════════════════════════════ */
 function ChatPanel({ myId, myName, targetUser }:
   { myId:string; myName:string; targetUser:{id:string;name:string}|null }) {
-  const { sendMessage, wsRef } = usePresence();
+  const { sendMessage, sendChatMessage, wsRef } = usePresence();
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<CommsUploadProgress | null>(null);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const commIdentityHeaders = useMemo(
     () => ({ "x-device-id": myId, "x-user-id": myId }),
     [myId],
@@ -368,8 +519,14 @@ function ChatPanel({ myId, myName, targetUser }:
       senderName: string;
       message: string;
       timestamp: string;
+      messageType?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+      voiceDurationSeconds?: number;
+      fileSizeBytes?: number;
     }) => {
-      if (data.senderId !== targetUser.id) return;
+      if (data.senderId !== targetUser.id && data.senderId !== myId) return;
       const normalized = normalizeChatMsg(
         {
           id: data.id ?? `msg-${Date.now()}`,
@@ -377,6 +534,12 @@ function ChatPanel({ myId, myName, targetUser }:
           senderName: data.senderName,
           content: data.message,
           createdAt: data.timestamp,
+          messageType: data.messageType,
+          fileUrl: data.fileUrl,
+          fileName: data.fileName,
+          fileMimeType: data.fileMimeType,
+          voiceDurationSeconds: data.voiceDurationSeconds,
+          fileSizeBytes: data.fileSizeBytes,
         },
         myId,
         myName,
@@ -390,16 +553,76 @@ function ChatPanel({ myId, myName, targetUser }:
       });
     };
 
+    const onMessageSent = (data: {
+      id?: string;
+      recipientId?: string;
+      message?: string;
+      messageType?: string;
+      timestamp?: string;
+      fileUrl?: string;
+      fileName?: string;
+      fileMimeType?: string;
+      voiceDurationSeconds?: number;
+      fileSizeBytes?: number;
+    }) => {
+      if (data.recipientId !== targetUser.id) return;
+      const normalized = normalizeChatMsg(
+        {
+          id: data.id ?? `msg-${Date.now()}`,
+          senderId: myId,
+          senderName: myName,
+          content: data.message ?? "",
+          createdAt: data.timestamp ?? new Date().toISOString(),
+          messageType: data.messageType,
+          fileUrl: data.fileUrl,
+          fileName: data.fileName,
+          fileMimeType: data.fileMimeType,
+          voiceDurationSeconds: data.voiceDurationSeconds,
+          fileSizeBytes: data.fileSizeBytes,
+        },
+        myId,
+        myName,
+        targetUser,
+      );
+      setMsgs((prev) => (prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]));
+    };
+
     socket.on("new-message", onNewMessage);
+    socket.on("message-sent", onMessageSent);
     return () => {
       socket.off("new-message", onNewMessage);
+      socket.off("message-sent", onMessageSent);
     };
   }, [targetUser?.id, myId, myName, targetUser, wsRef]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [msgs]);
 
-  const send = () => {
-    if (!input.trim()||!targetUser||sending) return;
+  const send = async () => {
+    if (!targetUser || sending || uploading) return;
+
+    if (attachFile) {
+      setUploading(true);
+      setUploadProgress({ loaded: 0, total: attachFile.size, percent: 0, phase: "init" });
+      try {
+        const payload = await uploadAndBuildCommsMediaPayload(
+          attachFile,
+          input.trim(),
+          myId,
+          attachFile.name,
+          setUploadProgress,
+        );
+        if (!payload) return;
+        sendChatMessage(targetUser.id, payload);
+        setInput("");
+        setAttachFile(null);
+      } finally {
+        setUploading(false);
+        setUploadProgress(null);
+      }
+      return;
+    }
+
+    if (!input.trim()) return;
     setSending(true);
     const text = input.trim(); setInput("");
     setMsgs(p=>[...p, normalizeChatMsg(
@@ -423,6 +646,12 @@ function ChatPanel({ myId, myName, targetUser }:
       });
     }
     setSending(false);
+  };
+
+  const handleFilePick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) setAttachFile(file);
   };
 
   if (!targetUser) return (
@@ -474,7 +703,6 @@ function ChatPanel({ myId, myName, targetUser }:
         {msgs.map(msg => {
           const safeSenderName = msg.senderName || "Operator";
           const safeCreatedAt = msg.createdAt || new Date().toISOString();
-          const safeContent = msg.content || "";
           const mine = msg.senderId===myId;
           return (
             /* Activity-feed style card: avatar + name/time + message + Reply */
@@ -490,16 +718,15 @@ function ChatPanel({ myId, myName, targetUser }:
               {/* Card body */}
               <div className="flex-1 min-w-0 rounded-2xl px-4 py-3"
                 style={{
-                  background: mine ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.05)",
-                  border: `1px solid ${mine ? "rgba(124,58,237,0.22)" : C.border}`,
+                  background: mine ? C.bubbleMine : C.bubbleTheirs,
+                  border: `1px solid ${mine ? C.bubbleMineBorder : C.border}`,
                 }}>
                 {/* Name + time row */}
                 <div className="flex items-baseline gap-2 mb-1.5">
                   <p className="text-[12px] font-bold text-white/90 truncate">{safeSenderName}</p>
                   <p className="text-[9px] text-white/30 shrink-0">{timeAgo(safeCreatedAt)}</p>
                 </div>
-                {/* Message text */}
-                <p className="text-[12px] text-white/70 leading-relaxed">{safeContent}</p>
+                {renderDirectChatBody(msg)}
                 {/* Reply button — matches reference "Reply" link */}
                 {!mine && (
                   <button type="button"
@@ -515,22 +742,47 @@ function ChatPanel({ myId, myName, targetUser }:
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — warm glassmorphism */}
-      <div className="flex items-center gap-2.5 px-5 py-3.5 shrink-0"
-        style={{ borderTop:`1px solid ${C.border}`, background:"rgba(28,28,34,0.6)" }}>
-        <div className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-2.5"
-          style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
-          <input type="text" value={input} onChange={e=>setInput(e.target.value)}
-            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
-            placeholder="Write a message…"
-            className="flex-1 bg-transparent text-[13px] text-white/80 placeholder:text-white/30 focus:outline-none" />
+      {/* Input bar — dark pill, red send */}
+      <div className="flex flex-col gap-2 px-5 py-3.5 shrink-0"
+        style={{ borderTop:`1px solid ${C.border}`, background:"rgba(18,18,18,0.92)" }}>
+        {attachFile && (
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] text-white/60"
+            style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${C.borderLight}` }}>
+            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate flex-1">{attachFile.name}</span>
+            <button type="button" onClick={()=>setAttachFile(null)} className="text-white/40 hover:text-white/70">✕</button>
+          </div>
+        )}
+        {uploadProgress && uploading && (
+          <p className="text-[10px] text-white/35 font-mono">
+            Uploading… {uploadProgress.percent}%
+          </p>
+        )}
+        <div className="flex items-center gap-2.5">
+          <input ref={fileRef} type="file" accept={COMMS_MEDIA_FILE_ACCEPT} className="hidden" onChange={handleFilePick} />
+          <button type="button" title="Attach file or media" disabled={uploading}
+            onClick={()=>fileRef.current?.click()}
+            className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-105 disabled:opacity-30"
+            style={{ background:"rgba(255,255,255,0.06)", border:`1px solid ${C.border}` }}>
+            <Paperclip className="h-4 w-4 text-white/50" strokeWidth={1.8} />
+          </button>
+          <div className="flex-1 flex items-center gap-3 rounded-full px-4 py-2.5"
+            style={{ background:C.slate, border:`1px solid ${C.borderLight}` }}>
+            <input type="text" value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}}
+              placeholder={attachFile ? "Add a caption…" : uploading ? "Uploading…" : "Write a message…"}
+              disabled={uploading}
+              className="flex-1 bg-transparent text-[13px] text-white/85 placeholder:text-white/35 focus:outline-none disabled:opacity-50" />
+          </div>
+          <button type="button" onClick={()=>void send()} disabled={(!input.trim()&&!attachFile)||sending||uploading}
+            className="flex items-center justify-center h-10 w-10 rounded-full transition-all hover:scale-105 disabled:opacity-30"
+            style={{
+              background: (input.trim()||attachFile) ? C.red : C.slateLight,
+              boxShadow: (input.trim()||attachFile) ? `0 4px 14px ${C.redGlow}` : "none",
+            }}>
+            <Send className="h-4 w-4 text-white" strokeWidth={2} />
+          </button>
         </div>
-        <button type="button" onClick={send} disabled={!input.trim()||sending}
-          className="flex items-center justify-center h-10 w-10 rounded-xl transition-all hover:scale-105 disabled:opacity-30"
-          style={{ background:"linear-gradient(135deg, #7c3aed, #5b21b6)",
-            boxShadow: input.trim()?"0 4px 16px rgba(124,58,237,0.35)":"none" }}>
-          <Send className="h-4 w-4 text-white" strokeWidth={2} />
-        </button>
       </div>
     </div>
   );
@@ -665,6 +917,8 @@ function GroupCallHub({
   onStartGroupCall, onJoinByRoomId,
   onAcceptGroupCall, onDeclineGroupCall, onEndGroupCall,
   onToggleMute, onToggleVideo, isMuted, isVideoEnabled,
+  groupCallChatMessages, onSendGroupCallChatMessage, onSendGroupCallMedia,
+  wsRef,
 }: {
   myUserId:string; myName:string; users:OnlineUser[]; sfuMode:string;
   activeGroupCall:any; incomingGroupCall:any;
@@ -673,12 +927,21 @@ function GroupCallHub({
   onAcceptGroupCall:()=>void; onDeclineGroupCall:()=>void;
   onEndGroupCall:()=>void; onToggleMute:()=>void; onToggleVideo:()=>void;
   isMuted:boolean; isVideoEnabled:boolean;
+  groupCallChatMessages: InCallChatMessage[];
+  onSendGroupCallChatMessage: (message: string) => void;
+  onSendGroupCallMedia: (
+    file: File,
+    caption: string,
+    onProgress?: (progress: CommsUploadProgress) => void,
+  ) => Promise<void>;
+  wsRef: MutableRefObject<unknown>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [callType, setCallType] = useState<"audio"|"video">("video");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [tick, setTick] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [showGroupChat, setShowGroupChat] = useState(false);
 
   useEffect(() => { const t=setInterval(()=>setTick(v=>v+1),700); return()=>clearInterval(t); },[]);
   useEffect(() => {
@@ -705,7 +968,7 @@ function GroupCallHub({
         <div className="relative" style={{ animation:"cy-float 3s ease-in-out infinite" }}>
           <Avatar name={caller} size={88} ring speaking />
           <div className="absolute -bottom-1 -right-1 flex items-center justify-center h-7 w-7 rounded-full"
-            style={{ background:C.purple, border:"2px solid rgba(8,8,16,1)" }}>
+            style={{ background:C.steel, border:"2px solid rgba(8,8,16,1)" }}>
             <Users className="h-3.5 w-3.5 text-white" strokeWidth={2} />
           </div>
         </div>
@@ -749,7 +1012,8 @@ function GroupCallHub({
     const RADIUS = Math.min(200, 100+N*22);
 
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex flex-col overflow-hidden">
         <HexGrid />
 
         {/* Call header bar */}
@@ -766,7 +1030,7 @@ function GroupCallHub({
           <span className="text-[8px] font-mono text-white/30 font-black tabular-nums"
             style={{ color:C.cyan }}>{fmtDur(elapsed)}</span>
           <div className="ml-auto flex items-center gap-4">
-            <StatPill label="PARTICIPANTS" value={String(N)} color={C.purple} />
+            <StatPill label="PARTICIPANTS" value={String(N)} color={C.amber} />
             <StatPill label="MODE" value={sfuMode?.toUpperCase()??"P2P"} color={C.cyan} />
             <SignalBars quality={4} color={C.green} />
           </div>
@@ -777,7 +1041,7 @@ function GroupCallHub({
           {/* Multi-layer orbital rings */}
           {[
             { r:RADIUS*2+50, col:C.cyan,   dur:"10s", dir:1,  w:1 },
-            { r:RADIUS*2+90, col:C.purple, dur:"16s", dir:-1, w:1 },
+            { r:RADIUS*2+90, col:C.steel, dur:"16s", dir:-1, w:1 },
             { r:RADIUS*2+130,col:C.crimson,dur:"22s", dir:1,  w:1 },
             { r:RADIUS*2+170,col:C.cyan,   dur:"30s", dir:-1, w:1 },
           ].map(({r,col,dur,dir,w},i)=>(
@@ -794,7 +1058,7 @@ function GroupCallHub({
           {/* Centre glow */}
           <div className="absolute rounded-full"
             style={{ width:80, height:80,
-              background:`radial-gradient(circle, ${C.crimson}25, ${C.purple}12, transparent)`,
+              background:`radial-gradient(circle, ${C.red}22, ${C.slate}40, transparent)`,
               animation:"cy-pulse 2.5s ease-in-out infinite",
               filter:"blur(8px)" }} />
           <div className="absolute rounded-full"
@@ -856,7 +1120,7 @@ function GroupCallHub({
               color:isMuted?C.crimson:C.cyan, active:isMuted, fn:onToggleMute },
             { label:isVideoEnabled?"STOP VID":"START VID", icon:isVideoEnabled?VideoOff:Video,
               color:isVideoEnabled?C.orange:C.cyan, active:!isVideoEnabled, fn:onToggleVideo },
-            { label:"SHARE SCREEN", icon:Monitor, color:C.purple, active:false, fn:()=>{} },
+            { label:showGroupChat?"HIDE CHAT":"CHAT", icon:MessageSquare, color:C.red, active:showGroupChat, fn:()=>setShowGroupChat(v=>!v) },
           ].map(({label,icon:Icon,color,active,fn})=>(
             <button key={label} type="button" onClick={fn}
               className="flex flex-col items-center gap-1.5 rounded-2xl px-4 py-3 transition-all hover:scale-110"
@@ -878,6 +1142,20 @@ function GroupCallHub({
             LEAVE CALL
           </button>
         </div>
+        </div>
+
+        {showGroupChat && activeGroupCall?.roomId && (
+          <InCallChat
+            roomId={activeGroupCall.roomId}
+            currentUserId={myUserId}
+            currentUserName={myName}
+            messages={groupCallChatMessages}
+            onSendMessage={onSendGroupCallChatMessage}
+            onSendMedia={onSendGroupCallMedia}
+            onClose={()=>setShowGroupChat(false)}
+            socketRef={wsRef as MutableRefObject<any>}
+          />
+        )}
       </div>
     );
   }
@@ -891,8 +1169,8 @@ function GroupCallHub({
       <div className="px-6 pt-5 pb-4 shrink-0">
         <div className="flex items-center gap-3 mb-1">
           <div className="h-8 w-8 flex items-center justify-center rounded-xl"
-            style={{ background:`${C.purple}18`, border:`1px solid ${C.purple}30` }}>
-            <Users className="h-4 w-4" style={{color:C.purple}} strokeWidth={1.8} />
+            style={{ background:`${C.slateLight}40`, border:`1px solid ${C.borderLight}` }}>
+            <Users className="h-4 w-4" style={{color:C.steel}} strokeWidth={1.8} />
           </div>
           <div>
             <p className="text-[11px] font-black tracking-[0.3em] text-white/65 uppercase"
@@ -965,7 +1243,7 @@ function GroupCallHub({
           <button type="button" disabled={selected.size===0}
             onClick={()=>{onStartGroupCall(Array.from(selected),callType);setSelected(new Set());}}
             className="flex items-center justify-center gap-2 rounded-2xl py-3.5 font-black text-[10px] transition-all hover:scale-[1.02] disabled:opacity-30 shrink-0"
-            style={{ background:`linear-gradient(135deg, ${C.crimson}, ${C.purple})`,
+            style={{ background:`linear-gradient(135deg, ${C.red}, ${C.redDim})`,
               boxShadow:selected.size>0?`0 6px 28px ${C.crimson}35`:"none",
               fontFamily:"'Orbitron',system-ui" }}>
             {callType==="video"?<Video className="h-4 w-4 text-white" strokeWidth={2}/>:<Phone className="h-4 w-4 text-white" strokeWidth={2}/>}
@@ -1000,7 +1278,7 @@ function GroupCallHub({
             <div className="space-y-2.5">
               {[
                 { label:"Host", value:myName.slice(0,16), color:C.cyan },
-                { label:"Protocol", value:sfuMode?.toUpperCase()??"P2P", color:C.purple },
+                { label:"Protocol", value:sfuMode?.toUpperCase()??"P2P", color:C.steel },
                 { label:"Encryption", value:"DTLS-SRTP", color:C.green },
                 { label:"Max peers", value:"16", color:C.orange },
               ].map(({label,value,color})=>(
@@ -1014,9 +1292,9 @@ function GroupCallHub({
 
           {/* Mini visualiser */}
           <div className="rounded-2xl p-4 flex flex-col items-center gap-2"
-            style={{ background:`${C.purple}08`, border:`1px solid ${C.purple}18` }}>
+            style={{ background:`${C.slate}55`, border:`1px solid ${C.border}` }}>
             <p className="text-[7px] font-mono tracking-widest text-white/20 uppercase">SIGNAL</p>
-            <AudioBars active bars={10} color={C.purple} />
+            <AudioBars active bars={10} color={C.amber} />
             <SignalBars quality={5} color={C.green} />
           </div>
         </div>
@@ -1029,6 +1307,7 @@ function GroupCallHub({
    VOICE NOTE PANEL
 ══════════════════════════════════════════════════════════════ */
 function VoiceNotePanel({ targetUser }: { targetUser:{id:string;name:string}|null }) {
+  const { sendChatMessage } = usePresence();
   const [recording, setRecording] = useState(false);
   const [blob, setBlob] = useState<Blob|null>(null);
   const [url, setUrl] = useState<string|null>(null);
@@ -1063,9 +1342,20 @@ function VoiceNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
     try {
       const fd = new FormData();
       fd.append("file",blob,"voice-note.webm");
-      fd.append("recipientId",targetUser.id);
-      fd.append("messageType","voice-note");
-      await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      const res = await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      if (!res.ok) throw new Error("Upload failed");
+      const upload = await res.json() as {
+        fileUrl?: string; fileName?: string; mimeType?: string; fileSize?: number;
+      };
+      sendChatMessage(targetUser.id, {
+        message: "",
+        messageType: "voice-note",
+        fileUrl: upload.fileUrl,
+        fileName: upload.fileName || "voice-note.webm",
+        fileMimeType: upload.mimeType || "audio/webm",
+        fileSizeBytes: upload.fileSize,
+        voiceDurationSeconds: dur,
+      });
       setSent(true); setTimeout(discard,2500);
     } catch{/*silent*/}
     setSending(false);
@@ -1150,6 +1440,7 @@ function VoiceNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
    VIDEO NOTE PANEL
 ══════════════════════════════════════════════════════════════ */
 function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|null }) {
+  const { sendChatMessage } = usePresence();
   const [recording, setRecording] = useState(false);
   const [blob, setBlob] = useState<Blob|null>(null);
   const [url, setUrl] = useState<string|null>(null);
@@ -1188,9 +1479,19 @@ function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
     try {
       const fd = new FormData();
       fd.append("file",blob,"video-note.webm");
-      fd.append("recipientId",targetUser.id);
-      fd.append("messageType","video-note");
-      await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      const res = await systemFetch("/api/comms/upload",{method:"POST",body:fd});
+      if (!res.ok) throw new Error("Upload failed");
+      const upload = await res.json() as {
+        fileUrl?: string; fileName?: string; mimeType?: string; fileSize?: number;
+      };
+      sendChatMessage(targetUser.id, {
+        message: "Video note",
+        messageType: "media",
+        fileUrl: upload.fileUrl,
+        fileName: upload.fileName || "video-note.webm",
+        fileMimeType: upload.mimeType || "video/webm",
+        fileSizeBytes: upload.fileSize,
+      });
       setSent(true); setTimeout(discard,2500);
     } catch{/*silent*/}
     setSending(false);
@@ -1199,8 +1500,8 @@ function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl"
-        style={{ background:`${C.purple}15`, border:`1px solid ${C.purple}28` }}>
-        <Film className="h-6 w-6" style={{color:C.purple}} strokeWidth={1.8} />
+        style={{ background:`${C.slate}40`, border:`1px solid ${C.borderLight}` }}>
+        <Film className="h-6 w-6" style={{color:C.steel}} strokeWidth={1.8} />
       </div>
 
       <p className="text-[10px] font-black tracking-[0.4em] text-white/40 uppercase"
@@ -1243,7 +1544,7 @@ function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
         {!recording&&!blob && (
           <button type="button" onClick={startRec}
             className="flex items-center gap-2 rounded-2xl px-7 py-3.5 font-black text-[10px] transition-all hover:scale-105"
-            style={{ background:`${C.purple}18`, border:`1px solid ${C.purple}32`, color:C.purple, fontFamily:"'Orbitron',system-ui" }}>
+            style={{ background:`${C.slateLight}50`, border:`1px solid ${C.borderLight}`, color:C.steel, fontFamily:"'Orbitron',system-ui" }}>
             <Camera className="h-4 w-4" strokeWidth={2} />RECORD
           </button>
         )}
@@ -1280,13 +1581,13 @@ function VideoNotePanel({ targetUser }: { targetUser:{id:string;name:string}|nul
    TAB CONFIG
 ══════════════════════════════════════════════════════════════ */
 const TABS: Array<{ id:CommsTab; label:string; icon:typeof MessageSquare; color:string; sub:string }> = [
-  { id:"chat",    label:"CHAT",       icon:MessageSquare, color:C.cyan,   sub:"Secure messaging"  },
-  { id:"voice",   label:"VOICE",      icon:Phone,         color:C.green,  sub:"P2P audio call"    },
-  { id:"video",   label:"VIDEO",      icon:Video,         color:C.crimson,sub:"P2P video call"    },
-  { id:"group",   label:"GROUP",      icon:Users,         color:C.purple, sub:"Multi-party call"  },
-  { id:"vnote",   label:"VOICE NOTE", icon:Mic,           color:C.orange, sub:"Audio message"     },
-  { id:"vidnote", label:"VIDEO NOTE", icon:Film,          color:"#f43f5e",sub:"Video message"     },
-  { id:"pshare",  label:"PSHARE",     icon:Radio,         color:C.crimson,sub:"Broadcast feed"    },
+  { id:"chat",    label:"CHAT",       icon:MessageSquare, color:C.sky,     sub:"Secure messaging"  },
+  { id:"voice",   label:"VOICE",      icon:Phone,         color:C.green,   sub:"P2P audio call"    },
+  { id:"video",   label:"VIDEO",      icon:Video,         color:C.red,     sub:"P2P video call"    },
+  { id:"group",   label:"GROUP",      icon:Users,         color:C.amber,   sub:"Multi-party call"  },
+  { id:"vnote",   label:"VOICE NOTE", icon:Mic,           color:C.orange,  sub:"Audio message"     },
+  { id:"vidnote", label:"VIDEO NOTE", icon:Film,          color:C.steel,   sub:"Video message"     },
+  { id:"pshare",  label:"PSHARE",     icon:Radio,         color:C.red,     sub:"Broadcast feed"    },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -1299,8 +1600,17 @@ export default function CommsHubPage() {
 
   const {
     onlineUsers, isConnected, myUserId, notifications,
-    callUser,
-    wsRef,
+    incomingCall, activeCall,
+    localStream, remoteStream, callDuration,
+    callUser, acceptCall, declineCall, endCall,
+    toggleMute: toggleP2PMute, toggleVideo: toggleP2PVideo,
+    mediaControls, wsRef, isScreenSharing, screenShareStream,
+    remoteScreenSharerName, startScreenShare, stopScreenShare,
+    sendCallChatMessage, recoverCallMedia, reportRemoteMediaPlayback,
+    callChatMessages,
+    isCallRecording, isCallRecordingUploading, callRecordingDurationSec,
+    remoteRecordingActive, remoteRecordingBy, toggleCallRecording,
+    sendCallMedia,
   } = usePresence();
 
   const myId = useMemo(() => {
@@ -1318,6 +1628,7 @@ export default function CommsHubPage() {
     createGroupCall, joinGroupCall,
     acceptIncomingGroupCall, declineIncomingGroupCall,
     endGroupCall, toggleMute: toggleGroupMute, toggleVideo: toggleGroupVideo,
+    groupCallChatMessages, sendGroupCallChatMessage, sendGroupCallMedia,
   } = useCyrusGroupCall({ socketRef:wsRef, selfId:myId, displayName, isConnected });
 
   /* Tab state — support URL query param */
@@ -1334,6 +1645,8 @@ export default function CommsHubPage() {
   });
 
   const [targetUser, setTargetUser] = useState<{id:string;name:string}|null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
 
   const handleCallVoice = useCallback((userId:string, name:string) => {
     setActiveTab("voice"); callUser(userId, name, "audio");
@@ -1346,6 +1659,9 @@ export default function CommsHubPage() {
   const handleMessage = useCallback((userId:string, name:string) => {
     setTargetUser({id:userId, name}); setActiveTab("chat");
   }, []);
+
+  const handleToggleMute = useCallback(() => { toggleP2PMute(); setIsMuted(v=>!v); }, [toggleP2PMute]);
+  const handleToggleVideo = useCallback(() => { toggleP2PVideo(); setIsVideoOff(v=>!v); }, [toggleP2PVideo]);
 
   const users: OnlineUser[] = useMemo(()=>
     (onlineUsers??[]).map((u:any)=>({
@@ -1370,7 +1686,7 @@ export default function CommsHubPage() {
     <>
       <style>{ANIM_CSS}</style>
 
-      {callAlert && (
+      {callAlert && !activeCall && !incomingCall && (
         <div
           className="fixed top-3 left-1/2 z-[210] max-w-md -translate-x-1/2 rounded-xl px-4 py-2 text-center text-[11px] font-medium shadow-lg"
           style={{
@@ -1384,22 +1700,87 @@ export default function CommsHubPage() {
         </div>
       )}
 
+      {incomingCall && !activeCall && (
+        <CommsIncomingCallOverlay
+          call={{
+            callerName: incomingCall.callerName,
+            callType: incomingCall.callType,
+          }}
+          onAccept={() => acceptCall()}
+          onDecline={() => declineCall()}
+        />
+      )}
+
+      {activeCall && (
+        <CallView
+          roomId={activeCall.roomId}
+          callType={activeCall.callType}
+          participants={[
+            {
+              id: activeCall.peerId || "remote-peer",
+              displayName: activeCall.peerName,
+              stream: remoteStream ?? undefined,
+              isMuted: false,
+              isVideoEnabled: activeCall.callType === "video",
+            },
+          ]}
+          localStream={localStream ?? null}
+          remoteStream={remoteStream ?? null}
+          currentUserId={myUserId ?? myId}
+          currentUserName={displayName}
+          isMuted={isMuted}
+          isVideoEnabled={!isVideoOff && (mediaControls?.isVideoEnabled ?? true)}
+          callDuration={callDuration}
+          mediaEstablishing={activeCall.status !== "connected"}
+          onEndCall={endCall}
+          onToggleMute={handleToggleMute}
+          onToggleVideo={handleToggleVideo}
+          isScreenSharing={isScreenSharing}
+          screenShareStream={screenShareStream ?? null}
+          screenSharerName={remoteScreenSharerName ?? undefined}
+          onStartScreenShare={startScreenShare}
+          onStopScreenShare={stopScreenShare}
+          onSendChatMessage={(msg: string) => sendCallChatMessage({ message: msg, messageType: "text" })}
+          chatMessages={callChatMessages}
+          onRemotePlaybackDiagnostics={({ blocked }) => reportRemoteMediaPlayback(blocked)}
+          onRecoverMedia={() => void recoverCallMedia()}
+          socketRef={wsRef}
+          isRecording={isCallRecording}
+          isRecordingUploading={isCallRecordingUploading}
+          recordingDurationSec={callRecordingDurationSec}
+          remoteRecordingActive={remoteRecordingActive}
+          remoteRecordingBy={remoteRecordingBy}
+          onToggleRecording={toggleCallRecording}
+          onSendCallMedia={sendCallMedia}
+        />
+      )}
+
+      {activeCall && activeCall.status === "connected" && !remoteStream?.getTracks().length && (
+        <button
+          type="button"
+          className="fixed bottom-24 left-1/2 z-[95] -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-[11px] font-semibold text-amber-100"
+          onClick={() => void recoverCallMedia()}
+        >
+          No remote audio? Tap to recover media
+        </button>
+      )}
+
       <div className="flex flex-col overflow-hidden text-white"
-        style={{ height:"100vh", background:C.bg }}>
+        style={{ height:"100vh", ...MAIN_SURFACE }}>
 
         {/* ══ HEADER ══════════════════════════════════════════ */}
         <header className="shrink-0 flex items-center gap-0 px-5"
-          style={{ height:52, background:"rgba(28,28,34,0.97)",
+          style={{ height:52, background:"rgba(18,18,18,0.95)",
             borderBottom:`1px solid ${C.border}`,
-            boxShadow:"0 2px 16px rgba(0,0,0,0.3)" }}>
+            boxShadow:"0 2px 20px rgba(0,0,0,0.45)" }}>
 
           {/* Brand */}
           <div className="flex items-center gap-2.5 mr-5 shrink-0">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{ background:"linear-gradient(135deg, #7c3aed, #5b21b6)", boxShadow:"0 2px 8px rgba(124,58,237,0.4)" }}>
+              style={{ background:C.red, boxShadow:`0 2px 10px ${C.redGlow}` }}>
               <Radio className="h-4 w-4 text-white" strokeWidth={1.8} />
             </div>
-            <p className="text-[11px] font-bold text-white/70 tracking-widest uppercase">COMMS HUB</p>
+            <p className="text-[11px] font-bold text-white/80 tracking-widest uppercase">COMMS HUB</p>
           </div>
 
           {/* Tabs */}
@@ -1408,13 +1789,18 @@ export default function CommsHubPage() {
               const isActive = activeTab===id;
               return (
                 <button key={id} type="button" onClick={()=>setActiveTab(id)}
-                  className="flex items-center gap-2 rounded-xl px-3.5 py-2 transition-all duration-200 shrink-0"
-                  style={{ background:isActive?"rgba(255,255,255,0.1)":"transparent",
-                    border:`1px solid ${isActive?"rgba(255,255,255,0.16)":"transparent"}` }}>
+                  className="relative flex items-center gap-2 rounded-lg px-3.5 py-2 transition-all duration-200 shrink-0"
+                  style={{
+                    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                    border:`1px solid ${isActive ? C.borderLight : "transparent"}`,
+                  }}>
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full" style={{ background: C.red }} />
+                  )}
                   <Icon className="h-3.5 w-3.5 shrink-0"
-                    style={{color:isActive?color:"rgba(255,255,255,0.3)"}} strokeWidth={1.8} />
+                    style={{color:isActive?color:"rgba(255,255,255,0.32)"}} strokeWidth={1.8} />
                   <span className="text-[9px] font-semibold tracking-wide"
-                    style={{ color:isActive?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)" }}>
+                    style={{ color:isActive?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.35)" }}>
                     {label}
                   </span>
                 </button>
@@ -1449,6 +1835,7 @@ export default function CommsHubPage() {
           {/* Users Rail */}
           <UsersRail
             users={users} myId={myId} myName={displayName}
+            selectedUserId={targetUser?.id}
             onCallVoice={handleCallVoice}
             onCallVideo={handleCallVideo}
             onMessage={handleMessage} />
@@ -1458,7 +1845,7 @@ export default function CommsHubPage() {
 
             {/* Sub-header: active tab info */}
             <div className="flex items-center gap-3 px-5 py-2.5 shrink-0"
-              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(28,28,34,0.6)" }}>
+              style={{ borderBottom:`1px solid ${C.border}`, background:"rgba(18,18,18,0.75)" }}>
               <tabCfg.icon className="h-3.5 w-3.5" style={{color:tabCfg.color}} strokeWidth={1.8} />
               <span className="text-[9px] font-semibold tracking-widest text-white/50 uppercase">{tabCfg.label}</span>
               <span className="text-[8px] text-white/25">{tabCfg.sub}</span>
@@ -1498,7 +1885,12 @@ export default function CommsHubPage() {
                   onToggleMute={toggleGroupMute}
                   onToggleVideo={toggleGroupVideo}
                   isMuted={groupMuted}
-                  isVideoEnabled={groupVideoEnabled} />
+                  isVideoEnabled={groupVideoEnabled}
+                  groupCallChatMessages={groupCallChatMessages}
+                  onSendGroupCallChatMessage={sendGroupCallChatMessage}
+                  onSendGroupCallMedia={sendGroupCallMedia}
+                  wsRef={wsRef}
+                />
               )}
               {activeTab==="vnote" && (
                 <VoiceNotePanel targetUser={targetUser} />

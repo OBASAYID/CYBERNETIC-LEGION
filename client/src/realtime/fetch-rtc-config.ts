@@ -58,8 +58,7 @@ export async function fetchCyrusCommRtcConfiguration(query?: {
     const forceRelay =
       query?.forceRelay === true ||
       data.iceTransportPolicy === "relay" ||
-      (Boolean(data.relayConfigured) &&
-        (isLikelyCrossNetworkPath() || import.meta.env.PROD));
+      (Boolean(data.relayConfigured) && isLikelyCrossNetworkPath());
 
     return buildRtcConfiguration(merged, { forceRelay });
   } catch (e) {

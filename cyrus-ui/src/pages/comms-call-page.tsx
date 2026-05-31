@@ -1,10 +1,14 @@
 /**
- * Lightweight P2P call shell — WebRTC + CallView only.
- * Loaded on `/comms/call`; avoids Comms Hub tabs and Command Center modules during calls.
+ * Lightweight P2P call shell — same CYRUS call graphics, minimal route bundle.
+ * Transmission/signaling: PresenceContext + sealed WebRTC (server-blind relay).
  */
 import { useCallback, useMemo, useState } from "react";
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
-import { CallView, IncomingCallOverlay } from "../../../client/src/components/comms/CallView";
+import { CallView } from "../../../client/src/components/comms/CallView";
+import {
+  COMMS_THEME,
+  CommsIncomingCallOverlay,
+} from "@/components/comms/comms-call-chrome";
 
 export default function CommsCallPage() {
   const displayName =
@@ -59,11 +63,13 @@ export default function CommsCallPage() {
   }, [toggleVideo]);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black text-white">
+    <div className="fixed inset-0 z-[80] text-white" style={{ background: COMMS_THEME.bg }}>
       {incomingCall && !activeCall && (
-        <IncomingCallOverlay
-          callerName={incomingCall.callerName}
-          callType={incomingCall.callType}
+        <CommsIncomingCallOverlay
+          call={{
+            callerName: incomingCall.callerName,
+            callType: incomingCall.callType,
+          }}
           onAccept={() => acceptCall()}
           onDecline={() => declineCall()}
         />

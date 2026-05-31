@@ -16,6 +16,18 @@ const WEBRTC_ANSWER_EVENTS = ["webrtc:answer", "webrtc-answer"] as const;
 const WEBRTC_ICE_EVENTS = ["webrtc:ice-candidate", "webrtc-ice-candidate"] as const;
 const CRYPTO_HANDSHAKE_EVENTS = ["webrtc-crypto-handshake", "webrtc:crypto-handshake"] as const;
 
+/** Opt-in only — default off so plaintext SDP/ICE relay stays reliable. */
+export function isCommsSealedSignalingEnabled(): boolean {
+  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_CYRUS_COMMS_SEALED === "1") {
+    return true;
+  }
+  try {
+    return localStorage.getItem("cyrus-comms-sealed") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export type SealedSignalingContext = {
   roomId: string;
   targetPeerId?: string;
@@ -113,9 +125,17 @@ export async function resolveWebRtcRelayPayload(
   crypto: CommsCallCryptoSession | null,
   data: CyrusWebRtcRelayPayload,
 ): Promise<CyrusWebRtcSignalBody | null> {
-  if (data.sealed && isSealedPayload(data.sealed)) {
-    if (!crypto?.isReady) return null;
-    return crypto.open(data.sealed);
+  if (data.sealed && isSealedPayload(data.sealed) && isCommsSealedSignalingEnabled()) {
+    if (!crypto?.isReady) {
+      // Peer may still be handshaking — fall through to legacy fields if present.
+      if (!data.offer && !data.answer && data.candidate === undefined) return null;
+    } else {
+      try {
+        return await crypto.open(data.sealed);
+      } catch (e) {
+        console.warn("[CallCrypto] Failed to open sealed payload:", e);
+      }
+    }
   }
   if (data.offer) return { kind: "offer", offer: data.offer };
   if (data.answer) return { kind: "answer", answer: data.answer };

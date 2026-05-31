@@ -1648,8 +1648,36 @@ export function initSocketSignaling(server: HttpServer) {
             console.error("[Socket.IO] Failed to update call session end:", err);
           }
         } else if (activeCall.participants.length >= 1) {
-          await saveActiveCall(data.roomId, activeCall);
-          socket.to(data.roomId).emit("peer-left", { roomId: data.roomId, peerId: userId });
+          const remainingIds = [...activeCall.participants];
+          const shouldEndForAll =
+            activeCall.sfuMode === "p2p" || remainingIds.length <= 1;
+
+          if (shouldEndForAll) {
+            await clearActiveCall(data.roomId);
+            const now = new Date();
+            const durationSeconds = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
+            try {
+              await db.update(callSessions)
+                .set({ endTime: now, durationSeconds })
+                .where(eq(callSessions.callId, data.roomId));
+            } catch (err) {
+              console.error("[Socket.IO] Failed to update call session end:", err);
+            }
+
+            const endedPayload = { roomId: data.roomId, userId, reason: "peer-left" };
+            io.to(data.roomId).emit("call-ended", endedPayload);
+            for (const participantId of remainingIds) {
+              const participant = findUserByCommsId(participantId);
+              if (participant) {
+                participant.inCall = false;
+                participant.currentRoomId = undefined;
+              }
+              await emitUserEventByCommsId(io, participantId, "call-ended", endedPayload);
+            }
+          } else {
+            await saveActiveCall(data.roomId, activeCall);
+            socket.to(data.roomId).emit("peer-left", { roomId: data.roomId, peerId: userId });
+          }
         }
         if (activeCall.screenSharingBy === userId) {
           activeCall.screenSharingBy = undefined;
