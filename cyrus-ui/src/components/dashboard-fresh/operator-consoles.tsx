@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { Activity, Radio, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Link } from "wouter";
 import {
   BOTSWANA_BEEF_EXPORTS_URL,
   BOTSWANA_TECHNOLOGY_URL,
@@ -168,105 +167,16 @@ export function SystemSpotlightConsole({
   );
 }
 
-export function MissionStatusConsole({
-  stackSummary,
-  healthPercent,
-  onlineEngines,
-  totalEngines,
-  degradedEngines,
-  offlineEngines,
-}: {
-  stackSummary?: StackSummaryResponse;
-  healthPercent: number;
-  onlineEngines: number;
-  totalEngines: number;
-  degradedEngines: number;
-  offlineEngines: number;
-}) {
-  const aiState = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
-
-  return (
-    <ConsoleShell title="CYRUS AI console" kicker="Unified mission control" icon={Activity} accent="emerald">
-      <div className="space-y-3">
-        <div className="rounded-xl border border-white/12 bg-black/22 px-3 py-2.5">
-          <div className="mb-1 flex items-center justify-between text-xs text-white/70">
-            <span>Field readiness</span>
-            <span className="font-mono text-emerald-200">{healthPercent}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-800/80 ring-1 ring-white/10">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-cyan-300 to-amber-400"
-              style={{ width: `${Math.max(5, healthPercent)}%` }}
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-xl border border-emerald-200/35 bg-[#b8eca7] p-2 font-mono text-slate-900">
-            {onlineEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Online</p>
-          </div>
-          <div className="rounded-xl border border-amber-200/35 bg-[#f6d669] p-2 font-mono text-slate-900">
-            {degradedEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Degraded</p>
-          </div>
-          <div className="rounded-xl border border-orange-200/35 bg-[#f6ad64] p-2 font-mono text-slate-900">
-            {offlineEngines}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wider text-slate-900/65">Offline</p>
-          </div>
-        </div>
-        <div className="rounded-xl border border-white/12 bg-gradient-to-b from-white/[0.1] via-white/[0.07] to-white/[0.05] px-3 py-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.3)]">
-          <p className="text-[9px] uppercase tracking-[0.22em] text-white/50">CYRUS AI state</p>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-white/90" style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}>
-              {aiState}
-            </p>
-            <span className="rounded-full border border-white/22 bg-black/20 px-2 py-0.5 text-[10px] font-mono text-white/78">
-              {totalEngines} engines
-            </span>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 cyrus-xs-quick-grid">
-          {QUICK_LINKS.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <button
-                type="button"
-                className={`min-h-11 w-full rounded-xl border px-2 py-2 text-xs font-semibold transition hover:brightness-110 touch-manipulation cyrus-xs-quick-button ${link.tone} shadow-[0_8px_18px_rgba(0,0,0,0.24)]`}
-                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
-              >
-                {link.label}
-              </button>
-            </Link>
-          ))}
-        </div>
-        <p className="text-[11px] text-white/60">
-          Mission status and quick actions are unified here for direct CYRUS AI operations.
-        </p>
-      </div>
-    </ConsoleShell>
-  );
-}
-
-const QUICK_LINKS = [
-  { href: "/comms", label: "Comms", tone: "border-violet-400/35 bg-violet-500/15 text-violet-100" },
-  { href: "/ops", label: "Ops", tone: "border-emerald-400/35 bg-emerald-500/15 text-emerald-100" },
-  { href: "/modules", label: "Modules", tone: "border-cyan-400/35 bg-cyan-500/15 text-cyan-100" },
-  { href: "/intelligence", label: "Intel", tone: "border-amber-400/35 bg-amber-500/15 text-amber-100" },
-] as const;
-
 export function OperatorConsoleCluster({
   stackSummary,
   healthPercent,
   onlineEngines,
   totalEngines,
-  degradedEngines,
-  offlineEngines,
 }: {
   stackSummary?: StackSummaryResponse;
   healthPercent: number;
   onlineEngines: number;
   totalEngines: number;
-  degradedEngines: number;
-  offlineEngines: number;
 }) {
   return (
     <div className="flex flex-col gap-2 lg:gap-2.5 cyrus-xs-console-cluster">
@@ -276,24 +186,6 @@ export function OperatorConsoleCluster({
         onlineEngines={onlineEngines}
         totalEngines={totalEngines}
       />
-      <MissionStatusConsole
-        stackSummary={stackSummary}
-        healthPercent={healthPercent}
-        onlineEngines={onlineEngines}
-        totalEngines={totalEngines}
-        degradedEngines={degradedEngines}
-        offlineEngines={offlineEngines}
-      />
     </div>
-  );
-}
-
-/** Bottom anchor label used by news feed header styling. */
-export function LiveBroadcastBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-400/35 bg-red-500/15 px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest text-red-100">
-      <Radio className="h-3 w-3 animate-pulse" aria-hidden />
-      Live
-    </span>
   );
 }
