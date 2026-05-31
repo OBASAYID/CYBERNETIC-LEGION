@@ -130,12 +130,7 @@ export default function DashboardFresh() {
         {(headerOperator || !isAdmin) && (
           <section className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem]">
             <div className="flex min-h-0 flex-col gap-0">
-              <OperatorConsoleCluster
-                stackSummary={stackSummary}
-                healthPercent={healthPercent}
-                onlineEngines={onlineEngines}
-                totalEngines={totalEngines}
-              />
+              <OperatorConsoleCluster />
               <PshareFeedConsole stack="bottom" />
             </div>
             <div className="flex min-h-0 flex-col xl:sticky xl:top-[5.5rem] xl:max-h-[calc(100vh-7rem)] xl:self-stretch">
