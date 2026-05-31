@@ -166,7 +166,7 @@ export function adviseStudioProject(input: {
 
 export function normalizePostKind(kind?: string | null): string {
   const k = String(kind || "general").toLowerCase();
-  if (["clip", "story", "reel", "listing", "general"].includes(k)) return k;
+  if (["clip", "story", "reel", "listing", "live", "general"].includes(k)) return k;
   return "general";
 }
 
@@ -180,6 +180,8 @@ export function pshareKindLabel(kind?: string | null): string {
       return "Reel";
     case "listing":
       return "Listing";
+    case "live":
+      return "Live";
     default:
       return "Post";
   }

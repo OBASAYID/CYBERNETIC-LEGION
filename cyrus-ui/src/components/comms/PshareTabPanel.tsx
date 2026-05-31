@@ -4,7 +4,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clapperboard, ImagePlus, Loader2, Paperclip, Radio, Send, X } from "lucide-react";
+import { Clapperboard, History, ImagePlus, Loader2, Paperclip, Radio, Send, Video, X } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
@@ -19,9 +19,11 @@ import {
 } from "../../../../client/src/lib/pshare-utils";
 import { PsharePostCard } from "./pshare-post-card";
 import { PshareStudio } from "./pshare-studio";
+import { PshareLivePanel } from "./pshare-live-panel";
+import { PshareHistoryPanel } from "./pshare-history-panel";
 import type { PsharePendingMedia, PsharePost } from "./pshare-types";
 
-type PshareView = "feed" | "studio";
+type PshareView = "feed" | "studio" | "live" | "history";
 
 const C = {
   crimson: "#e11d48",
@@ -68,12 +70,15 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
       setUploadError(null);
       setUploadProgress({ loaded: 0, total: file.size, percent: 0, phase: "init" });
       try {
+        const mimeGuess = guessCommsMediaMime(file.name, file.type);
+        const mediaKind = detectPshareMediaKind(file.name, mimeGuess);
         const result = await uploadCommsFileSmart(file, {
           userId: myUserId,
           fileName: file.name,
+          priority: mediaKind === "image" ? "photo" : "normal",
           onProgress: setUploadProgress,
         });
-        const mime = result.mimeType || guessCommsMediaMime(file.name, file.type);
+        const mime = result.mimeType || mimeGuess;
         const kind = detectPshareMediaKind(file.name, mime);
         const previewUrl =
           kind === "image" ? resolvePshareMediaUrl(result.fileUrl) : URL.createObjectURL(file);
@@ -154,7 +159,11 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
           <p className="text-[10px] text-white/35">
             {view === "studio"
               ? "Stories, clips, soundtrack polish — preview before you post"
-              : "Like, react, hype, and climb the diamond tiers"}
+              : view === "live"
+                ? "Go live from mobile camera or a linked drone feed"
+                : view === "history"
+                  ? "Archived broadcasts after the 24-hour live feed window"
+                  : "Live feed — photo uploads prioritized · moves to chat history after 24h"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -162,7 +171,7 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
             className="flex rounded-lg p-0.5"
             style={{ background: C.sidebarInput, border: `1px solid ${C.sidebarDivider}` }}
           >
-            {(["feed", "studio"] as const).map((tab) => (
+            {(["feed", "studio", "live", "history"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -174,7 +183,15 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
                 }}
               >
                 {tab === "studio" ? <Clapperboard className="h-3 w-3" /> : null}
-                {tab === "feed" ? "Feed" : "Studio"}
+                {tab === "live" ? <Video className="h-3 w-3" /> : null}
+                {tab === "history" ? <History className="h-3 w-3" /> : null}
+                {tab === "feed"
+                  ? "Feed"
+                  : tab === "studio"
+                    ? "Studio"
+                    : tab === "live"
+                      ? "Live"
+                      : "History"}
               </button>
             ))}
           </div>
@@ -191,6 +208,18 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
       {view === "studio" ? (
         <div className="flex-1 overflow-y-auto py-3">
           <PshareStudio myUserId={myUserId} onPosted={() => setView("feed")} />
+        </div>
+      ) : null}
+
+      {view === "live" ? (
+        <div className="flex-1 overflow-y-auto py-3">
+          <PshareLivePanel myUserId={myUserId} onLiveStarted={() => setView("feed")} />
+        </div>
+      ) : null}
+
+      {view === "history" ? (
+        <div className="flex-1 overflow-y-auto py-3">
+          <PshareHistoryPanel myUserId={myUserId} />
         </div>
       ) : null}
 

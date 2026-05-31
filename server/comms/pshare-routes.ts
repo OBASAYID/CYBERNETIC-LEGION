@@ -1,17 +1,50 @@
 import { Router } from "express";
 import { db } from "../db.js";
-import { psharePosts, pshareComments, pshareLikes, onlineUsers } from "../../shared/schema";
+import { psharePosts, pshareComments, pshareLikes, onlineUsers, liveStreams } from "../../shared/schema";
 import {
   enrichPsharePostEngagement,
   PSHARE_REACTION_EMOJIS,
   type PshareReactionEmoji,
 } from "../../shared/comms/pshare-engagement.js";
+import {
+  adviseLiveBroadcast,
+  isPsharePhotoUpload,
+  isPsharePostExpired,
+  psharePhotoFeedBoost,
+  psharePostExpiresAt,
+  pshareRetentionCutoff,
+  type PshareBroadcastSource,
+} from "../../shared/comms/pshare-engine.js";
 import { adviseStudioProject, normalizePostKind } from "../../shared/comms/pshare-studio.js";
-import { eq, and, or, desc, asc, sql, inArray, count } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, inArray, count, gte, lt, isNull, isNotNull } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
 let pshareTablesReady = false;
+let lastPshareArchiveAt = 0;
+
+async function archiveExpiredPsharePosts(): Promise<number> {
+  const cutoff = pshareRetentionCutoff();
+  const archived = await db
+    .update(psharePosts)
+    .set({ archivedAt: new Date() })
+    .where(and(lt(psharePosts.createdAt, cutoff), isNull(psharePosts.archivedAt)))
+    .returning({ id: psharePosts.id });
+  return archived.length;
+}
+
+async function maybeArchiveExpiredPsharePosts(): Promise<void> {
+  const now = Date.now();
+  if (now - lastPshareArchiveAt < 5 * 60 * 1000) return;
+  lastPshareArchiveAt = now;
+  try {
+    const n = await archiveExpiredPsharePosts();
+    if (n > 0) console.log(`[Pshare] archived ${n} post(s) to chat history`);
+  } catch (e: any) {
+    console.warn("[Pshare] archive (non-fatal):", e?.message || e);
+  }
+}
 
 async function ensurePshareTables(): Promise<void> {
   if (pshareTablesReady) return;
@@ -83,6 +116,11 @@ async function ensurePshareTables(): Promise<void> {
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS audio_url varchar`,
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS duration_sec integer`,
     `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS polish_preset varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS live_stream_id varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS live_status varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS broadcast_source varchar`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS expires_at timestamp`,
+    `ALTER TABLE pshare_posts ADD COLUMN IF NOT EXISTS archived_at timestamp`,
   ]) {
     try {
       await db.execute(sql.raw(alter));
@@ -282,6 +320,16 @@ function mapPostRow(
     audioUrl: p.audioUrl ?? null,
     durationSec: p.durationSec ?? null,
     polishPreset: p.polishPreset ?? null,
+    liveStreamId: p.liveStreamId ?? null,
+    liveStatus: p.liveStatus ?? null,
+    broadcastSource: p.broadcastSource ?? null,
+    expiresAt:
+      p.expiresAt instanceof Date
+        ? p.expiresAt.toISOString()
+        : p.expiresAt ?? psharePostExpiresAt(p.createdAt).toISOString(),
+    archivedAt: p.archivedAt instanceof Date ? p.archivedAt.toISOString() : p.archivedAt ?? null,
+    hasPhoto: isPsharePhotoUpload(p.fileName, p.fileMimeType),
+    isPhotoPriority: isPsharePhotoUpload(p.fileName, p.fileMimeType),
     visibility: p.visibility,
     allowComments: p.allowComments,
     allowedUserIds: (p.allowedUserIds as string[]) || [],
@@ -319,6 +367,7 @@ async function assertPostVisible(postId: string, userId: string): Promise<boolea
 router.use(async (_req, res, next) => {
   try {
     await ensurePshareTables();
+    await maybeArchiveExpiredPsharePosts();
     next();
   } catch (e: any) {
     console.error("[Pshare] ensure tables:", e);
@@ -332,10 +381,17 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
     return res.status(401).json({ error: "Authentication required" });
   }
   try {
+    const cutoff = pshareRetentionCutoff();
     const rows = await db
       .select()
       .from(psharePosts)
-      .where(visibleToUserSafe(userId))
+      .where(
+        and(
+          visibleToUserSafe(userId),
+          isNull(psharePosts.archivedAt),
+          gte(psharePosts.createdAt, cutoff),
+        ),
+      )
       .orderBy(desc(psharePosts.createdAt))
       .limit(200);
 
@@ -346,12 +402,192 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
 
     const posts = rows
       .map((p) => mapPostRow(p, names, maps))
-      .sort((a, b) => b.trendScore - a.trendScore || Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
+      .sort(
+        (a, b) =>
+          b.trendScore +
+          psharePhotoFeedBoost(b.fileName, b.fileMimeType) -
+          (a.trendScore + psharePhotoFeedBoost(a.fileName, a.fileMimeType)) ||
+          Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)),
+      );
 
-    res.json({ posts });
+    res.json({ posts, retentionHours: 24 });
   } catch (e: any) {
     console.error("[Pshare] list posts:", e);
     res.status(500).json({ error: "Failed to load posts" });
+  }
+});
+
+router.get("/api/comms/pshare/history", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  try {
+    const rows = await db
+      .select()
+      .from(psharePosts)
+      .where(and(visibleToUserSafe(userId), isNotNull(psharePosts.archivedAt)))
+      .orderBy(desc(psharePosts.archivedAt))
+      .limit(200);
+
+    const ids = rows.map((r) => r.id);
+    const maps = await loadEngagementMaps(ids, userId);
+    const authorIds = rows.map((r) => r.authorId);
+    const names = await displayNameMap(authorIds);
+
+    const posts = rows.map((p) => mapPostRow(p, names, maps));
+
+    res.json({ posts, label: "Chat history", retentionHours: 24 });
+  } catch (e: any) {
+    console.error("[Pshare] list history:", e);
+    res.status(500).json({ error: "Failed to load chat history" });
+  }
+});
+router.post("/api/comms/pshare/live/start", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+  const body = req.body || {};
+  const caption = String(body.caption || body.body || "").trim();
+  const sourceRaw = String(body.source || body.broadcastSource || "mobile_camera").toLowerCase();
+  const source: PshareBroadcastSource =
+    sourceRaw === "drone" ? "drone" : sourceRaw === "webcam" ? "webcam" : "mobile_camera";
+  const droneUrl = body.droneUrl || body.sourceUrl ? String(body.droneUrl || body.sourceUrl).trim() : "";
+  const streamName = String(body.streamName || caption || "Pshare live").trim() || "Pshare live";
+
+  if (source === "drone" && !droneUrl) {
+    return res.status(400).json({ error: "Drone feed URL is required (RTSP or HLS)." });
+  }
+
+  const advice = adviseLiveBroadcast({ source });
+  const streamId = randomUUID();
+  const expiresAt = psharePostExpiresAt(new Date());
+  const liveSourceType = source === "drone" ? "drone" : source === "webcam" ? "webcam" : "mobile_camera";
+
+  try {
+    const names = await displayNameMap([userId]);
+    const broadcasterName = names[userId] || userId;
+
+    await db.insert(liveStreams).values({
+      streamId,
+      streamName,
+      sourceType: liveSourceType,
+      sourceUrl: source === "drone" ? droneUrl : null,
+      broadcasterId: userId,
+      broadcasterName,
+      viewers: [],
+      status: "active",
+      quality: source === "drone" ? "1080p" : "720p",
+    });
+
+    const [inserted] = await db
+      .insert(psharePosts)
+      .values({
+        authorId: userId,
+        body: caption || (source === "drone" ? "Drone live broadcast" : "Live from mobile camera"),
+        linkUrl: source === "drone" ? droneUrl : null,
+        fileUrl: source === "drone" ? droneUrl : null,
+        fileName: source === "drone" ? "drone-feed" : null,
+        fileMimeType: source === "drone" ? "application/x-pshare-live" : "video/webm",
+        postKind: "live",
+        liveStreamId: streamId,
+        liveStatus: "live",
+        broadcastSource: source,
+        expiresAt,
+        visibility: "all",
+        allowComments: true,
+        allowedUserIds: [],
+        mediaManifest: {
+          source,
+          profile: advice.profile,
+          tips: advice.tips,
+        },
+      })
+      .returning();
+
+    const maps = await loadEngagementMaps([inserted.id], userId);
+    res.json({
+      post: mapPostRow(inserted, names, maps),
+      streamId,
+      advice,
+    });
+  } catch (e: any) {
+    console.error("[Pshare] live start:", e);
+    res.status(500).json({ error: "Failed to start live broadcast" });
+  }
+});
+
+router.post("/api/comms/pshare/live/:postId/chunk", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const { postId } = req.params;
+  const { fileUrl, fileName, fileMimeType } = req.body || {};
+  if (!fileUrl) return res.status(400).json({ error: "fileUrl required" });
+
+  try {
+    const [row] = await db.select().from(psharePosts).where(eq(psharePosts.id, postId)).limit(1);
+    if (!row || row.authorId !== userId) return res.status(404).json({ error: "Not found" });
+    if (row.postKind !== "live" || row.liveStatus !== "live") {
+      return res.status(400).json({ error: "Post is not an active live broadcast" });
+    }
+
+    const [updated] = await db
+      .update(psharePosts)
+      .set({
+        fileUrl: String(fileUrl).trim(),
+        fileName: fileName ? String(fileName) : row.fileName,
+        fileMimeType: fileMimeType ? String(fileMimeType) : row.fileMimeType || "video/webm",
+      })
+      .where(eq(psharePosts.id, postId))
+      .returning();
+
+    const names = await displayNameMap([userId]);
+    const maps = await loadEngagementMaps([postId], userId);
+    res.json({ post: mapPostRow(updated, names, maps) });
+  } catch (e: any) {
+    console.error("[Pshare] live chunk:", e);
+    res.status(500).json({ error: "Failed to update live segment" });
+  }
+});
+
+router.post("/api/comms/pshare/live/:postId/stop", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+  const { postId } = req.params;
+  const { fileUrl, fileName, fileMimeType, recordingUrl } = req.body || {};
+
+  try {
+    const [row] = await db.select().from(psharePosts).where(eq(psharePosts.id, postId)).limit(1);
+    if (!row || row.authorId !== userId) return res.status(404).json({ error: "Not found" });
+
+    if (row.liveStreamId) {
+      await db
+        .update(liveStreams)
+        .set({
+          status: "ended",
+          endTime: new Date(),
+          recordingUrl: recordingUrl ? String(recordingUrl) : null,
+        })
+        .where(eq(liveStreams.streamId, row.liveStreamId));
+    }
+
+    const [updated] = await db
+      .update(psharePosts)
+      .set({
+        liveStatus: "ended",
+        fileUrl: fileUrl ? String(fileUrl).trim() : row.fileUrl,
+        fileName: fileName ? String(fileName) : row.fileName,
+        fileMimeType: fileMimeType ? String(fileMimeType) : row.fileMimeType,
+      })
+      .where(eq(psharePosts.id, postId))
+      .returning();
+
+    const names = await displayNameMap([userId]);
+    const maps = await loadEngagementMaps([postId], userId);
+    res.json({ post: mapPostRow(updated, names, maps) });
+  } catch (e: any) {
+    console.error("[Pshare] live stop:", e);
+    res.status(500).json({ error: "Failed to stop live broadcast" });
   }
 });
 
@@ -365,6 +601,9 @@ router.get("/api/comms/pshare/posts/:id", async (req: any, res) => {
     const [row] = await db.select().from(psharePosts).where(eq(psharePosts.id, id)).limit(1);
     if (!row) {
       return res.status(404).json({ error: "Not found" });
+    }
+    if (isPsharePostExpired(row.createdAt) && !row.archivedAt) {
+      return res.status(404).json({ error: "Post expired" });
     }
     const canSee = await db
       .select({ id: psharePosts.id })
@@ -429,6 +668,13 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
   const hasListingFields = postKind === "listing" && !!(listingTitle || listingPrice);
   const manifest =
     mediaManifest && typeof mediaManifest === "object" ? mediaManifest : null;
+  const photoPriority = isPsharePhotoUpload(fileName, fileMimeType);
+  const mergedManifest =
+    photoPriority && manifest
+      ? { ...manifest, mediaPriority: "photo" }
+      : photoPriority
+        ? { mediaPriority: "photo" }
+        : manifest;
   if (!text && !link && !hasFile && !hasListingFields) {
     return res.status(400).json({
       error:
@@ -440,6 +686,7 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
 
   try {
     const allowed = v === "selected" ? [...new Set([...list, userId])] : [];
+    const expiresAt = psharePostExpiresAt(new Date());
     const [inserted] = await db
       .insert(psharePosts)
       .values({
@@ -453,10 +700,11 @@ router.post("/api/comms/pshare/posts", async (req: any, res) => {
         listingTitle: listingTitle || null,
         listingPrice: listingPrice || null,
         listingCurrency: listingCurrency || null,
-        mediaManifest: manifest,
+        mediaManifest: mergedManifest,
         audioUrl: audioUrl ? String(audioUrl).trim() : null,
         durationSec: durationSec != null ? Number(durationSec) || null : null,
         polishPreset: polishPreset ? String(polishPreset) : null,
+        expiresAt,
         visibility: v,
         allowComments: !!allowComments,
         allowedUserIds: v === "selected" ? allowed : [],

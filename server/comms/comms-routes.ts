@@ -2262,7 +2262,7 @@ router.post("/api/comms/live-streams", async (req: any, res) => {
       return res.status(400).json({ error: "sourceType is required" });
     }
 
-    const validSourceTypes = ["drone", "cctv", "webcam", "screen", "rtsp"];
+    const validSourceTypes = ["drone", "cctv", "webcam", "screen", "rtsp", "mobile_camera"];
     if (!validSourceTypes.includes(sourceType)) {
       return res.status(400).json({ error: `sourceType must be one of: ${validSourceTypes.join(", ")}` });
     }

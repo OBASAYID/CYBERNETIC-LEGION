@@ -6,6 +6,7 @@ import {
   Flame,
   Heart,
   MessageCircle,
+  Radio,
   Share2,
   Zap,
 } from "lucide-react";
@@ -28,6 +29,8 @@ type PsharePostCardProps = {
   post: PsharePost;
   myUserId: string;
   variant?: "feed" | "console";
+  /** Lock card height for dashboard console ticker. */
+  fixedLayout?: boolean;
 };
 
 function pshareHeaders(userId: string): HeadersInit {
@@ -38,7 +41,7 @@ function pshareHeaders(userId: string): HeadersInit {
   };
 }
 
-export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostCardProps) {
+export function PsharePostCard({ post, myUserId, variant = "feed", fixedLayout = false }: PsharePostCardProps) {
   const qc = useQueryClient();
   const [local, setLocal] = useState(post);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -47,11 +50,19 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
   const [commentDraft, setCommentDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [liveRefreshKey, setLiveRefreshKey] = useState(0);
   const isConsole = variant === "console";
+  const compactConsole = isConsole && fixedLayout;
 
   useEffect(() => {
     setLocal(post);
   }, [post]);
+
+  useEffect(() => {
+    if (local.postKind !== "live" || local.liveStatus !== "live" || !local.fileUrl) return;
+    const id = window.setInterval(() => setLiveRefreshKey((k) => k + 1), 4000);
+    return () => window.clearInterval(id);
+  }, [local.postKind, local.liveStatus, local.fileUrl]);
 
   const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
@@ -212,6 +223,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
   const grade = (local.diamondGrade ?? 0) as 0 | 1 | 2 | 3 | 4 | 5;
   const postKind = normalizePostKind(local.postKind);
   const isStudioPost = postKind === "clip" || postKind === "story" || postKind === "reel";
+  const isLivePost = postKind === "live";
   const kindLabel = pshareKindLabel(postKind);
   const durationLabel =
     local.durationSec && local.durationSec > 0
@@ -220,13 +232,13 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
 
   return (
     <div
-      className={`overflow-hidden rounded-xl ${local.isTrending ? "ring-1 ring-rose-500/40" : ""}`}
+      className={`overflow-hidden rounded-xl ${local.isTrending ? "ring-1 ring-rose-500/40" : ""} ${compactConsole ? "flex h-[200px] flex-col" : ""}`}
       style={{
         background: "rgba(255,255,255,0.04)",
         border: `1px solid ${local.isTrending ? "rgba(231,0,17,0.35)" : C.border}`,
       }}
     >
-      <div className={`px-3 ${isConsole ? "py-2" : "py-2.5"}`}>
+      <div className={`px-3 ${isConsole ? "py-2" : "py-2.5"} ${compactConsole ? "shrink-0" : ""}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -240,6 +252,31 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
                 >
                   <Flame className="h-2.5 w-2.5" />
                   Trending
+                </span>
+              )}
+              {local.isPhotoPriority && (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                  style={{ background: "rgba(251,191,36,0.15)", color: "rgb(253,224,71)" }}
+                >
+                  Photo
+                </span>
+              )}
+              {local.archivedAt && (
+                <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white/45">
+                  Archived
+                </span>
+              )}
+              {isLivePost && (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                  style={{
+                    background: local.liveStatus === "live" ? "rgba(244,63,94,0.2)" : "rgba(255,255,255,0.08)",
+                    color: local.liveStatus === "live" ? "#fda4af" : "rgba(255,255,255,0.55)",
+                  }}
+                >
+                  <Radio className={`h-2.5 w-2.5 ${local.liveStatus === "live" ? "animate-pulse" : ""}`} />
+                  {local.liveStatus === "live" ? "Live now" : "Live ended"}
                 </span>
               )}
               {isStudioPost && (
@@ -260,6 +297,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
             {local.createdAt && (
               <span className="text-[9px] text-white/30">
                 {formatPshareRelativeTime(local.createdAt)}
+                {local.expiresAt ? " · 24h window" : ""}
               </span>
             )}
           </div>
@@ -273,12 +311,16 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
       </div>
 
       {local.fileUrl && (
-        <div className="px-3 pb-2">
-          <PshareMediaPreview post={local} variant={isConsole ? "console" : "feed"} />
+        <div className={`px-3 pb-2 ${compactConsole ? "min-h-0 flex-1 overflow-hidden" : ""}`}>
+          <PshareMediaPreview
+            post={local}
+            variant={isConsole ? "console" : "feed"}
+            liveRefreshKey={liveRefreshKey}
+          />
         </div>
       )}
 
-      {local.linkUrl && (
+      {local.linkUrl && !compactConsole && (
         <div className="px-3 pb-2">
           <a
             href={local.linkUrl}
@@ -304,7 +346,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
       ) : null}
 
       <div
-        className="flex flex-wrap items-center gap-0.5 border-t px-1 py-1"
+        className={`flex flex-wrap items-center gap-0.5 border-t px-1 py-1 ${compactConsole ? "mt-auto shrink-0" : ""}`}
         style={{ borderColor: C.border }}
       >
         <button
@@ -389,7 +431,7 @@ export function PsharePostCard({ post, myUserId, variant = "feed" }: PsharePostC
         </button>
       </div>
 
-      {commentsOpen && (
+      {commentsOpen && !compactConsole && (
         <div className="border-t px-3 py-2" style={{ borderColor: C.border, background: "rgba(0,0,0,0.25)" }}>
           {loadingComments && <p className="mb-2 text-[10px] text-white/35">Loading…</p>}
           <ul className="mb-2 max-h-36 space-y-1.5 overflow-y-auto">
