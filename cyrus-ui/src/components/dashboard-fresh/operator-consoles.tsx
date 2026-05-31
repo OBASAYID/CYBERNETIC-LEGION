@@ -10,6 +10,26 @@ import {
 } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
 
+/** Shared dark console surface — matches Live panel sidebar. */
+export const DASHBOARD_DARK_CONSOLE_BG =
+  "bg-gradient-to-b from-[#070b12]/98 via-[#05080d]/99 to-black/95";
+export const DASHBOARD_DARK_CONSOLE_INNER =
+  "rounded-xl border border-white/10 bg-gradient-to-b from-[#0c1018]/92 via-[#080b10]/96 to-black/90";
+export const DASHBOARD_CONSOLE_SHADOW =
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_22px_46px_rgba(0,0,0,0.52)]";
+
+type ConsoleStack = "standalone" | "top" | "bottom";
+
+function stackShellClass(stack: ConsoleStack) {
+  if (stack === "top") {
+    return "rounded-t-2xl rounded-b-none border-x border-t border-white/14 border-b border-b-white/10";
+  }
+  if (stack === "bottom") {
+    return "rounded-b-2xl rounded-t-none border-x border-b border-white/14 border-t-0";
+  }
+  return "rounded-2xl border border-white/14";
+}
+
 function ConsoleShell({
   title,
   kicker,
@@ -17,6 +37,7 @@ function ConsoleShell({
   accent = "cyan",
   children,
   className = "",
+  stack = "standalone",
 }: {
   title: string;
   kicker: string;
@@ -24,6 +45,7 @@ function ConsoleShell({
   accent?: "cyan" | "amber" | "violet" | "emerald";
   children: ReactNode;
   className?: string;
+  stack?: ConsoleStack;
 }) {
   const ring =
     accent === "amber"
@@ -41,23 +63,14 @@ function ConsoleShell({
         : accent === "emerald"
           ? "text-emerald-300"
           : "text-cyan-300";
-  const accentAura =
-    accent === "amber"
-      ? "cyrus-console-accent-amber"
-      : accent === "violet"
-        ? "cyrus-console-accent-violet"
-        : accent === "emerald"
-          ? "cyrus-console-accent-emerald"
-          : "";
 
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl border ${ring} bg-gradient-to-br from-slate-700/58 via-slate-900/78 to-slate-950/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.11),0_22px_46px_rgba(0,0,0,0.4)] backdrop-blur-xl cyrus-xs-console-shell ${className}`}
+      className={`relative overflow-hidden ${stackShellClass(stack)} ${DASHBOARD_DARK_CONSOLE_BG} p-4 ${DASHBOARD_CONSOLE_SHADOW} backdrop-blur-xl cyrus-xs-console-shell ${className}`}
     >
-      <div className={`pointer-events-none absolute inset-0 ${accentAura}`} aria-hidden />
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.16]" aria-hidden />
-      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.06] blur-2xl" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
       <div className="mb-3 flex items-center gap-2">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${ring} bg-white/[0.04]`}>
           <Icon className={`h-4 w-4 ${iconTone}`} aria-hidden />
@@ -99,8 +112,8 @@ export function SystemSpotlightConsole({
   ] as const;
 
   return (
-    <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber">
-      <div className="mb-3 flex gap-3 rounded-2xl border border-white/12 bg-gradient-to-b from-white/[0.12] via-white/[0.08] to-white/[0.06] p-2.5 shadow-[0_12px_26px_rgba(0,0,0,0.3)] cyrus-xs-spotlight-hero">
+    <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber" stack="top">
+      <div className={`mb-3 flex gap-3 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.45)] cyrus-xs-spotlight-hero ${DASHBOARD_DARK_CONSOLE_INNER}`}>
         <img
           src={TSODILO_DANCE_HERO_URL}
           alt="Tsodilo spiritual dance"
@@ -126,7 +139,7 @@ export function SystemSpotlightConsole({
         {pillars.map((pillar) => (
           <article
             key={pillar.title}
-            className="group relative overflow-hidden rounded-xl border border-white/15 bg-slate-900/70 p-2 shadow-[0_10px_24px_rgba(0,0,0,0.32)]"
+            className={`group relative overflow-hidden p-2 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}
           >
             <img
               src={pillar.image}
@@ -142,25 +155,25 @@ export function SystemSpotlightConsole({
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
-        <div className="rounded-2xl border border-amber-300/35 bg-[#f6d669] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Progress</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none">{healthPercent}</p>
-          <p className="mt-1 text-[10px] text-slate-900/65">Health index</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-amber-400/25`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-amber-200/70">Progress</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{healthPercent}</p>
+          <p className="mt-1 text-[10px] text-white/45">Health index</p>
         </div>
-        <div className="rounded-2xl border border-orange-200/35 bg-[#f6ad64] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Time</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none">{onlineEngines}</p>
-          <p className="mt-1 text-[10px] text-slate-900/65">Online engines</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-orange-300/25`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-orange-200/70">Time</p>
+          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{onlineEngines}</p>
+          <p className="mt-1 text-[10px] text-white/45">Online engines</p>
         </div>
-        <div className="rounded-2xl border border-cyan-100/40 bg-[#9ee7f2] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">Signal</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none">{origin}</p>
-          <p className="mt-1 text-[10px] text-slate-900/65">Fused origin</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-cyan-300/25`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-200/70">Signal</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{origin}</p>
+          <p className="mt-1 text-[10px] text-white/45">Fused origin</p>
         </div>
-        <div className="rounded-2xl border border-emerald-100/35 bg-[#b8eca7] px-3 py-2.5 text-slate-950 cyrus-xs-spotlight-stat-card">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-900/70">AI state</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none">{ai}</p>
-          <p className="mt-1 text-[10px] text-slate-900/65">{totalEngines} total engines</p>
+        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-emerald-300/25`}>
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-200/70">AI state</p>
+          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{ai}</p>
+          <p className="mt-1 text-[10px] text-white/45">{totalEngines} total engines</p>
         </div>
       </div>
     </ConsoleShell>

@@ -5,6 +5,11 @@ import { Link } from "wouter";
 import { usePresence } from "../../../../client/src/contexts/PresenceContext";
 import { systemFetch } from "@/lib/system-api";
 import { cn } from "@/lib/utils";
+import {
+  DASHBOARD_CONSOLE_SHADOW,
+  DASHBOARD_DARK_CONSOLE_BG,
+  DASHBOARD_DARK_CONSOLE_INNER,
+} from "@/components/dashboard-fresh/operator-consoles";
 
 type OnlineUser = {
   id: string;
@@ -117,7 +122,9 @@ export function OnlineUsersSidebar({ className }: OnlineUsersSidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex h-full min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-[#070b12]/98 via-[#05080d]/99 to-black/95 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_22px_46px_rgba(0,0,0,0.52)] backdrop-blur-xl cyrus-xs-live-panel-sidebar",
+        "relative flex h-full min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-white/14 p-3.5 backdrop-blur-xl cyrus-xs-live-panel-sidebar",
+        DASHBOARD_DARK_CONSOLE_BG,
+        DASHBOARD_CONSOLE_SHADOW,
         className,
       )}
       aria-label="Online users sidebar"
@@ -148,7 +155,7 @@ export function OnlineUsersSidebar({ className }: OnlineUsersSidebarProps) {
       ) : (
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {users.map((u) => (
-            <div key={u.id} className="rounded-xl border border-white/10 bg-gradient-to-b from-[#0c1018]/92 via-[#080b10]/96 to-black/90 px-3 py-2.5 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45)]">
+            <div key={u.id} className={`px-3 py-2.5 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}>
               <div className="flex items-center gap-2">
               <div className="relative">
                 <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-slate-100 text-[11px] font-semibold text-slate-900">

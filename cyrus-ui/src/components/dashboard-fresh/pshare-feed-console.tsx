@@ -17,6 +17,11 @@ import {
 } from "../../../../client/src/lib/pshare-utils";
 import { PsharePostCard } from "@/components/comms/pshare-post-card";
 import type { PsharePendingMedia, PsharePost } from "@/components/comms/pshare-types";
+import {
+  DASHBOARD_CONSOLE_SHADOW,
+  DASHBOARD_DARK_CONSOLE_BG,
+  DASHBOARD_DARK_CONSOLE_INNER,
+} from "@/components/dashboard-fresh/operator-consoles";
 
 function resolveMyUserId(): string {
   try {
@@ -26,7 +31,13 @@ function resolveMyUserId(): string {
   }
 }
 
-export function PshareFeedConsole({ className }: { className?: string }) {
+export function PshareFeedConsole({
+  className,
+  stack = "standalone",
+}: {
+  className?: string;
+  stack?: "standalone" | "top" | "bottom";
+}) {
   const queryClient = useQueryClient();
   const myUserId = resolveMyUserId();
   const [draft, setDraft] = useState("");
@@ -178,17 +189,29 @@ export function PshareFeedConsole({ className }: { className?: string }) {
     ? detectPshareMediaKind(pendingMedia.fileName, pendingMedia.fileMimeType)
     : "none";
 
+  const stackClass =
+    stack === "top"
+      ? "rounded-t-2xl rounded-b-none border-x border-t border-white/14 border-b border-b-white/10"
+      : stack === "bottom"
+        ? "rounded-b-2xl rounded-t-none border-x border-b border-white/14 border-t-0"
+        : "rounded-2xl border border-white/14";
+
   return (
     <section
       className={cn(
-        "relative flex h-[min(540px,72vh)] min-h-[540px] max-h-[540px] flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/60 via-slate-900/78 to-slate-950/90 p-4 shadow-[0_20px_44px_rgba(0,0,0,0.38)] backdrop-blur-xl cyrus-xs-pshare-console",
+        "relative flex h-[min(540px,72vh)] min-h-[540px] max-h-[540px] flex-col overflow-hidden",
+        stackClass,
+        DASHBOARD_DARK_CONSOLE_BG,
+        "p-4",
+        DASHBOARD_CONSOLE_SHADOW,
+        "backdrop-blur-xl cyrus-xs-pshare-console",
         className,
       )}
       aria-label="Pshare post feed console"
     >
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.1]" aria-hidden />
-      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-white/[0.05] blur-2xl" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
+      <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="mb-3 shrink-0 flex flex-wrap items-center justify-between gap-2 cyrus-xs-pshare-header">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-200/25 bg-sky-200/10">
@@ -226,7 +249,7 @@ export function PshareFeedConsole({ className }: { className?: string }) {
         </Link>
       </div>
 
-      <div className="mb-3 shrink-0 rounded-xl border border-white/12 bg-slate-950/46 p-2.5 cyrus-xs-pshare-compose-wrap">
+      <div className={`mb-3 shrink-0 p-2.5 cyrus-xs-pshare-compose-wrap ${DASHBOARD_DARK_CONSOLE_INNER}`}>
         {pendingMedia && (
           <div className="relative mb-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
             {pendingKind === "image" && pendingMedia.previewUrl && (
