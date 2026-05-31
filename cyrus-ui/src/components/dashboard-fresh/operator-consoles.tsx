@@ -4,12 +4,17 @@ import type { LucideIcon } from "lucide-react";
 import {
   BOTSWANA_BEEF_EXPORTS_HERO_URL,
   BOTSWANA_COAT_OF_ARMS_DEBSWANA_URL,
+  BOTSWANA_PRESIDENT_DUMA_BOKO_URL,
+  BOTSWANA_PRESIDENT_FESTUS_MOGAE_URL,
+  BOTSWANA_PRESIDENT_IAN_KHAMA_URL,
+  BOTSWANA_PRESIDENT_KETUMILE_MASIRE_URL,
+  BOTSWANA_PRESIDENT_MOKGWEETSI_MASISI_URL,
+  BOTSWANA_PRESIDENT_SERETSE_KHAMA_URL,
   BOTSWANA_TECHNOLOGY_HERO_URL,
   BOTSWANA_TOURISM_WILDLIFE_URL,
   CYRUS_MINING_DIAMOND_URL,
   TSODILO_DANCE_HERO_URL,
 } from "@/lib/dashboard-backdrop";
-import type { StackSummaryResponse } from "./types";
 import { cn } from "@/lib/utils";
 
 /** Shared dark console surface — matches Live panel sidebar. */
@@ -203,6 +208,116 @@ function SpotlightHeroFlank({
   );
 }
 
+type SpotlightPresident = {
+  name: string;
+  term: string;
+  order: number;
+  image: string;
+  blend?: "normal" | "lighten";
+  /** Portrait grading for archival vs modern studio shots. */
+  grade?: "heritage" | "studio";
+};
+
+const BOTSWANA_PRESIDENTS: SpotlightPresident[] = [
+  {
+    order: 1,
+    name: "Sir Seretse Khama",
+    term: "1966 – 1980",
+    image: BOTSWANA_PRESIDENT_SERETSE_KHAMA_URL,
+    grade: "heritage",
+    blend: "normal",
+  },
+  {
+    order: 2,
+    name: "Sir Ketumile Masire",
+    term: "1980 – 1998",
+    image: BOTSWANA_PRESIDENT_KETUMILE_MASIRE_URL,
+    grade: "studio",
+    blend: "lighten",
+  },
+  {
+    order: 3,
+    name: "Festus Mogae",
+    term: "1998 – 2008",
+    image: BOTSWANA_PRESIDENT_FESTUS_MOGAE_URL,
+    grade: "studio",
+    blend: "lighten",
+  },
+  {
+    order: 4,
+    name: "Ian Khama",
+    term: "2008 – 2018",
+    image: BOTSWANA_PRESIDENT_IAN_KHAMA_URL,
+    grade: "studio",
+    blend: "lighten",
+  },
+  {
+    order: 5,
+    name: "Mokgweetsi Masisi",
+    term: "2018 – 2024",
+    image: BOTSWANA_PRESIDENT_MOKGWEETSI_MASISI_URL,
+    grade: "studio",
+    blend: "lighten",
+  },
+  {
+    order: 6,
+    name: "Duma Boko",
+    term: "2024 – present",
+    image: BOTSWANA_PRESIDENT_DUMA_BOKO_URL,
+    grade: "studio",
+    blend: "lighten",
+  },
+];
+
+function SpotlightPresidentCard({ president }: { president: SpotlightPresident }) {
+  const heritage = president.grade === "heritage";
+
+  return (
+    <article
+      className={`group relative overflow-hidden p-2 shadow-[0_10px_22px_rgba(0,0,0,0.45)] cyrus-xs-spotlight-president ${DASHBOARD_DARK_CONSOLE_INNER} border-amber-200/15`}
+    >
+      <div className="relative h-[4.75rem] w-full overflow-hidden rounded-lg border border-white/12 bg-[#0a0c10]">
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_50%_28%,rgba(251,191,36,0.1),transparent_55%),radial-gradient(ellipse_at_center,rgba(7,11,18,0)_30%,rgba(7,11,18,0.85)_100%)]"
+          aria-hidden
+        />
+        <img
+          src={president.image}
+          alt={president.name}
+          className={cn(
+            "relative z-0 h-full w-full object-cover object-[center_18%]",
+            president.blend === "lighten" && "mix-blend-lighten",
+            heritage
+              ? "brightness-[1.12] contrast-[1.22] saturate-0 sepia-[0.35]"
+              : "brightness-[1.06] contrast-[1.14] saturate-[0.92]",
+            "drop-shadow-[0_8px_18px_rgba(0,0,0,0.5)]",
+          )}
+          loading="lazy"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-t from-[#080b10] via-[#080b10]/35 to-transparent"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute left-1.5 top-1.5 z-[3] flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/50 text-[9px] font-bold text-amber-100/95 backdrop-blur-sm"
+          aria-hidden
+        >
+          {president.order}
+        </div>
+      </div>
+      <div className="mt-2 min-h-[2.6rem]">
+        <p
+          className="text-[10px] font-semibold leading-tight text-white/95"
+          style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+        >
+          {president.name}
+        </p>
+        <p className="mt-0.5 text-[9px] font-mono uppercase tracking-[0.14em] text-amber-100/65">{president.term}</p>
+      </div>
+    </article>
+  );
+}
+
 function SpotlightPillarCard({ pillar }: { pillar: SpotlightPillar }) {
   const variant = pillar.variant ?? "default";
   const refined = variant !== "default" ? PILLAR_RENDER[variant] : null;
@@ -287,19 +402,7 @@ function SpotlightPillarCard({ pillar }: { pillar: SpotlightPillar }) {
   );
 }
 
-export function SystemSpotlightConsole({
-  stackSummary,
-  healthPercent,
-  onlineEngines,
-  totalEngines,
-}: {
-  stackSummary?: StackSummaryResponse;
-  healthPercent: number;
-  onlineEngines: number;
-  totalEngines: number;
-}) {
-  const origin = stackSummary?.stack?.fused?.liveOrigin ?? "Single-origin fused stack";
-  const ai = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
+export function SystemSpotlightConsole() {
   const pillars: SpotlightPillar[] = [
     { title: "Tourism", sub: "Wildlife safari", image: BOTSWANA_TOURISM_WILDLIFE_URL },
     { title: "Culture", sub: "Tsodilo heritage", image: TSODILO_DANCE_HERO_URL },
@@ -373,51 +476,22 @@ export function SystemSpotlightConsole({
           <SpotlightPillarCard key={pillar.title} pillar={pillar} />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-amber-400/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-amber-200/70">Progress</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{healthPercent}</p>
-          <p className="mt-1 text-[10px] text-white/45">Health index</p>
-        </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-orange-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-orange-200/70">Time</p>
-          <p className="mt-1 text-[1.75rem] font-black leading-none text-white">{onlineEngines}</p>
-          <p className="mt-1 text-[10px] text-white/45">Online engines</p>
-        </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-cyan-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-200/70">Signal</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{origin}</p>
-          <p className="mt-1 text-[10px] text-white/45">Fused origin</p>
-        </div>
-        <div className={`px-3 py-2.5 cyrus-xs-spotlight-stat-card ${DASHBOARD_DARK_CONSOLE_INNER} border-emerald-300/25`}>
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-200/70">AI state</p>
-          <p className="mt-1 truncate text-[1.05rem] font-black leading-none text-white">{ai}</p>
-          <p className="mt-1 text-[10px] text-white/45">{totalEngines} total engines</p>
+      <div className="space-y-2">
+        <p className="text-[9px] font-mono uppercase tracking-[0.28em] text-amber-200/55">Republic leadership</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 cyrus-xs-spotlight-presidents">
+          {BOTSWANA_PRESIDENTS.map((president) => (
+            <SpotlightPresidentCard key={president.order} president={president} />
+          ))}
         </div>
       </div>
     </ConsoleShell>
   );
 }
 
-export function OperatorConsoleCluster({
-  stackSummary,
-  healthPercent,
-  onlineEngines,
-  totalEngines,
-}: {
-  stackSummary?: StackSummaryResponse;
-  healthPercent: number;
-  onlineEngines: number;
-  totalEngines: number;
-}) {
+export function OperatorConsoleCluster() {
   return (
     <div className="flex flex-col gap-2 lg:gap-2.5 cyrus-xs-console-cluster">
-      <SystemSpotlightConsole
-        stackSummary={stackSummary}
-        healthPercent={healthPercent}
-        onlineEngines={onlineEngines}
-        totalEngines={totalEngines}
-      />
+      <SystemSpotlightConsole />
     </div>
   );
 }

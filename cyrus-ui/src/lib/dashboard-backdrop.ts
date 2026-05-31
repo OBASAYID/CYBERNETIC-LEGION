@@ -48,3 +48,11 @@ export const BOTSWANA_TECHNOLOGY_URL = "/images/botswana-technology-network.png"
 export const BOTSWANA_TECHNOLOGY_HERO_URL = "/images/botswana-technology-hero.png";
 /** Botswana coat of arms / Debswana mining sculpture — System Spotlight hero flank. */
 export const BOTSWANA_COAT_OF_ARMS_DEBSWANA_URL = "/images/botswana-coat-of-arms-debswana-hero.png";
+
+/** Botswana presidents — System Spotlight leadership strip (chronological). */
+export const BOTSWANA_PRESIDENT_SERETSE_KHAMA_URL = "/images/botswana-president-01-seretse-khama.png";
+export const BOTSWANA_PRESIDENT_KETUMILE_MASIRE_URL = "/images/botswana-president-02-ketumile-masire.png";
+export const BOTSWANA_PRESIDENT_FESTUS_MOGAE_URL = "/images/botswana-president-03-festus-mogae.png";
+export const BOTSWANA_PRESIDENT_IAN_KHAMA_URL = "/images/botswana-president-04-ian-khama.png";
+export const BOTSWANA_PRESIDENT_MOKGWEETSI_MASISI_URL = "/images/botswana-president-05-mokgweetsi-masisi.png";
+export const BOTSWANA_PRESIDENT_DUMA_BOKO_URL = "/images/botswana-president-06-duma-boko.png";
