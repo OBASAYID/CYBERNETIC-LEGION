@@ -8,8 +8,10 @@ import { cn } from "@/lib/utils";
 import {
   DASHBOARD_CONSOLE_SHADOW,
   DASHBOARD_DARK_CONSOLE_BG,
-  DASHBOARD_DARK_CONSOLE_INNER,
 } from "@/components/dashboard-fresh/operator-consoles";
+
+const DISPLAY_FONT = "'Orbitron', system-ui, sans-serif";
+const BODY_FONT = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 type OnlineUser = {
   id: string;
@@ -30,6 +32,62 @@ type SidebarUser = {
   profileImageUrl?: string | null;
 };
 
+/** Reference-style warm stat cards — orange/yellow family with crimson stripe. */
+const USER_CARD_THEMES = [
+  {
+    shell: "bg-gradient-to-br from-[#fde68a] via-[#facc15] to-[#fb923c]",
+    name: "text-amber-950",
+    meta: "text-amber-900/80",
+    label: "text-amber-950/65",
+    chip: "border-amber-900/15 bg-white/45 text-amber-950",
+    action: "border-amber-950/20 bg-white/50 text-amber-950 hover:bg-white/75",
+  },
+  {
+    shell: "bg-gradient-to-br from-[#fdba74] via-[#f97316] to-[#ea580c]",
+    name: "text-orange-950",
+    meta: "text-orange-900/80",
+    label: "text-orange-950/65",
+    chip: "border-orange-950/15 bg-white/40 text-orange-950",
+    action: "border-orange-950/20 bg-white/45 text-orange-950 hover:bg-white/70",
+  },
+  {
+    shell: "bg-gradient-to-br from-[#fef08a] via-[#fbbf24] to-[#f59e0b]",
+    name: "text-yellow-950",
+    meta: "text-yellow-900/80",
+    label: "text-yellow-950/65",
+    chip: "border-yellow-950/15 bg-white/45 text-yellow-950",
+    action: "border-yellow-950/20 bg-white/50 text-yellow-950 hover:bg-white/75",
+  },
+  {
+    shell: "bg-gradient-to-br from-[#fcd34d] via-[#f59e0b] to-[#d97706]",
+    name: "text-amber-950",
+    meta: "text-amber-900/80",
+    label: "text-amber-950/65",
+    chip: "border-amber-900/15 bg-white/40 text-amber-950",
+    action: "border-amber-950/20 bg-white/45 text-amber-950 hover:bg-white/70",
+  },
+] as const;
+
+const STANDBY_THEME = {
+  shell: "bg-gradient-to-br from-[#fef3c7]/90 via-[#fde68a]/75 to-[#fed7aa]/80",
+  name: "text-amber-950/85",
+  meta: "text-amber-900/60",
+  label: "text-amber-900/50",
+  chip: "border-amber-900/10 bg-white/35 text-amber-900/70",
+  action: "border-amber-900/15 bg-white/35 text-amber-900/70",
+};
+
+function themeIndexForUser(userId: string) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) hash = (hash + userId.charCodeAt(i) * (i + 1)) % 9973;
+  return hash % USER_CARD_THEMES.length;
+}
+
+function userCardTheme(userId: string, live: boolean) {
+  if (!live) return STANDBY_THEME;
+  return USER_CARD_THEMES[themeIndexForUser(userId)] ?? USER_CARD_THEMES[0];
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -40,8 +98,8 @@ function initials(name: string) {
 }
 
 function statusTone(status: string) {
-  if (status === "in_call" || status === "busy") return "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]";
-  if (status === "online") return "bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.85)]";
+  if (status === "in_call" || status === "busy") return "bg-rose-600 shadow-[0_0_6px_rgba(225,29,72,0.85)]";
+  if (status === "online") return "bg-emerald-600 shadow-[0_0_6px_rgba(5,150,105,0.85)]";
   return "bg-slate-500";
 }
 
@@ -54,6 +112,12 @@ function seenAgo(iso?: string) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h`;
   return `${Math.floor(h / 24)}d`;
+}
+
+function activityLine(user: SidebarUser) {
+  if (user.status === "in_call") return "On a live call";
+  if (user.live) return "Just joined the channel";
+  return "Viewed updates";
 }
 
 type OnlineUsersSidebarProps = {
@@ -75,9 +139,7 @@ export function OnlineUsersSidebar({ className }: OnlineUsersSidebarProps) {
   });
 
   const users = useMemo((): SidebarUser[] => {
-    const restById = new Map(
-      (usersQuery.data ?? []).map((u) => [u.id, u]),
-    );
+    const restById = new Map((usersQuery.data ?? []).map((u) => [u.id, u]));
 
     const liveRows: SidebarUser[] =
       isConnected && onlineUsers.length > 0
@@ -128,71 +190,108 @@ export function OnlineUsersSidebar({ className }: OnlineUsersSidebarProps) {
         className,
       )}
       aria-label="Online users sidebar"
+      style={{ fontFamily: BODY_FONT }}
     >
-      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
-      <div className="pointer-events-none absolute -left-8 bottom-8 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.06]" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-      <div className="mb-2.5 flex shrink-0 items-center justify-between border-b border-white/10 pb-2.5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/12">
-            <Users className="h-4 w-4 text-sky-300" aria-hidden />
+
+      <div className="mb-3 flex shrink-0 items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#E70011]/35 bg-[#E70011]/15 shadow-[0_0_18px_rgba(231,0,17,0.25)]">
+            <Users className="h-4 w-4 text-[#ff6b6b]" aria-hidden />
           </div>
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-sky-200/60">Live panel</p>
-            <h3 className="text-sm font-semibold text-white/95">Activity</h3>
+            <p
+              className="text-[9px] font-semibold uppercase tracking-[0.34em] text-white/45"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              Live panel
+            </p>
+            <h3
+              className="text-[15px] font-bold leading-tight text-white"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              Activity
+            </h3>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono text-emerald-200/85">
-          <Radio className="h-3 w-3 animate-pulse" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#E70011]/35 bg-[#E70011]/12 px-2.5 py-1 text-[10px] font-bold text-[#ffb4b4]">
+          <Radio className="h-3 w-3 animate-pulse text-[#ff6b6b]" />
           {activeCount}
         </span>
       </div>
 
       {isLoading ? (
-        <p className="px-1 text-xs text-white/50">Loading active operators…</p>
+        <p className="px-1 text-[13px] leading-relaxed text-white/55">Loading active operators…</p>
       ) : users.length === 0 ? (
-        <p className="px-1 text-xs text-white/45">No active operators yet.</p>
+        <p className="px-1 text-[13px] leading-relaxed text-white/45">No active operators yet.</p>
       ) : (
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          {users.map((u) => (
-            <div key={u.id} className={`px-3 py-2.5 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}>
-              <div className="flex items-center gap-2">
-              <div className="relative">
-                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-slate-100 text-[11px] font-semibold text-slate-900">
-                  {u.profileImageUrl ? (
-                    <img src={u.profileImageUrl} alt={u.name} className="h-full w-full object-cover" />
-                  ) : (
-                    initials(u.name)
-                  )}
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
+          {users.map((u) => {
+            const theme = userCardTheme(u.id, u.live);
+            return (
+              <article
+                key={u.id}
+                className={cn(
+                  "relative overflow-hidden rounded-2xl border border-[#E70011]/55 border-l-[5px] border-l-[#E70011] px-3 py-3 shadow-[0_14px_28px_rgba(0,0,0,0.28)]",
+                  theme.shell,
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="relative shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white/70 bg-white text-[12px] font-bold text-slate-900 shadow-sm">
+                      {u.profileImageUrl ? (
+                        <img src={u.profileImageUrl} alt={u.name} className="h-full w-full object-cover" />
+                      ) : (
+                        initials(u.name)
+                      )}
+                    </div>
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${statusTone(u.status)}`}
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={cn("truncate text-[13px] font-bold leading-snug", theme.name)}>{u.name}</p>
+                      <span className={cn("shrink-0 text-[10px] font-semibold tabular-nums", theme.label)}>
+                        {seenAgo(u.lastSeen)}
+                      </span>
+                    </div>
+                    <p className={cn("mt-0.5 text-[12px] leading-snug", theme.meta)}>{activityLine(u)}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]",
+                          theme.chip,
+                        )}
+                        style={{ fontFamily: DISPLAY_FONT }}
+                      >
+                        {u.live ? "Reply" : "Standby"}
+                      </span>
+                      {u.live ? (
+                        <Link href="/comms">
+                          <button
+                            type="button"
+                            className={cn(
+                              "inline-flex h-8 w-8 items-center justify-center rounded-xl border transition",
+                              theme.action,
+                            )}
+                            aria-label={`Contact ${u.name}`}
+                            title="Open Comms"
+                          >
+                            <Phone className="h-3.5 w-3.5" />
+                          </button>
+                        </Link>
+                      ) : (
+                        <Activity className={cn("h-3.5 w-3.5", theme.label)} aria-hidden />
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-white ${statusTone(u.status)}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-white/95">{u.name}</p>
-                <p className="text-[10px] text-slate-200/78">
-                  {u.live ? "Just joined the channel" : "Viewed updates"} · {seenAgo(u.lastSeen)}
-                </p>
-                <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wide text-slate-300/55">
-                  {u.live ? "Reply" : "Standby"}
-                </p>
-              </div>
-              {u.live ? (
-                <Link href="/comms">
-                  <button
-                    type="button"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/24 bg-white/12 text-slate-100 transition hover:bg-white/20"
-                    aria-label={`Contact ${u.name}`}
-                    title="Open Comms"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                  </button>
-                </Link>
-              ) : (
-                <Activity className="h-3.5 w-3.5 text-slate-300/65" aria-hidden />
-              )}
-              </div>
-            </div>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </aside>
