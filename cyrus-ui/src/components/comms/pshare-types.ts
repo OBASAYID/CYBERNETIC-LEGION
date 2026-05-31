@@ -1,5 +1,6 @@
 /** Pshare post shape from `/api/comms/pshare/posts`. */
 import type { PshareDiamondGrade } from "@shared/comms/pshare-engagement";
+import type { PsharePolishPreset, PshareStudioManifest } from "@shared/comms/pshare-studio";
 
 export type PsharePost = {
   id: string;
@@ -11,6 +12,10 @@ export type PsharePost = {
   fileName?: string | null;
   fileMimeType?: string | null;
   postKind?: string;
+  mediaManifest?: PshareStudioManifest | Record<string, unknown> | null;
+  audioUrl?: string | null;
+  durationSec?: number | null;
+  polishPreset?: PsharePolishPreset | string | null;
   createdAt?: string | null;
   allowComments?: boolean;
   likeCount?: number;

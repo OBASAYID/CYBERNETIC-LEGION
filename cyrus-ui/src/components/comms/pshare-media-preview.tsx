@@ -1,5 +1,6 @@
 import { Download, FileText, Volume2 } from "lucide-react";
 import { guessCommsMediaMime, inferCommsMediaCategory } from "@shared/comms/media-formats";
+import { polishCssFilter, type PsharePolishPreset } from "@shared/comms/pshare-studio";
 import {
   detectPshareMediaKind,
   pshareCategoryLabel,
@@ -9,7 +10,9 @@ import {
 import type { PsharePost } from "./pshare-types";
 
 type PshareMediaPreviewProps = {
-  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType">;
+  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset"> & {
+    mediaManifest?: { polishPreset?: PsharePolishPreset; polishIntensity?: number } | null;
+  };
   /** Full-width feed card vs compact command-console ticker. */
   variant?: "feed" | "console";
   className?: string;
@@ -27,6 +30,9 @@ export function PshareMediaPreview({
   const url = resolvePshareMediaUrl(post.fileUrl);
   const downloadUrl = pshareMediaDownloadUrl(post.fileUrl);
   const isConsole = variant === "console";
+  const manifest = post.mediaManifest as { polishPreset?: PsharePolishPreset; polishIntensity?: number } | undefined;
+  const preset = (post.polishPreset || manifest?.polishPreset || "clean") as PsharePolishPreset;
+  const polish = polishCssFilter(preset, manifest?.polishIntensity ?? 65);
 
   if (kind === "image") {
     return (
@@ -39,6 +45,7 @@ export function PshareMediaPreview({
               ? "max-h-28 w-full object-cover"
               : "max-h-[min(60vh,420px)] w-full object-contain"
           }
+          style={{ filter: polish }}
           loading="lazy"
         />
       </div>
@@ -54,6 +61,7 @@ export function PshareMediaPreview({
           playsInline
           preload="metadata"
           className={isConsole ? "max-h-28 w-full object-cover" : "max-h-[min(60vh,400px)] w-full"}
+          style={{ filter: polish }}
         />
       </div>
     );

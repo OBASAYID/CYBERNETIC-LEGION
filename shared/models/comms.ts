@@ -254,11 +254,15 @@ export const psharePosts = pgTable("pshare_posts", {
   fileUrl: varchar("file_url"),
   fileName: varchar("file_name"),
   fileMimeType: varchar("file_mime_type"),
-  /** general | listing — listings can show price/title for marketplace-style posts */
+  /** general | listing | clip | story | reel */
   postKind: varchar("post_kind").notNull().default("general"),
   listingTitle: varchar("listing_title"),
   listingPrice: varchar("listing_price"),
   listingCurrency: varchar("listing_currency"),
+  mediaManifest: jsonb("media_manifest"),
+  audioUrl: varchar("audio_url"),
+  durationSec: integer("duration_sec"),
+  polishPreset: varchar("polish_preset"),
   /** "all" = every signed-in comms user, "selected" = author + `allowedUserIds` */
   visibility: varchar("visibility").notNull().default("all"),
   allowComments: boolean("allow_comments").notNull().default(true),

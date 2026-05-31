@@ -4,7 +4,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, Paperclip, Radio, Send, X } from "lucide-react";
+import { Clapperboard, ImagePlus, Loader2, Paperclip, Radio, Send, X } from "lucide-react";
 import { systemFetch } from "@/lib/system-api";
 import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
@@ -18,7 +18,10 @@ import {
   resolvePshareMediaUrl,
 } from "../../../../client/src/lib/pshare-utils";
 import { PsharePostCard } from "./pshare-post-card";
+import { PshareStudio } from "./pshare-studio";
 import type { PsharePendingMedia, PsharePost } from "./pshare-types";
+
+type PshareView = "feed" | "studio";
 
 const C = {
   crimson: "#e11d48",
@@ -33,6 +36,7 @@ type PshareTabPanelProps = {
 
 export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
   const qc = useQueryClient();
+  const [view, setView] = useState<PshareView>("feed");
   const [draft, setDraft] = useState("");
   const [pendingMedia, setPendingMedia] = useState<PsharePendingMedia | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -147,17 +151,50 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
       >
         <div>
           <p className="text-sm font-bold text-white">Pshare</p>
-          <p className="text-[10px] text-white/35">Like, react, hype, and climb the diamond tiers</p>
+          <p className="text-[10px] text-white/35">
+            {view === "studio"
+              ? "Stories, clips, soundtrack polish — preview before you post"
+              : "Like, react, hype, and climb the diamond tiers"}
+          </p>
         </div>
-        <div
-          className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
-          style={{ background: `${C.crimson}18`, border: `1px solid ${C.crimson}35` }}
-        >
-          <Radio className="h-2.5 w-2.5 text-rose-400" strokeWidth={2} />
-          <span className="text-[8px] font-bold text-rose-400">LIVE</span>
+        <div className="flex items-center gap-2">
+          <div
+            className="flex rounded-lg p-0.5"
+            style={{ background: C.sidebarInput, border: `1px solid ${C.sidebarDivider}` }}
+          >
+            {(["feed", "studio"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setView(tab)}
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide transition"
+                style={{
+                  background: view === tab ? `${C.crimson}28` : "transparent",
+                  color: view === tab ? "#fda4af" : "rgba(255,255,255,0.45)",
+                }}
+              >
+                {tab === "studio" ? <Clapperboard className="h-3 w-3" /> : null}
+                {tab === "feed" ? "Feed" : "Studio"}
+              </button>
+            ))}
+          </div>
+          <div
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
+            style={{ background: `${C.crimson}18`, border: `1px solid ${C.crimson}35` }}
+          >
+            <Radio className="h-2.5 w-2.5 text-rose-400" strokeWidth={2} />
+            <span className="text-[8px] font-bold text-rose-400">LIVE</span>
+          </div>
         </div>
       </div>
 
+      {view === "studio" ? (
+        <div className="flex-1 overflow-y-auto py-3">
+          <PshareStudio myUserId={myUserId} onPosted={() => setView("feed")} />
+        </div>
+      ) : null}
+
+      {view === "feed" ? (
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {postsQuery.isLoading && (
           <p className="text-[11px] text-white/40">Loading feed…</p>
@@ -172,7 +209,9 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
           <PsharePostCard key={p.id} post={p} myUserId={myUserId} variant="feed" />
         ))}
       </div>
+      ) : null}
 
+      {view === "feed" ? (
       <div className="shrink-0 border-t px-4 py-3" style={{ borderColor: C.border }}>
         {pendingMedia && (
           <div className="relative mb-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
@@ -260,6 +299,7 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
           </p>
         )}
       </div>
+      ) : null}
     </div>
   );
 }
