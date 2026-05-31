@@ -36,6 +36,60 @@ export function CommandConsolePopup({
   );
 }
 
+/** Nested under System Settings in the module sidebar — logo tap opens command console. */
+export function CyrusCommandSidebarActivate({
+  collapsed,
+  className,
+  pageContext = "System Settings — CYRUS Command",
+}: {
+  collapsed?: boolean;
+  className?: string;
+  pageContext?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <div className={cn("my-1", collapsed ? "mx-2" : "mx-2 ml-4 border-l border-white/10 pl-2.5", className)}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Click to activate CYRUS AI command console"
+          title="CYRUS Command"
+          className={cn(
+            "group w-full rounded-xl border border-transparent transition-all duration-200 touch-manipulation",
+            "hover:border-cyan-500/25 hover:bg-white/[0.04] focus:outline-none focus-visible:border-cyan-500/35 focus-visible:ring-2 focus-visible:ring-cyan-500/20",
+            collapsed ? "flex justify-center px-0 py-2.5" : "flex flex-col items-center gap-2.5 px-2 py-3",
+          )}
+        >
+          <div className={cn("relative shrink-0", collapsed ? "scale-100" : "scale-110")}>
+            <CyrusSidebarBrand collapsed />
+          </div>
+
+          {!collapsed && (
+            <div className="text-center">
+              <p
+                className="text-[9px] font-black uppercase tracking-[0.28em] text-cyan-200/85 transition-colors group-hover:text-cyan-100"
+                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                Click to activate AI
+              </p>
+              <p className="mt-1 text-[7px] font-mono uppercase tracking-[0.22em] text-white/32">
+                Secure link · Operator ack
+              </p>
+              <p className="mt-0.5 text-[7px] font-mono uppercase tracking-[0.2em] text-[#e11d48]/40">
+                Standby // encrypted
+              </p>
+            </div>
+          )}
+        </button>
+      </div>
+
+      <CommandConsolePopup open={open} onOpenChange={setOpen} pageContext={pageContext} />
+    </>
+  );
+}
+
 /** CYRUS logo host — lower viewport placement; opens command console on click. */
 export function CyrusCommandActivateHost({
   pageContext,
