@@ -8,7 +8,7 @@ import {
   MessageSquare, Phone, Video, Users, Mic, Film, MicOff, VideoOff,
   PhoneOff, Send, Search, Shield, SignalHigh, Radio, Zap, Camera,
   StopCircle, Trash2, ChevronRight, PhoneCall, Wifi, Lock, Volume2,
-  Monitor, Signal, Activity, Globe, Settings2, Antenna, Paperclip,
+  Monitor, Signal, Activity, Globe, Settings2, Antenna, Paperclip, Brain,
 } from "lucide-react";
 import { usePresence } from "../../../client/src/contexts/PresenceContext";
 import { useCyrusGroupCall } from "../../../client/src/hooks/useCyrusGroupCall";
@@ -1181,6 +1181,19 @@ function GroupCallHub({
               MODE: {sfuMode?.toUpperCase()??"P2P"} · {available.length} OPERATORS AVAILABLE
             </p>
           </div>
+          <a
+            href="/comms/group-module"
+            className="ml-auto flex items-center gap-2 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-wider transition hover:scale-[1.02]"
+            style={{
+              background: `${C.amber}12`,
+              border: `1px solid ${C.amber}35`,
+              color: C.amber,
+              fontFamily: "'Orbitron',system-ui",
+            }}
+          >
+            <Brain className="h-3.5 w-3.5" strokeWidth={2} />
+            CYRUS Group Module
+          </a>
         </div>
       </div>
 
