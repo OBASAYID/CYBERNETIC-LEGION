@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Activity, Radio, Share2, Users } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Activity, Radio, Share2, Users, X } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogClose, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CyrusSidebarBrand } from "@/components/cyrus-sidebar-brand";
 import { cn } from "@/lib/utils";
 import { ModuleCommandConsole } from "./module-command-console";
 
 const sideIconClass =
   "group relative w-full overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/50 via-slate-900/72 to-slate-950/82 px-3 py-2.5 text-slate-100 shadow-[0_12px_26px_rgba(0,0,0,0.34)] backdrop-blur-sm transition hover:border-white/22 hover:bg-gradient-to-b hover:from-slate-700/62 hover:via-slate-900/78 hover:to-slate-950/88 touch-manipulation";
+
+/** Same width/centering as the dashboard + module workspace command console dock. */
+const COMMAND_CONSOLE_SHELL =
+  "relative z-20 mx-auto w-full max-w-cyrus-console cyrus-safe-x px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-1.5 sm:pt-1.5 lg:px-8";
 
 export function CommandConsolePopup({
   open,
@@ -20,18 +25,32 @@ export function CommandConsolePopup({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(
-          "max-h-[min(92vh,calc(44rem*var(--cyrus-ui-width-scale)))] w-full max-w-cyrus-console gap-0 overflow-hidden border-white/12 bg-slate-950/95 p-2 sm:p-3",
-          "[&>button:last-of-type]:right-3 [&>button:last-of-type]:top-3 [&>button:last-of-type]:text-white/70 [&>button:last-of-type]:hover:text-white",
-        )}
-        aria-describedby={undefined}
-      >
-        <ModuleCommandConsole
-          pageContext={pageContext}
-          className="max-h-[min(85vh,40rem)] min-h-[20rem] shadow-none"
-        />
-      </DialogContent>
+      <DialogPortal>
+        <DialogOverlay className="z-[110] bg-black/55 backdrop-blur-[2px]" />
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed inset-x-0 bottom-0 top-auto z-[120] mx-auto w-full max-w-none translate-x-0 translate-y-0",
+            "border-0 bg-transparent p-0 shadow-none outline-none",
+            "duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          )}
+          aria-describedby={undefined}
+        >
+          <div className={COMMAND_CONSOLE_SHELL}>
+            <DialogClose
+              className="absolute right-5 top-3 z-40 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/70 text-white/70 backdrop-blur transition hover:border-white/25 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 sm:right-6 lg:right-8"
+              aria-label="Close command console"
+            >
+              <X className="h-4 w-4" />
+            </DialogClose>
+            <ModuleCommandConsole
+              pageContext={pageContext}
+              className="max-h-[min(88vh,42rem)] min-h-[24rem] shadow-none sm:min-h-[26rem]"
+            />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPortal>
     </Dialog>
   );
 }
