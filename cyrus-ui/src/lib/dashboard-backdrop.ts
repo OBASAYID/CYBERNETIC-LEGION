@@ -34,9 +34,15 @@ export const TSODILO_MARKINGS_CANVAS_URL = "/tsodilo-markings-canvas.png";
 export const TSODILO_SYMBOLS_STELE_URL = "/tsodilo-symbols-stele.png";
 /** Diamond hero art placed on a dark leather surface for the featured spotlight panel. */
 export const CYRUS_DIAMONDS_LEATHER_URL = "/images/cyrus-diamonds-leather.png";
+/** Refined brilliant-cut diamond render for the System Spotlight mining pillar card. */
+export const CYRUS_MINING_DIAMOND_URL = "/images/cyrus-mining-diamond-hero.png";
 /** Botswana wildlife tourism hero used in the national pillars strip. */
 export const BOTSWANA_TOURISM_WILDLIFE_URL = "/images/botswana-dashboard-wildlife.jpg";
 /** Cattle heritage texture used to represent Botswana beef exports. */
 export const BOTSWANA_BEEF_EXPORTS_URL = "/images/botswana-beef-cattle-heritage.png";
+/** Bulls with Botswana flag — System Spotlight beef exports pillar hero. */
+export const BOTSWANA_BEEF_EXPORTS_HERO_URL = "/images/botswana-beef-exports-hero.png";
 /** Technology and digital skills visual used for Botswana innovation pillar. */
 export const BOTSWANA_TECHNOLOGY_URL = "/images/botswana-technology-network.png";
+/** Debswana industrial mining site — System Spotlight technology pillar hero. */
+export const BOTSWANA_TECHNOLOGY_HERO_URL = "/images/botswana-technology-hero.png";
