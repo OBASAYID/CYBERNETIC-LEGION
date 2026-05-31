@@ -37,15 +37,10 @@ import { AVATAR_SERVE_MIME } from "../../shared/comms/avatar-image-formats.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { resolveCommsRecordingsDir, resolveCommsUploadDir } from "./upload-paths.js";
 
-const COMMS_UPLOAD_DIR = path.join(process.cwd(), "uploads", "comms");
-const COMMS_RECORDINGS_DIR = path.join(COMMS_UPLOAD_DIR, "recordings");
-if (!fs.existsSync(COMMS_UPLOAD_DIR)) {
-  fs.mkdirSync(COMMS_UPLOAD_DIR, { recursive: true });
-}
-if (!fs.existsSync(COMMS_RECORDINGS_DIR)) {
-  fs.mkdirSync(COMMS_RECORDINGS_DIR, { recursive: true });
-}
+const COMMS_UPLOAD_DIR = resolveCommsUploadDir();
+const COMMS_RECORDINGS_DIR = resolveCommsRecordingsDir(COMMS_UPLOAD_DIR);
 
 const commsUpload = multer({
   storage: multer.diskStorage({
@@ -1613,7 +1608,8 @@ router.post("/api/comms/upload/chunk", chunkUpload.single("chunk"), async (req: 
 });
 
 router.get("/api/comms/upload/:uploadId/status", (req, res) => {
-  const session = getChunkUploadSession(String(req.params.uploadId || ""));
+  const chunksRoot = getCommsChunksDir(COMMS_UPLOAD_DIR);
+  const session = getChunkUploadSession(String(req.params.uploadId || ""), chunksRoot);
   if (!session) return res.status(404).json({ error: "Upload session not found" });
   res.json({
     uploadId: session.uploadId,

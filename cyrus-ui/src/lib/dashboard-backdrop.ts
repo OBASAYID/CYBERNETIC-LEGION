@@ -46,3 +46,5 @@ export const BOTSWANA_BEEF_EXPORTS_HERO_URL = "/images/botswana-beef-exports-her
 export const BOTSWANA_TECHNOLOGY_URL = "/images/botswana-technology-network.png";
 /** Debswana industrial mining site — System Spotlight technology pillar hero. */
 export const BOTSWANA_TECHNOLOGY_HERO_URL = "/images/botswana-technology-hero.png";
+/** Botswana coat of arms / Debswana mining sculpture — System Spotlight hero flank. */
+export const BOTSWANA_COAT_OF_ARMS_DEBSWANA_URL = "/images/botswana-coat-of-arms-debswana-hero.png";

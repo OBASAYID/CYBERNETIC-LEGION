@@ -3,8 +3,19 @@ import type { GateProfile } from "@/components/password-gate";
 export const AUTH_KEY = "cyrus_auth_session";
 export const AUTH_TIMESTAMP_KEY = "cyrus_auth_timestamp";
 export const SESSION_TOKEN_KEY = "cyrus_session_token";
+export const USER_ID_KEY = "cyrus-user-id";
 export const GATE_DRAFT_KEY = "cyrus_gate_draft_v1";
 export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+
+export function getAuthenticatedUserId(): string {
+  try {
+    const id = localStorage.getItem(USER_ID_KEY);
+    if (id?.trim()) return id.trim();
+  } catch {
+    /* ignore */
+  }
+  return "local-operator";
+}
 
 export function getSessionToken(): string | null {
   try {
@@ -45,6 +56,7 @@ export function clearAuthSessionStorage(): void {
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(AUTH_TIMESTAMP_KEY);
     localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(USER_ID_KEY);
     localStorage.removeItem("cyrus-user-role");
     localStorage.removeItem("cyrus-display-name");
     // Critical comms/session isolation cleanup: remove persisted identity/cursors
@@ -66,6 +78,7 @@ export function persistAuthSession(sessionToken: string, profile: GateProfile): 
   localStorage.setItem(AUTH_KEY, "valid");
   localStorage.setItem(AUTH_TIMESTAMP_KEY, Date.now().toString());
   if (sessionToken) localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
+  if (profile.userId?.trim()) localStorage.setItem(USER_ID_KEY, profile.userId.trim());
   localStorage.setItem("cyrus-display-name", profile.displayName);
   localStorage.setItem("cyrus-user-role", profile.role);
   if (typeof window !== "undefined") {
