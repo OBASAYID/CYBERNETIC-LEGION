@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 /** Shared dark console surface — matches Live panel sidebar. */
 export const DASHBOARD_DARK_CONSOLE_BG =
   "bg-gradient-to-b from-[#070b12]/98 via-[#05080d]/99 to-black/95";
+/** Opaque top stack (System Spotlight) — sits on the white dashboard page. */
+export const DASHBOARD_TOP_CONSOLE_BG =
+  "bg-gradient-to-b from-[#0a0e16] via-[#060a10] to-[#030508]";
 export const DASHBOARD_DARK_CONSOLE_INNER =
   "rounded-xl border border-white/10 bg-gradient-to-b from-[#0c1018]/92 via-[#080b10]/96 to-black/90";
 export const DASHBOARD_CONSOLE_SHADOW =
@@ -71,10 +74,23 @@ function ConsoleShell({
           ? "text-emerald-300"
           : "text-cyan-300";
 
+  const surfaceBg = stack === "top" ? DASHBOARD_TOP_CONSOLE_BG : DASHBOARD_DARK_CONSOLE_BG;
+
   return (
     <section
-      className={`relative overflow-hidden ${stackShellClass(stack)} ${DASHBOARD_DARK_CONSOLE_BG} p-4 ${DASHBOARD_CONSOLE_SHADOW} backdrop-blur-xl cyrus-xs-console-shell ${className}`}
+      className={cn(
+        "relative isolate overflow-hidden p-4 cyrus-xs-console-shell",
+        stackShellClass(stack),
+        surfaceBg,
+        DASHBOARD_CONSOLE_SHADOW,
+        stack === "top" && "text-white shadow-[0_20px_48px_rgba(0,0,0,0.55)]",
+        stack !== "top" && "backdrop-blur-xl",
+        className,
+      )}
     >
+      {stack === "top" ? (
+        <div className="pointer-events-none absolute inset-0 bg-[#05080d]" aria-hidden />
+      ) : null}
       <div className="pointer-events-none absolute inset-0 cyrus-glyph-matrix opacity-[0.08]" aria-hidden />
       <div className="pointer-events-none absolute -right-8 top-2 h-28 w-28 rounded-full bg-black/40 blur-2xl" aria-hidden />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
@@ -490,8 +506,10 @@ export function SystemSpotlightConsole() {
 
 export function OperatorConsoleCluster() {
   return (
-    <div className="flex flex-col gap-2 lg:gap-2.5 cyrus-xs-console-cluster">
-      <SystemSpotlightConsole />
+    <div className="flex flex-col gap-0 cyrus-xs-console-cluster">
+      <div className="overflow-hidden rounded-t-2xl bg-[#05080d] shadow-[0_16px_42px_rgba(0,0,0,0.48)]">
+        <SystemSpotlightConsole />
+      </div>
     </div>
   );
 }
