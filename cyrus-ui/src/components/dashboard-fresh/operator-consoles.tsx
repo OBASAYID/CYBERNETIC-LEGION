@@ -2,13 +2,14 @@ import type { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  BOTSWANA_BEEF_EXPORTS_URL,
-  BOTSWANA_TECHNOLOGY_URL,
+  BOTSWANA_BEEF_EXPORTS_HERO_URL,
+  BOTSWANA_TECHNOLOGY_HERO_URL,
   BOTSWANA_TOURISM_WILDLIFE_URL,
-  CYRUS_DIAMONDS_LEATHER_URL,
+  CYRUS_MINING_DIAMOND_URL,
   TSODILO_DANCE_HERO_URL,
 } from "@/lib/dashboard-backdrop";
 import type { StackSummaryResponse } from "./types";
+import { cn } from "@/lib/utils";
 
 /** Shared dark console surface — matches Live panel sidebar. */
 export const DASHBOARD_DARK_CONSOLE_BG =
@@ -90,6 +91,133 @@ function ConsoleShell({
   );
 }
 
+type SpotlightPillar = {
+  title: string;
+  sub: string;
+  image: string;
+  variant?: "default" | "mining" | "beef" | "technology";
+};
+
+const PILLAR_RENDER: Record<
+  Exclude<SpotlightPillar["variant"], "default" | undefined>,
+  {
+    frame: string;
+    img: string;
+    filter?: string;
+    sub: string;
+    badge?: string;
+  }
+> = {
+  mining: {
+    frame:
+      "border-white/20 bg-[#0a0c10] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_24px_rgba(186,230,253,0.12)]",
+    img: "object-cover object-[center_42%] brightness-[1.08] contrast-[1.18] saturate-[0.92]",
+    filter: "drop-shadow(0 0 18px rgba(186,230,253,0.28)) drop-shadow(0 8px 16px rgba(0,0,0,0.55))",
+    sub: "text-cyan-100/70",
+    badge: "Refined",
+  },
+  beef: {
+    frame:
+      "border-amber-200/25 bg-[#1a1208] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_22px_rgba(251,191,36,0.14)]",
+    img: "object-cover object-[center_38%] brightness-[1.04] contrast-[1.14] saturate-[1.08]",
+    filter: "drop-shadow(0 0 14px rgba(251,191,36,0.22)) drop-shadow(0 8px 18px rgba(0,0,0,0.5))",
+    sub: "text-amber-100/75",
+    badge: "Exports",
+  },
+  technology: {
+    frame:
+      "border-sky-200/20 bg-[#0a1018] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_22px_rgba(56,189,248,0.12)]",
+    img: "object-cover object-[center_40%] brightness-[1.05] contrast-[1.16] saturate-[1.06]",
+    filter: "drop-shadow(0 0 16px rgba(56,189,248,0.2)) drop-shadow(0 8px 18px rgba(0,0,0,0.52))",
+    sub: "text-sky-100/75",
+    badge: "Industry",
+  },
+};
+
+function SpotlightPillarCard({ pillar }: { pillar: SpotlightPillar }) {
+  const variant = pillar.variant ?? "default";
+  const refined = variant !== "default" ? PILLAR_RENDER[variant] : null;
+
+  return (
+    <article
+      className={`group relative overflow-hidden p-2 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}
+    >
+      <div
+        className={cn(
+          "relative h-20 w-full overflow-hidden rounded-lg border",
+          refined ? refined.frame : "border-transparent",
+        )}
+      >
+        <img
+          src={pillar.image}
+          alt={pillar.title}
+          className={cn(
+            "h-full w-full transition duration-500 group-hover:scale-[1.04]",
+            refined ? refined.img : "object-cover brightness-[0.9] contrast-[1.08] saturate-[1.05] group-hover:scale-[1.03]",
+          )}
+          style={refined?.filter ? { filter: refined.filter } : undefined}
+          loading="lazy"
+        />
+        {variant === "mining" ? (
+          <>
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_52%_38%,rgba(255,255,255,0.22),transparent_42%)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-cyan-200/10 via-transparent to-violet-200/10 mix-blend-screen"
+              aria-hidden
+            />
+          </>
+        ) : null}
+        {variant === "beef" ? (
+          <>
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_55%,rgba(251,191,36,0.18),transparent_48%)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-sky-300/10 via-transparent to-amber-300/12 mix-blend-screen"
+              aria-hidden
+            />
+          </>
+        ) : null}
+        {variant === "technology" ? (
+          <>
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_48%_42%,rgba(125,211,252,0.16),transparent_46%)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-sky-400/12 via-transparent to-amber-300/10 mix-blend-screen"
+              aria-hidden
+            />
+          </>
+        ) : null}
+        {refined ? (
+          <>
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/78 via-black/18 to-transparent"
+              aria-hidden
+            />
+            {refined.badge ? (
+              <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/25 bg-white/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-white/85 backdrop-blur-sm">
+                {refined.badge}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/72 via-black/25 to-transparent" />
+        )}
+      </div>
+      <div className="mt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/92">{pillar.title}</p>
+        <p className={cn("text-[10px]", refined?.sub ?? "text-slate-300/80")}>{pillar.sub}</p>
+      </div>
+    </article>
+  );
+}
+
 export function SystemSpotlightConsole({
   stackSummary,
   healthPercent,
@@ -103,13 +231,28 @@ export function SystemSpotlightConsole({
 }) {
   const origin = stackSummary?.stack?.fused?.liveOrigin ?? "Single-origin fused stack";
   const ai = stackSummary?.cyrusAiReachable ? "AI online" : "AI check pending";
-  const pillars = [
+  const pillars: SpotlightPillar[] = [
     { title: "Tourism", sub: "Wildlife safari", image: BOTSWANA_TOURISM_WILDLIFE_URL },
     { title: "Culture", sub: "Tsodilo heritage", image: TSODILO_DANCE_HERO_URL },
-    { title: "Mining", sub: "Diamond strength", image: CYRUS_DIAMONDS_LEATHER_URL },
-    { title: "Beef exports", sub: "Cattle economy", image: BOTSWANA_BEEF_EXPORTS_URL },
-    { title: "Technology", sub: "Digital growth", image: BOTSWANA_TECHNOLOGY_URL },
-  ] as const;
+    {
+      title: "Mining",
+      sub: "Diamond strength",
+      image: CYRUS_MINING_DIAMOND_URL,
+      variant: "mining",
+    },
+    {
+      title: "Beef exports",
+      sub: "Cattle economy",
+      image: BOTSWANA_BEEF_EXPORTS_HERO_URL,
+      variant: "beef",
+    },
+    {
+      title: "Technology",
+      sub: "Digital growth",
+      image: BOTSWANA_TECHNOLOGY_HERO_URL,
+      variant: "technology",
+    },
+  ];
 
   return (
     <ConsoleShell title="System spotlight" kicker="Featured console" icon={Sparkles} accent="amber" stack="top">
@@ -130,28 +273,14 @@ export function SystemSpotlightConsole({
           </div>
         </div>
         <img
-          src={CYRUS_DIAMONDS_LEATHER_URL}
-          alt="Diamonds on dark leather surface"
-          className="h-36 w-24 shrink-0 rounded-xl border border-white/18 object-cover shadow-[0_10px_20px_rgba(0,0,0,0.36)]"
+          src={CYRUS_MINING_DIAMOND_URL}
+          alt="Brilliant-cut diamonds on dark leather"
+          className="h-36 w-24 shrink-0 rounded-xl border border-white/18 object-cover object-[center_42%] shadow-[0_10px_20px_rgba(0,0,0,0.36)] brightness-[1.06] contrast-[1.14]"
         />
       </div>
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {pillars.map((pillar) => (
-          <article
-            key={pillar.title}
-            className={`group relative overflow-hidden p-2 shadow-[0_10px_22px_rgba(0,0,0,0.45)] ${DASHBOARD_DARK_CONSOLE_INNER}`}
-          >
-            <img
-              src={pillar.image}
-              alt={pillar.title}
-              className="h-20 w-full rounded-lg object-cover brightness-[0.9] contrast-[1.08] saturate-[1.05] transition duration-300 group-hover:scale-[1.03]"
-            />
-            <div className="pointer-events-none absolute inset-x-2 top-2 h-20 rounded-lg bg-gradient-to-t from-black/72 via-black/25 to-transparent" />
-            <div className="mt-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/92">{pillar.title}</p>
-              <p className="text-[10px] text-slate-300/80">{pillar.sub}</p>
-            </div>
-          </article>
+          <SpotlightPillarCard key={pillar.title} pillar={pillar} />
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2.5 cyrus-xs-spotlight-stats sm:grid-cols-4">
