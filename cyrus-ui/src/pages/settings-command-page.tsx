@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { AlertTriangle, ChevronLeft, ShieldCheck, Terminal } from "lucide-react";
-import { ModuleCommandConsole } from "@/components/command-center/module-command-console";
+import { CyrusCommandActivateHost } from "@/components/command-center/command-console-popup";
 import { useUserRole } from "@/hooks/use-user-role";
 
 export default function SettingsCommandPage() {
@@ -12,7 +12,7 @@ export default function SettingsCommandPage() {
       <div className="pointer-events-none fixed inset-0 bg-slate-950/40" aria-hidden />
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-slate-900/30 via-transparent to-black/30" />
 
-      <div className="relative z-10 mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-10 sm:px-6 lg:px-8">
         <Link
           href="/settings"
           className="mb-6 inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-white/45 transition-colors hover:text-cyan-300/90"
@@ -21,7 +21,7 @@ export default function SettingsCommandPage() {
           System Settings
         </Link>
 
-        <div className="mb-8">
+        <div className="mb-4">
           <div className="mb-2 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 shadow-inner">
               <Terminal className="h-5 w-5 text-cyan-400" />
@@ -51,17 +51,14 @@ export default function SettingsCommandPage() {
             <p className="mt-1 text-xs text-white/35">Log in with the admin code to use the CYRUS command console.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-1 flex-col">
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <ShieldCheck className="h-4 w-4 shrink-0 text-cyan-400/80" />
               <p className="text-xs text-white/55">
                 Operator AI console for system guidance, pipeline handoff, and module routing.
               </p>
             </div>
-            <ModuleCommandConsole
-              pageContext="System Settings — CYRUS Command"
-              className="min-h-[32rem] shadow-[0_20px_46px_rgba(0,0,0,0.42)]"
-            />
+            <CyrusCommandActivateHost pageContext="System Settings — CYRUS Command" className="flex-1" />
           </div>
         )}
       </div>
