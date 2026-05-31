@@ -25,7 +25,10 @@ import {
  */
 export type CommandCenterNavEntry = {
   path: string;
+  /** Short label for dashboard pills / collapsed tooltips */
   dashboardLabel: string;
+  /** Full professional name in the module sidebar */
+  sidebarLabel: string;
   dashboardDescription?: string;
   surfaceLabel?: string;
   sublabel?: string;
@@ -36,6 +39,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/",
     dashboardLabel: "Command",
+    sidebarLabel: "Command Center",
     dashboardDescription: "Primary Interface",
     surfaceLabel: "Command",
     sublabel: "Primary Interface",
@@ -44,6 +48,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/intelligence",
     dashboardLabel: "Intelligence",
+    sidebarLabel: "Intelligence Hub",
     dashboardDescription: "Mine, grow & automate",
     surfaceLabel: "Intelligence Hub",
     sublabel: "Assets, knowledge growth, missions, MCP",
@@ -52,6 +57,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/files",
     dashboardLabel: "Docs",
+    sidebarLabel: "Document Intelligence",
     dashboardDescription: "Document intelligence",
     surfaceLabel: "Documents",
     sublabel: "Upload, analyze, generate",
@@ -60,6 +66,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/scan",
     dashboardLabel: "Vision",
+    sidebarLabel: "Vision Analysis",
     dashboardDescription: "Optical Analysis",
     surfaceLabel: "Vision",
     sublabel: "OCR, QR, translate, analyze",
@@ -68,6 +75,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/comms",
     dashboardLabel: "Comms",
+    sidebarLabel: "Communications",
     dashboardDescription: "Secure messaging & calls",
     surfaceLabel: "Communications",
     sublabel: "Chat, WebRTC, group work assessment",
@@ -76,6 +84,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/modules",
     dashboardLabel: "Modules",
+    sidebarLabel: "Module Orchestrator",
     dashboardDescription: "AI Orchestrator",
     surfaceLabel: "Modules",
     sublabel: "Engine status & routing",
@@ -84,6 +93,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/algorithms",
     dashboardLabel: "Algorithms",
+    sidebarLabel: "Algorithms Catalog",
     dashboardDescription: "Engines & API map",
     surfaceLabel: "Algorithms",
     sublabel: "REST catalog reference",
@@ -92,6 +102,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/document-builder",
     dashboardLabel: "Doc Builder",
+    sidebarLabel: "Document Builder",
     dashboardDescription: "Structured documents",
     surfaceLabel: "Doc Builder",
     sublabel: "Sitrep, intelsum, reports",
@@ -100,6 +111,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/device",
     dashboardLabel: "Systems",
+    sidebarLabel: "Device Systems",
     dashboardDescription: "Hardware Control",
     surfaceLabel: "Systems",
     sublabel: "Device automation (when enabled)",
@@ -108,6 +120,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/medical",
     dashboardLabel: "Medical",
+    sidebarLabel: "Medical Diagnostics",
     dashboardDescription: "Diagnostics",
     surfaceLabel: "Medical",
     sublabel: "Symptom analysis & health data",
@@ -116,6 +129,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/quantum",
     dashboardLabel: "Quantum",
+    sidebarLabel: "Quantum Simulation",
     dashboardDescription: "Circuit simulation",
     surfaceLabel: "Quantum",
     sublabel: "Simulate & create circuits",
@@ -124,6 +138,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/ops",
     dashboardLabel: "Ops",
+    sidebarLabel: "Operations Center",
     dashboardDescription: "Intelligence automation",
     surfaceLabel: "Operations",
     sublabel: "Growth, automation, asset resume",
@@ -132,6 +147,7 @@ export const COMMAND_CENTER_NAV: CommandCenterNavEntry[] = [
   {
     path: "/settings",
     dashboardLabel: "Settings",
+    sidebarLabel: "System Settings",
     dashboardDescription: "System configuration",
     surfaceLabel: "Settings",
     sublabel: "Access codes, API keys, admin controls",

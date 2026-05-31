@@ -106,7 +106,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
-  const sidebarW = isMobile ? "0px" : sidebarCollapsed ? "72px" : "clamp(12.5rem, 16vw, 15rem)";
+  const sidebarW = isMobile ? "0px" : sidebarCollapsed ? "76px" : "clamp(17rem, 19vw, 17rem)";
 
   return (
     <ThemeProvider>
