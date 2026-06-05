@@ -118,12 +118,11 @@ export function getMetrics() {
 // ── Periodic logging ─────────────────────────────────────────────────────────
 
 const METRICS_LOG_INTERVAL_MS =
-  Number.parseInt(process.env.CYRUS_METRICS_INTERVAL_MS || "300000", 10) || 300_000; // 5 min default
+  Number.parseInt(process.env.CYRUS_METRICS_LOG_INTERVAL_MS || "600000");
 
-setInterval(() => {
-  try {
-    logger.info("metrics_snapshot", getMetrics());
-  } catch {
-    // Never let metrics logging crash the process
-  }
-}, METRICS_LOG_INTERVAL_MS).unref();
+if (METRICS_LOG_INTERVAL_MS > 0 && typeof setInterval === "function") {
+  setInterval(() => {
+    const metrics = getMetrics();
+    logger.info("[Metrics] API + Database snapshot", { metrics });
+  }, METRICS_LOG_INTERVAL_MS);
+}
