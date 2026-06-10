@@ -7,10 +7,6 @@ import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import { useUserRole } from "@/hooks/use-user-role";
 import { CyrusSidebarBrand } from "@/components/cyrus-sidebar-brand";
 import { CyrusCommandSidebarActivate } from "@/components/command-center/command-console-popup";
-import {
-  ModuleSidebarActivate,
-  MODULE_SIDEBAR_ACTIVATE_PATHS,
-} from "@/components/command-center/module-sidebar-activate";
 
 interface GameSidebarProps {
   collapsed: boolean;
@@ -245,15 +241,6 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                       </Link>
                       {item.path === "/settings" && role === "admin" ? (
                         <CyrusCommandSidebarActivate collapsed={collapsed} />
-                      ) : null}
-                      {MODULE_SIDEBAR_ACTIVATE_PATHS.has(item.path) ? (
-                        <ModuleSidebarActivate
-                          collapsed={collapsed}
-                          path={item.path}
-                          label={item.sidebarLabel}
-                          Icon={item.Icon}
-                          onNavigate={() => onMobileClose?.()}
-                        />
                       ) : null}
                     </Fragment>
                   );

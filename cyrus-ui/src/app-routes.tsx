@@ -2,8 +2,8 @@ import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { PresenceProvider } from "../../client/src/contexts/PresenceContext";
 import { CommsPresenceBootstrap } from "../../client/src/hooks/usePresenceBootstrap";
-import { CommsRoutes } from "./comms-routes";
-import { CommandCenterRoutes } from "./command-center-routes";
+import { commsRouteElements } from "./comms-routes";
+import { commandCenterRouteElements } from "./command-center-routes";
 import NotFound from "@/pages/not-found";
 import { ApiKeyTriggerButton } from "@/components/ApiKeyModal";
 
@@ -33,8 +33,8 @@ export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRo
             <DashboardFresh />
           </Suspense>
         </Route>
-        <CommsRoutes />
-        <CommandCenterRoutes />
+        {commsRouteElements}
+        {commandCenterRouteElements}
         <Route component={NotFound} />
       </Switch>
     </PresenceProvider>

@@ -49,12 +49,15 @@ function SuspenseCommsRoute({
   );
 }
 
+export const commsRouteElements = (
+  <>
+    <SuspenseCommsRoute path="/comms/call" C={CommsCallPage} />
+    <SuspenseCommsRoute path="/comms/group-module" C={GroupCallModulePage} />
+    <SuspenseCommsRoute path="/comms" C={CommsHubPage} />
+  </>
+);
+
+/** @deprecated Use `commsRouteElements` inside `<Switch>` — bare components match as `*` and block other routes. */
 export function CommsRoutes() {
-  return (
-    <>
-      <SuspenseCommsRoute path="/comms/call" C={CommsCallPage} />
-      <SuspenseCommsRoute path="/comms/group-module" C={GroupCallModulePage} />
-      <SuspenseCommsRoute path="/comms" C={CommsHubPage} />
-    </>
-  );
+  return commsRouteElements;
 }
