@@ -20,68 +20,84 @@ import {
   getFallbackStoreSizes,
 } from "./db-service.js";
 import { messageQueue } from "./message-queue.js";
+import {
+  type CallType,
+  type CallStatus,
+  type UserStatus,
+  type MessageType,
+  type ActiveCall,
+  type ActiveConference,
+  type UserPresence,
+  type MessagePayload,
+  type QueueMetrics,
+  type CommsDbStatus,
+  validateUserId,
+  validateMessageContent,
+  validateCallType,
+  validateUserStatus,
+  validateMessageType,
+  validatePositiveInteger,
+  ValidationError,
+} from "./comms-types.js";
+import { CommsError, CommsErrorCode, withCommsErrorHandling } from "./comms-errors.js";
 
-type CallType = "voice" | "video" | "conference" | "screen_share";
-type CallStatus = "initiating" | "ringing" | "connected" | "on_hold" | "ended" | "declined" | "missed" | "failed";
-type UserStatus = "online" | "away" | "do_not_disturb" | "offline" | "in_call";
-type MessageType = "text" | "image" | "video" | "file" | "voice_note" | "system";
-
-interface ActiveCall {
-  callId: string;
-  callType: CallType;
-  initiatorId: string;
-  initiatorName: string;
-  participants: string[];
-  status: CallStatus;
-  startedAt: Date | null;
-  callQuality: number;
-  bandwidthKbps: number;
-  isRecording: boolean;
-}
-
-interface ActiveConference {
-  conferenceId: string;
-  title: string;
-  hostId: string;
-  hostName: string;
-  participants: string[];
-  maxParticipants: number;
-  startedAt: Date | null;
-  isRecording: boolean;
-  screenSharingBy: string | null;
-  roomCode: string;
-  password: string | null;
-  meetingLink: string;
-}
-
-interface UserPresence {
-  userId: string;
-  displayName: string;
-  status: UserStatus;
-  lastSeen: Date;
-  currentCallId: string | null;
-  currentConferenceId: string | null;
-  networkLatencyMs: number;
-  connectionQuality: number;
-}
+/** Type re-exports from comms-types.ts */
+export type {
+  CallType,
+  CallStatus,
+  UserStatus,
+  MessageType,
+  ActiveCall,
+  ActiveConference,
+  UserPresence,
+  MessagePayload,
+};
 
 class EncryptionEngine {
   private keys: Map<string, Buffer> = new Map();
-  
+  private readonly KEY_SIZE = 32; // 256 bits for AES-256
+  private readonly IV_SIZE = 16; // 128 bits
+  private readonly MAX_KEYS = 10000; // Prevent memory leaks
+
   generateKey(userId: string): string {
-    const key = crypto.randomBytes(32);
-    this.keys.set(userId, key);
-    return key.toString("hex");
+    try {
+      validateUserId(userId);
+      
+      // Prevent memory leaks by limiting key storage
+      if (this.keys.size >= this.MAX_KEYS && !this.keys.has(userId)) {
+        console.warn(`[EncryptionEngine] Key cache full (${this.MAX_KEYS}), evicting oldest entry`);
+        const firstKey = this.keys.keys().next().value;
+        if (firstKey) this.keys.delete(firstKey);
+      }
+
+      const key = crypto.randomBytes(this.KEY_SIZE);
+      this.keys.set(userId, key);
+      console.log(`[EncryptionEngine] Generated encryption key for user: ${userId}`);
+      return key.toString("hex");
+    } catch (error) {
+      console.error(`[EncryptionEngine] Key generation failed for ${userId}:`, error);
+      throw CommsError.encryptionError("Failed to generate encryption key");
+    }
   }
 
   encrypt(userId: string, message: string): string {
     const key = this.keys.get(userId);
-    if (!key) return message;
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
-    let encrypted = cipher.update(message, "utf8", "hex");
-    encrypted += cipher.final("hex");
-    return iv.toString("hex") + ":" + encrypted;
+    if (!key) {
+      console.warn(`[EncryptionEngine] No encryption key for user ${userId}, storing plaintext`);
+      return message;
+    }
+    
+    try {
+      const iv = crypto.randomBytes(this.IV_SIZE);
+      const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+      let encrypted = cipher.update(message, "utf8", "hex");
+      encrypted += cipher.final("hex");
+      return `${iv.toString("hex")}:${encrypted}`;
+    } catch (error) {
+      console.error(`[EncryptionEngine] Encryption failed for user ${userId}:`, error);
+      // Fallback to plaintext rather than failing
+      return message;
+    }
   }
 
   hasKey(userId: string): boolean {
@@ -90,17 +106,44 @@ class EncryptionEngine {
 
   decrypt(userId: string, encrypted: string): string {
     const key = this.keys.get(userId);
-    if (!key) return encrypted;
+    if (!key) {
+      console.warn(`[EncryptionEngine] No decryption key for user ${userId}, returning as-is`);
+      return encrypted;
+    }
+    
     try {
-      const [ivHex, data] = encrypted.split(":");
+      const parts = encrypted.split(":");
+      if (parts.length !== 2) {
+        console.warn(`[EncryptionEngine] Invalid encrypted format for user ${userId}`);
+        return encrypted;
+      }
+      
+      const [ivHex, data] = parts;
       const iv = Buffer.from(ivHex, "hex");
       const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
       let decrypted = decipher.update(data, "hex", "utf8");
       decrypted += decipher.final("utf8");
       return decrypted;
-    } catch {
+    } catch (error) {
+      console.error(`[EncryptionEngine] Decryption failed for user ${userId}:`, error);
+      // Return encrypted text rather than failing
       return encrypted;
     }
+  }
+
+  /** Remove encryption key for a user (e.g., on logout) */
+  removeKey(userId: string): boolean {
+    const existed = this.keys.has(userId);
+    this.keys.delete(userId);
+    if (existed) {
+      console.log(`[EncryptionEngine] Removed encryption key for user: ${userId}`);
+    }
+    return existed;
+  }
+
+  /** Get current number of stored encryption keys */
+  getKeyCount(): number {
+    return this.keys.size;
   }
 }
 
@@ -202,47 +245,79 @@ class CommunicationEngine {
   }
 
   async sendMessage(
-    senderId: string, 
+    senderId: string,
     recipientId: string | null,
-    groupId: string | null, 
+    groupId: string | null,
     content: string,
     messageType: MessageType = "text",
     replyToId?: string,
     fileUrl?: string,
     fileName?: string,
-    fileSizeBytes?: number
-  ) {
-    const hasKey = this.encryption.hasKey(senderId);
-    const isEncrypted = hasKey;
-    const storedContent = hasKey ? this.encryption.encrypt(senderId, content) : content;
+    fileSizeBytes?: number,
+  ): Promise<MessagePayload | null> {
+    try {
+      // Validate inputs
+      validateUserId(senderId);
+      if (recipientId) validateUserId(recipientId);
+      if (groupId) validateUserId(groupId);
+      validateMessageContent(content);
+      validateMessageType(messageType);
 
-    const payload = {
-      senderId,
-      recipientId: recipientId || "broadcast",
-      content: storedContent,
-      messageType,
-      isEncrypted,
-      encryptionLevel: isEncrypted ? "aes_256" : "none",
-      fileUrl: fileUrl || null,
-      fileName: fileName || null,
-      fileSizeBytes: fileSizeBytes || null,
-      replyToId: replyToId || null,
-      groupId: groupId || null,
-    };
+      if (!recipientId && !groupId) {
+        console.warn(`[CommEngine] sendMessage: Neither recipientId nor groupId provided, defaulting to broadcast`);
+      }
 
-    // Queue for offline sync regardless — the db-service will also store in fallback
-    if (this.isUsingFallback) {
-      messageQueue.enqueue("sendMessage", payload as any);
+      if (fileSizeBytes !== undefined && fileSizeBytes !== null) {
+        validatePositiveInteger(fileSizeBytes, "fileSizeBytes");
+      }
+
+      const hasKey = this.encryption.hasKey(senderId);
+      const isEncrypted = hasKey;
+      const storedContent = hasKey ? this.encryption.encrypt(senderId, content) : content;
+
+      const payload: MessagePayload = {
+        senderId,
+        recipientId: recipientId || "broadcast",
+        content: storedContent,
+        messageType,
+        isEncrypted,
+        encryptionLevel: isEncrypted ? "aes_256" : "none",
+        fileUrl: fileUrl || null,
+        fileName: fileName || null,
+        fileSizeBytes: fileSizeBytes ?? null,
+        replyToId: replyToId || null,
+        groupId: groupId || null,
+      };
+
+      // Queue for offline sync if in fallback mode
+      if (this.isUsingFallback) {
+        messageQueue.enqueue("sendMessage", payload as unknown as Record<string, unknown>);
+      }
+
+      const result = await dbInsertMessage(payload);
+      if (!result.success) {
+        console.error(`[CommEngine] sendMessage DB error: ${result.error}`);
+        throw CommsError.databaseError("insert message", new Error(result.error));
+      }
+
+      this.messageCount++;
+      console.log(
+        `[Comms] Message sent from ${senderId} to ${recipientId || groupId || "broadcast"} (${messageType}, encrypted=${isEncrypted})`,
+      );
+      
+      // Return with proper typing
+      return result.data ? {
+        ...result.data,
+        messageType: result.data.messageType as MessageType,
+      } as MessagePayload : null;
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof CommsError) {
+        console.error(`[CommEngine] sendMessage validation error:`, error);
+        throw error;
+      }
+      console.error(`[CommEngine] sendMessage unexpected error:`, error);
+      throw CommsError.internalError("Failed to send message", error as Error);
     }
-
-    const result = await dbInsertMessage(payload);
-    if (!result.success) {
-      console.error(`[CommEngine] sendMessage DB error: ${result.error}`);
-    }
-
-    this.messageCount++;
-    console.log(`[Comms] Message sent from ${senderId} to ${recipientId || groupId || "broadcast"} (${messageType})`);
-    return result.success ? result.data : null;
   }
 
   async getConversation(userId: string, otherUserId: string, limit: number = 50) {
@@ -318,37 +393,63 @@ class CommunicationEngine {
     initiatorId: string,
     initiatorName: string,
     recipientId: string,
-    callType: CallType = "voice"
+    callType: CallType = "voice",
   ): Promise<ActiveCall> {
-    const callId = uuid();
-    const roomId = `call_${callId.substring(0, 8)}`;
+    try {
+      // Validate inputs
+      validateUserId(initiatorId);
+      validateUserId(recipientId);
+      validateCallType(callType);
 
-    const call: ActiveCall = {
-      callId,
-      callType,
-      initiatorId,
-      initiatorName,
-      participants: [initiatorId, recipientId],
-      status: "ringing",
-      startedAt: null,
-      callQuality: 1.0,
-      bandwidthKbps: 0,
-      isRecording: false,
-    };
+      if (initiatorId === recipientId) {
+        throw CommsError.invalidInput("recipientId", "cannot call yourself");
+      }
 
-    this.activeCalls.set(callId, call);
+      const callId = uuid();
+      const roomId = `call_${callId.substring(0, 8)}`;
 
-    const callPayload = { callerId: initiatorId, recipientId, roomId, callType, status: "ringing" };
-    if (this.isUsingFallback) {
-      messageQueue.enqueue("initiateCall", callPayload as any);
+      const call: ActiveCall = {
+        callId,
+        callType,
+        initiatorId,
+        initiatorName: initiatorName || initiatorId,
+        participants: [initiatorId, recipientId],
+        status: "ringing",
+        startedAt: null,
+        callQuality: 1.0,
+        bandwidthKbps: 0,
+        isRecording: false,
+      };
+
+      this.activeCalls.set(callId, call);
+
+      const callPayload = {
+        callerId: initiatorId,
+        recipientId,
+        roomId,
+        callType,
+        status: "ringing" as const,
+      };
+
+      if (this.isUsingFallback) {
+        messageQueue.enqueue("initiateCall", callPayload as unknown as Record<string, unknown>);
+      }
+
+      const result = await dbInsertCall(callPayload);
+      if (!result.success) {
+        console.error(`[CommEngine] initiateCall DB error: ${result.error}`);
+        // Continue even if DB insert fails - call state is in memory
+      }
+
+      console.log(`[Comms] Call initiated: ${initiatorName} -> ${recipientId} (${callType}, callId=${callId})`);
+      return call;
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof CommsError) {
+        throw error;
+      }
+      console.error(`[CommEngine] initiateCall unexpected error:`, error);
+      throw CommsError.internalError("Failed to initiate call", error as Error);
     }
-    const result = await dbInsertCall(callPayload);
-    if (!result.success) {
-      console.error(`[CommEngine] initiateCall DB error: ${result.error}`);
-    }
-
-    console.log(`[Comms] Call initiated: ${initiatorName} -> ${recipientId} (${callType})`);
-    return call;
   }
 
   async acceptCall(callId: string, acceptorId: string): Promise<boolean> {
@@ -569,42 +670,57 @@ class CommunicationEngine {
   }
 
   async updatePresence(userId: string, displayName: string, status: UserStatus): Promise<UserPresence> {
-    const presence: UserPresence = {
-      userId,
-      displayName,
-      status,
-      lastSeen: new Date(),
-      currentCallId: null,
-      currentConferenceId: null,
-      networkLatencyMs: 0,
-      connectionQuality: 1.0,
-    };
+    try {
+      // Validate inputs
+      validateUserId(userId);
+      validateUserStatus(status);
 
-    const existing = this.userPresence.get(userId);
-    if (existing) {
-      presence.currentCallId = existing.currentCallId;
-      presence.currentConferenceId = existing.currentConferenceId;
+      const presence: UserPresence = {
+        userId,
+        displayName: displayName || userId,
+        status,
+        lastSeen: new Date(),
+        currentCallId: null,
+        currentConferenceId: null,
+        networkLatencyMs: 0,
+        connectionQuality: 1.0,
+      };
+
+      const existing = this.userPresence.get(userId);
+      if (existing) {
+        presence.currentCallId = existing.currentCallId;
+        presence.currentConferenceId = existing.currentConferenceId;
+      }
+
+      this.userPresence.set(userId, presence);
+
+      const upsertPayload = {
+        id: userId,
+        displayName: displayName || userId,
+        isOnline: status !== "offline",
+        lastSeen: new Date(),
+        status,
+      };
+
+      if (this.isUsingFallback) {
+        messageQueue.enqueue("updatePresence", upsertPayload as unknown as Record<string, unknown>);
+      }
+
+      const result = await dbUpsertOnlineUser(upsertPayload);
+      if (!result.success) {
+        console.error(`[CommEngine] updatePresence DB error: ${result.error}`);
+        // Continue even if DB update fails - presence is in memory
+      }
+
+      console.log(`[Comms] Presence updated: ${displayName} -> ${status}`);
+      return presence;
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof CommsError) {
+        throw error;
+      }
+      console.error(`[CommEngine] updatePresence unexpected error:`, error);
+      throw CommsError.internalError("Failed to update presence", error as Error);
     }
-
-    this.userPresence.set(userId, presence);
-
-    const upsertPayload = {
-      id: userId,
-      displayName,
-      isOnline: status !== "offline",
-      lastSeen: new Date(),
-      status,
-    };
-    if (this.isUsingFallback) {
-      messageQueue.enqueue("updatePresence", upsertPayload as any);
-    }
-    const result = await dbUpsertOnlineUser(upsertPayload);
-    if (!result.success) {
-      console.error(`[CommEngine] updatePresence DB error: ${result.error}`);
-    }
-
-    console.log(`[Comms] Presence updated: ${displayName} -> ${status}`);
-    return presence;
   }
 
   getPresence(userId: string): UserPresence | null {
@@ -658,19 +774,19 @@ class CommunicationEngine {
   }
 
   /** Returns the current DB + fallback status for the health endpoint. */
-  getDbStatus() {
+  getDbStatus(): CommsDbStatus {
     const dbHealth = getDbHealthState();
     const queueMetrics = messageQueue.getMetrics();
     return {
-      dbConnected: dbHealth.isHealthy,
-      fallbackMode: this.isUsingFallback,
+      isHealthy: dbHealth.isHealthy,
       circuitOpen: dbHealth.circuitOpen,
       consecutiveFailures: dbHealth.consecutiveFailures,
       lastError: dbHealth.lastError,
-      errorCategory: dbHealth.errorCategory ?? null,
-      lastCheckedAt: dbHealth.lastCheckedAt?.toISOString() ?? null,
+      errorCategory: dbHealth.errorCategory ?? undefined,
+      lastCheckedAt: dbHealth.lastCheckedAt ?? null,
+      fallbackMode: this.isUsingFallback,
       queue: {
-        size: queueMetrics.queueSize,
+        queueSize: queueMetrics.queueSize,
         oldestAgeMs: queueMetrics.oldestAgeMs,
         totalEnqueued: queueMetrics.totalEnqueued,
         totalFlushed: queueMetrics.totalFlushed,
@@ -690,15 +806,41 @@ class CommunicationEngine {
   }
 
   getConference(conferenceId: string): ActiveConference | null {
-    return this.activeConferences.get(conferenceId) || null;
+    try {
+      validateUserId(conferenceId);
+      return this.activeConferences.get(conferenceId) || null;
+    } catch (error) {
+      console.error(`[CommEngine] getConference validation error:`, error);
+      return null;
+    }
   }
 
   getCall(callId: string): ActiveCall | null {
-    return this.activeCalls.get(callId) || null;
+    try {
+      validateUserId(callId);
+      return this.activeCalls.get(callId) || null;
+    } catch (error) {
+      console.error(`[CommEngine] getCall validation error:`, error);
+      return null;
+    }
   }
 
   generateEncryptionKey(userId: string): string {
-    return this.encryption.generateKey(userId);
+    try {
+      validateUserId(userId);
+      return this.encryption.generateKey(userId);
+    } catch (error) {
+      console.error(`[CommEngine] generateEncryptionKey error:`, error);
+      throw error;
+    }
+  }
+
+  /** Get encryption engine statistics for monitoring */
+  getEncryptionStats(): { keyCount: number; maxKeys: number } {
+    return {
+      keyCount: this.encryption.getKeyCount(),
+      maxKeys: 10000, // Match MAX_KEYS from EncryptionEngine
+    };
   }
 }
 
