@@ -75,7 +75,20 @@
     "postinstall:sfu": "node scripts/install-mediasoup-worker.mjs",
     "sfu:install": "node scripts/install-mediasoup-worker.mjs",
     "sfu:verify": "tsx scripts/sfu-verify-cli.ts",
-    "deploy": "npm run build"
+    "deploy": "npm run build",
+    "mobile:init": "npx cap init",
+    "mobile:add:ios": "npx cap add ios",
+    "mobile:add:android": "npx cap add android",
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:sync:ios": "npm run build && npx cap sync ios",
+    "mobile:sync:android": "npm run build && npx cap sync android",
+    "mobile:open:ios": "npx cap open ios",
+    "mobile:open:android": "npx cap open android",
+    "mobile:run:ios": "npx cap run ios",
+    "mobile:run:android": "npx cap run android",
+    "mobile:copy": "npx cap copy",
+    "mobile:update": "npx cap update",
+    "mobile:doctor": "npx cap doctor"
   },
   "keywords": [
     "ai",
@@ -94,6 +107,21 @@
     "@azure/ai-form-recognizer": "^5.1.0",
     "@azure/identity": "^4.13.1",
     "@azure/openai": "^2.0.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/device": "^8.0.2",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/keyboard": "^8.0.3",
+    "@capacitor/local-notifications": "^8.2.0",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -195,6 +223,9 @@
     "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/ios": "^8.4.0",
     "@playwright/test": "^1.49.1",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
@@ -208,5 +239,16 @@
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
     "vite-plugin-pwa": "^0.21.2"
+  },
+  "capacitor": {
+    "appId": "com.cyrus.ai.mobile",
+    "appName": "CYRUS AI",
+    "webDir": "dist/public",
+    "plugins": {
+      "SplashScreen": {
+        "launchShowDuration": 2000,
+        "backgroundColor": "#0f172a"
+      }
+    }
   }
 }

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Configuration -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>CYRUS AI</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    
+    <!-- Permissions -->
+    
+    <!-- Camera -->
+    <key>NSCameraUsageDescription</key>
+    <string>CYRUS needs camera access for video calls, QR code scanning, and document capture.</string>
+    
+    <!-- Microphone -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>CYRUS needs microphone access for voice and video calls.</string>
+    
+    <!-- Photo Library -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>CYRUS needs access to your photos to share images and save documents.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>CYRUS needs permission to save photos and documents to your library.</string>
+    
+    <!-- Location -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>CYRUS needs your location to share it during calls and for location-based features.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>CYRUS needs location access to provide location-based services.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>CYRUS needs location access to share your location during calls.</string>
+    
+    <!-- Local Network -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>CYRUS needs local network access for peer-to-peer communication and calls.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_cyrus._tcp</string>
+        <string>_webrtc._tcp</string>
+    </array>
+    
+    <!-- Contacts -->
+    <key>NSContactsUsageDescription</key>
+    <string>CYRUS needs access to your contacts to help you connect with friends and colleagues.</string>
+    
+    <!-- Speech Recognition -->
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>CYRUS uses speech recognition for voice commands and transcription.</string>
+    
+    <!-- Face ID -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>CYRUS uses Face ID for secure authentication.</string>
+    
+    <!-- Bluetooth -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>CYRUS needs Bluetooth access to connect to audio devices.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>CYRUS needs Bluetooth access to connect to audio devices.</string>
+    
+    <!-- Background Modes -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+        <string>voip</string>
+        <string>fetch</string>
+        <string>remote-notification</string>
+        <string>processing</string>
+    </array>
+    
+    <!-- App Transport Security -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+    
+    <!-- Supported Interface Orientations -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    
+    <!-- Status Bar -->
+    <key>UIStatusBarHidden</key>
+    <false/>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+    
+    <!-- Launch Screen -->
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    
+    <!-- Files App Integration -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    
+    <!-- URL Schemes -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>cyrus</string>
+                <string>com.cyrus.ai.mobile</string>
+            </array>
+            <key>CFBundleURLName</key>
+            <string>com.cyrus.ai.mobile</string>
+        </dict>
+    </array>
+    
+    <!-- Universal Links -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:cyrus.app</string>
+        <string>applinks:www.cyrus.app</string>
+    </array>
+    
+    <!-- Capabilities -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.cyrus.ai.mobile</string>
+    </array>
+</dict>
+</plist>
