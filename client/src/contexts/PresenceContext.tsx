@@ -467,15 +467,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const emitPresenceRegister = useCallback((socket: Socket) => {
     const identity = identityRef.current;
-    if (!identity) return;
+    if (!identity) {
+      console.log("[Presence] ✗ Cannot emit register - no identity");
+      return;
+    }
     const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
-    socket.emit("register", {
+    const payload = {
       userId: identity.commsUserId,
       displayName: displayNameRef.current,
       deviceId: identity.deviceId,
       profileImageUrl: profileImageUrl || null,
       resumeFromSeq: sessionSeqRef.current,
-    });
+    };
+    console.log("[Presence] ✓ Emitting 'register' event:", JSON.stringify(payload));
+    socket.emit("register", payload);
   }, []);
 
   const refreshIdentityAndRegister = useCallback(
@@ -1372,7 +1377,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       });
 
       socket.on("registered", (data: { userId: string; totalOnline: number }) => {
-        console.log("[Presence] Registered successfully:", data);
+        console.log("[Presence] ✓ Received 'registered' event:", JSON.stringify(data));
         setMyUserId(data.userId);
         currentUserIdRef.current = data.userId;
         setPresenceTotal(data.totalOnline);
@@ -1406,6 +1411,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           presenceRegisteredOnceRef.current = true;
           addNotification("success", `Connected as ${displayNameRef.current}`);
         }
+      });
+
+      socket.on("users-list", (data: { users: Array<{ id: string; displayName: string; status?: string; inCall?: boolean; profileImageUrl?: string | null }> }) => {
+        console.log(`[Presence] ✓ Received 'users-list' with ${data.users.length} users:`, data.users.map(u => u.displayName).join(", "));
+        const currentId = currentUserIdRef.current;
+        const otherUsers = data.users.filter((u) => u.id !== currentId).map((u) => ({
+          id: u.id,
+          displayName: u.displayName,
+          status: (u.status as OnlineUser["status"]) || "online",
+          inCall: u.inCall || false,
+          profileImageUrl: u.profileImageUrl || null,
+        }));
+        console.log(`[Presence] ✓ Setting ${otherUsers.length} other users (excluding self)`);
+        setOnlineUsers(otherUsers);
+        setPresenceTotal(data.users.length);
       });
 
     socket.on('presence-update', (data: { users: OnlineUser[]; total: number }) => {
