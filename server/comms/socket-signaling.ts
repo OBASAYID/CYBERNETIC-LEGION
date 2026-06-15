@@ -4,7 +4,7 @@ import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
 import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
 import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
 import { db } from "../db.js";
-import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms";
+import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
 import { eq, ilike, sql } from "drizzle-orm";
 import { commsIntelligence } from "./comms-intelligence.js";
 import { gwaEngine } from "./gwa-engine.js";
@@ -108,6 +108,8 @@ const recentMessageAcks = new Map<
   string,
   {
     id: string;
+    senderId?: string;
+    senderName?: string;
     recipientId?: string;
     groupId?: string;
     message: string;
@@ -1000,6 +1002,8 @@ export function initSocketSignaling(server: HttpServer) {
       profileImageUrl?: string | null;
       resumeFromSeq?: number;
     }) => {
+      console.log(`[Socket.IO] ✓ REGISTER event received:`, JSON.stringify({ userId: data.userId, displayName: data.displayName, deviceId: data.deviceId }));
+      
       const { displayName, deviceId } = data;
       const commsUserId = data.userId || deviceId;
       const mapKey = presenceMapKey(commsUserId, deviceId);
@@ -1030,7 +1034,7 @@ export function initSocketSignaling(server: HttpServer) {
       knownDevices.add(deviceId);
       knownDeviceIdsByUser.set(commsUserId, knownDevices);
 
-      console.log(`[Socket.IO] User registered: ${displayName} (${commsUserId} @ ${deviceId}) - Total: ${users.size}`);
+      console.log(`[Socket.IO] ✓ User registered: ${displayName} (${commsUserId} @ ${deviceId}) - Total: ${users.size}`);
 
       const disconnectedAt = userLastDisconnectAt.get(commsUserId);
       if (typeof disconnectedAt === "number" && disconnectedAt > 0) {
@@ -1066,7 +1070,19 @@ export function initSocketSignaling(server: HttpServer) {
         console.error("[Socket.IO] Failed to persist user:", err);
       }
 
+      console.log(`[Socket.IO] ✓ Emitting "registered" to socket ${socket.id}`);
       socket.emit("registered", { userId: commsUserId, totalOnline: users.size });
+
+      // Broadcast updated online users list to all clients
+      const onlineUsersList = Array.from(users.values()).map(u => ({
+        id: u.id,
+        displayName: u.displayName,
+        status: u.status,
+        inCall: u.inCall,
+        profileImageUrl: u.profileImageUrl,
+      }));
+      console.log(`[Socket.IO] ✓ Broadcasting "users-list" with ${onlineUsersList.length} users:`, onlineUsersList.map(u => u.displayName).join(", "));
+      io.emit("users-list", { users: onlineUsersList });
 
       const deliveredMessageIds = new Set<string>();
       let delivered = flushPendingForUser(mapKey, (payload) => {
@@ -1779,6 +1795,8 @@ export function initSocketSignaling(server: HttpServer) {
 
         const messageSentPayload = {
           id: outgoingPayload.id,
+          senderId: senderId,
+          senderName: sender.displayName,
           recipientId: data.targetUserId,
           groupId: data.groupId,
           message: data.message,
@@ -1793,13 +1811,15 @@ export function initSocketSignaling(server: HttpServer) {
           longitude: data.longitude,
           clientMessageId: data.clientMessageId,
         };
-        const sentEvt = await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
+        await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
+        // Only emit message-sent acknowledgment to sender - do NOT emit comms:event to prevent duplicate
         socket.emit("message-sent", messageSentPayload);
-        socket.emit("comms:event", toCommsEnvelope(sentEvt));
         runtimeMetrics.messageSentEvents += 1;
         if (ackKey) {
           recentMessageAcks.set(ackKey, {
             id: outgoingPayload.id,
+            senderId: senderId,
+            senderName: sender.displayName,
             recipientId: data.targetUserId,
             groupId: data.groupId,
             message: data.message,
@@ -2964,7 +2984,18 @@ export function initSocketSignaling(server: HttpServer) {
             qosActionStateByRoomUser.delete(key);
           }
         }
-        console.log(`[Socket.IO] Disconnected: ${user?.displayName || userId} - Remaining: ${users.size}`);
+        console.log(`[Socket.IO] ✓ Disconnected: ${user?.displayName || userId} - Remaining: ${users.size}`);
+
+        // Broadcast updated online users list after disconnect
+        const onlineUsersList = Array.from(users.values()).map(u => ({
+          id: u.id,
+          displayName: u.displayName,
+          status: u.status,
+          inCall: u.inCall,
+          profileImageUrl: u.profileImageUrl,
+        }));
+        console.log(`[Socket.IO] ✓ Broadcasting "users-list" after disconnect: ${onlineUsersList.length} users:`, onlineUsersList.map(u => u.displayName).join(", "));
+        io.emit("users-list", { users: onlineUsersList });
 
         const stillOnline = Array.from(users.values()).some((u) => u.id === userId);
         if (!stillOnline) {

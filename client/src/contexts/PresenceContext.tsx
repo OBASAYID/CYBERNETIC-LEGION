@@ -38,6 +38,7 @@ import {
 import { WebRtcDiagnosticsSession } from "../realtime/webrtc-diagnostics-session";
 import { RtcRecoveryManager } from "../realtime/rtc-recovery-manager";
 import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinator";
+import { RobustConnectionManager } from "../realtime/robust-connection-manager";
 import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
 import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
@@ -372,6 +373,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const activeCallRef = useRef<ActiveCallState | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const connectionManagerRef = useRef<RobustConnectionManager | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream>(new MediaStream());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -467,15 +469,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const emitPresenceRegister = useCallback((socket: Socket) => {
     const identity = identityRef.current;
-    if (!identity) return;
+    if (!identity) {
+      console.log("[Presence] ✗ Cannot emit register - no identity");
+      return;
+    }
     const profileImageUrl = localStorage.getItem("cyrus-chat-avatar");
-    socket.emit("register", {
+    const payload = {
       userId: identity.commsUserId,
       displayName: displayNameRef.current,
       deviceId: identity.deviceId,
       profileImageUrl: profileImageUrl || null,
       resumeFromSeq: sessionSeqRef.current,
-    });
+    };
+    console.log("[Presence] ✓ Emitting 'register' event:", JSON.stringify(payload));
+    socket.emit("register", payload);
   }, []);
 
   const refreshIdentityAndRegister = useCallback(
@@ -644,6 +651,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     if (abrControllerRef.current) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
+    }
+    if (connectionManagerRef.current) {
+      connectionManagerRef.current.dispose();
+      connectionManagerRef.current = null;
     }
     mediaPipelineDisposeRef.current?.();
     mediaPipelineDisposeRef.current = null;
@@ -983,7 +994,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         let stream: MediaStream;
         try {
+          console.log(`[WebRTC-Presence] Requesting ${callType} media...`);
           const acquired = await acquireCommsUserMedia(callType, networkMode);
+          console.log(`[WebRTC-Presence] Media acquired successfully - Audio tracks: ${acquired.stream.getAudioTracks().length}, Video tracks: ${acquired.stream.getVideoTracks().length}`);
           if (!alive()) {
             acquired.stream.getTracks().forEach((t) => t.stop());
             acquired.disposeMediaPipeline();
@@ -994,8 +1007,60 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           stream = acquired.stream;
         } catch (mediaErr) {
           console.error("[WebRTC-Presence] getUserMedia failed:", mediaErr);
-          addNotification("error", "Microphone/camera access denied or unavailable.");
-          throw mediaErr;
+          
+          // Extract enhanced error information from our new permission system
+          const err = mediaErr as Error & { 
+            name?: string; 
+            permissionResult?: any;
+            suggestedAction?: string;
+            browserInstructions?: string;
+          };
+          
+          let errorMessage = "Microphone/camera access denied or unavailable.";
+          let detailedHelp = "";
+          
+          // Use enhanced error info if available
+          if (err.permissionResult) {
+            errorMessage = err.permissionResult.error || errorMessage;
+            detailedHelp = err.suggestedAction || err.browserInstructions || "";
+          } else {
+            // Fallback to manual parsing (legacy)
+            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+              errorMessage = callType === "video" 
+                ? "Camera permission denied. Please allow camera access in your browser settings."
+                : "Microphone permission denied. Please allow microphone access in your browser settings.";
+              detailedHelp = "Click the lock icon in your browser's address bar and enable permissions.";
+            } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+              errorMessage = callType === "video"
+                ? "No camera found. Please connect a camera and try again."
+                : "No microphone found. Please connect a microphone and try again.";
+              detailedHelp = "Make sure your device is properly connected and recognized by your system.";
+            } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+              errorMessage = callType === "video"
+                ? "Camera is already in use by another application."
+                : "Microphone is already in use by another application.";
+              detailedHelp = "Close other apps using your camera/microphone and try again.";
+            } else if (err.name === "OverconstrainedError") {
+              errorMessage = "Camera/microphone doesn't meet requirements. Try a different device.";
+              detailedHelp = "Your device may not support the requested quality settings.";
+            } else if (err.name === "SecurityError") {
+              errorMessage = "Camera/microphone access blocked due to security settings.";
+              detailedHelp = "Ensure the page is loaded over HTTPS.";
+            }
+          }
+
+          console.error("[WebRTC-Presence] Permission error:", errorMessage);
+          if (detailedHelp) {
+            console.error("[WebRTC-Presence] Help:", detailedHelp);
+          }
+          
+          addNotification("error", errorMessage);
+          if (detailedHelp) {
+            // Show detailed help after a short delay
+            setTimeout(() => addNotification("warning", detailedHelp), 1000);
+          }
+          
+          throw new Error(errorMessage);
         }
 
         localStreamRef.current = stream;
@@ -1007,8 +1072,96 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           );
         }
 
-        const pc = new RTCPeerConnection(rtcConfig);
+        // Create connection manager for robust connection handling
+        const connectionManager = new RobustConnectionManager({
+          forceRelay: isRelayOnlyTestMode() || isLikelyCrossNetworkPath(),
+          maxReconnectAttempts: 5,
+          debug: false,
+          onStateChange: (state) => {
+            console.log(`[RobustConnection] State: ${state}`);
+            if (state === "connected") {
+              promoteMediaConnected();
+            } else if (state === "failed" || state === "closed") {
+              addNotification("error", "Call connection failed");
+              if (socket.connected) socket.emit("end-call", { roomId });
+              cleanupMedia();
+              setActiveCall(null);
+              activeCallRef.current = null;
+            }
+          },
+          onIceStateChange: (iceState) => {
+            console.log(`[RobustConnection] ICE State: ${iceState}`);
+            if (!alive()) return;
+            recoveryManagerRef.current.onIceStateChange(iceState, Date.now());
+            
+            if (isIcePathLive(iceState)) {
+              iceRestartAttemptsRef.current = 0;
+              if (iceRestartVerifyTimerRef.current) {
+                clearTimeout(iceRestartVerifyTimerRef.current);
+                iceRestartVerifyTimerRef.current = null;
+              }
+              promoteMediaConnected();
+            }
+          },
+          onReconnecting: () => {
+            console.log("[RobustConnection] Reconnecting...");
+            setActiveCall((prev) =>
+              prev && prev.roomId === roomId
+                ? { ...prev, status: assertCallTransition(prev.status, "reconnecting") }
+                : prev,
+            );
+            addNotification("warning", "Recovering connection...");
+          },
+          onReconnected: () => {
+            console.log("[RobustConnection] Reconnected!");
+            addNotification("success", "Connection recovered");
+            promoteMediaConnected();
+          },
+          onFailed: () => {
+            console.error("[RobustConnection] All reconnection attempts failed");
+            addNotification("error", "Connection lost after multiple attempts");
+            if (socket.connected) socket.emit("end-call", { roomId });
+            cleanupMedia();
+            setActiveCall(null);
+            activeCallRef.current = null;
+          },
+        });
+        
+        connectionManagerRef.current = connectionManager;
+
+        // Create peer connection with robust configuration
+        const pc = await connectionManager.createPeerConnection(
+          rtcConfig.iceServers || [],
+          async () => {
+            // ICE restart callback
+            console.log("[RobustConnection] ICE restart triggered");
+            try {
+              if (peerConnectionRef.current) {
+                peerConnectionRef.current.restartIce();
+              }
+            } catch (e) {
+              console.warn("[RobustConnection] ICE restart error:", e);
+            }
+          }
+        );
+        
         peerConnectionRef.current = pc;
+        
+        // Start connection health monitoring
+        connectionManager.startHealthMonitoring((metrics) => {
+          console.log(`[RobustConnection] Quality: ${metrics.quality} | RTT: ${metrics.rtt}ms | Loss: ${(metrics.packetLossRate * 100).toFixed(1)}%`);
+          
+          // Update diagnostics with health metrics
+          if (webrtcDiagSessionRef.current) {
+            // Future: integrate health metrics into diagnostics
+          }
+          
+          // Notify user if quality is critical
+          if (metrics.quality === "critical" || metrics.quality === "poor") {
+            addNotification("warning", `Call quality ${metrics.quality} - network issues detected`);
+          }
+        });
+        
         resetOutboundBitrateTracker(pc);
 
         const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
@@ -1372,7 +1525,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       });
 
       socket.on("registered", (data: { userId: string; totalOnline: number }) => {
-        console.log("[Presence] Registered successfully:", data);
+        console.log("[Presence] ✓ Received 'registered' event:", JSON.stringify(data));
         setMyUserId(data.userId);
         currentUserIdRef.current = data.userId;
         setPresenceTotal(data.totalOnline);
@@ -1406,6 +1559,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           presenceRegisteredOnceRef.current = true;
           addNotification("success", `Connected as ${displayNameRef.current}`);
         }
+      });
+
+      socket.on("users-list", (data: { users: Array<{ id: string; displayName: string; status?: string; inCall?: boolean; profileImageUrl?: string | null }> }) => {
+        console.log(`[Presence] ✓ Received 'users-list' with ${data.users.length} users:`, data.users.map(u => u.displayName).join(", "));
+        const currentId = currentUserIdRef.current;
+        const otherUsers = data.users.filter((u) => u.id !== currentId).map((u) => ({
+          id: u.id,
+          displayName: u.displayName,
+          status: (u.status as OnlineUser["status"]) || "online",
+          inCall: u.inCall || false,
+          profileImageUrl: u.profileImageUrl || null,
+        }));
+        console.log(`[Presence] ✓ Setting ${otherUsers.length} other users (excluding self)`);
+        setOnlineUsers(otherUsers);
+        setPresenceTotal(data.users.length);
       });
 
     socket.on('presence-update', (data: { users: OnlineUser[]; total: number }) => {
@@ -1499,7 +1667,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       incomingCallRef.current = null;
       socket.emit("join-call-room", { roomId: data.roomId });
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId);
+      
+      // CRITICAL FIX: Properly handle setupWebRTCMedia errors
+      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId).catch((err) => {
+        console.error("[Presence] WebRTC setup failed:", err);
+        addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
+        setActiveCall(null);
+        activeCallRef.current = null;
+        cleanupMedia();
+      });
     });
 
     socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
@@ -1520,7 +1696,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setIncomingCall(null);
       incomingCallRef.current = null;
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId);
+      
+      // CRITICAL FIX: Properly handle setupWebRTCMedia errors
+      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId).catch((err) => {
+        console.error("[Presence] WebRTC setup failed:", err);
+        addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
+        setActiveCall(null);
+        activeCallRef.current = null;
+        cleanupMedia();
+      });
     });
 
     socket.on('call-declined', (data: { roomId: string }) => {

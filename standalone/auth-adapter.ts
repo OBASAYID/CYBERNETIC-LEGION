@@ -185,17 +185,17 @@ export async function setupAuth(app: Express): Promise<void> {
   // Token-first auth routes are mounted before session middleware so login cannot hang on session-store I/O.
   app.post("/api/login", async (req: any, res) => {
     console.log("[Auth] /api/login token-first handler invoked");
-    const username = String((req.body || {}).username ?? "").trim();
+    let username = String((req.body || {}).username ?? "").trim();
     const code = String((req.body || {}).code ?? "").trim();
-    if (!username || !code) {
-      return res.status(400).json({ message: "Username and access code required" });
+    if (!code) {
+      return res.status(400).json({ message: "Access code required" });
     }
 
     const activity = await tryActivity();
     const ip = activity?.getIp(req) ?? null;
 
     // Check if user is blocked before doing anything else.
-    if (activity) {
+    if (activity && username) {
       const blocked = await activity.isUserBlocked(username).catch(() => false);
       if (blocked) {
         void activity.logActivity({ username, eventType: "login_blocked", ipAddress: ip });
@@ -232,6 +232,13 @@ export async function setupAuth(app: Express): Promise<void> {
     } else {
       void activity?.logActivity({ username, eventType: "login_failed", details: "Invalid access code", ipAddress: ip });
       return res.status(401).json({ message: "Invalid access code" });
+    }
+
+    // Override username for admin, require username for users
+    if (role === "admin") {
+      username = "delta uniform 00";
+    } else if (!username) {
+      return res.status(400).json({ message: "Username required for user access" });
     }
 
     const userId = crypto.createHash("sha256").update(username).digest("hex").slice(0, 16);
