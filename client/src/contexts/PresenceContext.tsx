@@ -988,7 +988,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         let stream: MediaStream;
         try {
+          console.log(`[WebRTC-Presence] Requesting ${callType} media...`);
           const acquired = await acquireCommsUserMedia(callType, networkMode);
+          console.log(`[WebRTC-Presence] Media acquired successfully - Audio tracks: ${acquired.stream.getAudioTracks().length}, Video tracks: ${acquired.stream.getVideoTracks().length}`);
           if (!alive()) {
             acquired.stream.getTracks().forEach((t) => t.stop());
             acquired.disposeMediaPipeline();
@@ -999,8 +1001,31 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           stream = acquired.stream;
         } catch (mediaErr) {
           console.error("[WebRTC-Presence] getUserMedia failed:", mediaErr);
-          addNotification("error", "Microphone/camera access denied or unavailable.");
-          throw mediaErr;
+          
+          // Provide user-friendly error messages like WhatsApp
+          let errorMessage = "Microphone/camera access denied or unavailable.";
+          const err = mediaErr as Error & { name?: string };
+          
+          if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+            errorMessage = callType === "video" 
+              ? "Camera permission denied. Please allow camera access in your browser settings."
+              : "Microphone permission denied. Please allow microphone access in your browser settings.";
+          } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+            errorMessage = callType === "video"
+              ? "No camera found. Please connect a camera and try again."
+              : "No microphone found. Please connect a microphone and try again.";
+          } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+            errorMessage = callType === "video"
+              ? "Camera is already in use by another application."
+              : "Microphone is already in use by another application.";
+          } else if (err.name === "OverconstrainedError") {
+            errorMessage = "Camera/microphone doesn't meet requirements. Try a different device.";
+          } else if (err.name === "SecurityError") {
+            errorMessage = "Camera/microphone access blocked due to security settings.";
+          }
+          
+          addNotification("error", errorMessage);
+          throw new Error(errorMessage);
         }
 
         localStreamRef.current = stream;
@@ -1519,7 +1544,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       incomingCallRef.current = null;
       socket.emit("join-call-room", { roomId: data.roomId });
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId);
+      
+      // CRITICAL FIX: Properly handle setupWebRTCMedia errors
+      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId).catch((err) => {
+        console.error("[Presence] WebRTC setup failed:", err);
+        addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
+        setActiveCall(null);
+        activeCallRef.current = null;
+        cleanupMedia();
+      });
     });
 
     socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
@@ -1540,7 +1573,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       setIncomingCall(null);
       incomingCallRef.current = null;
       addNotification("success", `Connecting to ${data.peerName}…`);
-      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId);
+      
+      // CRITICAL FIX: Properly handle setupWebRTCMedia errors
+      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId).catch((err) => {
+        console.error("[Presence] WebRTC setup failed:", err);
+        addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
+        setActiveCall(null);
+        activeCallRef.current = null;
+        cleanupMedia();
+      });
     });
 
     socket.on('call-declined', (data: { roomId: string }) => {

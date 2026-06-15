@@ -2,7 +2,6 @@ import { useState } from "react";
 import { LayoutGrid, LogOut, TerminalSquare } from "lucide-react";
 import { clearAuthSessionStorage } from "@/lib/auth-storage";
 import { FieldDateTimeHud } from "@/components/command-center/field-datetime-hud";
-import { DashboardCommandSideRail } from "@/components/command-center/command-console-popup";
 import {
   BottomPanels,
   EngineMatrixSection,
@@ -210,8 +209,6 @@ export default function DashboardFresh() {
           </div>
         )}
       </main>
-
-        <DashboardCommandSideRail />
       </div>
     </div>
   );

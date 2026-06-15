@@ -4,7 +4,7 @@ import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
 import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
 import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
 import { db } from "../db.js";
-import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms";
+import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
 import { eq, ilike, sql } from "drizzle-orm";
 import { commsIntelligence } from "./comms-intelligence.js";
 import { gwaEngine } from "./gwa-engine.js";
@@ -108,6 +108,8 @@ const recentMessageAcks = new Map<
   string,
   {
     id: string;
+    senderId?: string;
+    senderName?: string;
     recipientId?: string;
     groupId?: string;
     message: string;
@@ -1793,6 +1795,8 @@ export function initSocketSignaling(server: HttpServer) {
 
         const messageSentPayload = {
           id: outgoingPayload.id,
+          senderId: senderId,
+          senderName: sender.displayName,
           recipientId: data.targetUserId,
           groupId: data.groupId,
           message: data.message,
@@ -1807,13 +1811,15 @@ export function initSocketSignaling(server: HttpServer) {
           longitude: data.longitude,
           clientMessageId: data.clientMessageId,
         };
-        const sentEvt = await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
+        await appendCommsUserEvent(senderId, "message-sent", messageSentPayload);
+        // Only emit message-sent acknowledgment to sender - do NOT emit comms:event to prevent duplicate
         socket.emit("message-sent", messageSentPayload);
-        socket.emit("comms:event", toCommsEnvelope(sentEvt));
         runtimeMetrics.messageSentEvents += 1;
         if (ackKey) {
           recentMessageAcks.set(ackKey, {
             id: outgoingPayload.id,
+            senderId: senderId,
+            senderName: sender.displayName,
             recipientId: data.targetUserId,
             groupId: data.groupId,
             message: data.message,

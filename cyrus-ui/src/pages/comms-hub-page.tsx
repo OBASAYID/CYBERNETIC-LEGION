@@ -557,6 +557,8 @@ function ChatPanel({ myId, myName, targetUser }:
 
     const onMessageSent = (data: {
       id?: string;
+      senderId?: string;
+      senderName?: string;
       recipientId?: string;
       message?: string;
       messageType?: string;
@@ -566,8 +568,11 @@ function ChatPanel({ myId, myName, targetUser }:
       fileMimeType?: string;
       voiceDurationSeconds?: number;
       fileSizeBytes?: number;
+      clientMessageId?: string;
     }) => {
       if (data.recipientId !== targetUser.id) return;
+      
+      // Replace optimistic message if exists, or add new if this is a media upload
       const normalized = normalizeChatMsg(
         {
           id: data.id ?? `msg-${Date.now()}`,
@@ -586,7 +591,26 @@ function ChatPanel({ myId, myName, targetUser }:
         myName,
         targetUser,
       );
-      setMsgs((prev) => (prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]));
+      
+      setMsgs((prev) => {
+        // Check if we already have this exact message (by server ID)
+        if (prev.some((m) => m.id === normalized.id)) return prev;
+        
+        // Replace any optimistic message with same content
+        const optimisticIndex = prev.findIndex(
+          (m) => m.id.startsWith('opt-') && m.content === normalized.content && m.senderId === myId
+        );
+        
+        if (optimisticIndex >= 0) {
+          // Replace optimistic with confirmed message
+          const updated = [...prev];
+          updated[optimisticIndex] = normalized;
+          return updated;
+        }
+        
+        // Otherwise add as new (e.g., media upload acknowledgment)
+        return [...prev, normalized];
+      });
     };
 
     socket.on("new-message", onNewMessage);

@@ -64,15 +64,18 @@ export async function uploadCommsMediaFile(
   const validationError = validateCommsMediaFile(file, name);
   if (validationError) {
     console.error("[comms] media validation:", validationError);
+    alert(`Upload failed: ${validationError}`);
     return null;
   }
 
   try {
+    console.log(`[comms] Uploading ${name} (${file.size} bytes)...`);
     const uploaded = await uploadCommsFileSmart(file, {
       userId: options.userId,
       fileName: name,
       onProgress: options.onProgress,
     });
+    console.log(`[comms] Upload successful: ${uploaded.fileUrl}`);
     return {
       fileUrl: uploaded.fileUrl,
       fileName: uploaded.fileName || name,
@@ -85,6 +88,8 @@ export async function uploadCommsMediaFile(
     };
   } catch (err) {
     console.error("[comms] media upload failed:", err);
+    const errorMsg = err instanceof Error ? err.message : "Unknown error";
+    alert(`Upload failed: ${errorMsg}. Please check your connection and try again.`);
     return null;
   }
 }

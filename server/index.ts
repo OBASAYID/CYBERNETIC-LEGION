@@ -17,6 +17,7 @@ import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
 import { parseExpressJsonBodyLimit } from "../shared/cyrus-document-limits.js";
+import { initSocketSignaling } from "./comms/socket-signaling.js";
 
 
 const dotenvResult = dotenv.config();
@@ -66,6 +67,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
+
+// Initialize Socket.IO for real-time communications
+initSocketSignaling(httpServer);
 
 if (
   process.env.NODE_ENV === "production" ||
@@ -577,7 +581,7 @@ async function initializeSystem() {
   // Always use standalone (access-code) auth — the frontend's PasswordGate posts
   // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter");
+    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter.js");
     await setupAuth(app);
     registerAuthRoutes(app);
     isAuthenticatedMiddleware = isAuthenticated;
