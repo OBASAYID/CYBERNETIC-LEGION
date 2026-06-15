@@ -97,12 +97,11 @@ export class RobustConnectionManager {
     const useRelayOnly = this.shouldUseRelayOnly(iceServers);
     
     const configuration: RTCConfiguration = {
-      iceServers,
+      iceServers: this.prioritizeRelayServers(iceServers),
       iceTransportPolicy: useRelayOnly ? "relay" : "all",
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
       iceCandidatePoolSize: useRelayOnly ? 8 : 16, // More candidates for direct connections
-      iceServers: this.prioritizeRelayServers(iceServers),
     };
 
     this.log("Creating peer connection", { useRelayOnly, serverCount: iceServers.length });
