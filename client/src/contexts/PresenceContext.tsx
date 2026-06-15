@@ -994,9 +994,16 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         let stream: MediaStream;
         try {
-          console.log(`[WebRTC-Presence] Requesting ${callType} media...`);
+          console.log(`[WebRTC-Presence] ===== REQUESTING ${callType.toUpperCase()} MEDIA =====`);
+          console.log(`[WebRTC-Presence] Network mode: ${networkMode}`);
+          console.log(`[WebRTC-Presence] This will trigger a browser permission prompt`);
+          console.log(`[WebRTC-Presence] Please click ALLOW when prompted`);
+          
           const acquired = await acquireCommsUserMedia(callType, networkMode);
-          console.log(`[WebRTC-Presence] Media acquired successfully - Audio tracks: ${acquired.stream.getAudioTracks().length}, Video tracks: ${acquired.stream.getVideoTracks().length}`);
+          
+          console.log(`[WebRTC-Presence] ===== MEDIA ACQUIRED SUCCESSFULLY =====`);
+          console.log(`[WebRTC-Presence] Audio tracks: ${acquired.stream.getAudioTracks().length}`);
+          console.log(`[WebRTC-Presence] Video tracks: ${acquired.stream.getVideoTracks().length}`);
           if (!alive()) {
             acquired.stream.getTracks().forEach((t) => t.stop());
             acquired.disposeMediaPipeline();
@@ -1006,7 +1013,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           audioProcessorRef.current = acquired.audioProcessor;
           stream = acquired.stream;
         } catch (mediaErr) {
-          console.error("[WebRTC-Presence] getUserMedia failed:", mediaErr);
+          console.error("[WebRTC-Presence] ===== MEDIA ACQUISITION FAILED =====");
+          console.error("[WebRTC-Presence] Error details:", mediaErr);
           
           // Extract enhanced error information from our new permission system
           const err = mediaErr as Error & { 
@@ -1016,6 +1024,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             browserInstructions?: string;
           };
           
+          console.error("[WebRTC-Presence] Error name:", err.name);
+          console.error("[WebRTC-Presence] Error message:", err.message);
+          
           let errorMessage = "Microphone/camera access denied or unavailable.";
           let detailedHelp = "";
           
@@ -1023,7 +1034,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           if (err.permissionResult) {
             errorMessage = err.permissionResult.error || errorMessage;
             detailedHelp = err.suggestedAction || err.browserInstructions || "";
+            console.error("[WebRTC-Presence] Using enhanced error info from permission manager");
           } else {
+            console.error("[WebRTC-Presence] Using fallback error parsing");
             // Fallback to manual parsing (legacy)
             if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
               errorMessage = callType === "video" 
@@ -1049,9 +1062,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          console.error("[WebRTC-Presence] Permission error:", errorMessage);
+          console.error("[WebRTC-Presence] Final error message:", errorMessage);
           if (detailedHelp) {
-            console.error("[WebRTC-Presence] Help:", detailedHelp);
+            console.error("[WebRTC-Presence] Help text:", detailedHelp);
           }
           
           addNotification("error", errorMessage);
@@ -1628,11 +1641,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       });
       addNotification("info", `Calling ${data.targetName}...`);
       
+      // Increase timeout to 90 seconds to allow time for:
+      // 1. Permission prompts (user needs time to click "Allow")
+      // 2. Media acquisition
+      // 3. Connection establishment
       if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
       callTimeoutRef.current = setTimeout(() => {
         const currentCall = activeCallRef.current;
         if (currentCall && currentCall.status === "ringing") {
-          console.log("[Presence] Call timeout - no answer after 30s");
+          console.log("[Presence] Call timeout - no answer after 90s");
           socket.emit('end-call', {
             roomId: data.roomId,
             callTxnId: generateCallTxnId(),
@@ -1643,7 +1660,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           cleanupMedia();
           addNotification("warning", `No answer from ${data.targetName}`);
         }
-      }, 30000);
+      }, 90000); // Increased from 30s to 90s
+      
+      console.log("[Presence] Call timeout set to 90 seconds (allows time for permissions)");
     });
 
     socket.on('call-accepted', (data: { roomId: string; peerName: string; peerId: string; callType?: "audio" | "video" }) => {

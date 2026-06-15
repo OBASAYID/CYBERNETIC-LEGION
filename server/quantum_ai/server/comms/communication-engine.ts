@@ -2,7 +2,7 @@ import { db } from "../db";
 import { 
   directMessages, callHistory, meetingRooms, onlineUsers, 
   contacts, groupChats 
-} from "../../shared/models/comms";
+} from "../../shared/models/comms.js";
 import { eq, desc, asc, or, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";

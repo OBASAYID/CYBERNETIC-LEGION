@@ -830,6 +830,63 @@ export function initSocketSignaling(server: HttpServer) {
           connection_quality varchar DEFAULT '1.0'
         )
       `);
+      
+      // Create direct_messages table
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS direct_messages (
+          id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+          sender_id varchar NOT NULL,
+          recipient_id varchar NOT NULL,
+          content text NOT NULL,
+          is_read boolean DEFAULT false,
+          created_at timestamp DEFAULT now() NOT NULL,
+          message_type varchar DEFAULT 'text',
+          is_encrypted boolean DEFAULT false,
+          encryption_level varchar DEFAULT 'none',
+          file_url varchar,
+          file_name varchar,
+          file_mime_type varchar(128),
+          file_size_bytes integer,
+          read_at timestamp,
+          reply_to_id varchar,
+          group_id varchar,
+          reactions jsonb
+        )
+      `);
+      
+      // Create other required tables
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS call_history (
+          id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+          caller_id varchar NOT NULL,
+          recipient_id varchar,
+          room_id varchar NOT NULL,
+          call_type varchar NOT NULL,
+          status varchar NOT NULL,
+          started_at timestamp DEFAULT now(),
+          ended_at timestamp,
+          duration varchar,
+          is_recording boolean DEFAULT false,
+          recording_url varchar,
+          call_quality varchar DEFAULT '1.0',
+          bandwidth_kbps varchar DEFAULT '0',
+          missed_by jsonb,
+          declined_by jsonb
+        )
+      `);
+      
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS contacts (
+          id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id varchar NOT NULL,
+          contact_id varchar NOT NULL,
+          favorite boolean DEFAULT false,
+          nickname varchar,
+          blocked boolean DEFAULT false,
+          created_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+      
       // Some deployments created online_users without status; self-heal before presence updates.
       await db.execute(sql`ALTER TABLE online_users ADD COLUMN IF NOT EXISTS status varchar(32) DEFAULT 'online'`);
       await db.execute(sql`
