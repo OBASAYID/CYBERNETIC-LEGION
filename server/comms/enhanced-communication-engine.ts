@@ -568,7 +568,7 @@ export class EnhancedCommunicationEngine {
   private messageDelivery: MessageDeliveryManager;
   private encryption: EnhancedEncryptionEngine;
   private messageCount: number = 0;
-  private qualityCheckInterval: Map<string, NodeJS.Timer> = new Map();
+  private qualityCheckInterval: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   constructor() {
     this.networkManager = new NetworkQualityManager();
