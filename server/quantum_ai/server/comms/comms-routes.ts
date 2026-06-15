@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db";
 import { onlineUsers, directMessages, callHistory, meetingRooms, reminders, newsItems, contacts, incomingCalls, groupChats, callSessions, liveStreams, sharedMedia, callMessages } from "../../shared/schema";
-import { commsInteractionEvents } from "../../shared/models/comms";
+import { commsInteractionEvents } from "../../shared/models/comms.js";
 import { eq, or, and, desc, asc, ilike, inArray, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { getConnectedUsers } from "./signaling";

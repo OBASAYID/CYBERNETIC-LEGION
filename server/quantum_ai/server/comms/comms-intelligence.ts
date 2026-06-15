@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { commsUserProfiles, commsInteractionEvents, commsMlModels, directMessages, callHistory, contacts } from '../../shared/models/comms';
+import { commsUserProfiles, commsInteractionEvents, commsMlModels, directMessages, callHistory, contacts } from '../../shared/models/comms.js';
 import { eq, desc, sql, and, count, gte } from 'drizzle-orm';
 import { commsMLClient } from './comms-ml-client';
 

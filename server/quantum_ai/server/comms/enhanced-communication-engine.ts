@@ -8,7 +8,7 @@ import { db } from "../db";
 import {
   directMessages, callHistory, meetingRooms, onlineUsers,
   contacts, groupChats, callSessions, callMessages
-} from "../../shared/models/comms";
+} from "../../shared/models/comms.js";
 import { eq, desc, asc, or, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import * as crypto from "crypto";

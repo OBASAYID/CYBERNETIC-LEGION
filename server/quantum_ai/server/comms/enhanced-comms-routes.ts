@@ -9,7 +9,7 @@ import { db } from "../db";
 import {
   directMessages, callHistory, meetingRooms, onlineUsers,
   contacts, groupChats, callSessions, callMessages
-} from "../../shared/models/comms";
+} from "../../shared/models/comms.js";
 import { eq, desc, asc, or, and } from "drizzle-orm";
 import { enhancedCommunicationEngine } from "./enhanced-communication-engine";
 import { commsIntelligence } from "./comms-intelligence";

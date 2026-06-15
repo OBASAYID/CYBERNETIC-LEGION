@@ -1,7 +1,7 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { db } from "../db";
-import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia } from "../../shared/models/comms";
+import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia } from "../../shared/models/comms.js";
 import { eq, ilike } from "drizzle-orm";
 import { commsIntelligence } from "./comms-intelligence";
 
