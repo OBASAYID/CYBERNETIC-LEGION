@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYRUS Media Permissions Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0a0e14;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #06b6d4;
+            font-size: 24px;
+        }
+        .test-section {
+            background: #1a1e24;
+            border: 1px solid #2a2e34;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        button {
+            background: #06b6d4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0891b2;
+        }
+        button:disabled {
+            background: #374151;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .success {
+            background: #064e3b;
+            border: 1px solid #059669;
+            color: #10b981;
+        }
+        .error {
+            background: #7f1d1d;
+            border: 1px solid #dc2626;
+            color: #f87171;
+        }
+        .info {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+            color: #60a5fa;
+        }
+        .warning {
+            background: #78350f;
+            border: 1px solid #f59e0b;
+            color: #fbbf24;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            background: black;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 CYRUS Media Permissions Tester</h1>
+    <p>This tool helps diagnose camera and microphone permission issues.</p>
+
+    <div class="test-section">
+        <h2>Test 1: Check Browser Support</h2>
+        <button onclick="testBrowserSupport()">Check Browser Support</button>
+        <div id="browser-status"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Enumerate Devices (No Permission)</h2>
+        <button onclick="testEnumerateDevices()">List Devices</button>
+        <div id="devices-status"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Request Microphone Only</h2>
+        <button onclick="testMicrophoneOnly()">Request Microphone</button>
+        <div id="mic-status"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Request Camera Only</h2>
+        <button onclick="testCameraOnly()">Request Camera</button>
+        <div id="camera-status"></div>
+        <video id="camera-preview" autoplay muted playsinline style="display:none;"></video>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 5: Request Both (Full Video Call)</h2>
+        <button onclick="testBoth()">Request Camera + Microphone</button>
+        <div id="both-status"></div>
+        <video id="both-preview" autoplay muted playsinline style="display:none;"></video>
+    </div>
+
+    <div class="test-section">
+        <h2>Debug Log</h2>
+        <pre id="debug-log"></pre>
+    </div>
+
+    <script>
+        let logLines = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+            const line = `[${timestamp}] ${message}`;
+            logLines.push(line);
+            document.getElementById('debug-log').textContent = logLines.slice(-20).join('\n');
+            console.log(message);
+        }
+
+        function showStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        async function testBrowserSupport() {
+            log('Testing browser support...');
+            
+            const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+            const hasEnumerateDevices = !!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices);
+            const isSecureContext = window.isSecureContext;
+            const protocol = window.location.protocol;
+            
+            let message = `
+                <strong>Browser Support:</strong><br>
+                • getUserMedia: ${hasGetUserMedia ? '✓ Supported' : '✗ NOT supported'}<br>
+                • enumerateDevices: ${hasEnumerateDevices ? '✓ Supported' : '✗ NOT supported'}<br>
+                • Secure Context (HTTPS/localhost): ${isSecureContext ? '✓ Yes' : '✗ NO (Media APIs blocked!)'}<br>
+                • Protocol: ${protocol}<br>
+                • User Agent: ${navigator.userAgent.slice(0, 80)}...
+            `;
+            
+            const type = (hasGetUserMedia && hasEnumerateDevices && isSecureContext) ? 'success' : 'error';
+            
+            showStatus('browser-status', message, type);
+            log(`Browser support check: ${type}`);
+        }
+
+        async function testEnumerateDevices() {
+            log('Enumerating devices (pre-permission)...');
+            
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(d => d.kind === 'videoinput');
+                const microphones = devices.filter(d => d.kind === 'audioinput');
+                
+                let message = `
+                    <strong>Devices Found:</strong><br>
+                    • Cameras: ${cameras.length}<br>
+                    • Microphones: ${microphones.length}<br><br>
+                `;
+                
+                if (cameras.length === 0) {
+                    message += `⚠️ No cameras detected! Connect a camera and refresh.<br>`;
+                }
+                if (microphones.length === 0) {
+                    message += `⚠️ No microphones detected! Connect a microphone and refresh.<br>`;
+                }
+                
+                if (cameras.length > 0 || microphones.length > 0) {
+                    message += `<br><strong>Device List:</strong><br>`;
+                    devices.forEach((device, i) => {
+                        message += `${i + 1}. ${device.kind}: ${device.label || '(unlabeled - no permission yet)'}<br>`;
+                    });
+                }
+                
+                const type = (cameras.length > 0 && microphones.length > 0) ? 'success' : 'warning';
+                showStatus('devices-status', message, type);
+                log(`Found ${cameras.length} cameras, ${microphones.length} microphones`);
+            } catch (error) {
+                showStatus('devices-status', `Error: ${error.message}`, 'error');
+                log(`Enumerate devices error: ${error.message}`);
+            }
+        }
+
+        async function testMicrophoneOnly() {
+            log('Requesting microphone access...');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                const audioTracks = stream.getAudioTracks();
+                let message = `
+                    <strong>✓ Microphone Access Granted!</strong><br>
+                    • Audio tracks: ${audioTracks.length}<br>
+                `;
+                
+                audioTracks.forEach((track, i) => {
+                    message += `  ${i + 1}. ${track.label} (${track.enabled ? 'enabled' : 'disabled'})<br>`;
+                });
+                
+                showStatus('mic-status', message, 'success');
+                log('Microphone access granted');
+                
+                // Stop the stream
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                const errorName = error.name || 'Unknown';
+                let message = `<strong>✗ Microphone Access Failed</strong><br>`;
+                message += `Error: ${errorName}<br>`;
+                message += `Message: ${error.message}<br><br>`;
+                
+                if (errorName === 'NotAllowedError') {
+                    message += `🔒 <strong>Permission Denied:</strong><br>Click the lock icon in the address bar and allow microphone access.`;
+                } else if (errorName === 'NotFoundError') {
+                    message += `🎤 <strong>No Microphone Found:</strong><br>Connect a microphone and try again.`;
+                } else if (errorName === 'NotReadableError') {
+                    message += `⚠️ <strong>Microphone In Use:</strong><br>Close other apps using your microphone.`;
+                }
+                
+                showStatus('mic-status', message, 'error');
+                log(`Microphone error: ${errorName} - ${error.message}`);
+            }
+        }
+
+        async function testCameraOnly() {
+            log('Requesting camera access...');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+                
+                const videoTracks = stream.getVideoTracks();
+                let message = `
+                    <strong>✓ Camera Access Granted!</strong><br>
+                    • Video tracks: ${videoTracks.length}<br>
+                `;
+                
+                videoTracks.forEach((track, i) => {
+                    const settings = track.getSettings();
+                    message += `  ${i + 1}. ${track.label}<br>`;
+                    message += `     Resolution: ${settings.width}x${settings.height}<br>`;
+                    message += `     FPS: ${settings.frameRate}<br>`;
+                });
+                
+                showStatus('camera-status', message, 'success');
+                log('Camera access granted');
+                
+                // Show preview
+                const video = document.getElementById('camera-preview');
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.style.display = 'none';
+                    log('Camera stream stopped');
+                }, 10000);
+                
+            } catch (error) {
+                const errorName = error.name || 'Unknown';
+                let message = `<strong>✗ Camera Access Failed</strong><br>`;
+                message += `Error: ${errorName}<br>`;
+                message += `Message: ${error.message}<br><br>`;
+                
+                if (errorName === 'NotAllowedError') {
+                    message += `🔒 <strong>Permission Denied:</strong><br>Click the lock icon in the address bar and allow camera access.`;
+                } else if (errorName === 'NotFoundError') {
+                    message += `📹 <strong>No Camera Found:</strong><br>Connect a camera and try again.`;
+                } else if (errorName === 'NotReadableError') {
+                    message += `⚠️ <strong>Camera In Use:</strong><br>Close other apps using your camera.`;
+                }
+                
+                showStatus('camera-status', message, 'error');
+                log(`Camera error: ${errorName} - ${error.message}`);
+            }
+        }
+
+        async function testBoth() {
+            log('Requesting camera + microphone access...');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }, 
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    }
+                });
+                
+                const audioTracks = stream.getAudioTracks();
+                const videoTracks = stream.getVideoTracks();
+                
+                let message = `
+                    <strong>✓ Full Media Access Granted!</strong><br>
+                    • Audio tracks: ${audioTracks.length}<br>
+                    • Video tracks: ${videoTracks.length}<br><br>
+                `;
+                
+                audioTracks.forEach((track, i) => {
+                    message += `🎤 ${i + 1}. ${track.label}<br>`;
+                });
+                
+                videoTracks.forEach((track, i) => {
+                    const settings = track.getSettings();
+                    message += `📹 ${i + 1}. ${track.label} - ${settings.width}x${settings.height} @ ${settings.frameRate}fps<br>`;
+                });
+                
+                message += `<br><strong>This is what a video call should see!</strong>`;
+                
+                showStatus('both-status', message, 'success');
+                log('Full media access granted');
+                
+                // Show preview
+                const video = document.getElementById('both-preview');
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.style.display = 'none';
+                    log('Full media stream stopped');
+                }, 15000);
+                
+            } catch (error) {
+                const errorName = error.name || 'Unknown';
+                let message = `<strong>✗ Media Access Failed</strong><br>`;
+                message += `Error: ${errorName}<br>`;
+                message += `Message: ${error.message}<br><br>`;
+                
+                if (errorName === 'NotAllowedError') {
+                    message += `🔒 <strong>Permission Denied:</strong><br>Click the lock icon in the address bar and allow camera/microphone access.`;
+                } else if (errorName === 'NotFoundError') {
+                    message += `📱 <strong>Device Not Found:</strong><br>Connect your camera and/or microphone and try again.`;
+                } else if (errorName === 'NotReadableError') {
+                    message += `⚠️ <strong>Device In Use:</strong><br>Close other apps using your camera/microphone.`;
+                } else if (errorName === 'OverconstrainedError') {
+                    message += `⚙️ <strong>Quality Requirements Not Met:</strong><br>Your camera doesn't support the requested resolution. Trying lower quality...`;
+                }
+                
+                showStatus('both-status', message, 'error');
+                log(`Full media error: ${errorName} - ${error.message}`);
+            }
+        }
+
+        // Auto-run browser support test on load
+        window.addEventListener('load', () => {
+            log('CYRUS Media Permissions Tester loaded');
+            testBrowserSupport();
+        });
+    </script>
+</body>
+</html>
