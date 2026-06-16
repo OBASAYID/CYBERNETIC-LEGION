@@ -34,8 +34,8 @@ let textToSpeechStreamElevenLabs: any;
 let ELEVENLABS_VOICES: any;
 let getEmotionVoiceSettings: any;
 let runAutonomy: any;
-let registerDeviceRoutes: any;
-let registerNavRoutes: any;
+let registerDeviceRoutes: any = () => undefined;
+let registerNavRoutes: any = () => undefined;
 let detectFile: any;
 let extractFile: any;
 let analyzeExtraction: any;
@@ -60,7 +60,7 @@ let listReminders: any;
 let registerCommsRoutes: any;
 let analyzeScan: any;
 let decodeQr: any;
-let registerDroneRoutes: any;
+let registerDroneRoutes: any = () => undefined;
 let experienceMemory: any;
 let adaptiveLearning: any;
 let registerAdvancedUpgradeRoutes: any;
@@ -2493,29 +2493,73 @@ Format your response in a clear, structured manner.`
         ? quantumBridge.buildSystemPromptEnhancement(quantumEnhancement)
         : '';
 
-      const result = await withTimeout(
-        neuralFusionEngine.processInference({
-          message,
-          context: typeof systemContext === "string" && systemContext.trim() ? systemContext : undefined,
-          imageData,
-          detectedObjects,
-          location,
-          userId,
-          moduleContext: enhancedModuleContext,
-          conversationHistory,
-          quantumPromptEnhancement
-        }),
-        25000,
-        {
-          response: 'Core inference timed out under degraded dependencies. Systems remain operational in fallback mode; please retry once services stabilize.',
-          confidence: 0.45,
-          processingTime: 25000,
-          branchesEngaged: [],
-          quantumEnhanced: false,
-          neuralPathsActivated: 0,
-          agiReasoning: true,
+      const canUseNeuralFusion =
+        neuralFusionEngine &&
+        typeof (neuralFusionEngine as any).processInference === "function";
+
+      let result: any;
+      if (!canUseNeuralFusion) {
+        let openAIClient: OpenAI | AzureOpenAI | null = null;
+        try {
+          openAIClient = getOpenAIClient();
+        } catch (_clientError) {
+          openAIClient = null;
         }
-      );
+
+        if (!openAIClient) {
+          return res.json({
+            response: "Server AI engine is degraded. Please verify OPENAI_API_KEY and restart the server.",
+            confidence: 0.6,
+            processingTime: 0,
+            branchesEngaged: 1,
+            quantumEnhanced: false,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const fallbackResponse = await openAIClient.chat.completions.create({
+          model: getCyrusChatModel(),
+          messages: [
+            ...(typeof systemContext === "string" && systemContext.trim()
+              ? [{ role: "system" as const, content: systemContext }]
+              : []),
+            { role: "user" as const, content: message }
+          ],
+        });
+
+        return res.json({
+          response: stripEmojis(fallbackResponse.choices[0]?.message?.content || "No response available."),
+          confidence: 0.6,
+          processingTime: 0,
+          branchesEngaged: 1,
+          quantumEnhanced: false,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        result = await withTimeout(
+          (neuralFusionEngine as any).processInference({
+            message,
+            context: typeof systemContext === "string" && systemContext.trim() ? systemContext : undefined,
+            imageData,
+            detectedObjects,
+            location,
+            userId,
+            moduleContext: enhancedModuleContext,
+            conversationHistory,
+            quantumPromptEnhancement
+          }),
+          25000,
+          {
+            response: 'Core inference timed out under degraded dependencies. Systems remain operational in fallback mode; please retry once services stabilize.',
+            confidence: 0.45,
+            processingTime: 25000,
+            branchesEngaged: [],
+            quantumEnhanced: false,
+            neuralPathsActivated: 0,
+            agiReasoning: true,
+          }
+        );
+      }
 
       // Apply quantum formatting to transform response presentation
       let formattedResponse = stripEmojis(result.response);
