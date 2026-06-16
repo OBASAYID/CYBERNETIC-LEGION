@@ -17,14 +17,14 @@ services:
 
   coturn:
     image: coturn/coturn:4.6.2
+    container_name: cyrus-coturn
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - .env
     volumes:
-      - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-    environment:
-      TURN_SECRET: ${TURN_SECRET:-change-me-in-production}
-    profiles:
-      - turn
+      - ./deploy/coturn/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
 
   app:
     build:

@@ -14,6 +14,9 @@ const PUBLIC_API_PATHS = new Set([
   /** Port / stack discovery for dashboard and local tooling (no secrets). */
   "/api/stack/ports",
   "/api/stack/summary",
+  "/api/stack/deployment",
+  "/api/comms/webrtc-health",
+  "/api/comms/push/status",
   "/api/algorithms/catalog",
   "/api/mcp/catalog",
   "/api/mcp/status",

@@ -24,6 +24,11 @@ async function main() {
     detail: d.webrtc?.turnConfigured ? "yes" : "set TURN_URLS + TURN_SECRET",
   });
   checks.push({
+    name: "Redis signaling",
+    pass: Boolean(d.webrtc?.redisSignaling),
+    detail: d.webrtc?.redisSignaling ? "yes" : "set REDIS_URL",
+  });
+  checks.push({
     name: "SFU announced IP",
     pass: Boolean(d.webrtc?.sfuAnnouncedIp),
     detail: d.webrtc?.sfuAnnouncedIp || "set CYRUS_SFU_ANNOUNCED_IP",
@@ -33,14 +38,16 @@ async function main() {
   checks.push({
     name: "push scaffold",
     pass: push.ok,
-    detail: push.body?.configured ? "FCM/APNs configured" : "optional — register FCM_SERVER_KEY",
+    detail: push.body?.configured ? "FCM configured" : "optional — set FCM_SERVER_KEY",
   });
 
-  const rtc = await get("/api/comms/webrtc-config");
+  const rtc = await get("/api/comms/webrtc-health");
   checks.push({
-    name: "webrtc-config",
-    pass: rtc.ok && Array.isArray(rtc.body?.iceServers) && rtc.body.iceServers.length > 0,
-    detail: rtc.body?.relayConfigured ? "relay present" : "no TURN in ICE list",
+    name: "webrtc-health",
+    pass: rtc.ok && rtc.body?.relayConfigured === true,
+    detail: rtc.body?.relayConfigured
+      ? `${rtc.body.iceServerCount} ICE servers`
+      : "no TURN relay in ICE list",
   });
 
   const failed = checks.filter((c) => !c.pass);
