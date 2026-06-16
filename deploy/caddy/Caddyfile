@@ -3,5 +3,7 @@
 
 {$SITE_HOST} {
 	encode gzip
+	@socket path /cyrus-io*
+	reverse_proxy @socket app:3020
 	reverse_proxy app:3020
 }
