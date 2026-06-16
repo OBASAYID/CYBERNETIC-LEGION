@@ -52,7 +52,11 @@ if "caddy:" not in text:
         marker = "\n  app:"
     text = text.replace(marker, caddy + marker, 1)
     if "caddy_data:" not in text:
-        text = text.rstrip() + "\n  caddy_data:\n  caddy_config:\n"
+        text = text.replace(
+            "volumes:\n  postgres_data:",
+            "volumes:\n  caddy_data:\n  caddy_config:\n  postgres_data:",
+            1,
+        )
     compose.write_text(text)
     print("Added caddy service to docker-compose.yml")
 PY
