@@ -418,8 +418,9 @@ export function getVideoConstraintsForCommsCall(
   networkMode: CyrusCommsNetworkMode
 ): boolean | MediaTrackConstraints {
   if (callType !== "video") return false;
+  // Always capture local camera for video calls; bandwidth modes only reduce quality.
   if (networkMode === "audio_priority" || networkMode === "emergency") {
-    return false;
+    return MEDIA_CONSTRAINTS.video.mobile;
   }
   if (networkMode === "low_bandwidth" || networkMode === "degraded") {
     return {

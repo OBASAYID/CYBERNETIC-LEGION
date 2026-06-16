@@ -15,6 +15,7 @@ import { OperatorConsoleCluster } from "@/components/dashboard-fresh/operator-co
 import { OnlineUsersSidebar } from "@/components/dashboard-fresh/online-users-sidebar";
 import { PshareFeedConsole } from "@/components/dashboard-fresh/pshare-feed-console";
 import { useDashboardFreshData } from "@/hooks/use-dashboard-fresh-data";
+import { ModuleCommandConsole, ModuleCommandConsoleDock } from "@/components/command-center/module-command-console";
 import { useUserRole } from "@/hooks/use-user-role";
 import { TSODILO_SYMBOLS_STELE_URL } from "@/lib/dashboard-backdrop";
 type AdminTab = "modules" | "console";
@@ -210,6 +211,12 @@ export default function DashboardFresh() {
         )}
       </main>
       </div>
+      <ModuleCommandConsoleDock>
+        <ModuleCommandConsole
+          scope="dashboard"
+          pageContext="Command Center dashboard — operator home"
+        />
+      </ModuleCommandConsoleDock>
     </div>
   );
 }

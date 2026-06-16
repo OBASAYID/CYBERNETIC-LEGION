@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Geolocation } from '@capacitor/geolocation';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { Keyboard } from '@capacitor/keyboard';
+import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 import { App } from '@capacitor/app';
 import { Network } from '@capacitor/network';
 import { Device } from '@capacitor/device';
@@ -89,7 +89,7 @@ export async function initializeMobilePlatform(): Promise<void> {
 
   // Set up keyboard behavior
   try {
-    Keyboard.setResizeMode({ mode: 'body' });
+    Keyboard.setResizeMode({ mode: KeyboardResize.Native });
   } catch (error) {
     console.warn('[Mobile] Keyboard configuration failed:', error);
   }

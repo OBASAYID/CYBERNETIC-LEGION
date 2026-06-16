@@ -21,6 +21,7 @@ import {
   getInitialQualityPreset,
   presetToCallQualityLabel,
   tuneCommsPeerConnection,
+  type CommsAcquiredMedia,
 } from "../lib/comms-call-media";
 import { AudioProcessor } from "../lib/webrtc-config";
 import type { CallSessionStatus } from "@shared/calls/call-session-types";
@@ -398,6 +399,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
   const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
+  const primedCallMediaRef = useRef<(CommsAcquiredMedia & { callType: "audio" | "video" }) | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const savedCameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -638,6 +640,24 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     [addNotification, emitCommsTelemetry],
   );
 
+  const clearPrimedCallMedia = useCallback(() => {
+    const primed = primedCallMediaRef.current;
+    if (!primed) return;
+    primed.stream.getTracks().forEach((t) => t.stop());
+    primed.disposeMediaPipeline();
+    primedCallMediaRef.current = null;
+  }, []);
+
+  const primeCallMediaOnGesture = useCallback(
+    async (callType: "audio" | "video") => {
+      clearPrimedCallMedia();
+      const acquired = await acquireCommsUserMedia(callType);
+      primedCallMediaRef.current = { ...acquired, callType };
+      return acquired;
+    },
+    [clearPrimedCallMedia],
+  );
+
   const cleanupMedia = useCallback(() => {
     webrtcSessionGenerationRef.current += 1;
     pendingRemoteOfferRef.current = null;
@@ -658,6 +678,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
     mediaPipelineDisposeRef.current?.();
     mediaPipelineDisposeRef.current = null;
+    clearPrimedCallMedia();
     audioProcessorRef.current = null;
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -996,10 +1017,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         try {
           console.log(`[WebRTC-Presence] ===== REQUESTING ${callType.toUpperCase()} MEDIA =====`);
           console.log(`[WebRTC-Presence] Network mode: ${networkMode}`);
-          console.log(`[WebRTC-Presence] This will trigger a browser permission prompt`);
-          console.log(`[WebRTC-Presence] Please click ALLOW when prompted`);
-          
-          const acquired = await acquireCommsUserMedia(callType, networkMode);
+
+          const primed = primedCallMediaRef.current;
+          let acquired: CommsAcquiredMedia;
+          if (primed && primed.callType === callType && primed.stream.getTracks().some((t) => t.readyState === "live")) {
+            console.log("[WebRTC-Presence] Using media primed on call/accept click");
+            primedCallMediaRef.current = null;
+            acquired = primed;
+          } else {
+            clearPrimedCallMedia();
+            console.log(`[WebRTC-Presence] Requesting live media (browser permission prompt may appear)`);
+            acquired = await acquireCommsUserMedia(callType, networkMode);
+          }
           
           console.log(`[WebRTC-Presence] ===== MEDIA ACQUIRED SUCCESSFULLY =====`);
           console.log(`[WebRTC-Presence] Audio tracks: ${acquired.stream.getAudioTracks().length}`);
@@ -1159,22 +1188,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         );
         
         peerConnectionRef.current = pc;
-        
-        // Start connection health monitoring
-        connectionManager.startHealthMonitoring((metrics) => {
-          console.log(`[RobustConnection] Quality: ${metrics.quality} | RTT: ${metrics.rtt}ms | Loss: ${(metrics.packetLossRate * 100).toFixed(1)}%`);
-          
-          // Update diagnostics with health metrics
-          if (webrtcDiagSessionRef.current) {
-            // Future: integrate health metrics into diagnostics
-          }
-          
-          // Notify user if quality is critical
-          if (metrics.quality === "critical" || metrics.quality === "poor") {
-            addNotification("warning", `Call quality ${metrics.quality} - network issues detected`);
-          }
-        });
-        
+
         resetOutboundBitrateTracker(pc);
 
         const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
@@ -1455,7 +1469,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [addNotification, startCallTimer, cleanupMedia]
+    [addNotification, startCallTimer, cleanupMedia, clearPrimedCallMedia]
   );
 
   const connectPresence = useCallback((displayName: string = "User") => {
@@ -1574,13 +1588,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      socket.on("users-list", (data: { users: Array<{ id: string; displayName: string; status?: string; inCall?: boolean; profileImageUrl?: string | null }> }) => {
+      socket.on("users-list", (data: { users: Array<{ id: string; displayName: string; deviceId?: string; inCall?: boolean; profileImageUrl?: string | null }> }) => {
         console.log(`[Presence] ✓ Received 'users-list' with ${data.users.length} users:`, data.users.map(u => u.displayName).join(", "));
         const currentId = currentUserIdRef.current;
         const otherUsers = data.users.filter((u) => u.id !== currentId).map((u) => ({
           id: u.id,
           displayName: u.displayName,
-          status: (u.status as OnlineUser["status"]) || "online",
+          deviceId: u.deviceId || u.id,
           inCall: u.inCall || false,
           profileImageUrl: u.profileImageUrl || null,
         }));
@@ -1962,12 +1976,24 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     presenceRegisteredOnceRef.current = false;
   }, [cleanupMedia, clearAllPendingMessageAcks]);
 
-  const callUser = useCallback((targetUserId: string, targetName: string, type: "audio" | "video") => {
+  const callUser = useCallback(async (targetUserId: string, targetName: string, type: "audio" | "video") => {
     console.log(`[Presence] Initiating ${type} call to ${targetName} (${targetUserId})`);
 
     if (!socketRef.current?.connected) {
       console.error("[Presence] Socket not connected - cannot place call");
       addNotification("error", "Not connected. Please refresh the page.");
+      return;
+    }
+
+    try {
+      await primeCallMediaOnGesture(type);
+    } catch (mediaErr) {
+      const err = mediaErr as Error & { permissionResult?: { error?: string }; suggestedAction?: string };
+      const msg = err.permissionResult?.error || err.message || "Microphone/camera access denied.";
+      addNotification("error", msg);
+      if (err.suggestedAction) {
+        setTimeout(() => addNotification("warning", err.suggestedAction!), 800);
+      }
       return;
     }
 
@@ -1978,9 +2004,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       clientSeq: nextClientSeq(),
     });
     addNotification("info", `Calling ${targetName}...`);
-  }, [addNotification, nextClientSeq]);
+  }, [addNotification, nextClientSeq, primeCallMediaOnGesture]);
 
-  const acceptCall = useCallback(() => {
+  const acceptCall = useCallback(async () => {
     const call = incomingCallRef.current;
     console.log("[Presence] acceptCall triggered, call ref:", call);
 
@@ -1993,6 +2019,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     if (!socketRef.current?.connected) {
       console.error("[Presence] Socket not connected - cannot accept call");
       addNotification("error", "Connection lost. Please refresh.");
+      return;
+    }
+
+    try {
+      await primeCallMediaOnGesture(call.callType);
+    } catch (mediaErr) {
+      const err = mediaErr as Error & { permissionResult?: { error?: string }; suggestedAction?: string };
+      const msg = err.permissionResult?.error || err.message || "Microphone/camera access denied.";
+      addNotification("error", msg);
+      if (err.suggestedAction) {
+        setTimeout(() => addNotification("warning", err.suggestedAction!), 800);
+      }
       return;
     }
 
@@ -2022,7 +2060,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     setIncomingCall(null);
     incomingCallRef.current = null;
     addNotification("success", `Connecting to ${call.callerName}...`);
-  }, [addNotification, nextClientSeq]);
+  }, [addNotification, nextClientSeq, primeCallMediaOnGesture]);
 
   const declineCall = useCallback(() => {
     const call = incomingCallRef.current;

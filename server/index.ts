@@ -593,7 +593,7 @@ async function initializeSystem() {
   // Fusion bootstrap (honest capability map for gate UI)
   if (!commsOnlyMode) {
     try {
-      const { default: completeFusionApi } = await import("./routes/complete-fusion-api");
+      const { default: completeFusionApi } = await import("./routes/complete-fusion-api.js");
       app.use("/api", completeFusionApi);
       log("[Fusion] Bootstrap routes registered (honest capability map)");
     } catch (e) {
@@ -605,7 +605,7 @@ async function initializeSystem() {
 
   // Security middleware — non-fatal so the server still starts without it
   try {
-    const { createApiAuthMiddleware, createStandardLimiter, requireAdminForSensitiveApi } = await import("./security/middleware");
+    const { createApiAuthMiddleware, createStandardLimiter, requireAdminForSensitiveApi } = await import("./security/middleware.js");
     app.use("/api", createApiAuthMiddleware(isAuthenticatedMiddleware));
     app.use("/api", requireAdminForSensitiveApi);
 
@@ -638,7 +638,7 @@ async function initializeSystem() {
   // Core API routes — each wrapped individually so one failure doesn't block the rest
   if (!commsOnlyMode) {
     try {
-      const { default: settingsRoutes } = await import("./settings/routes");
+      const { default: settingsRoutes } = await import("./settings/routes.js");
       app.use("/api/settings", settingsRoutes);
       log("[Routes] Settings registered");
     } catch (e) {
@@ -646,7 +646,7 @@ async function initializeSystem() {
     }
 
     try {
-      const { default: sysdbRoutes } = await import("./sysdb/routes");
+      const { default: sysdbRoutes } = await import("./sysdb/routes.js");
       app.use("/api/sysdb", sysdbRoutes);
       log("[Routes] SysDB registered");
     } catch (e) {
@@ -654,7 +654,7 @@ async function initializeSystem() {
     }
 
     try {
-      const { default: queryRoutes } = await import("./query/router");
+      const { default: queryRoutes } = await import("./query/router.js");
       app.use("/api/query", queryRoutes);
       log("[Routes] Query registered");
     } catch (e) {
@@ -662,7 +662,7 @@ async function initializeSystem() {
     }
 
     try {
-      const { default: trainRoutes } = await import("./train/routes");
+      const { default: trainRoutes } = await import("./train/routes.js");
       app.use("/api/train", trainRoutes);
       log("[Routes] Train registered");
     } catch (e) {
@@ -670,7 +670,7 @@ async function initializeSystem() {
     }
 
     try {
-      const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes");
+      const { default: intelligenceCoreRoutes } = await import("./intelligence/core-routes.js");
       app.use("/api", intelligenceCoreRoutes);
       log("[Routes] Intelligence core registered");
     } catch (e) {
@@ -693,7 +693,7 @@ async function initializeSystem() {
 
   if (!commsOnlyMode) {
     try {
-      const { default: humanoidRoutes } = await import("./humanoid/routes");
+      const { default: humanoidRoutes } = await import("./humanoid/routes.js");
       app.use("/api/humanoid", humanoidRoutes);
       log("[Humanoid] Registered");
     } catch (e) {
@@ -702,7 +702,7 @@ async function initializeSystem() {
     await tick();
 
     try {
-      const { default: visionRoutes } = await import("./humanoid/vision-analysis");
+      const { default: visionRoutes } = await import("./humanoid/vision-analysis.js");
       app.use("/api/vision", visionRoutes);
       log("[Vision] Registered");
     } catch (e) {
@@ -714,10 +714,18 @@ async function initializeSystem() {
   }
 
   try {
-    const { registerRoutes } = await import("./routes");
+    const { registerRoutes } = await import("./routes.js");
     await registerRoutes(httpServer, app);
+    log("[Routes] Main route bundle registered");
   } catch (e) {
-    console.warn("[Init] Routes module not loaded (non-fatal):", (e instanceof Error ? e.message : String(e)));
+    console.error("[Init] Routes module not loaded:", e instanceof Error ? e.message : String(e));
+    try {
+      const { registerUiEngineBridge } = await import("./routes/ui-engine-bridge.js");
+      await registerUiEngineBridge(app);
+      log("[Routes] UI engine bridge fallback registered (/api/infer)");
+    } catch (bridgeErr) {
+      console.error("[Init] UI engine bridge fallback failed:", bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr));
+    }
   }
   await tick();
 
@@ -782,7 +790,7 @@ async function setupFrontendRoutes() {
   if (frontendReady) return;
 
   if (process.env.NODE_ENV !== "production") {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
     frontendReady = true;
     return;
@@ -818,7 +826,7 @@ async function gracefulShutdown(signal: string) {
   }
 
   try {
-    const { cyrusBrain } = await import("./ai/cyrus-brain");
+    const { cyrusBrain } = await import("./ai/cyrus-brain.js");
     await cyrusBrain.shutdown();
   } catch (error) {
     logger.warn("brain_shutdown_warning", { error });

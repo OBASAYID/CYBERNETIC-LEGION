@@ -119,15 +119,28 @@ export function ModuleCommandConsole({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, systemContext, module: "systems" }),
       });
+      const body = (await res.json().catch(() => ({}))) as {
+        response?: string;
+        error?: string;
+        degraded?: boolean;
+      };
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || "Request failed");
+        throw new Error(body.error || `Request failed (${res.status})`);
       }
-      return res.json() as { response?: string };
+      if (!body.response?.trim()) {
+        throw new Error(body.error || "Empty response from CYRUS");
+      }
+      return body;
     },
     onSuccess: async (data) => {
       const text = data.response || "—";
-      setLog((prev) => [...prev, { role: "cyrus", content: text }]);
+      setLog((prev) => [
+        ...prev,
+        {
+          role: "cyrus",
+          content: data.degraded ? `${text}\n\n_(degraded mode — check server OPENAI_API_KEY)_` : text,
+        },
+      ]);
       if (speakNextRef.current) {
         speakNextRef.current = false;
         void speakCyrusTts(text);

@@ -22,7 +22,6 @@ import {
   type CommsMediaFilterMode,
 } from "./comms-media-filters";
 import {
-  requestMediaPermissions,
   enumerateMediaDevices,
   parseMediaError,
   getBrowserSpecificInstructions,
@@ -72,27 +71,21 @@ export async function acquireCommsUserMedia(
 ): Promise<CommsAcquiredMedia> {
   const mode = networkMode ?? getCyrusCommsNetworkMode();
   
-  // Step 1: Pre-flight device check
-  console.log("[CommsMedia] Starting pre-flight device check...");
-  const deviceInfo = await enumerateMediaDevices();
-  
+  // Step 1: Optional device hint (do not block — Safari/Firefox often hide devices until after permission)
+  try {
+    const deviceInfo = await enumerateMediaDevices();
+    console.log(
+      "[CommsMedia] Pre-permission device hint — Cameras:",
+      deviceInfo.cameraCount,
+      "Microphones:",
+      deviceInfo.microphoneCount,
+    );
+  } catch {
+    /* ignore */
+  }
+
   const deviceType = callType === "video" ? "both" : "microphone";
-  
-  // Check if required devices exist
-  if (callType === "video" && !deviceInfo.hasCamera) {
-    const error = new Error("No camera found");
-    (error as any).name = "NotFoundError";
-    throw error;
-  }
-  
-  if (!deviceInfo.hasMicrophone) {
-    const error = new Error("No microphone found");
-    (error as any).name = "NotFoundError";
-    throw error;
-  }
-  
-  console.log("[CommsMedia] Devices found - Cameras:", deviceInfo.cameraCount, "Microphones:", deviceInfo.microphoneCount);
-  
+
   // Step 2: Build constraint attempts with fallbacks
   const primaryVideo = getVideoConstraintsForCommsCall(callType, mode);
   const audioConstraints = getAudioConstraints();
