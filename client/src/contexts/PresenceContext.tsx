@@ -40,9 +40,14 @@ import { WebRtcDiagnosticsSession } from "../realtime/webrtc-diagnostics-session
 import { RtcRecoveryManager } from "../realtime/rtc-recovery-manager";
 import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinator";
 import { RobustConnectionManager } from "../realtime/robust-connection-manager";
+import { FastMediaQualityAdapter } from "../realtime/fast-media-quality-adapter";
 import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
 import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
+import {
+  readEmbeddedPushToken,
+  registerCallPushToken,
+} from "../lib/push-call-registration";
 import {
   createSealedSignalingContext,
   disposeSealedSignalingContext,
@@ -397,6 +402,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
   const negotiationBusyRef = useRef(false);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
+  const fastQualityAdapterRef = useRef<FastMediaQualityAdapter | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
   const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
   const primedCallMediaRef = useRef<(CommsAcquiredMedia & { callType: "audio" | "video" }) | null>(null);
@@ -485,6 +491,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     };
     console.log("[Presence] ✓ Emitting 'register' event:", JSON.stringify(payload));
     socket.emit("register", payload);
+    const pushToken = readEmbeddedPushToken();
+    if (pushToken) {
+      void registerCallPushToken(identity.commsUserId, pushToken).catch((e) => {
+        console.warn("[Presence] push token register failed:", e);
+      });
+    }
   }, []);
 
   const refreshIdentityAndRegister = useCallback(
@@ -672,6 +684,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
     }
+    if (fastQualityAdapterRef.current) {
+      fastQualityAdapterRef.current.stop();
+      fastQualityAdapterRef.current = null;
+    }
     if (connectionManagerRef.current) {
       connectionManagerRef.current.dispose();
       connectionManagerRef.current = null;
@@ -848,6 +864,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
           abrControllerRef.current = ctl;
           ctl.start();
+          if (!fastQualityAdapterRef.current) {
+            const fast = new FastMediaQualityAdapter(pcNow, (level) => {
+              if (!alive() || !socket.connected) return;
+              socket.emit("update-call-quality", { roomId, quality: level.name });
+            });
+            fastQualityAdapterRef.current = fast;
+            fast.start();
+          }
           socket.emit("update-call-quality", {
             roomId,
             quality: presetToCallQualityLabel(getInitialQualityPreset(callType, getCyrusCommsNetworkMode())),
@@ -1800,15 +1824,29 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         needsMediaRecovery?: boolean;
       }) => {
         if (!data?.roomId) return;
-        setActiveCall({
+        const restored: typeof activeCallRef.current = {
           roomId: data.roomId,
           peerName: data.peerName || "Participant",
           peerId: data.peerId || "",
           callType: data.callType || "audio",
           isInitiator: Boolean(data.isInitiator),
           status: data.needsMediaRecovery ? "reconnecting" : "connecting",
-        });
+        };
+        activeCallRef.current = restored;
+        setActiveCall(restored);
         addNotification("info", "Call session restored - recovering media path.");
+        if (data.needsMediaRecovery !== false && socket.connected) {
+          void setupWebRTCMedia(
+            data.roomId,
+            data.callType || "audio",
+            Boolean(data.isInitiator),
+            socket,
+            data.peerId || undefined,
+          ).catch((err) => {
+            console.error("[Presence] Rehydrate media recovery failed:", err);
+            addNotification("error", "Could not restore call media. Try rejoining the call.");
+          });
+        }
       },
     );
 

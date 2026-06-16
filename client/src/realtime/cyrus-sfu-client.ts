@@ -170,7 +170,19 @@ export class CyrusSfuClient {
     if (!this.sendTransport || !this.localStream) return;
     for (const track of this.localStream.getTracks()) {
       if (this.callType === "audio" && track.kind === "video") continue;
-      await this.sendTransport.produce({ track });
+      if (track.kind === "video") {
+        await this.sendTransport.produce({
+          track,
+          encodings: [
+            { rid: "h", scaleResolutionDownBy: 1, maxBitrate: 1_500_000 },
+            { rid: "m", scaleResolutionDownBy: 2, maxBitrate: 600_000 },
+            { rid: "l", scaleResolutionDownBy: 4, maxBitrate: 200_000 },
+          ],
+          codecOptions: { videoGoogleStartBitrate: 1000 },
+        });
+      } else {
+        await this.sendTransport.produce({ track });
+      }
     }
   }
 

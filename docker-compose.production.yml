@@ -1,0 +1,69 @@
+# CYRUS production stack — API + Redis signaling + coturn TURN relay.
+# Scale path: run multiple `app` replicas behind a load balancer with sticky sessions;
+# open UDP CYRUS_SFU_RTC_MIN_PORT–CYRUS_SFU_RTC_MAX_PORT per replica for mediasoup.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  coturn:
+    image: coturn/coturn:4.6.2
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    environment:
+      TURN_SECRET: ${TURN_SECRET:-change-me-in-production}
+    profiles:
+      - turn
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod.server
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${CYRUS_LIVE_PORT:-3020}:3020"
+      - "40000-40100:40000-40100/udp"
+    environment:
+      NODE_ENV: production
+      PORT: 3020
+      CYRUS_LIVE_PORT: 3020
+      REDIS_URL: redis://redis:6379
+      CYRUS_COMM_PUBLIC_TURN: "false"
+      CYRUS_SFU_RTC_MIN_PORT: 40000
+      CYRUS_SFU_RTC_MAX_PORT: 40100
+      CYRUS_SFU_WORKER_COUNT: ${CYRUS_SFU_WORKER_COUNT:-2}
+      CYRUS_SFU_MAX_PARTICIPANTS: ${CYRUS_SFU_MAX_PARTICIPANTS:-64}
+      CYRUS_MAX_CONCURRENT_USERS: ${CYRUS_MAX_CONCURRENT_USERS:-500000}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      CYRUS_SFU_ANNOUNCED_IP: ${CYRUS_SFU_ANNOUNCED_IP:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FCM_SERVER_KEY: ${FCM_SERVER_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3020/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  redis_data:

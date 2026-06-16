@@ -3,6 +3,8 @@
  * Set PUBLIC_BASE_URL (or BASE_URL) in every non-local deployment.
  */
 import { getCyrusLivePort, getServerBindHost, getCyrusFusedOrigin } from "./stack-ports.js";
+import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
+import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 
 function trimSlash(s: string): string {
   return s.replace(/\/+$/, "");
@@ -77,12 +79,20 @@ export function getDeploymentPayload() {
     },
     webrtc: {
       sfuAnnouncedIp: process.env.CYRUS_SFU_ANNOUNCED_IP?.trim() || null,
-      turnConfigured: Boolean(process.env.TURN_URLS?.trim()),
+      turnConfigured: Boolean(
+        process.env.TURN_URLS?.trim() ||
+          process.env.TURN_SECRET?.trim() ||
+          (process.env.TURN_USERNAME?.trim() && process.env.TURN_CREDENTIAL?.trim()),
+      ),
+      redisSignaling: Boolean(process.env.REDIS_URL?.trim()),
+      pushConfigured: pushCallServiceConfigured(),
     },
+    scale: getCyrusScaleLimits(),
     hints: [
       "Set PUBLIC_BASE_URL to your public HTTPS origin — not 127.0.0.1 — for cookies and WebRTC on mobile/LAN.",
       "Same account on multiple devices: log in on each; deviceId stays per-browser, userId follows session.",
-      "Production: SERVER_HOST=0.0.0.0, TURN_URLS + CYRUS_SFU_ANNOUNCED_IP for cross-network calls.",
+      "Production: REDIS_URL + horizontal replicas, TURN_URLS/TURN_SECRET, CYRUS_SFU_ANNOUNCED_IP, UDP 40000-40100 per pod.",
+      "500k users: scale API replicas (HPA), global TURN fleet, regional SFU clusters — not a single VPS.",
     ],
   };
 }

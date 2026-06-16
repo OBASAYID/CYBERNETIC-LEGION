@@ -3,6 +3,8 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
 import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
 import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
+import { sendIncomingCallPush } from "./push-call-service.js";
+import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
 import { eq, ilike, sql } from "drizzle-orm";
@@ -775,6 +777,24 @@ export function broadcastForceLogout(userId: string): void {
   }
 }
 
+async function attachSocketIoRedisAdapter(io: SocketIOServer): Promise<void> {
+  const url = String(process.env.REDIS_URL || "").trim();
+  if (!url) return;
+  try {
+    const { createAdapter } = await import("@socket.io/redis-adapter");
+    const { default: Redis } = await import("ioredis");
+    const pub = new Redis(url, { maxRetriesPerRequest: null });
+    const sub = pub.duplicate();
+    io.adapter(createAdapter(pub, sub));
+    console.log("[Socket.IO] Redis adapter attached — multi-node signaling enabled");
+  } catch (e) {
+    console.warn(
+      "[Socket.IO] Redis adapter unavailable:",
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+}
+
 export function initSocketSignaling(server: HttpServer) {
   const allowWebSocket = process.env.CYRUS_COMM_SOCKET_WS !== "false";
   const io = new SocketIOServer(server, {
@@ -794,6 +814,8 @@ export function initSocketSignaling(server: HttpServer) {
   });
 
   ioInstance = io;
+
+  void attachSocketIoRedisAdapter(io);
 
   void initCommsFanout(`socksig_${process.pid}`, (message) => {
     runtimeMetrics.commsFanoutReceived += 1;
@@ -1227,7 +1249,38 @@ export function initSocketSignaling(server: HttpServer) {
       const target = findUserByCommsId(data.targetUserId);
 
       if (!target) {
+        const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const pendingCall: PendingCall = {
+          callerId,
+          callerName: caller.displayName,
+          targetId: data.targetUserId,
+          roomId,
+          callType: data.callType,
+          timestamp: new Date(),
+        };
+        await savePendingCall(roomId, pendingCall);
+        schedulePendingCallTimeout(io, roomId, callerId, data.targetUserId);
+        const push = await sendIncomingCallPush(data.targetUserId, {
+          callerId,
+          callerName: caller.displayName,
+          roomId,
+          callType: data.callType,
+        });
+        if (push.sent > 0) {
+          caller.inCall = true;
+          caller.currentRoomId = roomId;
+          socket.join(roomId);
+          socket.emit("call-ringing", {
+            roomId,
+            targetName: data.targetUserId,
+            callType: data.callType,
+            viaPush: true,
+          });
+          emitPresenceUpdate();
+          return;
+        }
         runtimeMetrics.callSetupFailed += 1;
+        await deletePendingCallState(roomId);
         socket.emit("call-failed", { reason: "user-offline" });
         return;
       }

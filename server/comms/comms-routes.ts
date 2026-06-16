@@ -18,6 +18,7 @@ import {
 import { pshareRouter } from "./pshare-routes.js";
 import { gwaRouter } from "./gwa-routes.js";
 import { groupCallIntelligenceRouter } from "./group-call-intelligence-routes.js";
+import { pushCallRouter } from "./push-routes.js";
 import { getDeliveryHubStats } from "./delivery-hub.js";
 import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
 import {
@@ -2566,6 +2567,7 @@ export function registerCommsRoutes(app: any) {
   app.use(pshareRouter);
   app.use(gwaRouter);
   app.use(groupCallIntelligenceRouter);
+  app.use(pushCallRouter);
   app.use(router);
   console.log("[Comms] Registered communication routes (60+ endpoints)");
   console.log("[Comms Intelligence] 12 intelligence API endpoints active (8 core + 4 ML-enhanced)");

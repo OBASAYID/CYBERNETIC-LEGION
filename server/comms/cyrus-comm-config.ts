@@ -14,10 +14,20 @@ export type CyrusCommIceServer = {
   credential?: string;
 };
 
-const PUBLIC_BACKUP_TURN: CyrusCommIceServer[] =
-  process.env.CYRUS_COMM_PUBLIC_TURN === "false"
-    ? []
-    : [
+const productionTurnConfigured = Boolean(
+  process.env.TURN_URLS?.trim() ||
+    process.env.TURN_SECRET?.trim() ||
+    (process.env.TURN_USERNAME?.trim() && process.env.TURN_CREDENTIAL?.trim()),
+);
+
+/** In production with private TURN, disable metered.ca public relay (unsuitable at scale). */
+const allowPublicBackupTurn =
+  process.env.CYRUS_COMM_PUBLIC_TURN === "true" ||
+  (process.env.CYRUS_COMM_PUBLIC_TURN !== "false" &&
+    !(process.env.NODE_ENV === "production" && productionTurnConfigured));
+
+const PUBLIC_BACKUP_TURN: CyrusCommIceServer[] = allowPublicBackupTurn
+  ? [
         {
           urls: [
             "turn:openrelay.metered.ca:80",
@@ -27,7 +37,8 @@ const PUBLIC_BACKUP_TURN: CyrusCommIceServer[] =
           username: "openrelayproject",
           credential: "openrelayproject",
         },
-      ];
+      ]
+  : [];
 
 export const CYRUS_COMM_ICE_SERVERS: CyrusCommIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -104,10 +115,16 @@ export function getLiveSfuConfig() {
     };
     const s = getSfuStatus();
     const mode = s.mode === "mediasoup" ? "mediasoup" : s.mode === "star" ? "star" : "p2p";
+    const workerCount =
+      "workerCount" in s && typeof (s as { workerCount?: number }).workerCount === "number"
+        ? (s as { workerCount: number }).workerCount
+        : s.mediasoupAvailable
+          ? 1
+          : 0;
     return {
       mode,
       mediasoup: {
-        workerCount: s.mediasoupAvailable ? 1 : 0,
+        workerCount,
         rtcMinPort: s.rtcPortRange?.min ?? 0,
         rtcMaxPort: s.rtcPortRange?.max ?? 0,
         announcedIp: s.announcedIp ?? "",
@@ -165,10 +182,12 @@ export function getCyrusCommWebRtcConfigResponse(query?: CyrusCommWebRtcConfigQu
     process.env.CYRUS_COMM_DEFAULT_LINK === "ntn";
 
   const iceServers = getProductionIceServers();
-  const hasProductionTurn = Boolean(process.env.TURN_URLS && process.env.TURN_USERNAME);
+  const hasProductionTurn = productionTurnConfigured || relayIsConfigured(iceServers);
   const iceTransportPolicy =
     process.env.CYRUS_COMM_ICE_TRANSPORT_POLICY === "relay" ||
-    (hasProductionTurn && process.env.CYRUS_COMM_PREFER_RELAY === "true")
+    (hasProductionTurn &&
+      (process.env.CYRUS_COMM_PREFER_RELAY === "true" ||
+        process.env.CYRUS_COMM_MOBILE_RELAY_FIRST === "true"))
       ? ("relay" as const)
       : ("all" as const);
 

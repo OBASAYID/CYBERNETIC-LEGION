@@ -4,15 +4,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { CyrusSfuMode } from "../../../shared/comms/sfu-types.js";
+import { getCyrusScaleLimits, getSfuParticipantLimit } from "../../../shared/comms/scale-config.js";
 import { getProductionIceServers, relayIsConfigured } from "../cyrus-comm-config.js";
 
-export const GROUP_CALL_SFU_MAX = 20;
+export const GROUP_CALL_SFU_MAX = getSfuParticipantLimit();
 
 type MediasoupTypes = typeof import("mediasoup");
 
 let sfuMode: CyrusSfuMode = "star";
 let mediasoupLib: MediasoupTypes | null = null;
 let worker: import("mediasoup").types.Worker | null = null;
+const workers: import("mediasoup").types.Worker[] = [];
+let workerRoundRobin = 0;
 let initError: string | null = null;
 const routers = new Map<string, import("mediasoup").types.Router>();
 
@@ -55,15 +58,15 @@ export function getSfuMode(): CyrusSfuMode {
 }
 
 export function getSfuStatus() {
-  const rtcMin = Number(process.env.CYRUS_SFU_RTC_MIN_PORT || 40000);
-  const rtcMax = Number(process.env.CYRUS_SFU_RTC_MAX_PORT || 49999);
+  const scale = getCyrusScaleLimits();
   return {
     mode: sfuMode,
-    mediasoupAvailable: mediasoupLib !== null && worker !== null,
+    mediasoupAvailable: mediasoupLib !== null && workers.length > 0,
+    workerCount: workers.length,
     relayConfigured: relayIsConfigured(getProductionIceServers()),
     maxParticipants: GROUP_CALL_SFU_MAX,
     announcedIp: getAnnouncedIp() ?? null,
-    rtcPortRange: { min: rtcMin, max: rtcMax },
+    rtcPortRange: { min: scale.sfuRtcMinPort, max: scale.sfuRtcMaxPort },
     workerBin: resolveWorkerBinPath(),
     initError,
   };
@@ -92,18 +95,31 @@ export async function initCyrusSfu(): Promise<void> {
 
     const mod = await import("mediasoup");
     mediasoupLib = mod;
-    worker = await mod.createWorker({
-      logLevel: "warn",
-      rtcMinPort: Number(process.env.CYRUS_SFU_RTC_MIN_PORT || 40000),
-      rtcMaxPort: Number(process.env.CYRUS_SFU_RTC_MAX_PORT || 49999),
-    });
-    worker.on("died", () => {
-      console.error("[SFU] mediasoup worker died — falling back to star relay");
-      worker = null;
-      sfuMode = "star";
-    });
-    sfuMode = "mediasoup";
-    console.log(`[SFU] mediasoup worker online — group calls use SFU (${workerBin || "bundled"})`);
+    const scale = getCyrusScaleLimits();
+    const workerCount = scale.maxSfuWorkers;
+    for (let i = 0; i < workerCount; i++) {
+      const w = await mod.createWorker({
+        logLevel: "warn",
+        rtcMinPort: scale.sfuRtcMinPort,
+        rtcMaxPort: scale.sfuRtcMaxPort,
+      });
+      w.on("died", () => {
+        console.error(`[SFU] mediasoup worker ${i} died`);
+        const idx = workers.indexOf(w);
+        if (idx >= 0) workers.splice(idx, 1);
+        if (!workers.length) {
+          worker = null;
+          sfuMode = "star";
+          console.error("[SFU] all workers dead — falling back to star relay");
+        }
+      });
+      workers.push(w);
+    }
+    worker = workers[0] ?? null;
+    sfuMode = workers.length ? "mediasoup" : "star";
+    console.log(
+      `[SFU] mediasoup online — ${workers.length} worker(s), up to ${GROUP_CALL_SFU_MAX} participants/room`,
+    );
   } catch (e) {
     sfuMode = "star";
     initError = e instanceof Error ? e.message : String(e);
@@ -112,11 +128,12 @@ export async function initCyrusSfu(): Promise<void> {
 }
 
 async function getOrCreateRouter(roomId: string): Promise<import("mediasoup").types.Router | null> {
-  if (!mediasoupLib || !worker) return null;
+  if (!mediasoupLib || !workers.length) return null;
   let router = routers.get(roomId);
   if (router) return router;
 
-  router = await worker.createRouter({
+  const w = workers[workerRoundRobin++ % workers.length];
+  router = await w.createRouter({
     mediaCodecs: [
       {
         kind: "audio",
@@ -130,6 +147,12 @@ async function getOrCreateRouter(roomId: string): Promise<import("mediasoup").ty
         mimeType: "video/VP8",
         clockRate: 90000,
         parameters: { "x-google-start-bitrate": 1000 },
+      },
+      {
+        kind: "video",
+        mimeType: "video/VP9",
+        clockRate: 90000,
+        parameters: { "profile-id": 2, "x-google-start-bitrate": 1000 },
       },
       {
         kind: "video",
@@ -178,8 +201,13 @@ export async function sfuJoinRoom(input: {
   const router = await getOrCreateRouter(input.roomId);
   if (!router) return { mode: "star", hostPeerId: input.userId };
 
+  const roomPeers = peersByRoom.get(input.roomId) ?? new Map();
+  if (roomPeers.size >= GROUP_CALL_SFU_MAX) {
+    throw new Error(`room-full:${GROUP_CALL_SFU_MAX}`);
+  }
+  if (!peersByRoom.has(input.roomId)) peersByRoom.set(input.roomId, roomPeers);
+
   const peerKey = buildSfuPeerKey(input.userId, input.socketId);
-  const roomPeers = peersByRoom.get(input.roomId)!;
   roomPeers.set(peerKey, {
     peerKey,
     userId: input.userId,
@@ -206,6 +234,7 @@ export async function sfuCreateWebRtcTransport(
     enableTcp: true,
     preferUdp: true,
     initialAvailableOutgoingBitrate: 2_500_000,
+    enableSctp: false,
   });
 
   const peer = getPeer(roomId, peerKey);

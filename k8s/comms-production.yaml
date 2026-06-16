@@ -1,0 +1,92 @@
+# CYRUS comms at scale — apply alongside k8s/deployment.yaml
+# Targets 500k registered users via horizontal API replicas + dedicated TURN/SFU UDP ranges.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cyrus-comms-config
+data:
+  REDIS_URL: "redis://cyrus-redis:6379"
+  CYRUS_COMM_PUBLIC_TURN: "false"
+  CYRUS_SFU_RTC_MIN_PORT: "40000"
+  CYRUS_SFU_RTC_MAX_PORT: "40100"
+  CYRUS_SFU_WORKER_COUNT: "2"
+  CYRUS_SFU_MAX_PARTICIPANTS: "64"
+  CYRUS_MAX_CONCURRENT_USERS: "500000"
+  CYRUS_MAX_SIGNALING_REPLICAS: "100"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cyrus-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cyrus-redis
+  template:
+    metadata:
+      labels:
+        app: cyrus-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cyrus-redis
+spec:
+  selector:
+    app: cyrus-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cyrus-core-hpa-scale
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cyrus-core
+  minReplicas: 5
+  maxReplicas: 100
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 120
