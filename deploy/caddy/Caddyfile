@@ -1,0 +1,7 @@
+# Automatic HTTPS via sslip.io — 167.233.36.99 → 167-233-36-99.sslip.io
+# Replace SITE_HOST in scripts/setup-hetzner-https.sh if your public IP changes.
+
+{$SITE_HOST} {
+	encode gzip
+	reverse_proxy app:3020
+}

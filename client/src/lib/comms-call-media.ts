@@ -27,6 +27,7 @@ import {
   getBrowserSpecificInstructions,
   type PermissionCheckResult,
 } from "./media-permissions";
+import { getMediaDevices } from "./secure-media-context";
 
 export type CommsCallQualityLabel = "HD" | "SD" | "Low";
 
@@ -70,6 +71,18 @@ export async function acquireCommsUserMedia(
   networkMode?: CyrusCommsNetworkMode,
 ): Promise<CommsAcquiredMedia> {
   const mode = networkMode ?? getCyrusCommsNetworkMode();
+  const deviceType = callType === "video" ? "both" : "microphone";
+
+  let mediaDevices: MediaDevices;
+  try {
+    mediaDevices = getMediaDevices();
+  } catch (err) {
+    const result = parseMediaError(err, deviceType);
+    const error = new Error(result.error);
+    (error as Error & { name?: string }).name = "SecurityError";
+    (error as Error & { permissionResult?: PermissionCheckResult }).permissionResult = result;
+    throw error;
+  }
   
   // Step 1: Optional device hint (do not block — Safari/Firefox often hide devices until after permission)
   try {
@@ -83,8 +96,6 @@ export async function acquireCommsUserMedia(
   } catch {
     /* ignore */
   }
-
-  const deviceType = callType === "video" ? "both" : "microphone";
 
   // Step 2: Build constraint attempts with fallbacks
   const primaryVideo = getVideoConstraintsForCommsCall(callType, mode);
@@ -116,7 +127,7 @@ export async function acquireCommsUserMedia(
     try {
       console.log(`[CommsMedia] Attempt ${i + 1}/${attempts.length} with constraints:`, JSON.stringify(constraints));
       
-      let stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream = await mediaDevices.getUserMedia(constraints);
       
       console.log(`[CommsMedia] Successfully acquired stream - Audio: ${stream.getAudioTracks().length} tracks, Video: ${stream.getVideoTracks().length} tracks`);
       

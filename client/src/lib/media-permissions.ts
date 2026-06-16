@@ -186,8 +186,19 @@ export function parseMediaError(error: unknown, deviceType: MediaDeviceType): Pe
     };
   }
   
-  // Unknown error
+  // Unknown error — include insecure-context hint when mediaDevices was missing
   const message = err instanceof Error ? err.message : String(error);
+  if (message.includes("getUserMedia") || message.includes("mediaDevices")) {
+    return {
+      granted: false,
+      available: false,
+      error: "Camera/microphone require HTTPS (or localhost). HTTP to an IP address is blocked by your browser.",
+      errorType: "security",
+      suggestedAction:
+        "Open the app via https://YOUR-DOMAIN or SSH tunnel: ssh -L 3020:127.0.0.1:3020 user@server then http://127.0.0.1:3020",
+      canRetry: false,
+    };
+  }
   return {
     granted: false,
     available: false,
