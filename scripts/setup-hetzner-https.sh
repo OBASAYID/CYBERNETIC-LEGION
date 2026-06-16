@@ -16,7 +16,12 @@ echo "→ HTTPS host: ${SITE_HOST}"
 echo "→ Public IP:  ${PUBLIC_IP}"
 
 mkdir -p deploy/caddy
-sed "s/\\{\$SITE_HOST\\}/${SITE_HOST}/g" deploy/caddy/Caddyfile > deploy/caddy/Caddyfile.generated
+python3 -c "
+from pathlib import Path
+host = '''${SITE_HOST}'''
+t = Path('deploy/caddy/Caddyfile').read_text()
+Path('deploy/caddy/Caddyfile.generated').write_text(t.replace('{\$SITE_HOST}', host))
+"
 
 if ! grep -q 'cyrus-caddy' docker-compose.yml 2>/dev/null; then
   python3 <<'PY'
