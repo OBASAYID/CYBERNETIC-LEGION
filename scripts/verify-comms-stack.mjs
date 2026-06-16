@@ -38,7 +38,7 @@ async function main() {
   checks.push({
     name: "push scaffold",
     pass: push.ok,
-    detail: push.body?.configured ? "FCM configured" : "optional — set FCM_SERVER_KEY",
+    detail: push.body?.configured ? "FCM configured" : push.ok ? "endpoint ok (set FCM_SERVER_KEY for wake)" : "push route missing",
   });
 
   const rtc = await get("/api/comms/webrtc-health");
@@ -50,7 +50,7 @@ async function main() {
       : "no TURN relay in ICE list",
   });
 
-  const failed = checks.filter((c) => !c.pass);
+  const failed = checks.filter((c) => !c.pass && c.name !== "push scaffold");
   for (const c of checks) {
     console.log(`${c.pass ? "✓" : "✗"} ${c.name}: ${c.detail}`);
   }

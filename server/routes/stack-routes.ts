@@ -3,6 +3,8 @@ import axios from "axios";
 
 import { getCyrusAiBaseUrl, getStackPortsPayload } from "../config/stack-ports.js";
 import { getDeploymentPayload } from "../config/deployment.js";
+import { getCyrusCommWebRtcConfigResponse } from "../comms/cyrus-comm-config.js";
+import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 import { getMcpIntegrationStatus } from "../mcp/mcp-registry.js";
 import { checkAllMcpHealth } from "../mcp/mcp-health.js";
 
@@ -14,6 +16,29 @@ router.get("/stack/ports", (_req, res) => {
 
 router.get("/stack/deployment", (_req, res) => {
   res.json({ success: true, ...getDeploymentPayload(), ts: Date.now() });
+});
+
+router.get("/comms/webrtc-health", (_req, res) => {
+  try {
+    const cfg = getCyrusCommWebRtcConfigResponse();
+    res.json({
+      ok: true,
+      relayConfigured: cfg.relayConfigured,
+      iceServerCount: Array.isArray(cfg.iceServers) ? cfg.iceServers.length : 0,
+      iceTransportPolicy: cfg.iceTransportPolicy,
+      encodingProfile: cfg.linkHints?.encodingProfile,
+      satelliteBackhaulCapable: cfg.linkHints?.satelliteBackhaulCapable,
+    });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+router.get("/comms/push/status", (_req, res) => {
+  res.json({
+    configured: pushCallServiceConfigured(),
+    redis: Boolean(String(process.env.REDIS_URL || "").trim()),
+  });
 });
 
 router.get("/stack/summary", async (_req, res) => {
