@@ -1,5 +1,17 @@
 /** Shared ICE parsing for Socket.IO–signaled WebRTC (CYRUS Comms). */
 
+import { SDP_NEGOTIATION_OPTIONS } from "../lib/webrtc-config";
+
+/** ICE restart with a fresh offer — required for remote side to recover media. */
+export async function renegotiateIceRestart(
+  pc: RTCPeerConnection,
+): Promise<RTCSessionDescriptionInit> {
+  await pc.restartIce();
+  const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
+  await pc.setLocalDescription(offer);
+  return offer;
+}
+
 export function toIceCandidateInit(raw: unknown): RTCIceCandidateInit | null {
   if (raw == null || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;

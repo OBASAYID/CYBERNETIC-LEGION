@@ -30,19 +30,11 @@ import { isIcePathLive } from "@shared/calls/call-session-types";
 import type { CyrusWebRtcRelayPayload } from "@shared/comms/cyrus-comms-envelope";
 import { fetchCyrusCommRtcConfiguration } from "../realtime/fetch-rtc-config";
 import { CYRUS_ICE_RESTART_VERIFY_MS } from "../realtime/ice-recovery-policy";
-import { addIceCandidateSafe, toIceCandidateInit } from "../realtime/webrtc-ice-utils";
+import { addIceCandidateSafe, renegotiateIceRestart, toIceCandidateInit } from "../realtime/webrtc-ice-utils";
 import type { CallDiagnosticsSnapshot } from "../realtime/webrtc-diagnostics-types";
-import {
-  createEmptyReliabilityReport,
-  createDefaultTransportDiagnostics,
-} from "../realtime/webrtc-diagnostics-types";
 import { WebRtcDiagnosticsSession } from "../realtime/webrtc-diagnostics-session";
 import { RtcRecoveryManager } from "../realtime/rtc-recovery-manager";
 import { RtcNegotiationCoordinator } from "../realtime/rtc-negotiation-coordinator";
-import { RobustConnectionManager } from "../realtime/robust-connection-manager";
-import { FastMediaQualityAdapter } from "../realtime/fast-media-quality-adapter";
-import { computeCommsQualityScores } from "../realtime/comms-quality-engine";
-import { classifyRtcFailures } from "../realtime/rtc-failure-classifier";
 import { resumeCyrusAudioPipeline } from "../realtime/audio-context-recovery";
 import {
   readEmbeddedPushToken,
@@ -163,6 +155,10 @@ function publishRemotePlayback(inbound: MediaStream, local: MediaStream | null |
   const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
   const remoteTracks = inbound.getTracks().filter((t) => !localIds.has(t.id));
   return new MediaStream(remoteTracks.length ? remoteTracks : inbound.getTracks());
+}
+
+function isCallDebugEnabled(): boolean {
+  return typeof localStorage !== "undefined" && localStorage.getItem("cyrus-call-debug") === "1";
 }
 
 /** Some browsers deliver remote tracks on receivers before/without firing ontrack. */
@@ -396,7 +392,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const activeCallRef = useRef<ActiveCallState | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const connectionManagerRef = useRef<RobustConnectionManager | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream>(new MediaStream());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -422,7 +417,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const remoteTrackWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
   const renegotiateCallMediaRef = useRef<(() => Promise<void>) | null>(null);
-  const fastQualityAdapterRef = useRef<FastMediaQualityAdapter | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
   const mediaPipelineDisposeRef = useRef<(() => void) | null>(null);
   const primedCallMediaRef = useRef<(CommsAcquiredMedia & { callType: "audio" | "video" }) | null>(null);
@@ -460,8 +454,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       }
     >()
   );
-  const lastQosSampleEmitAtRef = useRef(0);
-
   const nextClientSeq = useCallback(() => {
     if (clientSeqRef.current <= 0) {
       clientSeqRef.current = loadClientSequenceCursor();
@@ -470,30 +462,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     saveClientSequenceCursor(clientSeqRef.current);
     return clientSeqRef.current;
   }, []);
-
-  const emitCommsTelemetry = useCallback(
-    (
-      eventType: string,
-      payload?: {
-        roomId?: string;
-        outcome?: "attempt" | "success" | "failed";
-        latencyMs?: number;
-        reason?: string;
-      },
-    ) => {
-      const socket = socketRef.current;
-      if (!socket?.connected) return;
-      socket.emit("comms-telemetry", {
-        eventType,
-        roomId: payload?.roomId || activeCallRef.current?.roomId,
-        outcome: payload?.outcome,
-        latencyMs: payload?.latencyMs,
-        reason: payload?.reason,
-        clientSeq: nextClientSeq(),
-      });
-    },
-    [nextClientSeq],
-  );
 
   const emitPresenceRegister = useCallback((socket: Socket) => {
     const identity = identityRef.current;
@@ -607,71 +575,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     [addNotification, clearPendingMessageAck, nextClientSeq],
   );
 
-  const handleQosAction = useCallback(
-    async (data: { roomId?: string; action?: string; reason?: string }) => {
-      const call = activeCallRef.current;
-      const socket = socketRef.current;
-      const pc = peerConnectionRef.current;
-      if (!call || !socket || !pc || !data?.action) return;
-      if (data.roomId && call.roomId !== data.roomId) return;
-
-      if (data.action === "reduce_video" || data.action === "audio_priority") {
-        const local = localStreamRef.current;
-        if (local) {
-          for (const track of local.getVideoTracks()) {
-            track.enabled = false;
-          }
-          setMediaControls((prev) => ({ ...prev, isVideoEnabled: false }));
-        }
-        addNotification("warning", "Network degraded - switched to audio-priority mode.");
-        return;
-      }
-
-      if (data.action === "force_relay_restart") {
-        const startedAt = Date.now();
-        emitCommsTelemetry("relay_restart", {
-          outcome: "attempt",
-          roomId: call.roomId,
-          reason: data.reason || "qos_action_force_relay_restart",
-        });
-        try {
-          localStorage.setItem("cyrus-force-relay", "true");
-        } catch {
-          /* ignore */
-        }
-        try {
-          await pc.restartIce();
-          const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
-          await pc.setLocalDescription(offer);
-          if (socket.connected) {
-            await emitSmartWebRtcSignal(
-              sealedSignalingRef.current,
-              socket,
-              "offer",
-              withWebRtcTarget({ roomId: call.roomId, offer }, call.peerId),
-            );
-          }
-          emitCommsTelemetry("relay_restart", {
-            outcome: "success",
-            roomId: call.roomId,
-            latencyMs: Date.now() - startedAt,
-            reason: data.reason || "qos_action_force_relay_restart",
-          });
-          addNotification("warning", "Network critical - forcing relay path recovery.");
-        } catch {
-          emitCommsTelemetry("relay_restart", {
-            outcome: "failed",
-            roomId: call.roomId,
-            latencyMs: Date.now() - startedAt,
-            reason: data.reason || "qos_action_force_relay_restart_failed",
-          });
-          addNotification("error", "Relay recovery failed - retrying automatically.");
-        }
-      }
-    },
-    [addNotification, emitCommsTelemetry],
-  );
-
   const clearPrimedCallMedia = useCallback(() => {
     const primed = primedCallMediaRef.current;
     if (!primed) return;
@@ -708,14 +611,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     if (abrControllerRef.current) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
-    }
-    if (fastQualityAdapterRef.current) {
-      fastQualityAdapterRef.current.stop();
-      fastQualityAdapterRef.current = null;
-    }
-    if (connectionManagerRef.current) {
-      connectionManagerRef.current.dispose();
-      connectionManagerRef.current = null;
     }
     mediaPipelineDisposeRef.current?.();
     mediaPipelineDisposeRef.current = null;
@@ -912,14 +807,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
           abrControllerRef.current = ctl;
           ctl.start();
-          if (!fastQualityAdapterRef.current) {
-            const fast = new FastMediaQualityAdapter(pcNow, (level) => {
-              if (!alive() || !socket.connected) return;
-              socket.emit("update-call-quality", { roomId, quality: level.name });
-            });
-            fastQualityAdapterRef.current = fast;
-            fast.start();
-          }
           socket.emit("update-call-quality", {
             roomId,
             quality: presetToCallQualityLabel(getInitialQualityPreset(callType, getCyrusCommsNetworkMode())),
@@ -1217,85 +1104,17 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           );
         }
 
-        // Create connection manager for robust connection handling
-        const connectionManager = new RobustConnectionManager({
-          forceRelay: isRelayOnlyTestMode() || isLikelyCrossNetworkPath(),
-          maxReconnectAttempts: 5,
-          debug: false,
-          onStateChange: (state) => {
-            console.log(`[RobustConnection] State: ${state}`);
-            if (state === "connected") {
-              promoteMediaConnected();
-            } else if (state === "failed" || state === "closed") {
-              addNotification("error", "Call connection failed");
-              if (socket.connected) socket.emit("end-call", { roomId });
-              cleanupMedia();
-              setActiveCall(null);
-              activeCallRef.current = null;
-            }
-          },
-          onIceStateChange: (iceState) => {
-            console.log(`[RobustConnection] ICE State: ${iceState}`);
-            if (!alive()) return;
-            recoveryManagerRef.current.onIceStateChange(iceState, Date.now());
-            
-            if (isIcePathLive(iceState)) {
-              iceRestartAttemptsRef.current = 0;
-              if (iceRestartVerifyTimerRef.current) {
-                clearTimeout(iceRestartVerifyTimerRef.current);
-                iceRestartVerifyTimerRef.current = null;
-              }
-              promoteMediaConnected();
-            }
-          },
-          onReconnecting: () => {
-            console.log("[RobustConnection] Reconnecting...");
-            setActiveCall((prev) =>
-              prev && prev.roomId === roomId
-                ? { ...prev, status: assertCallTransition(prev.status, "reconnecting") }
-                : prev,
-            );
-            addNotification("warning", "Recovering connection...");
-          },
-          onReconnected: () => {
-            console.log("[RobustConnection] Reconnected!");
-            addNotification("success", "Connection recovered");
-            promoteMediaConnected();
-          },
-          onFailed: () => {
-            // PresenceContext's ICE state handlers own the actual call teardown.
-            // Log here but don't end the call — the oniceconnectionstatechange
-            // "failed" branch will do that if the path is truly dead.
-            console.warn("[RobustConnection] Connection manager reports failure — PresenceContext ICE handler takes over");
-          },
-        });
-        
-        connectionManagerRef.current = connectionManager;
-
-        // Create peer connection with robust configuration
-        const pc = await connectionManager.createPeerConnection(
-          rtcConfig.iceServers || [],
-          async () => {
-            // ICE restart callback
-            console.log("[RobustConnection] ICE restart triggered");
-            try {
-              if (peerConnectionRef.current) {
-                peerConnectionRef.current.restartIce();
-              }
-            } catch (e) {
-              console.warn("[RobustConnection] ICE restart error:", e);
-            }
-          }
-        );
-        
+        const pc = new RTCPeerConnection(rtcConfig);
         peerConnectionRef.current = pc;
 
         resetOutboundBitrateTracker(pc);
 
-        const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
-        diagSession.attach();
-        webrtcDiagSessionRef.current = diagSession;
-        void diagSession.probeAudioContext();
+        if (isCallDebugEnabled()) {
+          const diagSession = new WebRtcDiagnosticsSession(pc, roomId);
+          diagSession.attach();
+          webrtcDiagSessionRef.current = diagSession;
+          void diagSession.probeAudioContext();
+        }
 
         pc.ontrack = (event) => {
           webrtcDiagSessionRef.current?.logOnTrack(event);
@@ -1318,7 +1137,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
-          diagSession.logAddTrack(track);
+          webrtcDiagSessionRef.current?.logAddTrack(track);
         });
         // Ensure every transceiver is bidirectional so both sides receive video.
         try {
@@ -1423,11 +1242,16 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
                 : prev,
             );
             addNotification("warning", `Recovering media (${iceRestartAttemptsRef.current}/${maxAttempts})…`);
-            try {
-              pc.restartIce();
-            } catch (e) {
-              console.warn("[WebRTC-Presence] restartIce error:", e);
-            }
+            void (async () => {
+              try {
+                const offer = await renegotiateIceRestart(pc);
+                if (!alive() || !socket.connected) return;
+                const offerPayload = withWebRtcTarget({ roomId, offer }, rtcPeerId());
+                await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "offer", offerPayload);
+              } catch (e) {
+                console.warn("[WebRTC-Presence] ICE restart renegotiation failed:", e);
+              }
+            })();
             if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
             iceRestartVerifyTimerRef.current = setTimeout(() => {
               if (!alive() || peerConnectionRef.current !== pc) return;
@@ -2060,10 +1884,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       saveCommsSequenceCursor(sessionSeqRef.current);
     });
 
-    socket.on("qos-action", (data: { roomId?: string; action?: string; reason?: string }) => {
-      void handleQosAction(data);
-    });
-
     socket.on('disconnect', () => {
       console.log("[Presence] Disconnected");
       setIsConnected(false);
@@ -2098,7 +1918,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     refreshIdentityAndRegister,
     scheduleMessageAckWatchdog,
     clearPendingMessageAck,
-    handleQosAction,
     applyReplayedCommsEvent,
   ]);
 
@@ -2559,221 +2378,26 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   }, [cleanupMedia]);
 
   useEffect(() => {
-    if (!activeCall || activeCall.status === "failed") {
+    if (!activeCall || activeCall.status === "failed" || !isCallDebugEnabled()) {
       setCallDiagnostics(null);
       return;
     }
     const tick = async () => {
       const pc = peerConnectionRef.current;
-      if (!pc) return;
+      const session = webrtcDiagSessionRef.current;
+      if (!pc || !session) return;
       try {
         const m = await getCallQualityMetrics(pc);
-        const session = webrtcDiagSessionRef.current;
-        const call = activeCallRef.current;
-        if (session) {
-          const snap = await session.composeSnapshot(m, abrControllerRef.current?.getCurrentPreset());
-          setCallDiagnostics(snap);
-          const nowTs = Date.now();
-          const socket = socketRef.current;
-          if (
-            socket?.connected &&
-            call?.roomId &&
-            nowTs - lastQosSampleEmitAtRef.current >= 3000
-          ) {
-            lastQosSampleEmitAtRef.current = nowTs;
-            socket.emit("qos-sample", {
-              roomId: call.roomId,
-              rttMs: snap.rttMs,
-              jitterMs: snap.jitterMs,
-              packetLossRate: snap.packetLossRate,
-              bitrateKbps: snap.bitrateKbps,
-              quality: snap.qualityScores?.overall,
-              clientSeq: nextClientSeq(),
-            });
-          }
-
-          const rec = recoveryManagerRef.current;
-          rec.onIceStateChange(pc.iceConnectionState, Date.now());
-          const res = rec.tick({
-            now: Date.now(),
-            iceState: pc.iceConnectionState,
-            packetLossPct: snap.packetLossRate,
-            bitrateKbps: snap.bitrateKbps,
-            isVideoCall: call?.callType === "video",
-            mediaWasLive: mediaWasLiveRef.current,
-            remoteStalled: snap.remoteStalled,
-          });
-          const maxA = rec.maxRestartAttempts();
-          if (res.action === "ice_restart") {
-            if (iceRestartAttemptsRef.current >= maxA) return;
-            iceRestartAttemptsRef.current += 1;
-            session.recordRecoveryAction("auto_ice_restart", { reason: res.reason });
-            webrtcDiagSessionRef.current?.logReconnectAttempt(iceRestartAttemptsRef.current, maxA);
-            const restartStartedAt = Date.now();
-            emitCommsTelemetry("ice_restart", {
-              outcome: "attempt",
-              roomId: call?.roomId,
-              reason: res.reason || "auto_ice_restart",
-            });
-            setActiveCall((prev) =>
-              prev && prev.roomId === call?.roomId ? { ...prev, status: "reconnecting" } : prev
-            );
-            addNotification("warning", `Auto-recovering (${res.reason})…`);
-            try {
-              pc.restartIce();
-              emitCommsTelemetry("ice_restart", {
-                outcome: "success",
-                roomId: call?.roomId,
-                latencyMs: Date.now() - restartStartedAt,
-                reason: res.reason || "auto_ice_restart",
-              });
-            } catch (e) {
-              emitCommsTelemetry("ice_restart", {
-                outcome: "failed",
-                roomId: call?.roomId,
-                latencyMs: Date.now() - restartStartedAt,
-                reason: "auto_ice_restart_exception",
-              });
-              console.warn("[WebRTC-Presence] auto restartIce error:", e);
-            }
-            if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
-            const rid = call?.roomId;
-            iceRestartVerifyTimerRef.current = setTimeout(() => {
-              if (peerConnectionRef.current !== pc) return;
-              if (isIcePathLive(pc.iceConnectionState)) return;
-              if (iceRestartAttemptsRef.current >= maxA && rid && socketRef.current?.connected) {
-                webrtcDiagSessionRef.current?.logReconnectExhausted();
-                emitCommsTelemetry("ice_restart", {
-                  outcome: "failed",
-                  roomId: rid,
-                  reason: "auto_ice_restart_exhausted",
-                });
-                socketRef.current.emit("end-call", {
-                  roomId: rid,
-                  callTxnId: generateCallTxnId(),
-                  clientSeq: nextClientSeq(),
-                });
-                cleanupMedia();
-                setActiveCall(null);
-                activeCallRef.current = null;
-              }
-            }, CYRUS_ICE_RESTART_VERIFY_MS);
-          } else if (res.action === "force_relay_restart" || res.action === "escalate_relay_preference") {
-            session.recordRecoveryAction("relay_escalation", { reason: res.reason });
-            addNotification("info", "Switching to relay path for clearer audio…");
-            const relayStartedAt = Date.now();
-            emitCommsTelemetry("relay_restart", {
-              outcome: "attempt",
-              roomId: call?.roomId,
-              reason: res.reason || "relay_escalation",
-            });
-            try {
-              localStorage.setItem("cyrus-force-relay", "true");
-            } catch {
-              /* ignore */
-            }
-            if (iceRestartAttemptsRef.current >= maxA) return;
-            iceRestartAttemptsRef.current += 1;
-            try {
-              await pc.restartIce();
-              const offer = await pc.createOffer(SDP_NEGOTIATION_OPTIONS.iceRestart);
-              await pc.setLocalDescription(offer);
-              if (socketRef.current?.connected && call?.roomId) {
-                const offerPayload = withWebRtcTarget(
-                  { roomId: call.roomId, offer },
-                  call.peerId,
-                );
-                await emitSmartWebRtcSignal(
-                  sealedSignalingRef.current,
-                  socketRef.current,
-                  "offer",
-                  offerPayload,
-                );
-              }
-              emitCommsTelemetry("relay_restart", {
-                outcome: "success",
-                roomId: call?.roomId,
-                latencyMs: Date.now() - relayStartedAt,
-                reason: res.reason || "relay_escalation",
-              });
-            } catch (e) {
-              emitCommsTelemetry("relay_restart", {
-                outcome: "failed",
-                roomId: call?.roomId,
-                latencyMs: Date.now() - relayStartedAt,
-                reason: "relay_escalation_exception",
-              });
-              console.warn("[WebRTC-Presence] relay restart failed:", e);
-            }
-          }
-          return;
-        }
-        const rtt = Math.round((m.roundTripTime || 0) * 1000);
-        const jitter = Math.round((m.jitter || 0) * 1000);
-        const loss = m.packetLossRate;
-        const bitrate = Math.round((m.bitrate / 1000) * 10) / 10;
-        const basePartial = {
-          iceConnectionState: pc.iceConnectionState,
-          connectionState: pc.connectionState,
-          signalingState: pc.signalingState,
-          iceGatheringState: pc.iceGatheringState,
-          qualityScore: m.qualityScore,
-          rttMs: rtt,
-          packetLossRate: loss,
-          jitterMs: jitter,
-          bitrateKbps: bitrate,
-          abrPreset: abrControllerRef.current?.getCurrentPreset(),
-          localCandidateTypes: [] as string[],
-          remoteCandidateTypes: [] as string[],
-          relayCandidateSeen: false,
-          relayActive: false,
-          relayOnlyTestMode: isRelayOnlyTestMode(),
-          turnWarning: null,
-          remoteTracks: [] as CallDiagnosticsSnapshot["remoteTracks"],
-          remotePlaybackBlocked: false,
-          remoteStalled: false,
-          audioFlatlineSuspected: false,
-          videoBlackScreenSuspected: false,
-          audioContextSuspended: null as boolean | null,
-          negotiationInProgress: false,
-          reliabilityReport: createEmptyReliabilityReport(),
-          structuredLogTail: [] as CallDiagnosticsSnapshot["structuredLogTail"],
-          transport: createDefaultTransportDiagnostics(),
-          recoveryActions: [] as string[],
-          rtcTimeline: [] as CallDiagnosticsSnapshot["rtcTimeline"],
-          bitrateHistory: [] as number[],
-          lossHistory: [] as number[],
-          qualityScores: computeCommsQualityScores({
-            rttMs: rtt,
-            jitterMs: jitter,
-            packetLossPct: loss,
-            bitrateKbps: bitrate,
-            iceLive: isIcePathLive(pc.iceConnectionState),
-            relayActive: false,
-            remoteStalled: false,
-            remotePlaybackBlocked: false,
-            reconnectCount: 0,
-            negotiationFailures: 0,
-            audioFlatlineSuspected: false,
-            videoBlackScreenSuspected: false,
-          }),
-          failureHints: [] as string[],
-          activeCodecs: {} as CallDiagnosticsSnapshot["activeCodecs"],
-          networkMode: getCyrusCommsNetworkMode(),
-          relayEscalationActive: false,
-        };
-        setCallDiagnostics({
-          ...basePartial,
-          failureHints: classifyRtcFailures(basePartial as CallDiagnosticsSnapshot),
-        });
+        const snap = await session.composeSnapshot(m, abrControllerRef.current?.getCurrentPreset());
+        setCallDiagnostics(snap);
       } catch {
         /* stats may fail during teardown */
       }
     };
     void tick();
-    const id = setInterval(tick, 1500);
+    const id = setInterval(tick, 3000);
     return () => clearInterval(id);
-  }, [activeCall?.roomId, activeCall?.status, addNotification, cleanupMedia, emitCommsTelemetry, nextClientSeq]);
+  }, [activeCall?.roomId, activeCall?.status]);
 
   useEffect(() => {
     (window as any).__CYRUS_COMMS_CHAOS__ = {
