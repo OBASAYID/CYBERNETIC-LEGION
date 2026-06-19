@@ -1257,12 +1257,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             promoteMediaConnected();
           },
           onFailed: () => {
-            console.error("[RobustConnection] All reconnection attempts failed");
-            addNotification("error", "Connection lost after multiple attempts");
-            if (socket.connected) socket.emit("end-call", { roomId });
-            cleanupMedia();
-            setActiveCall(null);
-            activeCallRef.current = null;
+            // PresenceContext's ICE state handlers own the actual call teardown.
+            // Log here but don't end the call — the oniceconnectionstatechange
+            // "failed" branch will do that if the path is truly dead.
+            console.warn("[RobustConnection] Connection manager reports failure — PresenceContext ICE handler takes over");
           },
         });
         
@@ -1316,6 +1314,16 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           pc.addTrack(track, stream);
           diagSession.logAddTrack(track);
         });
+        // Ensure every transceiver is bidirectional so both sides receive video.
+        try {
+          for (const t of pc.getTransceivers()) {
+            if (t.direction === "sendonly" || t.direction === "inactive") {
+              t.direction = "sendrecv";
+            }
+          }
+        } catch {
+          /* not supported on all browsers */
+        }
         applyPreferredCodecsToPeerConnection(pc);
         void applyCommsSenderTuning(pc, callType);
 

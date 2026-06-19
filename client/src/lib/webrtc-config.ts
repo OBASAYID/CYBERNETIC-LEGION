@@ -489,7 +489,9 @@ export async function applyCommsSenderTuning(
       params.encodings[0].networkPriority = "high";
     } else if (track.kind === "video" && callType === "video") {
       params.degradationPreference = "maintain-framerate";
-      params.encodings[0].maxBitrate = params.encodings[0].maxBitrate ?? 2_500_000;
+      // Cap at 800 kbps — 2.5 Mbps overwhelms TURN relays and causes black video.
+      // The ABR controller can raise it later once the relay path is proven stable.
+      params.encodings[0].maxBitrate = params.encodings[0].maxBitrate ?? 800_000;
       params.encodings[0].maxFramerate = params.encodings[0].maxFramerate ?? 30;
       params.encodings[0].priority = "medium";
       params.encodings[0].networkPriority = "medium";

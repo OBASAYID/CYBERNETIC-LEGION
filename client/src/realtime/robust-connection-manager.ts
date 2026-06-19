@@ -53,13 +53,16 @@ const DEFAULT_CONFIG: Required<RobustConnectionConfig> = {
   debug: false,
 };
 
-// Aggressive timeouts for fast failure detection
-const ICE_GATHERING_TIMEOUT_MS = 8000; // 8 seconds max for ICE gathering
-const ICE_COMPLETE_TIMEOUT_MS = 12000; // 12 seconds for full ICE process
-const CONNECTION_TIMEOUT_MS = 15000; // 15 seconds for connection establishment
-const HEALTH_CHECK_INTERVAL_MS = 2000; // Check health every 2 seconds
-const DISCONNECTION_GRACE_MS = 3000; // Wait 3 seconds before reconnecting
-const CRITICAL_QUALITY_THRESHOLD = 3; // Samples in critical state before action
+// ICE / connection timeouts
+const ICE_GATHERING_TIMEOUT_MS = 10000;
+const ICE_COMPLETE_TIMEOUT_MS = 15000;
+const CONNECTION_TIMEOUT_MS = 20000;
+// Health monitoring — interval is intentionally slow so it does not conflict
+// with PresenceContext's own ICE restart logic (which fires on state events).
+const HEALTH_CHECK_INTERVAL_MS = 20000; // 20 seconds between samples
+const DISCONNECTION_GRACE_MS = 5000;
+// Require sustained poor quality across many samples (≥ 400 s) before acting.
+const CRITICAL_QUALITY_THRESHOLD = 20;
 
 export class RobustConnectionManager {
   private config: Required<RobustConnectionConfig>;
@@ -294,27 +297,15 @@ export class RobustConnectionManager {
   }
 
   /**
-   * Handle poor quality with adaptive recovery
+   * Handle sustained poor quality.
+   * PresenceContext owns ICE restart on state-change events — only log here
+   * to avoid fighting with it and causing the "user disappears" loop.
    */
   private async handlePoorQuality(metrics: ConnectionHealthMetrics): Promise<void> {
     if (!this.peerConnection || this.isReconnecting) return;
-
-    this.log("Handling poor quality", metrics);
-
-    // Try ICE restart first (faster than full reconnection)
-    if (this.onIceRestartNeeded) {
-      this.log("Attempting ICE restart for quality recovery");
-      try {
-        await this.onIceRestartNeeded();
-        this.criticalQualitySamples = 0;
-        return;
-      } catch (error) {
-        this.log("ICE restart failed:", error);
-      }
-    }
-
-    // If ICE restart fails or unavailable, trigger full reconnection
-    this.handleConnectionFailure();
+    this.log("Sustained poor quality — PresenceContext will manage ICE recovery", metrics);
+    // Reset counter so we don't spam this log every interval.
+    this.criticalQualitySamples = 0;
   }
 
   /**
