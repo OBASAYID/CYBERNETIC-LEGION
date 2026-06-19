@@ -428,7 +428,15 @@ export function getVideoConstraintsForCommsCall(
       frameRate: { ideal: 12, max: 20 },
     };
   }
-  return getOptimalVideoConstraints();
+  // Start at SD (360p/15fps) so the initial frames flow reliably through TURN
+  // relay on any network. The ABR controller can raise quality once the path
+  // is proven stable.
+  return {
+    width: { ideal: 640, max: 1280 },
+    height: { ideal: 360, max: 720 },
+    frameRate: { ideal: 15, max: 30 },
+    facingMode: "user",
+  };
 }
 
 /** Prefer Opus (audio) and VP8/H264 (video) when the browser supports setCodecPreferences. */
@@ -489,9 +497,9 @@ export async function applyCommsSenderTuning(
       params.encodings[0].networkPriority = "high";
     } else if (track.kind === "video" && callType === "video") {
       params.degradationPreference = "maintain-framerate";
-      // Cap at 800 kbps — 2.5 Mbps overwhelms TURN relays and causes black video.
-      // The ABR controller can raise it later once the relay path is proven stable.
-      params.encodings[0].maxBitrate = params.encodings[0].maxBitrate ?? 800_000;
+      // Start at 400 kbps (360p/15fps cap) so first frames flow through any relay.
+      // The ABR controller raises this once the path is proven stable.
+      params.encodings[0].maxBitrate = params.encodings[0].maxBitrate ?? 400_000;
       params.encodings[0].maxFramerate = params.encodings[0].maxFramerate ?? 30;
       params.encodings[0].priority = "medium";
       params.encodings[0].networkPriority = "medium";

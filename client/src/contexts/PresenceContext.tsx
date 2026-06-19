@@ -1202,6 +1202,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           throw new Error(errorMessage);
         }
 
+        // Guarantee tracks start enabled — some audio processors leave them disabled.
+        stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+        stream.getVideoTracks().forEach((t) => { t.enabled = true; });
+        // Reset mute state so the button always reflects reality.
+        setMediaControls({ isMuted: false, isVideoEnabled: stream.getVideoTracks().length > 0 });
+
         localStreamRef.current = stream;
         setLocalStream(stream);
         if (callType === "video" && stream.getVideoTracks().length === 0) {
@@ -1825,6 +1831,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
       console.log("[Presence] Call connected:", data.peerName, "type:", data.callType);
+      // Skip if acceptCall() already started WebRTC for this room. The guard
+      // must cover the whole setup window (not just after PC is created) so we
+      // check webrtcSetupRoomRef which is set at the very start of setupWebRTCMedia.
+      if (webrtcSetupRoomRef.current === data.roomId) {
+        console.log("[Presence] call-connected: WebRTC already being set up via acceptCall — skip");
+        return;
+      }
       if (
         peerConnectionRef.current &&
         activeCallRef.current?.roomId === data.roomId &&
@@ -1850,7 +1863,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       incomingCallRef.current = null;
       addNotification("success", `Connecting to ${data.peerName}…`);
       
-      // CRITICAL FIX: Properly handle setupWebRTCMedia errors
       setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId).catch((err) => {
         console.error("[Presence] WebRTC setup failed:", err);
         addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
@@ -2245,18 +2257,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   }, [addNotification, cleanupMedia, nextClientSeq]);
 
   const toggleMute = useCallback(() => {
-    if (localStreamRef.current) {
-      const audioTracks = localStreamRef.current.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = !track.enabled;
-        webrtcDiagSessionRef.current?.logLocalTrackControl(
-          track.enabled ? "enable" : "disable",
-          "audio",
-          track.id
-        );
-      });
-      setMediaControls(prev => ({ ...prev, isMuted: !prev.isMuted }));
-    }
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) return;
+    // Derive new state from the actual first track to stay in sync.
+    const newEnabled = !audioTracks[0].enabled;
+    audioTracks.forEach(track => {
+      track.enabled = newEnabled;
+      webrtcDiagSessionRef.current?.logLocalTrackControl(
+        newEnabled ? "enable" : "disable",
+        "audio",
+        track.id
+      );
+    });
+    setMediaControls(prev => ({ ...prev, isMuted: !newEnabled }));
   }, []);
 
   const toggleVideo = useCallback(() => {

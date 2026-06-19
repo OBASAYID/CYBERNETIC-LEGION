@@ -1680,8 +1680,9 @@ export default function CommsHubPage() {
   });
 
   const [targetUser, setTargetUser] = useState<{id:string;name:string}|null>(null);
-  const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  // Derive muted state from the context's source-of-truth (track.enabled).
+  const isMuted = mediaControls?.isMuted ?? false;
 
   const handleCallVoice = useCallback((userId:string, name:string) => {
     setActiveTab("voice"); callUser(userId, name, "audio");
@@ -1695,7 +1696,7 @@ export default function CommsHubPage() {
     setTargetUser({id:userId, name}); setActiveTab("chat");
   }, []);
 
-  const handleToggleMute = useCallback(() => { toggleP2PMute(); setIsMuted(v=>!v); }, [toggleP2PMute]);
+  const handleToggleMute = useCallback(() => { toggleP2PMute(); }, [toggleP2PMute]);
   const handleToggleVideo = useCallback(() => { toggleP2PVideo(); setIsVideoOff(v=>!v); }, [toggleP2PVideo]);
 
   const users: OnlineUser[] = useMemo(()=>
