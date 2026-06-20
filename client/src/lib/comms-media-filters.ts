@@ -211,13 +211,6 @@ export async function applyCommsMediaFilters(
   }
 
   enhanceLocalVideoTrackHints(stream);
-
-  try {
-    const { stream: enhanced, stop } = await CommsVideoEnhancer.enhance(stream);
-    enhanceLocalVideoTrackHints(enhanced);
-    return { stream: enhanced, mode, disposeVideoEnhancer: stop };
-  } catch (err) {
-    console.warn("[CommsMediaFilters] video enhancement unavailable:", err);
-    return { stream, mode, disposeVideoEnhancer: null };
-  }
+  // Raw camera for WebRTC — canvas captureStream can stall and send black frames.
+  return { stream, mode, disposeVideoEnhancer: null };
 }

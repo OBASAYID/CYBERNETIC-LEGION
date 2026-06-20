@@ -151,10 +151,16 @@ function mergeInboundRemoteTracks(
   return toAdd;
 }
 
-function publishRemotePlayback(inbound: MediaStream, local: MediaStream | null | undefined): MediaStream {
+function publishRemotePlayback(
+  inbound: MediaStream,
+  local: MediaStream | null | undefined,
+): MediaStream | null {
   const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
-  const remoteTracks = inbound.getTracks().filter((t) => !localIds.has(t.id));
-  return new MediaStream(remoteTracks.length ? remoteTracks : inbound.getTracks());
+  const remoteTracks = inbound.getTracks().filter(
+    (t) => !localIds.has(t.id) && t.readyState !== "ended",
+  );
+  if (!remoteTracks.length) return null;
+  return new MediaStream(remoteTracks);
 }
 
 function isCallDebugEnabled(): boolean {
@@ -415,6 +421,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const negotiationBusyRef = useRef(false);
   const webrtcSetupRoomRef = useRef<string | null>(null);
   const remoteTrackWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remoteTrackSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
   const renegotiateCallMediaRef = useRef<(() => Promise<void>) | null>(null);
   const audioProcessorRef = useRef<AudioProcessor | null>(null);
@@ -607,6 +614,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       clearTimeout(remoteTrackWatchdogRef.current);
       remoteTrackWatchdogRef.current = null;
     }
+    if (remoteTrackSyncIntervalRef.current) {
+      clearInterval(remoteTrackSyncIntervalRef.current);
+      remoteTrackSyncIntervalRef.current = null;
+    }
     webrtcSetupRoomRef.current = null;
     if (abrControllerRef.current) {
       abrControllerRef.current.stop();
@@ -756,11 +767,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       targetPeerId?: string,
     ) => {
       if (
-        webrtcSetupRoomRef.current === roomId &&
-        peerConnectionRef.current &&
-        peerConnectionRef.current.connectionState !== "closed"
+        webrtcSetupRoomRef.current === roomId
       ) {
-        console.log("[WebRTC-Presence] setupWebRTCMedia already active for", roomId);
+        console.log("[WebRTC-Presence] setupWebRTCMedia already in flight for", roomId);
         return;
       }
       webrtcSetupRoomRef.current = roomId;
@@ -824,6 +833,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         if (!toAdd.length) return false;
         for (const track of toAdd) inbound.addTrack(track);
         const playback = publishRemotePlayback(inbound, local);
+        if (!playback) return false;
         remoteStreamRef.current = playback;
         setRemoteStream(new MediaStream(playback.getTracks()));
         if (toAdd.some((t) => t.kind === "audio")) {
@@ -872,8 +882,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           peerConnectionRef.current = null;
         }
         if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach((t) => t.stop());
-          localStreamRef.current = null;
+          const primedLive =
+            primedCallMediaRef.current?.callType === callType &&
+            primedCallMediaRef.current.stream.getTracks().some((t) => t.readyState === "live");
+          if (!primedLive) {
+            localStreamRef.current.getTracks().forEach((t) => t.stop());
+            localStreamRef.current = null;
+          }
         }
         if (webRtcHandlersRef.current.offer) {
           unbindWebRtcSignalHandlers(socket, "offer", webRtcHandlersRef.current.offer);
@@ -978,11 +993,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               }
             });
         };
-
-        if (!isInitiator) {
-          webRtcHandlersRef.current.offer = handleRemoteOffer;
-          bindWebRtcSignalHandlers(socket, "offer", handleRemoteOffer);
-        }
 
         const rtcConfig = await fetchCyrusCommRtcConfiguration();
         if (!alive()) return;
@@ -1124,6 +1134,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           if (!toAdd.length) return;
           for (const track of toAdd) inbound.addTrack(track);
           const playback = publishRemotePlayback(inbound, local);
+          if (!playback) return;
           remoteStreamRef.current = playback;
           setRemoteStream(new MediaStream(playback.getTracks()));
           if (toAdd.some((t) => t.kind === "audio")) {
@@ -1139,6 +1150,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           pc.addTrack(track, stream);
           webrtcDiagSessionRef.current?.logAddTrack(track);
         });
+        if (callType === "video" && !pc.getSenders().some((s) => s.track?.kind === "video")) {
+          console.warn("[WebRTC-Presence] No outgoing video sender — adding sendrecv transceiver");
+          pc.addTransceiver("video", { direction: "sendrecv" });
+        }
         // Ensure every transceiver is bidirectional so both sides receive video.
         try {
           for (const t of pc.getTransceivers()) {
@@ -1151,6 +1166,19 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
         applyPreferredCodecsToPeerConnection(pc);
         void applyCommsSenderTuning(pc, callType);
+
+        if (!isInitiator) {
+          webRtcHandlersRef.current.offer = handleRemoteOffer;
+          bindWebRtcSignalHandlers(socket, "offer", handleRemoteOffer);
+        }
+
+        if (remoteTrackSyncIntervalRef.current) {
+          clearInterval(remoteTrackSyncIntervalRef.current);
+        }
+        remoteTrackSyncIntervalRef.current = setInterval(() => {
+          if (!alive() || peerConnectionRef.current !== pc) return;
+          syncInboundRemoteTracks("interval");
+        }, 2000);
 
         pc.onnegotiationneeded = () => {
           webrtcDiagSessionRef.current?.logNegotiationNeeded();
@@ -1400,6 +1428,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         );
         addNotification("error", "Failed to access camera/microphone or start call");
         if (alive()) {
+          if (webrtcSetupRoomRef.current === roomId) {
+            webrtcSetupRoomRef.current = null;
+          }
           setActiveCall((prev) =>
             prev && prev.roomId === roomId
               ? { ...prev, status: assertCallTransition(prev.status, "failed") }

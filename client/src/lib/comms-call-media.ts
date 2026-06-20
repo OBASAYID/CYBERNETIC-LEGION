@@ -38,7 +38,9 @@ export function getInitialQualityPreset(
   if (networkMode === "low_bandwidth" || networkMode === "degraded" || networkMode === "emergency") {
     return callType === "video" ? "low" : "audioOnly";
   }
-  if (networkMode === "audio_priority") return "audioOnly";
+  if (networkMode === "audio_priority") {
+    return callType === "video" ? "low" : "audioOnly";
+  }
   if (callType === "audio") return "high";
   const link = detectNetworkType();
   if (link === "wifi" || link === "ethernet") return "high";

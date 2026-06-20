@@ -331,7 +331,9 @@ function resolveRemoteStageStream(
   if (!remote) return null;
   if (local && remote === local) return null;
   const localIds = new Set((local?.getTracks() ?? []).map((t) => t.id));
-  const remoteTracks = remote.getTracks().filter((t) => !localIds.has(t.id));
+  const remoteTracks = remote.getTracks().filter(
+    (t) => !localIds.has(t.id) && t.readyState !== "ended",
+  );
   if (!remoteTracks.length) return null;
   return new MediaStream(remoteTracks);
 }

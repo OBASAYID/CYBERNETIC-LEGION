@@ -328,6 +328,8 @@ export const SDP_NEGOTIATION_OPTIONS = {
   } as RTCAnswerOptions,
   iceRestart: {
     iceRestart: true,
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
     voiceActivityDetection: false,
   } as RTCOfferOptions,
 };
@@ -445,18 +447,30 @@ export function applyPreferredCodecsToPeerConnection(pc: RTCPeerConnection): voi
   try {
     const audioCaps = RTCRtpSender.getCapabilities("audio");
     const videoCaps = RTCRtpSender.getCapabilities("video");
+    const recvVideoCaps =
+      typeof RTCRtpReceiver !== "undefined" && RTCRtpReceiver.getCapabilities
+        ? RTCRtpReceiver.getCapabilities("video")
+        : null;
+    const recvAudioCaps =
+      typeof RTCRtpReceiver !== "undefined" && RTCRtpReceiver.getCapabilities
+        ? RTCRtpReceiver.getCapabilities("audio")
+        : null;
     for (const t of pc.getTransceivers()) {
-      const track = t.sender?.track;
-      if (!track || typeof t.setCodecPreferences !== "function") continue;
-      if (track.kind === "audio" && audioCaps?.codecs?.length) {
-        const opus = audioCaps.codecs.filter((c) => /opus/i.test(c.mimeType));
-        const others = audioCaps.codecs.filter((c) => !/opus/i.test(c.mimeType));
+      if (typeof t.setCodecPreferences !== "function") continue;
+      const kind = t.sender?.track?.kind ?? t.receiver?.track?.kind;
+      if (kind === "audio") {
+        const caps = audioCaps?.codecs?.length ? audioCaps : recvAudioCaps;
+        if (!caps?.codecs?.length) continue;
+        const opus = caps.codecs.filter((c) => /opus/i.test(c.mimeType));
+        const others = caps.codecs.filter((c) => !/opus/i.test(c.mimeType));
         if (opus.length) t.setCodecPreferences([...opus, ...others]);
-      } else if (track.kind === "video" && videoCaps?.codecs?.length) {
-        const pref = videoCaps.codecs.filter(
+      } else if (kind === "video") {
+        const caps = videoCaps?.codecs?.length ? videoCaps : recvVideoCaps;
+        if (!caps?.codecs?.length) continue;
+        const pref = caps.codecs.filter(
           (c) => /vp8/i.test(c.mimeType) || /h264/i.test(c.mimeType)
         );
-        const rest = videoCaps.codecs.filter(
+        const rest = caps.codecs.filter(
           (c) => !/vp8/i.test(c.mimeType) && !/h264/i.test(c.mimeType)
         );
         if (pref.length) t.setCodecPreferences([...pref, ...rest]);
