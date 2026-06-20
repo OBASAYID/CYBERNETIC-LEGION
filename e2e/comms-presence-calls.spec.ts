@@ -76,40 +76,39 @@ async function newLoggedInCommsContext(
   await expect(page.getByRole("button", { name: "INITIALIZE" })).not.toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("input-username")).not.toBeVisible({ timeout: 60_000 });
   await expect(
-    page.getByRole("main").getByRole("heading", { name: "Module workspace", exact: true }),
+    page.getByRole("heading", { name: "Module workspace", exact: true }),
   ).toBeVisible({ timeout: 45_000 });
   return { context, page };
 }
 
-async function openCommsCallsTab(page: Page, baseURL: string | undefined) {
+async function openCommsDialerTab(page: Page, baseURL: string | undefined, mode: "audio" | "video") {
   const origin = (baseURL || "http://127.0.0.1:3105").replace(/\/$/, "");
-  await gotoWithDevRetry(page, `${origin}/comms`);
+  const tab = mode === "video" ? "video" : "voice";
+  await gotoWithDevRetry(page, `${origin}/comms?tab=${tab}`);
+  const label = mode === "video" ? "VIDEO CALL" : "VOICE CALL";
   try {
-    await expect(page.locator('nav[aria-label="Comms modules"]')).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText("COMMS HUB")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(label).first()).toBeVisible({ timeout: 90_000 });
   } catch (err) {
     const url = page.url();
     const snippet = (await page.locator("body").innerText().catch(() => "")).slice(0, 2000);
     throw new Error(
-      `Comms shell not found (nav Comms modules). url=${url}\n---- body (slice) ----\n${snippet}\n----\n${String(err)}`,
+      `Comms hub not found. url=${url}\n---- body (slice) ----\n${snippet}\n----\n${String(err)}`,
     );
   }
-  // Tab order: Chat, Timeline, Calls, … — label can be icon-only below `sm`; use stable index.
-  await page.locator('nav[aria-label="Comms modules"] button').nth(2).click();
 }
 
-/** Header status dot: emerald pulse when `/cyrus-io` presence is connected. */
+/** Header status: emerald pulse when `/cyrus-io` presence is connected. */
 async function waitCommsPresenceConnected(page: Page) {
-  await expect(page.locator("header span.animate-pulse.bg-emerald-400")).toBeVisible({
-    timeout: 90_000,
-  });
+  await expect(page.getByText(/● live/)).toBeVisible({ timeout: 90_000 });
 }
 
-async function waitCalleeRow(page: Page, calleeDisplayName: string) {
+async function waitCalleeDialerCard(page: Page, calleeDisplayName: string) {
   await expect
     .poll(
       async () => {
-        const row = page.locator("div.flex.items-center.justify-between").filter({ hasText: calleeDisplayName });
-        return await row.count();
+        const card = page.getByRole("button", { name: new RegExp(calleeDisplayName, "i") });
+        return await card.count();
       },
       { timeout: 90_000, intervals: [400, 800, 1500, 2500] },
     )
@@ -134,27 +133,24 @@ async function runCallScenario(browser: Browser, baseURL: string | undefined, mo
     ctxCallee = callee.context;
     const pageCallee = callee.page;
 
-    await openCommsCallsTab(pageCaller, baseURL);
-    await openCommsCallsTab(pageCallee, baseURL);
+    await openCommsDialerTab(pageCaller, baseURL, mode);
+    await openCommsDialerTab(pageCallee, baseURL, mode);
 
     await waitCommsPresenceConnected(pageCaller);
     await waitCommsPresenceConnected(pageCallee);
 
-    await waitCalleeRow(pageCaller, "E2E Callee");
+    await waitCalleeDialerCard(pageCaller, "E2E Callee");
 
-    const calleeRow = pageCaller.locator("div.flex.items-center.justify-between").filter({ hasText: "E2E Callee" });
-    if (mode === "audio") {
-      await calleeRow.getByRole("button").nth(0).click();
-    } else {
-      await calleeRow.getByRole("button").nth(1).click();
-    }
+    await pageCaller.getByRole("button", { name: /E2E Callee/i }).click();
 
-    await expect(pageCallee.getByText(/incoming.*call/i)).toBeVisible({ timeout: 45_000 });
-    await pageCallee.getByTestId("comms-accept-call").click();
+    await expect(pageCallee.getByText(/INCOMING.*CALL/i)).toBeVisible({ timeout: 45_000 });
+    await pageCallee.getByRole("button", { name: /^ACCEPT$/i }).click({ force: true, timeout: 10_000 });
 
     const inCallRe = mode === "video" ? /video call/i : /audio call/i;
     await expect(pageCallee.getByText(inCallRe)).toBeVisible({ timeout: 60_000 });
     await expect(pageCaller.getByText(inCallRe)).toBeVisible({ timeout: 60_000 });
+
+    await pageCaller.waitForTimeout(15_000);
 
     await pageCaller.getByTestId("comms-end-call").click();
     await expect(pageCaller.getByTestId("comms-end-call")).not.toBeVisible({ timeout: 30_000 });

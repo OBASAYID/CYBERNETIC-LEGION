@@ -7,8 +7,13 @@ import { getCyrusCommWebRtcConfigResponse } from "../comms/cyrus-comm-config.js"
 import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 import { getMcpIntegrationStatus } from "../mcp/mcp-registry.js";
 import { checkAllMcpHealth } from "../mcp/mcp-health.js";
+import { handleDebugSessionLogPost } from "../../shared/cyrus-debug-session-log.js";
 
 const router = Router();
+
+router.post("/debug/session-log", (req, res) => {
+  void handleDebugSessionLogPost(req.body, res);
+});
 
 router.get("/stack/ports", (_req, res) => {
   res.json({ success: true, ...getStackPortsPayload(), ts: Date.now() });

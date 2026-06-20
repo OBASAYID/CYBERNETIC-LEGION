@@ -39,9 +39,6 @@ export function usePresenceBootstrap(enabled = true): void {
 
     void waitForReady();
 
-    const retryMs = [1500, 4000, 10000, 20000];
-    const timers = retryMs.map((ms) => window.setTimeout(connect, ms));
-
     const onAuthChanged = () => {
       clearAccountUserIdCache();
       connectPresence(readDisplayName());
@@ -54,7 +51,6 @@ export function usePresenceBootstrap(enabled = true): void {
     window.addEventListener("storage", onStorage);
 
     return () => {
-      timers.forEach((t) => window.clearTimeout(t));
       window.removeEventListener(CYRUS_AUTH_SESSION_CHANGED, onAuthChanged);
       window.removeEventListener("storage", onStorage);
     };

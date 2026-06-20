@@ -5,6 +5,7 @@ import {
   resolveCyrusSocketIoOrigin,
   appendCommSignalingTokenToSearchParams,
 } from "@shared/cyrus-api-client";
+import { cyrusDebugLog } from "@shared/cyrus-debug-session-log";
 import {
   getCallQualityMetrics,
   AdaptiveBitrateController,
@@ -420,6 +421,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   /** Serialize offer/createOffer to avoid negotiation glints (single-flight). */
   const negotiationBusyRef = useRef(false);
   const webrtcSetupRoomRef = useRef<string | null>(null);
+  /** Blocks parallel setupWebRTCMedia for the same room before the PC exists. */
+  const webrtcSetupInFlightRef = useRef<string | null>(null);
+  /** Single-flight promise per room — dedupes rehydrate/re-register setup storms. */
+  const webrtcSetupPromiseByRoomRef = useRef<Map<string, Promise<void>>>(new Map());
   const remoteTrackWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTrackSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
@@ -619,6 +624,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       remoteTrackSyncIntervalRef.current = null;
     }
     webrtcSetupRoomRef.current = null;
+    webrtcSetupInFlightRef.current = null;
+    webrtcSetupPromiseByRoomRef.current.clear();
     if (abrControllerRef.current) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
@@ -766,13 +773,56 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       socket: Socket,
       targetPeerId?: string,
     ) => {
-      if (
-        webrtcSetupRoomRef.current === roomId
-      ) {
+      const setupPromiseByRoom = webrtcSetupPromiseByRoomRef.current;
+      const existingSetup = setupPromiseByRoom.get(roomId);
+      if (existingSetup) {
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:setupWebRTCMedia",
+          message: "setup skipped duplicate",
+          hypothesisId: "H1",
+          data: { roomId, isInitiator, reason: "promise_inflight" },
+        });
+        // #endregion
         console.log("[WebRTC-Presence] setupWebRTCMedia already in flight for", roomId);
+        return existingSetup;
+      }
+
+      const healthyPc = peerConnectionRef.current;
+      if (
+        webrtcSetupRoomRef.current === roomId &&
+        healthyPc &&
+        healthyPc.connectionState !== "closed" &&
+        healthyPc.connectionState !== "failed"
+      ) {
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:setupWebRTCMedia",
+          message: "setup skipped duplicate",
+          hypothesisId: "H1",
+          data: {
+            roomId,
+            isInitiator,
+            reason: "healthy_pc",
+            pcState: healthyPc.connectionState,
+          },
+        });
+        // #endregion
+        console.log("[WebRTC-Presence] setupWebRTCMedia reusing healthy session for", roomId);
         return;
       }
+
+      const runSetup = async (): Promise<void> => {
       webrtcSetupRoomRef.current = roomId;
+      webrtcSetupInFlightRef.current = roomId;
+      // #region agent log
+      cyrusDebugLog({
+        location: "PresenceContext.tsx:setupWebRTCMedia",
+        message: "setup started",
+        hypothesisId: "H1",
+        data: { roomId, isInitiator, callType },
+      });
+      // #endregion
       const sessionGen = ++webrtcSessionGenerationRef.current;
       const alive = () => sessionGen === webrtcSessionGenerationRef.current;
       const rtcPeerId = () =>
@@ -833,6 +883,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         if (!toAdd.length) return false;
         for (const track of toAdd) inbound.addTrack(track);
         const playback = publishRemotePlayback(inbound, local);
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:syncInboundRemoteTracks",
+          message: "receiver sync",
+          hypothesisId: "H2",
+          data: {
+            source,
+            added: toAdd.map((t) => ({ kind: t.kind, id: t.id.slice(0, 8) })),
+            playbackTracks: playback?.getTracks().length ?? 0,
+          },
+        });
+        // #endregion
         if (!playback) return false;
         remoteStreamRef.current = playback;
         setRemoteStream(new MediaStream(playback.getTracks()));
@@ -1131,6 +1193,17 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           const inbound = remoteStreamRef.current;
           const local = localStreamRef.current;
           const toAdd = mergeInboundRemoteTracks(event, inbound, local);
+          // #region agent log
+          cyrusDebugLog({
+            location: "PresenceContext.tsx:pc.ontrack",
+            message: "remote track event",
+            hypothesisId: "H2",
+            data: {
+              added: toAdd.map((t) => ({ kind: t.kind, id: t.id.slice(0, 8), muted: t.muted })),
+              streamCount: event.streams?.length ?? 0,
+            },
+          });
+          // #endregion
           if (!toAdd.length) return;
           for (const track of toAdd) inbound.addTrack(track);
           const playback = publishRemotePlayback(inbound, local);
@@ -1150,6 +1223,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           pc.addTrack(track, stream);
           webrtcDiagSessionRef.current?.logAddTrack(track);
         });
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:addTrack",
+          message: "local tracks attached",
+          hypothesisId: "H1",
+          data: {
+            audio: stream.getAudioTracks().length,
+            video: stream.getVideoTracks().length,
+            signalingState: pc.signalingState,
+          },
+        });
+        // #endregion
         if (callType === "video" && !pc.getSenders().some((s) => s.track?.kind === "video")) {
           console.warn("[WebRTC-Presence] No outgoing video sender — adding sendrecv transceiver");
           pc.addTransceiver("video", { direction: "sendrecv" });
@@ -1295,6 +1380,63 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             }, CYRUS_ICE_RESTART_VERIFY_MS);
           }
           if (pc.iceConnectionState === "failed") {
+            // #region agent log
+            cyrusDebugLog({
+              location: "PresenceContext.tsx:iceConnectionState",
+              message: "ICE failed",
+              hypothesisId: "H3",
+              data: {
+                roomId,
+                iceConnectionState: pc.iceConnectionState,
+                connectionState: pc.connectionState,
+                remoteTracks: remoteStreamRef.current?.getTracks().length ?? 0,
+                iceRestartAttempts: iceRestartAttemptsRef.current,
+                maxAttempts,
+              },
+            });
+            // #endregion
+            const maxRestarts = maxAttempts;
+            if (iceRestartAttemptsRef.current < maxRestarts) {
+              iceRestartAttemptsRef.current += 1;
+              recoveryManagerRef.current.recordManualRestart();
+              webrtcDiagSessionRef.current?.logReconnectAttempt(
+                iceRestartAttemptsRef.current,
+                maxRestarts,
+              );
+              setActiveCall((prev) =>
+                prev && prev.roomId === roomId
+                  ? { ...prev, status: assertCallTransition(prev.status, "reconnecting") }
+                  : prev,
+              );
+              addNotification(
+                "warning",
+                `Recovering media (${iceRestartAttemptsRef.current}/${maxRestarts})…`,
+              );
+              void (async () => {
+                try {
+                  const offer = await renegotiateIceRestart(pc);
+                  if (!alive() || !socket.connected) return;
+                  const offerPayload = withWebRtcTarget({ roomId, offer }, rtcPeerId());
+                  await emitSmartWebRtcSignal(sealedSignalingRef.current, socket, "offer", offerPayload);
+                } catch (e) {
+                  console.warn("[WebRTC-Presence] ICE failed restart failed:", e);
+                }
+              })();
+              if (iceRestartVerifyTimerRef.current) clearTimeout(iceRestartVerifyTimerRef.current);
+              iceRestartVerifyTimerRef.current = setTimeout(() => {
+                if (!alive() || peerConnectionRef.current !== pc) return;
+                if (isIcePathLive(pc.iceConnectionState)) return;
+                if (iceRestartAttemptsRef.current >= maxRestarts) {
+                  webrtcDiagSessionRef.current?.logReconnectExhausted();
+                  addNotification("error", "Media path lost after reconnect attempts.");
+                  if (socket.connected) socket.emit("end-call", { roomId });
+                  cleanupMedia();
+                  setActiveCall(null);
+                  activeCallRef.current = null;
+                }
+              }, CYRUS_ICE_RESTART_VERIFY_MS);
+              return;
+            }
             webrtcDiagSessionRef.current?.recordTurnFailure(
               isRelayOnlyTestMode()
                 ? "ICE failed during relay-only test — verify TURN is reachable and credentials."
@@ -1315,6 +1457,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             promoteMediaConnected();
           }
           if (pc.connectionState === "failed") {
+            // #region agent log
+            cyrusDebugLog({
+              location: "PresenceContext.tsx:connectionState",
+              message: "transport failed — ending call",
+              hypothesisId: "H3",
+              data: {
+                roomId,
+                iceConnectionState: pc.iceConnectionState,
+                connectionState: pc.connectionState,
+              },
+            });
+            // #endregion
             webrtcDiagSessionRef.current?.recordNegotiationFailure("RTCPeerConnection connectionState failed");
             addNotification("error", "Call transport failed");
             if (socket.connected) socket.emit("end-call", { roomId });
@@ -1338,6 +1492,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
               const diag = webrtcDiagSessionRef.current;
               const p = peerConnectionRef.current;
               if (sameSessionDescription(p.remoteDescription, answer)) {
+                return;
+              }
+              if (p.signalingState === "stable") {
+                return;
+              }
+              if (p.signalingState !== "have-local-offer") {
                 return;
               }
               diag?.setNegotiationLocked(true, "webrtc_answer");
@@ -1422,6 +1582,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:setupWebRTCMedia",
+          message: "setup failed",
+          hypothesisId: "H5",
+          data: {
+            roomId,
+            error: err instanceof Error ? err.message : String(err),
+            name: err instanceof Error ? err.name : undefined,
+          },
+        });
+        // #endregion
         console.error("[WebRTC-Presence] Media setup failed:", err);
         webrtcDiagSessionRef.current?.recordNegotiationFailure(
           `Media setup failed: ${err instanceof Error ? err.message : String(err)}`
@@ -1431,13 +1603,28 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           if (webrtcSetupRoomRef.current === roomId) {
             webrtcSetupRoomRef.current = null;
           }
+          if (webrtcSetupInFlightRef.current === roomId) {
+            webrtcSetupInFlightRef.current = null;
+          }
           setActiveCall((prev) =>
             prev && prev.roomId === roomId
               ? { ...prev, status: assertCallTransition(prev.status, "failed") }
               : prev,
           );
         }
+      } finally {
+        if (webrtcSetupInFlightRef.current === roomId) {
+          webrtcSetupInFlightRef.current = null;
+        }
       }
+      };
+
+      const setupPromise = runSetup();
+      setupPromiseByRoom.set(roomId, setupPromise);
+      void setupPromise.finally(() => {
+        setupPromiseByRoom.delete(roomId);
+      });
+      return setupPromise;
     },
     [addNotification, startCallTimer, cleanupMedia, clearPrimedCallMedia]
   );
@@ -1448,6 +1635,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     const existing = socketRef.current;
     if (existing?.connected) {
+      if (activeCallRef.current) {
+        console.log("[Presence] Already connected during active call — skip re-register");
+        return;
+      }
       console.log("[Presence] Already connected — refreshing identity + re-register");
       void refreshIdentityAndRegister(existing, true);
       return;
@@ -1689,7 +1880,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       // Skip if acceptCall() already started WebRTC for this room. The guard
       // must cover the whole setup window (not just after PC is created) so we
       // check webrtcSetupRoomRef which is set at the very start of setupWebRTCMedia.
-      if (webrtcSetupRoomRef.current === data.roomId) {
+      if (
+        webrtcSetupRoomRef.current === data.roomId ||
+        webrtcSetupInFlightRef.current === data.roomId
+      ) {
         console.log("[Presence] call-connected: WebRTC already being set up via acceptCall — skip");
         return;
       }
@@ -1798,6 +1992,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         activeCallRef.current = restored;
         setActiveCall(restored);
         addNotification("info", "Call session restored - recovering media path.");
+        const pc = peerConnectionRef.current;
+        const pcHealthy =
+          pc &&
+          pc.connectionState !== "closed" &&
+          pc.connectionState !== "failed";
+        if (pcHealthy && restored.roomId === data.roomId) {
+          console.log("[Presence] call-state-rehydrate: media path still active — skip setup");
+          return;
+        }
         if (data.needsMediaRecovery !== false && socket.connected) {
           void setupWebRTCMedia(
             data.roomId,
@@ -1923,6 +2126,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     socket.on('reconnect', () => {
       console.log("[Presence] Reconnected");
       setIsConnected(true);
+      if (activeCallRef.current) {
+        console.log("[Presence] Reconnected during active call — skip re-register");
+        return;
+      }
       void refreshIdentityAndRegister(socket, true);
     });
 

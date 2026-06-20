@@ -324,6 +324,8 @@ export const SDP_NEGOTIATION_OPTIONS = {
     voiceActivityDetection: false,
   } as RTCOfferOptions,
   answer: {
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
     voiceActivityDetection: false,
   } as RTCAnswerOptions,
   iceRestart: {

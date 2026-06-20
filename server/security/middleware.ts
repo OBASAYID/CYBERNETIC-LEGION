@@ -23,6 +23,8 @@ const PUBLIC_API_PATHS = new Set([
   "/api/mcp/health",
   /** Live broadcast news feed — public RSS proxy, no secrets exposed */
   "/api/news/rss",
+  /** Debug session NDJSON ingest (dev instrumentation only — no secrets). */
+  "/api/debug/session-log",
 ]);
 
 function getFullApiPath(req: Parameters<RequestHandler>[0]): string {

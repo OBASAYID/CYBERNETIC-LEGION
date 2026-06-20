@@ -5,6 +5,7 @@ import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
 import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
 import { sendIncomingCallPush } from "./push-call-service.js";
 import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
+import { cyrusDebugLogAwait } from "../../shared/cyrus-debug-session-log.js";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
 import { eq, ilike, sql } from "drizzle-orm";
@@ -312,11 +313,18 @@ async function resolveRelayTargetPeerId(
   fromPeerId: string,
   explicitTargetPeerId?: string,
 ): Promise<string | undefined> {
-  if (explicitTargetPeerId) return explicitTargetPeerId;
+  if (explicitTargetPeerId?.trim()) return explicitTargetPeerId.trim();
   const activeCall = await loadActiveCall(roomId);
-  if (!activeCall?.participants?.length) return undefined;
-  const peerId = activeCall.participants.find((id) => id !== fromPeerId);
-  return peerId;
+  if (activeCall?.participants?.length) {
+    const peerId = activeCall.participants.find((id) => id !== fromPeerId);
+    if (peerId) return peerId;
+  }
+  const pending = await loadPendingCall(roomId);
+  if (pending) {
+    if (fromPeerId === pending.callerId) return pending.targetId;
+    if (fromPeerId === pending.targetId) return pending.callerId;
+  }
+  return undefined;
 }
 
 /** Opaque WebRTC relay — forwards sealed + legacy fields without inspecting SDP/ICE. */
@@ -349,9 +357,37 @@ async function relayWebRtcPayload(
     for (const evt of eventNames) {
       emitToCommsUser(io, targetPeerId, evt, payload);
     }
+    // #region agent log
+    await cyrusDebugLogAwait({
+      location: "socket-signaling.ts:relayWebRtcPayload",
+      message: "webrtc relay direct",
+      hypothesisId: "H4",
+      data: {
+        roomId: data.roomId,
+        fromPeerId,
+        targetPeerId,
+        kind: eventNames[0],
+        hasOffer: Boolean(data.offer),
+        hasAnswer: Boolean(data.answer),
+        hasCandidate: Boolean(data.candidate),
+      },
+    });
+    // #endregion
     return;
   }
   runtimeMetrics.webrtcRelayFallbackRoom += 1;
+  // #region agent log
+  await cyrusDebugLogAwait({
+    location: "socket-signaling.ts:relayWebRtcPayload",
+    message: "webrtc relay room fallback",
+    hypothesisId: "H4",
+    data: {
+      roomId: data.roomId,
+      fromPeerId,
+      kind: eventNames[0],
+    },
+  });
+  // #endregion
   for (const evt of eventNames) {
     socket.to(data.roomId).emit(evt, payload);
   }
@@ -1304,6 +1340,21 @@ export function initSocketSignaling(server: HttpServer) {
 
       console.log(`[Socket.IO] Call: ${caller.displayName} -> ${target.displayName} (${data.callType}) Room: ${roomId}`);
 
+      // #region agent log
+      await cyrusDebugLogAwait({
+        location: "socket-signaling.ts:call-user",
+        message: "call placed",
+        hypothesisId: "H4",
+        data: {
+          roomId,
+          callerId,
+          targetUserId: data.targetUserId,
+          callType: data.callType,
+          targetOnline: true,
+        },
+      });
+      // #endregion
+
       await emitUserEventByCommsId(io, data.targetUserId, "incoming-call", {
         callerId,
         callerName: caller.displayName,
@@ -1388,7 +1439,21 @@ export function initSocketSignaling(server: HttpServer) {
 
       console.log(`[Socket.IO] Call accepted: ${caller.displayName} <-> ${user.displayName} (room: ${data.roomId})`);
 
-      // WebRTC handshake watchdog: if neither peer emits a successful ICE
+      // #region agent log
+      await cyrusDebugLogAwait({
+        location: "socket-signaling.ts:accept-call",
+        message: "call accepted",
+        hypothesisId: "H4",
+        data: {
+          roomId: data.roomId,
+          callerId: pendingCall.callerId,
+          calleeId: userId,
+          callType: pendingCall.callType,
+        },
+      });
+      // #endregion
+
+      // WebRTC handshake watchdog:
       // diagnostic within 30 seconds, log a warning so operators can
       // investigate TURN server availability for this region/network.
       const HANDSHAKE_WATCHDOG_MS = 30_000;
