@@ -45,6 +45,79 @@ function loadVideoMeta(url: string): Promise<HTMLVideoElement> {
   });
 }
 
+function finiteSec(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+async function waitForVideoFrame(v: HTMLVideoElement, timeoutMs = 8000): Promise<void> {
+  if (v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => resolve(), timeoutMs);
+    const done = () => {
+      window.clearTimeout(timer);
+      v.removeEventListener("loadeddata", done);
+      v.removeEventListener("error", onErr);
+      resolve();
+    };
+    const onErr = () => {
+      window.clearTimeout(timer);
+      v.removeEventListener("loadeddata", done);
+      reject(new Error("Failed to load video"));
+    };
+    v.addEventListener("loadeddata", done);
+    v.addEventListener("error", onErr);
+  });
+}
+
+async function seekVideo(v: HTMLVideoElement, timeSec: number): Promise<void> {
+  const dur = finiteSec(v.duration, 0);
+  let t = Number.isFinite(timeSec) ? Math.max(0, timeSec) : 0;
+  if (dur > 0) t = Math.min(t, Math.max(0, dur - 0.05));
+  if (!Number.isFinite(t)) t = 0;
+
+  if (v.readyState < HTMLMediaElement.HAVE_METADATA) {
+    await waitForVideoFrame(v);
+  }
+  if (Math.abs(v.currentTime - t) < 0.04) return;
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      v.removeEventListener("seeked", finish);
+      v.removeEventListener("error", finish);
+      resolve();
+    };
+    v.addEventListener("seeked", finish);
+    v.addEventListener("error", finish);
+    window.setTimeout(finish, 750);
+    try {
+      v.currentTime = t;
+    } catch {
+      finish();
+    }
+  });
+}
+
+async function preloadSlideSources(sources: SlideSource[]): Promise<{
+  images: Map<string, HTMLImageElement>;
+  videos: Map<string, HTMLVideoElement>;
+}> {
+  const images = new Map<string, HTMLImageElement>();
+  const videos = new Map<string, HTMLVideoElement>();
+  for (const src of sources) {
+    if (src.kind === "image") {
+      images.set(src.localId, await loadImage(src.objectUrl));
+    } else {
+      const vid = await loadVideoMeta(src.objectUrl);
+      await waitForVideoFrame(vid);
+      videos.set(src.localId, vid);
+    }
+  }
+  return { images, videos };
+}
+
 function drawCover(
   ctx: CanvasRenderingContext2D,
   source: CanvasImageSource,
@@ -141,12 +214,23 @@ export async function renderStoryVideo(
         audioEl!.onloadedmetadata = () => res();
         audioEl!.onerror = () => rej(new Error("Could not load soundtrack"));
       });
+      if (!Number.isFinite(audioEl.duration) || audioEl.duration <= 0) {
+        await new Promise<void>((res) => {
+          audioEl!.addEventListener("durationchange", () => res(), { once: true });
+          window.setTimeout(res, 500);
+        });
+      }
     }
 
-    const slideDur =
-      audioEl && audioEl.duration > 0
-        ? Math.max(2, Math.min(6, audioEl.duration / sources.length))
-        : manifest.slides[0]?.durationSec ?? 3.5;
+    const { images, videos } = await preloadSlideSources(sources);
+
+    const audioDur = audioEl ? finiteSec(audioEl.duration, 0) : 0;
+    const slideDur = finiteSec(
+      audioDur > 0
+        ? Math.max(2, Math.min(6, audioDur / sources.length))
+        : manifest.slides[0]?.durationSec ?? 3.5,
+      3.5,
+    );
     const totalSec = slideDur * sources.length;
     const fps = 24;
     const totalFrames = Math.ceil(totalSec * fps);
@@ -201,16 +285,14 @@ export async function renderStoryVideo(
         manifest.transition === "slide" ? (localT - 0.5) * w * 0.08 : Math.sin(localT * Math.PI) * 8;
 
       if (src.kind === "image") {
-        const img = await loadImage(src.objectUrl);
-        drawCover(ctx, img, img.naturalWidth, img.naturalHeight, w, h, zoom, panX, 0);
+        const img = images.get(src.localId)!;
+        drawCover(ctx, img, img.naturalWidth || w, img.naturalHeight || h, w, h, zoom, panX, 0);
       } else {
-        const vid = await loadVideoMeta(src.objectUrl);
-        const seek = Math.min(vid.duration || slideDur, localT * (vid.duration || slideDur));
-        await new Promise<void>((res) => {
-          vid.currentTime = seek;
-          vid.onseeked = () => res();
-        });
-        drawCover(ctx, vid, vid.videoWidth, vid.videoHeight, w, h, zoom, panX, 0);
+        const vid = videos.get(src.localId)!;
+        const clipDur = finiteSec(vid.duration, slideDur);
+        const seek = Math.min(clipDur * 0.99, Math.max(0, localT * clipDur));
+        await seekVideo(vid, seek);
+        drawCover(ctx, vid, vid.videoWidth || w, vid.videoHeight || h, w, h, zoom, panX, 0);
       }
 
       ctx.filter = "none";
@@ -240,6 +322,11 @@ export async function renderStoryVideo(
     recorder.stop();
     audioEl?.pause();
     if (audioEl?.src.startsWith("blob:")) URL.revokeObjectURL(audioEl.src);
+    for (const vid of videos.values()) {
+      vid.pause();
+      vid.removeAttribute("src");
+      vid.load();
+    }
     await audioCtx?.close();
 
     onProgress?.({ phase: "done", percent: 100, message: "Story ready" });
