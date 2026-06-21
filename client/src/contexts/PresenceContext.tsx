@@ -266,6 +266,7 @@ export type ChatOutboundPayload = {
   fileName?: string;
   fileMimeType?: string;
   fileSizeBytes?: number;
+  sharedMediaId?: string;
   voiceDurationSeconds?: number;
   latitude?: number;
   longitude?: number;
@@ -2169,6 +2170,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         fileUrl?: string;
         fileName?: string;
         fileMimeType?: string;
+        fileSizeBytes?: number;
+        sharedMediaId?: string;
         roomId?: string;
       }) => {
         const call = activeCallRef.current;
@@ -2184,6 +2187,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             fileUrl: data.fileUrl,
             fileName: data.fileName,
             fileMimeType: data.fileMimeType,
+            fileSizeBytes: data.fileSizeBytes,
+            sharedMediaId: data.sharedMediaId,
           };
           if (data.id && prev.some((m) => m.id === data.id)) return prev;
           const key = `${next.senderId}:${next.timestamp}:${next.message}`;
@@ -2672,6 +2677,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         fileMimeType: payload.fileMimeType,
+        fileSizeBytes: payload.fileSizeBytes,
+        sharedMediaId: payload.sharedMediaId,
       },
     ]);
     socket.emit("call-chat-message", {
@@ -2681,6 +2688,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       fileUrl: payload.fileUrl,
       fileName: payload.fileName,
       fileMimeType: payload.fileMimeType,
+      fileSizeBytes: payload.fileSizeBytes,
+      sharedMediaId: payload.sharedMediaId,
       timestamp,
     });
   }, [addNotification]);
@@ -2707,6 +2716,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         uid,
         file.name,
         onProgress,
+        {
+          callSessionId: call.roomId,
+          uploaderName: displayNameRef.current || undefined,
+        },
       );
       if (!payload) {
         addNotification("error", "Media upload failed");

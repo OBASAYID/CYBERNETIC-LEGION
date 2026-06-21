@@ -32,6 +32,40 @@ function commsUploadHeaders(userId: string, priority?: "photo" | "normal"): Head
   return headers;
 }
 
+const COMMS_CHUNK_UPLOAD_CONCURRENCY = 4;
+
+async function uploadChunksParallel(
+  file: File | Blob,
+  init: { uploadId: string; chunkSize: number; totalChunks: number },
+  total: number,
+  userId: string,
+  priority: "photo" | "normal",
+  onProgress?: (p: CommsUploadProgress) => void,
+): Promise<void> {
+  let nextIndex = 0;
+  let bytesLoaded = 0;
+
+  const worker = async () => {
+    while (nextIndex < init.totalChunks) {
+      const i = nextIndex++;
+      const start = i * init.chunkSize;
+      const end = Math.min(start + init.chunkSize, total);
+      const slice = file.slice(start, end);
+      await uploadChunkWithRetry(init.uploadId, i, slice, userId, priority);
+      bytesLoaded += end - start;
+      onProgress?.({
+        loaded: bytesLoaded,
+        total,
+        percent: Math.min(100, Math.round((bytesLoaded / total) * 100)),
+        phase: "uploading",
+      });
+    }
+  };
+
+  const workers = Math.min(COMMS_CHUNK_UPLOAD_CONCURRENCY, init.totalChunks);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+}
+
 async function uploadChunkWithRetry(
   uploadId: string,
   chunkIndex: number,
@@ -105,16 +139,15 @@ export async function uploadCommsFileChunked(
   };
 
   let loaded = 0;
-  for (let i = 0; i < init.totalChunks; i++) {
-    const start = i * init.chunkSize;
-    const end = Math.min(start + init.chunkSize, total);
-    const slice = file.slice(start, end);
-    await uploadChunkWithRetry(init.uploadId, i, slice, options.userId, priority);
-    loaded = end;
+  await uploadChunksParallel(file, init, total, options.userId, priority, (p) => {
+    loaded = p.loaded;
+    options.onProgress?.(p);
+  });
+  if (loaded < total) {
     options.onProgress?.({
-      loaded,
+      loaded: total,
       total,
-      percent: Math.min(100, Math.round((loaded / total) * 100)),
+      percent: 100,
       phase: "uploading",
     });
   }

@@ -97,6 +97,7 @@ interface EnhancedMessage {
   fileName?: string;
   fileMimeType?: string;
   fileSizeBytes?: number;
+  sharedMediaId?: string;
   /** For messageType "voice-note" */
   voiceDurationSeconds?: number;
   latitude?: number;
@@ -123,6 +124,7 @@ const recentMessageAcks = new Map<
     fileName?: string;
     fileMimeType?: string;
     fileSizeBytes?: number;
+    sharedMediaId?: string;
     voiceDurationSeconds?: number;
     latitude?: number;
     longitude?: number;
@@ -1947,6 +1949,7 @@ export function initSocketSignaling(server: HttpServer) {
             fileName: data.fileName,
             fileMimeType: data.fileMimeType,
             fileSizeBytes: data.fileSizeBytes,
+            sharedMediaId: data.sharedMediaId,
             voiceDurationSeconds: data.voiceDurationSeconds,
             latitude: data.latitude,
             longitude: data.longitude,
@@ -1987,6 +1990,7 @@ export function initSocketSignaling(server: HttpServer) {
           fileName: data.fileName,
           fileMimeType: data.fileMimeType,
           fileSizeBytes: data.fileSizeBytes,
+          sharedMediaId: data.sharedMediaId,
           voiceDurationSeconds: data.voiceDurationSeconds,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -2010,6 +2014,7 @@ export function initSocketSignaling(server: HttpServer) {
             fileName: data.fileName,
             fileMimeType: data.fileMimeType,
             fileSizeBytes: data.fileSizeBytes,
+            sharedMediaId: data.sharedMediaId,
             voiceDurationSeconds: data.voiceDurationSeconds,
             latitude: data.latitude,
             longitude: data.longitude,
@@ -2460,6 +2465,8 @@ export function initSocketSignaling(server: HttpServer) {
       fileUrl?: string;
       fileName?: string;
       fileMimeType?: string;
+      fileSizeBytes?: number;
+      sharedMediaId?: string;
     }) => {
       const userId = (socket as any).userId;
       const user = getSocketUser(socket) || findUserByCommsId(userId);
@@ -2493,6 +2500,8 @@ export function initSocketSignaling(server: HttpServer) {
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,
+        fileSizeBytes: data.fileSizeBytes,
+        sharedMediaId: data.sharedMediaId,
         timestamp: data.timestamp,
         roomId: data.roomId,
       };
@@ -2724,21 +2733,20 @@ export function initSocketSignaling(server: HttpServer) {
 
       const annotation = {
         userId,
-        displayName: user.displayName,
+        userName: user.displayName,
         type: data.annotationType,
         data: data.annotationData,
         timestamp: new Date().toISOString(),
       };
 
       try {
-        const [media] = await db.select().from(sharedMedia).where(eq(sharedMedia.mediaId, data.mediaId));
-        if (media) {
-          const annotations = (media.annotations as any[]) || [];
-          annotations.push(annotation);
-          await db.update(sharedMedia)
-            .set({ annotations })
-            .where(eq(sharedMedia.mediaId, data.mediaId));
-        }
+        const { appendSharedMediaAnnotation } = await import("./shared-media-service.js");
+        await appendSharedMediaAnnotation(data.mediaId, {
+          userId,
+          userName: user.displayName,
+          type: data.annotationType,
+          data: data.annotationData,
+        });
       } catch (err) {
         console.error("[Socket.IO] Failed to persist media annotation:", err);
       }

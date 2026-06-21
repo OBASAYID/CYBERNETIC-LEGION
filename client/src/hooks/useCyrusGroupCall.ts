@@ -297,6 +297,10 @@ export function useCyrusGroupCall({
         selfId,
         file.name,
         onProgress,
+        {
+          callSessionId: active.roomId,
+          uploaderName: displayName,
+        },
       );
       if (!payload) throw new Error("Upload failed");
       const timestamp = new Date().toISOString();
@@ -309,6 +313,8 @@ export function useCyrusGroupCall({
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         fileMimeType: payload.fileMimeType,
+        fileSizeBytes: payload.fileSizeBytes,
+        sharedMediaId: payload.sharedMediaId,
       });
       socket.emit("call-chat-message", {
         roomId: active.roomId,
@@ -317,6 +323,8 @@ export function useCyrusGroupCall({
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         fileMimeType: payload.fileMimeType,
+        fileSizeBytes: payload.fileSizeBytes,
+        sharedMediaId: payload.sharedMediaId,
         timestamp,
       });
     },
@@ -397,6 +405,8 @@ export function useCyrusGroupCall({
       fileUrl?: string;
       fileName?: string;
       fileMimeType?: string;
+      fileSizeBytes?: number;
+      sharedMediaId?: string;
       roomId?: string;
     }) => {
       const active = activeGroupCallRef.current;
@@ -411,6 +421,8 @@ export function useCyrusGroupCall({
         fileUrl: data.fileUrl,
         fileName: data.fileName,
         fileMimeType: data.fileMimeType,
+        fileSizeBytes: data.fileSizeBytes,
+        sharedMediaId: data.sharedMediaId,
       });
     };
 

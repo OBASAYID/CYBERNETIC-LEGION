@@ -20,6 +20,7 @@ export function buildPresenceSendMessagePayload(
     fileName: payload.fileName,
     fileMimeType: payload.fileMimeType,
     fileSizeBytes: payload.fileSizeBytes,
+    sharedMediaId: payload.sharedMediaId,
     voiceDurationSeconds: payload.voiceDurationSeconds,
     latitude: payload.latitude,
     longitude: payload.longitude,

@@ -45,6 +45,7 @@ import {
   initChunkUpload,
   writeUploadChunk,
 } from "./comms-chunk-upload.js";
+import { appendSharedMediaAnnotation, registerSharedMedia } from "./shared-media-service.js";
 import { serveCommsMediaWithRange } from "./comms-media-serve.js";
 import {
   avatarImageExtensionForSave,
@@ -67,7 +68,7 @@ const commsUpload = multer({
       cb(null, uniqueName);
     },
   }),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: getCommsMaxUploadBytes() },
 });
 
 const recordingUpload = multer({
@@ -2472,11 +2473,39 @@ router.get("/api/comms/shared-media", async (req: any, res) => {
   }
 });
 
+router.post("/api/comms/shared-media", async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { fileUrl, fileName, mimeType, fileSize, callSessionId, sharedWith, uploaderName } = req.body || {};
+    if (!fileUrl || !fileName) {
+      return res.status(400).json({ error: "fileUrl and fileName are required" });
+    }
+
+    const result = await registerSharedMedia({
+      uploadedBy: userId,
+      uploaderName: uploaderName || null,
+      fileUrl,
+      fileName,
+      mimeType: mimeType || null,
+      fileSize: fileSize != null ? Number(fileSize) : null,
+      callSessionId: callSessionId || null,
+      sharedWith: Array.isArray(sharedWith) ? sharedWith : [],
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error registering shared media:", error);
+    res.status(500).json({ error: "Failed to register shared media" });
+  }
+});
+
 router.post("/api/comms/shared-media/:mediaId/annotate", async (req: any, res) => {
   try {
     const { mediaId } = req.params;
     const userId = getUserId(req) || `anon_${Date.now()}`;
-    const { annotationType, annotationData, userName } = req.body;
+    const { annotationType, annotationData, userName } = req.body || {};
 
     if (!annotationType) {
       return res.status(400).json({ error: "annotationType is required" });
@@ -2487,28 +2516,17 @@ router.post("/api/comms/shared-media/:mediaId/annotate", async (req: any, res) =
       return res.status(400).json({ error: `annotationType must be one of: ${validTypes.join(", ")}` });
     }
 
-    const [media] = await db.select().from(sharedMedia)
-      .where(eq(sharedMedia.mediaId, mediaId));
-
-    if (!media) {
-      return res.status(404).json({ error: "Media not found" });
-    }
-
-    const existingAnnotations = Array.isArray(media.annotations) ? (media.annotations as any[]) : [];
-    const newAnnotation = {
+    const entry = await appendSharedMediaAnnotation(mediaId, {
       userId,
       userName: userName || null,
       type: annotationType,
-      data: annotationData || null,
-      timestamp: new Date().toISOString(),
-    };
-    const updatedAnnotations = [...existingAnnotations, newAnnotation];
+      data: annotationData,
+    });
+    if (!entry) {
+      return res.status(404).json({ error: "Media not found" });
+    }
 
-    await db.update(sharedMedia)
-      .set({ annotations: updatedAnnotations })
-      .where(eq(sharedMedia.mediaId, mediaId));
-
-    res.json({ success: true, annotation: newAnnotation, totalAnnotations: updatedAnnotations.length });
+    res.json({ success: true, annotation: entry });
   } catch (error: any) {
     console.error("Error annotating media:", error);
     res.status(500).json({ error: "Failed to annotate media" });

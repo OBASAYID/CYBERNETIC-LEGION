@@ -28,6 +28,7 @@ export type PersistedMessagePayload = {
   fileName?: string;
   fileMimeType?: string;
   fileSizeBytes?: number;
+  sharedMediaId?: string;
   voiceDurationSeconds?: number;
   latitude?: number;
   longitude?: number;
@@ -79,6 +80,7 @@ export async function persistChatMessage(input: {
     fileName?: string;
     fileMimeType?: string;
     fileSizeBytes?: number;
+    sharedMediaId?: string;
     voiceDurationSeconds?: number;
     latitude?: number;
     longitude?: number;
@@ -117,6 +119,7 @@ export async function persistChatMessage(input: {
     fileName: data.fileName,
     fileMimeType: data.fileMimeType,
     fileSizeBytes: data.fileSizeBytes,
+    sharedMediaId: data.sharedMediaId,
     voiceDurationSeconds: data.voiceDurationSeconds,
     latitude: data.latitude,
     longitude: data.longitude,

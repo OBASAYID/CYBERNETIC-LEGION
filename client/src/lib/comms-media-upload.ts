@@ -13,6 +13,7 @@ import {
   uploadCommsFileSmart,
   type CommsUploadProgress,
 } from "./comms-chunk-upload";
+import { registerCommsSharedMedia } from "./comms-shared-media";
 
 /** Shared accept string for chat + in-call media pickers */
 export const COMMS_MEDIA_FILE_ACCEPT = buildCommsMediaFileAccept();
@@ -37,6 +38,13 @@ export type CommsMediaMessagePayload = {
   fileName: string;
   fileMimeType?: string;
   fileSizeBytes?: number;
+  sharedMediaId?: string;
+};
+
+export type CommsMediaRegisterOptions = {
+  callSessionId?: string;
+  sharedWith?: string[];
+  uploaderName?: string;
 };
 
 export type CommsMediaUploadOptions = {
@@ -137,8 +145,25 @@ export async function uploadAndBuildCommsMediaPayload(
   userId: string,
   fileName?: string,
   onProgress?: (progress: CommsUploadProgress) => void,
+  register?: CommsMediaRegisterOptions,
 ): Promise<CommsMediaMessagePayload | null> {
   const uploaded = await uploadCommsMediaFile(file, { userId, fileName, onProgress });
   if (!uploaded) return null;
-  return buildCommsMediaMessagePayload(file, caption, uploaded);
+  const payload = buildCommsMediaMessagePayload(file, caption, uploaded);
+
+  if (register?.callSessionId || (register?.sharedWith && register.sharedWith.length > 0)) {
+    const record = await registerCommsSharedMedia({
+      userId,
+      uploaderName: register.uploaderName,
+      fileUrl: uploaded.fileUrl,
+      fileName: uploaded.fileName,
+      mimeType: uploaded.mimeType,
+      fileSize: uploaded.fileSize,
+      callSessionId: register.callSessionId,
+      sharedWith: register.sharedWith,
+    });
+    if (record?.mediaId) payload.sharedMediaId = record.mediaId;
+  }
+
+  return payload;
 }

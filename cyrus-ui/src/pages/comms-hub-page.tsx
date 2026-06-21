@@ -24,8 +24,8 @@ import {
   uploadAndBuildCommsMediaPayload,
   type CommsUploadProgress,
 } from "../../../client/src/lib/comms-media-upload";
-import { isCommsCad3dFile } from "../../../client/src/lib/comms-cad-formats";
-import { formatCommsFileSize } from "@shared/comms/media-formats";
+import { dmSharedMediaSessionId } from "../../../client/src/lib/comms-shared-media";
+import { CommsMediaMessageBody } from "../../../client/src/components/comms/CommsMediaMessageBody";
 
 /* ══════════════════════════════════════════════════════════════
    THEME — charcoal matte + red accent (Epic / launcher style)
@@ -85,6 +85,7 @@ interface ChatMsg {
   content: string; createdAt: string; messageType?: string;
   fileUrl?: string; fileName?: string; fileMimeType?: string;
   voiceDurationSeconds?: number; fileSizeBytes?: number;
+  sharedMediaId?: string;
 }
 
 function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { id: string; name: string } | null): ChatMsg {
@@ -118,6 +119,7 @@ function normalizeChatMsg(raw: any, myId: string, myName: string, targetUser: { 
     fileMimeType: typeof raw?.fileMimeType === "string" ? raw.fileMimeType : undefined,
     voiceDurationSeconds,
     fileSizeBytes: raw?.fileSizeBytes != null ? Number(raw.fileSizeBytes) : undefined,
+    sharedMediaId: typeof raw?.sharedMediaId === "string" ? raw.sharedMediaId : undefined,
   };
 }
 
@@ -160,74 +162,31 @@ function timeAgo(iso: string) {
   if(m<1) return "now"; if(m<60) return `${m}m`; return `${Math.floor(m/60)}h`;
 }
 
-function renderDirectChatBody(msg: ChatMsg) {
-  const mediaUrl = msg.fileUrl ? systemApiUrl(msg.fileUrl) : null;
-  const mt = msg.messageType || "text";
-  const mime = msg.fileMimeType || "";
-
-  if (mediaUrl && mt === "voice-note") {
-    return (
-      <div className="space-y-1.5">
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">Voice note</p>
-        <audio src={mediaUrl} controls className="w-full max-w-sm rounded-lg" preload="metadata" />
-        {msg.voiceDurationSeconds != null && msg.voiceDurationSeconds > 0 && (
-          <p className="text-[9px] text-white/30">{fmtDur(msg.voiceDurationSeconds)}</p>
-        )}
-      </div>
-    );
-  }
-
-  if (mediaUrl && (mt === "cad-3d" || isCommsCad3dFile(msg.fileName, mime))) {
-    return (
-      <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-[12px] underline"
-        style={{ color: "rgba(130,207,255,0.85)" }}>
-        🧊 {msg.fileName || "CAD file"}
-        {msg.content.trim() ? ` — ${msg.content}` : ""}
-      </a>
-    );
-  }
-
-  if (mediaUrl && mime.startsWith("image/")) {
-    return (
-      <div className="space-y-1.5">
-        <a href={mediaUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg">
-          <img src={mediaUrl} alt={msg.fileName || "Shared image"} className="max-h-48 w-full object-cover rounded-lg" />
-        </a>
-        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
-      </div>
-    );
-  }
-
-  if (mediaUrl && (mime.startsWith("video/") || mt === "media" && mime.startsWith("video"))) {
-    return (
-      <div className="space-y-1.5">
-        <video src={mediaUrl} controls playsInline className="w-full max-w-sm rounded-lg" preload="metadata" />
-        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
-      </div>
-    );
-  }
-
-  if (mediaUrl && mime.startsWith("audio/")) {
-    return (
-      <div className="space-y-1.5">
-        <audio src={mediaUrl} controls className="w-full max-w-sm rounded-lg" preload="metadata" />
-        {msg.content.trim() ? <p className="text-[12px] text-white/70 leading-relaxed">{msg.content}</p> : null}
-      </div>
-    );
-  }
-
-  if (mediaUrl) {
-    return (
-      <a href={mediaUrl} target="_blank" rel="noreferrer" className="text-[12px] underline"
-        style={{ color: "rgba(130,207,255,0.85)" }}>
-        📎 {msg.fileName || "Shared file"}
-        {msg.fileSizeBytes ? ` · ${formatCommsFileSize(msg.fileSizeBytes)}` : ""}
-        {msg.content.trim() ? ` — ${msg.content}` : ""}
-      </a>
-    );
-  }
-
-  return <p className="text-[12px] text-white/70 leading-relaxed">{msg.content || ""}</p>;
+function renderDirectChatBody(
+  msg: ChatMsg,
+  myId: string,
+  myName: string,
+  targetUser: { id: string; name: string } | null,
+  wsRef: MutableRefObject<{ emit: (event: string, payload: unknown) => void; connected?: boolean } | null>,
+) {
+  return (
+    <CommsMediaMessageBody
+      msg={{
+        message: msg.content,
+        messageType: msg.messageType,
+        fileUrl: msg.fileUrl,
+        fileName: msg.fileName,
+        fileMimeType: msg.fileMimeType,
+        fileSizeBytes: msg.fileSizeBytes,
+        sharedMediaId: msg.sharedMediaId,
+        voiceDurationSeconds: msg.voiceDurationSeconds,
+      }}
+      roomId={targetUser ? dmSharedMediaSessionId(myId, targetUser.id) : undefined}
+      currentUserId={myId}
+      currentUserName={myName}
+      socketRef={wsRef}
+    />
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -537,6 +496,7 @@ function ChatPanel({ myId, myName, targetUser }:
       fileMimeType?: string;
       voiceDurationSeconds?: number;
       fileSizeBytes?: number;
+      sharedMediaId?: string;
     }) => {
       if (data.senderId !== targetUser.id && data.senderId !== myId) return;
       const normalized = normalizeChatMsg(
@@ -552,6 +512,7 @@ function ChatPanel({ myId, myName, targetUser }:
           fileMimeType: data.fileMimeType,
           voiceDurationSeconds: data.voiceDurationSeconds,
           fileSizeBytes: data.fileSizeBytes,
+          sharedMediaId: data.sharedMediaId,
         },
         myId,
         myName,
@@ -578,6 +539,7 @@ function ChatPanel({ myId, myName, targetUser }:
       fileMimeType?: string;
       voiceDurationSeconds?: number;
       fileSizeBytes?: number;
+      sharedMediaId?: string;
       clientMessageId?: string;
     }) => {
       if (data.recipientId !== targetUser.id) return;
@@ -596,6 +558,7 @@ function ChatPanel({ myId, myName, targetUser }:
           fileMimeType: data.fileMimeType,
           voiceDurationSeconds: data.voiceDurationSeconds,
           fileSizeBytes: data.fileSizeBytes,
+          sharedMediaId: data.sharedMediaId,
         },
         myId,
         myName,
@@ -653,6 +616,13 @@ function ChatPanel({ myId, myName, targetUser }:
           myId,
           attachFile.name,
           setUploadProgress,
+          targetUser
+            ? {
+                callSessionId: dmSharedMediaSessionId(myId, targetUser.id),
+                sharedWith: [targetUser.id],
+                uploaderName: myName,
+              }
+            : undefined,
         );
         if (!payload) return;
         sendChatMessage(targetUser.id, payload);
@@ -769,7 +739,7 @@ function ChatPanel({ myId, myName, targetUser }:
                   <p className="text-[12px] font-bold text-white/90 truncate">{safeSenderName}</p>
                   <p className="text-[9px] text-white/30 shrink-0">{timeAgo(safeCreatedAt)}</p>
                 </div>
-                {renderDirectChatBody(msg)}
+                {renderDirectChatBody(msg, myId, myName, targetUser, wsRef)}
                 {mine && !msg.id.startsWith("opt-") && (
                   <button
                     type="button"

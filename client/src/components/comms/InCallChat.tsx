@@ -4,10 +4,9 @@ import { commsAssetUrl } from "@shared/cyrus-api-client";
 import { COMMS_MEDIA_FILE_ACCEPT, type CommsUploadProgress } from "../../lib/comms-media-upload";
 import { isCommsCad3dFile } from "../../lib/comms-cad-formats";
 import { CommsMediaDropZone } from "./CommsMediaDropZone";
-import { CommsCad3dAttachment } from "./CommsCad3dAttachment";
+import { CommsMediaMessageBody } from "./CommsMediaMessageBody";
 import { CommsUploadProgressBar } from "./CommsUploadProgress";
 import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
-import { formatCommsFileSize } from "@shared/comms/media-formats";
 
 export interface InCallChatMessage {
   id?: string;
@@ -19,6 +18,8 @@ export interface InCallChatMessage {
   fileUrl?: string;
   fileName?: string;
   fileMimeType?: string;
+  fileSizeBytes?: number;
+  sharedMediaId?: string;
 }
 
 interface InCallChatProps {
@@ -139,55 +140,17 @@ export function InCallChat({
     }
   };
 
-  const renderBody = (msg: InCallChatMessage) => {
-    const url = msg.fileUrl ? commsAssetUrl(msg.fileUrl) ?? msg.fileUrl : null;
-    const mime = msg.fileMimeType || "";
-    if (url && (msg.messageType === "cad-3d" || isCommsCad3dFile(msg.fileName, mime))) {
-      const downloadUrl = url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
-      return (
-        <CommsCad3dAttachment
-          url={url}
-          downloadUrl={downloadUrl}
-          fileName={msg.fileName}
-          mimeType={mime}
-          caption={msg.message}
-          holoSurface
-          compact
-        />
-      );
-    }
-    if (url && mime.startsWith("image/")) {
-      return (
-        <div className="space-y-1">
-          <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg">
-            <img src={url} alt={msg.fileName || "Shared image"} className="max-h-36 w-full object-cover" />
-          </a>
-          {msg.message.trim() ? <p>{msg.message}</p> : null}
-        </div>
-      );
-    }
-    if (url && (mime.startsWith("video/") || mime.startsWith("audio/"))) {
-      return (
-        <div className="space-y-1">
-          {mime.startsWith("video/") ? (
-            <video src={url} controls className="max-h-36 w-full rounded-lg bg-black/40" />
-          ) : (
-            <audio src={url} controls className="w-full" />
-          )}
-          {msg.message.trim() ? <p>{msg.message}</p> : null}
-        </div>
-      );
-    }
-    if (url) {
-      return (
-        <a href={url} target="_blank" rel="noreferrer" className="underline decoration-cyan-400/50">
-          📎 {msg.fileName || "Shared file"}
-          {msg.message.trim() ? ` — ${msg.message}` : ""}
-        </a>
-      );
-    }
-    return msg.message;
-  };
+  const renderBody = (msg: InCallChatMessage) => (
+    <CommsMediaMessageBody
+      msg={msg}
+      holoSurface
+      compact
+      roomId={roomId}
+      currentUserId={currentUserId}
+      currentUserName={currentUserName}
+      socketRef={socketRef}
+    />
+  );
 
   const canSend = Boolean((text.trim() || attachPreview) && !uploading);
 
