@@ -9,6 +9,8 @@ import { uploadCommsFileSmart } from "./comms-chunk-upload";
 import { acquireCommsUserMedia } from "./comms-call-media";
 import { parseMediaError } from "./media-permissions";
 import { getCommsDeviceId } from "./comms-device-id";
+import { startPshareLiveSfuBroadcast } from "./pshare-live-sfu";
+import type { Socket } from "socket.io-client";
 
 export type PshareLiveSession = {
   postId: string;
@@ -65,6 +67,8 @@ export class PshareMobileLiveBroadcaster {
   private stopped = false;
   private recordedMime = "video/webm";
   private userId: string;
+  private sfuStop: (() => void) | null = null;
+  private usingSfu = false;
 
   constructor(userId: string) {
     this.userId = userId;
@@ -197,13 +201,19 @@ export class PshareMobileLiveBroadcaster {
     return recorder;
   }
 
-  async goLive(caption: string, callbacks: LiveCallbacks = {}): Promise<PshareLiveSession> {
+  isUsingSfu(): boolean {
+    return this.usingSfu;
+  }
+
+  async goLive(
+    caption: string,
+    callbacks: LiveCallbacks = {},
+    opts?: { socket?: Socket | null; displayName?: string },
+  ): Promise<PshareLiveSession> {
     if (!this.previewStream) {
       this.previewStream = await this.preparePreview();
     }
     callbacks.onPreview?.(this.previewStream);
-
-    await this.setupRecordingPipeline();
 
     const res = await systemFetch("/api/comms/pshare/live/start", {
       method: "POST",
@@ -215,7 +225,6 @@ export class PshareMobileLiveBroadcaster {
       }),
     });
     if (!res.ok) {
-      this.stopSampler();
       const err = await res.json().catch(() => ({}));
       throw new Error((err as { error?: string }).error || "Failed to go live");
     }
@@ -226,6 +235,28 @@ export class PshareMobileLiveBroadcaster {
       source: "mobile_camera",
     };
     this.stopped = false;
+
+    const socket = opts?.socket;
+    const displayName = opts?.displayName?.trim() || this.userId;
+    if (socket?.connected && this.previewStream) {
+      try {
+        const sfu = await startPshareLiveSfuBroadcast({
+          socket,
+          streamId: data.streamId,
+          displayName,
+          localStream: this.previewStream,
+        });
+        if (sfu?.mode === "mediasoup") {
+          this.sfuStop = sfu.stop;
+          this.usingSfu = true;
+          return this.session;
+        }
+      } catch (e) {
+        callbacks.onError?.(e instanceof Error ? e.message : "Realtime live unavailable — using clip fallback");
+      }
+    }
+
+    await this.setupRecordingPipeline();
     this.startSegmentLoop(callbacks);
     return this.session;
   }
@@ -350,6 +381,9 @@ export class PshareMobileLiveBroadcaster {
 
   async stopLive(finalBlob?: Blob | null): Promise<void> {
     this.stopped = true;
+    this.sfuStop?.();
+    this.sfuStop = null;
+    this.usingSfu = false;
     if (this.recorder && this.recorder.state === "recording") {
       this.recorder.stop();
     }

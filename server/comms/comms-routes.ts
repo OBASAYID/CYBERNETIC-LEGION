@@ -35,6 +35,7 @@ import { groupCallIntelligenceRouter } from "./group-call-intelligence-routes.js
 import { pushCallRouter } from "./push-routes.js";
 import { getDeliveryHubStats, deleteChatMessage } from "./delivery-hub.js";
 import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
+import { getSfuStatus } from "./sfu/sfu-manager.js";
 import {
   completeChunkUpload,
   getChunkUploadSession,
@@ -1425,9 +1426,6 @@ router.get("/api/comms/status", (req, res) => {
 /** SFU runtime status (mediasoup vs star relay fallback). */
 router.get("/api/comms/sfu/status", (_req, res) => {
   try {
-    const { getSfuStatus } = require("./sfu/sfu-manager.js") as {
-      getSfuStatus: () => import("../../shared/comms/sfu-types.js").SfuStatusResponse;
-    };
     res.json(getSfuStatus());
   } catch (e: unknown) {
     res.status(500).json({ error: e instanceof Error ? e.message : "sfu status failed" });

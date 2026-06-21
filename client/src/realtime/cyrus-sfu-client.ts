@@ -52,6 +52,8 @@ export class CyrusSfuClient {
       stream: MediaStream;
       disposeMediaPipeline: () => void;
     } | null,
+    private readonly viewerOnly = false,
+    private readonly leaveLocalStreamOpen = false,
   ) {}
 
   getLocalStream(): MediaStream | null {
@@ -77,18 +79,24 @@ export class CyrusSfuClient {
     this.device = new Device();
     await this.device.load({ routerRtpCapabilities: join.rtpCapabilities as never });
 
-    if (this.preAcquired?.stream.getTracks().some((t) => t.readyState === "live")) {
-      this.localStream = this.preAcquired.stream;
-      this.disposeMediaPipeline = this.preAcquired.disposeMediaPipeline;
-    } else {
-      const acquired = await acquireCommsUserMedia(this.callType);
-      this.localStream = acquired.stream;
-      this.disposeMediaPipeline = acquired.disposeMediaPipeline;
+    if (!this.viewerOnly) {
+      if (this.preAcquired?.stream.getTracks().some((t) => t.readyState === "live")) {
+        this.localStream = this.preAcquired.stream;
+        this.disposeMediaPipeline = this.preAcquired.disposeMediaPipeline;
+      } else {
+        const acquired = await acquireCommsUserMedia(this.callType);
+        this.localStream = acquired.stream;
+        this.disposeMediaPipeline = acquired.disposeMediaPipeline;
+      }
+
+      await this.createSendTransport();
     }
 
-    await this.createSendTransport();
     await this.createRecvTransport();
-    await this.publishLocalTracks();
+
+    if (!this.viewerOnly) {
+      await this.publishLocalTracks();
+    }
     await this.consumeExistingProducers();
 
     this.socket.on("sfu-new-producer", this.onNewProducer);
@@ -251,9 +259,11 @@ export class CyrusSfuClient {
     this.socket.emit("sfu-leave", { roomId: this.roomId });
     this.sendTransport?.close();
     this.recvTransport?.close();
-    this.disposeMediaPipeline?.();
-    this.disposeMediaPipeline = null;
-    this.localStream?.getTracks().forEach((t) => t.stop());
+    if (!this.leaveLocalStreamOpen) {
+      this.disposeMediaPipeline?.();
+      this.disposeMediaPipeline = null;
+      this.localStream?.getTracks().forEach((t) => t.stop());
+    }
     this.localStream = null;
   }
 }

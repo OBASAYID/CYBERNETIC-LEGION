@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clapperboard, History, ImagePlus, Loader2, Paperclip, Radio, Send, Video, X } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { systemFetch } from "@/lib/system-api";
+import { usePresence } from "../../../../client/src/contexts/PresenceContext";
 import { CommsUploadProgressBar } from "../../../../client/src/components/comms/CommsUploadProgress";
 import { getCommsDeviceId } from "../../../../client/src/lib/comms-device-id";
 import { uploadCommsFileSmart, type CommsUploadProgress } from "../../../../client/src/lib/comms-chunk-upload";
@@ -35,11 +36,13 @@ const C = {
 
 type PshareTabPanelProps = {
   myUserId: string;
+  displayName?: string;
 };
 
-export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
+export function PshareTabPanel({ myUserId, displayName }: PshareTabPanelProps) {
   const qc = useQueryClient();
   const userRole = useUserRole();
+  const { wsRef, isConnected } = usePresence();
   const isAdmin = userRole === "admin";
   const [view, setView] = useState<PshareView>("feed");
   const [draft, setDraft] = useState("");
@@ -222,6 +225,9 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
         <div className="flex-1 overflow-y-auto py-3">
           <PshareLivePanel
             myUserId={myUserId}
+            displayName={displayName || myUserId}
+            socketRef={wsRef}
+            isSocketConnected={isConnected}
             onLiveStarted={() => {
               void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
             }}

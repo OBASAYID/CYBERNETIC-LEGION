@@ -12,7 +12,7 @@ import type { PsharePost } from "./pshare-types";
 import { PshareLiveViewerVideo } from "./pshare-live-viewer-video";
 
 type PshareMediaPreviewProps = {
-  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset" | "postKind" | "liveStatus" | "broadcastSource"> & {
+  post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset" | "postKind" | "liveStatus" | "liveStreamId" | "broadcastSource"> & {
     mediaManifest?: { polishPreset?: PsharePolishPreset; polishIntensity?: number } | null;
   };
   /** Full-width feed card vs compact command-console ticker. */
@@ -82,10 +82,11 @@ export function PshareMediaPreview({
 
   if (kind === "video" || isLive) {
     const hls = isHlsOrDashUrl(post.fileUrl);
-    if (isLive && !hls && baseUrl) {
+    if (isLive && !hls && (post.liveStreamId || baseUrl)) {
       return (
         <PshareLiveViewerVideo
-          fileUrl={baseUrl}
+          liveStreamId={post.liveStreamId}
+          fileUrl={post.fileUrl}
           broadcastSource={post.broadcastSource}
           polish={polish}
           isConsole={isConsole}

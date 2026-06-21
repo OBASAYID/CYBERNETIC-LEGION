@@ -24,11 +24,21 @@ const C = {
 
 type PshareLivePanelProps = {
   myUserId: string;
+  displayName: string;
+  socketRef: React.MutableRefObject<import("socket.io-client").Socket | null>;
+  isSocketConnected: boolean;
   onLiveStarted?: () => void;
   onLiveStopped?: () => void;
 };
 
-export function PshareLivePanel({ myUserId, onLiveStarted, onLiveStopped }: PshareLivePanelProps) {
+export function PshareLivePanel({
+  myUserId,
+  displayName,
+  socketRef,
+  isSocketConnected,
+  onLiveStarted,
+  onLiveStopped,
+}: PshareLivePanelProps) {
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
@@ -113,10 +123,14 @@ export function PshareLivePanel({ myUserId, onLiveStarted, onLiveStopped }: Psha
       setError(null);
       const broadcaster = getPshareLiveBroadcaster(myUserId);
       await ensureCamera();
-      const session = await broadcaster.goLive(caption, {
-        onPreview: attachPreview,
-        onError: (msg) => setError(msg),
-      });
+      const session = await broadcaster.goLive(
+        caption,
+        {
+          onPreview: attachPreview,
+          onError: (msg) => setError(msg),
+        },
+        { socket: socketRef.current, displayName },
+      );
       setLivePostId(session.postId);
       setIsLive(true);
       attachPreview(broadcaster.getPreviewStream()!);
@@ -214,7 +228,13 @@ export function PshareLivePanel({ myUserId, onLiveStarted, onLiveStopped }: Psha
       <div className="space-y-3 p-3">
         <p className="text-[10px] text-white/50">
           Live posts stay on Pshare until you delete them. {pshareBroadcastSourceLabel(mode === "mobile" ? "mobile_camera" : "drone")} mode.
-          {isLive ? " Stay on this tab or switch tabs — your broadcast keeps running until you end it." : null}
+          {isLive
+            ? getPshareLiveBroadcaster(myUserId).isUsingSfu()
+              ? " Viewers receive realtime video via CYRUS SFU."
+              : " Clip fallback mode — viewers may see short delays."
+            : isSocketConnected
+              ? " Realtime SFU live is available when you go live."
+              : " Connect to comms (online) for lowest-latency live video."}
         </p>
 
         {mode === "mobile" ? (

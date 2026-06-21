@@ -77,6 +77,8 @@ export function PsharePostCard({
 
   useEffect(() => {
     if (local.postKind !== "live" || local.liveStatus !== "live") return;
+    if (local.liveStreamId) return;
+
     let cancelled = false;
 
     const refreshLivePost = async () => {
