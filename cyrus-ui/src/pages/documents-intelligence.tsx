@@ -94,6 +94,12 @@ export default function DocumentsIntelligence() {
     generateDocument,
     exportDocument,
     clearResults,
+    classifyDocument,
+    generateIntelligentDocument,
+    cloneDocument,
+    respondToTender,
+    generateAnswerKey,
+    validateCompliance,
   } = useDocumentsIntelligence();
 
   const [category, setCategory] = useState("auto");
@@ -110,6 +116,13 @@ export default function DocumentsIntelligence() {
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
   const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
   const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
+  
+  // Intelligent processing state
+  const [intelligentFile, setIntelligentFile] = useState<File | null>(null);
+  const [classification, setClassification] = useState<any | null>(null);
+  const [intelligentDoc, setIntelligentDoc] = useState<any | null>(null);
+  const [isProcessingIntelligent, setIsProcessingIntelligent] = useState(false);
+  const intelligentFileInputRef = useRef<HTMLInputElement>(null);
 
   const docHintText =
     category === "auto"
@@ -139,7 +152,67 @@ export default function DocumentsIntelligence() {
     setHandoffStagedFile(null);
     setHandoffEncoded(undefined);
     setHandoffLargeRefs([]);
+    setIntelligentFile(null);
+    setClassification(null);
+    setIntelligentDoc(null);
     clearResults();
+  };
+
+  // Intelligent processing handlers
+  const handleClassifyDocument = async () => {
+    if (!intelligentFile) return;
+    setIsProcessingIntelligent(true);
+    try {
+      const result = await classifyDocument(intelligentFile);
+      setClassification(result);
+      toast({
+        title: "Document Classified",
+        description: `Type: ${result.category} (${(result.confidence * 100).toFixed(0)}% confidence)`,
+      });
+    } catch (err) {
+      // Error handled in hook
+    } finally {
+      setIsProcessingIntelligent(false);
+    }
+  };
+
+  const handleRespondToTender = async () => {
+    if (!intelligentFile) return;
+    setIsProcessingIntelligent(true);
+    try {
+      const result = await respondToTender(intelligentFile);
+      setIntelligentDoc(result);
+    } catch (err) {
+      // Error handled in hook
+    } finally {
+      setIsProcessingIntelligent(false);
+    }
+  };
+
+  const handleGenerateAnswers = async () => {
+    if (!intelligentFile) return;
+    setIsProcessingIntelligent(true);
+    try {
+      const result = await generateAnswerKey(intelligentFile);
+      setIntelligentDoc(result);
+    } catch (err) {
+      // Error handled in hook
+    } finally {
+      setIsProcessingIntelligent(false);
+    }
+  };
+
+  const handleCloneDocument = async (cloneType: "exact" | "template" | "answer-filled") => {
+    if (!intelligentFile) return;
+    setIsProcessingIntelligent(true);
+    try {
+      const result = await cloneDocument(intelligentFile, cloneType);
+      setIntelligentDoc(result);
+    } catch (err) {
+      // Error handled in hook
+    } finally {
+      setIsProcessingIntelligent(false);
+    }
   };
 
   useEffect(() => {
@@ -452,6 +525,121 @@ export default function DocumentsIntelligence() {
               </div>
             </section>
 
+            {/* INTELLIGENT DOCUMENT PROCESSING */}
+            <section className="shrink-0 rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-900/30 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
+              <h2
+                className="mb-3 flex items-center gap-2.5 text-base font-semibold text-emerald-100 sm:text-lg"
+                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                <Sparkles className="h-5 w-5 text-emerald-400" />
+                Intelligent Document Processing
+              </h2>
+              <p className="mb-3 text-sm text-emerald-200/70">
+                AI-powered classification, tender responses, exam answer generation, and document cloning
+              </p>
+
+              <div className="rounded-xl border border-dashed border-emerald-400/25 bg-slate-950/45 p-4">
+                <p className="mb-2 text-xs font-mono uppercase tracking-widest text-emerald-200/85">Upload for intelligent processing</p>
+                <input
+                  ref={intelligentFileInputRef}
+                  type="file"
+                  className="sr-only"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setIntelligentFile(f);
+                      setClassification(null);
+                      setIntelligentDoc(null);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-full border border-emerald-500/40 bg-emerald-500/15 px-4 text-base text-emerald-50 hover:bg-emerald-500/25"
+                  onClick={() => intelligentFileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-5 w-5" />
+                  Upload document
+                </Button>
+                {intelligentFile && (
+                  <p className="mt-2 text-sm text-emerald-100/75">
+                    <FileText className="mr-1.5 inline h-4 w-4" />
+                    {intelligentFile.name} · {(intelligentFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                )}
+              </div>
+
+              {intelligentFile && (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/40 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                    disabled={isProcessingIntelligent}
+                    onClick={handleClassifyDocument}
+                  >
+                    <Brain className="mr-1.5 h-4 w-4" />
+                    Classify
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/40 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                    disabled={isProcessingIntelligent}
+                    onClick={handleRespondToTender}
+                  >
+                    <Gavel className="mr-1.5 h-4 w-4" />
+                    Respond (Tender)
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/40 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                    disabled={isProcessingIntelligent}
+                    onClick={handleGenerateAnswers}
+                  >
+                    <Scroll className="mr-1.5 h-4 w-4" />
+                    Generate Answers
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/40 text-sm text-emerald-200 hover:bg-emerald-500/10"
+                    disabled={isProcessingIntelligent}
+                    onClick={() => handleCloneDocument("template")}
+                  >
+                    <FileText className="mr-1.5 h-4 w-4" />
+                    Clone Template
+                  </Button>
+                </div>
+              )}
+
+              {classification && (
+                <div className="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-950/40 p-3">
+                  <p className="text-sm font-semibold text-emerald-100">
+                    Classification: <span className="text-emerald-300">{classification.category}</span>
+                  </p>
+                  <p className="text-xs text-emerald-200/70">
+                    Confidence: {(classification.confidence * 100).toFixed(0)}%
+                    {classification.requiresResponse && (
+                      <span className="ml-2 text-emerald-400">• Requires {classification.responseType}</span>
+                    )}
+                  </p>
+                  {classification.characteristics && classification.characteristics.length > 0 && (
+                    <p className="mt-1 text-xs text-emerald-300/60">
+                      {classification.characteristics.join(" • ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+
             <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
               <h2
                 className="mb-2 flex items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg"
@@ -590,6 +778,48 @@ export default function DocumentsIntelligence() {
             </div>
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+              {/* Intelligent Document Output */}
+              {intelligentDoc && (
+                <section className="rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-950/50 to-slate-950/70 p-3.5 sm:p-4">
+                  <h3
+                    className="mb-2 flex items-center gap-2.5 text-base font-bold text-emerald-100"
+                    style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                  >
+                    <Sparkles className="h-5 w-5 text-emerald-400" />
+                    Intelligent Document Generated
+                  </h3>
+                  <p className="mb-2 text-sm text-emerald-200/90">{intelligentDoc.title}</p>
+                  <div className="mb-2 flex flex-wrap gap-2 text-xs text-emerald-300/70">
+                    <span>Category: {intelligentDoc.category}</span>
+                    <span>•</span>
+                    <span>Words: {intelligentDoc.metadata?.wordCount || 0}</span>
+                    <span>•</span>
+                    <span>Pages: {intelligentDoc.metadata?.pageCount || 0}</span>
+                    <span>•</span>
+                    <span>Quality: {((intelligentDoc.metadata?.qualityScore || 0) * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto rounded-lg border border-emerald-400/20 bg-black/30 p-2.5 sm:p-3">
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-emerald-100/90">
+                      {intelligentDoc.content.slice(0, 50000)}
+                    </pre>
+                  </div>
+                  {intelligentDoc.metadata?.complianceChecks && intelligentDoc.metadata.complianceChecks.length > 0 && (
+                    <p className="mt-2 text-xs text-emerald-300/70">
+                      Compliance: {intelligentDoc.metadata.complianceChecks.join(" • ")}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3 text-sm"
+                    onClick={() => downloadText(`${intelligentDoc.title || "intelligent-doc"}.md`, intelligentDoc.content)}
+                  >
+                    Download Document
+                  </Button>
+                </section>
+              )}
+
               {syncReport && (
                 <section className="rounded-xl border border-sky-300/28 bg-slate-950/55 p-3.5 sm:p-4">
                   <h3
@@ -741,11 +971,12 @@ export default function DocumentsIntelligence() {
                 job?.status !== "failed" &&
                 (!job || ["completed", "failed"].includes(job.status)) &&
                 !job?.result?.analysis && (
-                  <div className="flex min-h-[6.5rem] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/12 px-3 py-5 text-center text-sm leading-relaxed text-white/60">
-                    <FileText className="h-9 w-9 opacity-40" />
-                    <p>
-                      Upload a document in <span className="text-cyan-200/85">Document analysis and examination</span> or
-                      generate output on the left. Results will appear in this console.
+                  <div className="flex min-h-[8rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-400/20 bg-emerald-950/20 px-3 py-6 text-center text-sm leading-relaxed text-emerald-100/70">
+                    <Sparkles className="h-10 w-10 text-emerald-400/50" />
+                    <p className="font-semibold text-emerald-200">AI-Powered Document Intelligence</p>
+                    <p className="max-w-md text-emerald-300/60">
+                      Upload a document or generate content in the <span className="text-emerald-200/90">left console</span>. 
+                      Intelligent analysis and professional documents will appear here with ML-enhanced processing.
                     </p>
                   </div>
                 )}

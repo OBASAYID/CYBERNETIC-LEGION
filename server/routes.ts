@@ -887,6 +887,14 @@ export async function registerRoutes(
   }
 
   try {
+    const { intelligenceRouter } = await import("./ingestion/doc-intelligence-routes.js");
+    app.use(intelligenceRouter);
+    console.log("[Routes] Document intelligence API loaded");
+  } catch (e) {
+    console.warn("[Routes] document intelligence routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
     const { visionRouter } = await import("./scan/vision-routes.js");
     app.use(visionRouter);
   } catch (e) {

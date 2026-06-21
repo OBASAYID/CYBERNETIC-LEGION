@@ -4,6 +4,73 @@ import { parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { useToast } from "@/hooks/use-toast";
 import { systemFetch } from "@/lib/system-api";
 
+// =====================================
+// Enhanced Types for Intelligent System
+// =====================================
+
+export type DocumentCategory = 
+  | "tender"
+  | "examination"
+  | "quiz"
+  | "job_requirement"
+  | "administrative"
+  | "legal"
+  | "technical"
+  | "correspondence"
+  | "report"
+  | "proposal"
+  | "contract"
+  | "policy"
+  | "research"
+  | "unknown";
+
+export interface DocumentClassification {
+  category: DocumentCategory;
+  confidence: number;
+  subcategory?: string;
+  characteristics: string[];
+  requiresResponse: boolean;
+  responseType?: "comply" | "answer" | "clone" | "analyze";
+}
+
+export interface IntelligentDocument {
+  content: string;
+  htmlContent?: string;
+  title: string;
+  category: DocumentCategory;
+  format: string;
+  sections: Array<{ title: string; content: string; type?: string }>;
+  metadata: {
+    generatedAt: string;
+    wordCount: number;
+    pageCount: number;
+    confidence: number;
+    complianceChecks: string[];
+    qualityScore: number;
+  };
+  attachments?: Array<{
+    id: string;
+    type: "table" | "chart" | "image" | "calculation";
+    content: string;
+    description: string;
+  }>;
+}
+
+export interface FormatCompliance {
+  overallScore: number;
+  checks: Array<{
+    rule: string;
+    passed: boolean;
+    severity: "error" | "warning" | "info";
+    message: string;
+    suggestion?: string;
+  }>;
+  grammarScore: number;
+  professionalismScore: number;
+  structureScore: number;
+  recommendations: string[];
+}
+
 /** Aligns with `server/ingestion/report.ts` `AnalysisReport`. */
 export type SyncAnalysisReport = {
   success: boolean;
@@ -244,6 +311,156 @@ export function useDocumentsIntelligence() {
     setCurrentFile(file);
   }, []);
 
+  // =====================================
+  // Intelligent Document Functions
+  // =====================================
+
+  const classifyDocument = useCallback(
+    async (file: File) => {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        
+        const res = await systemFetch("/api/documents/classify", { method: "POST", body: form });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Classification failed");
+        
+        return data.classification as DocumentClassification;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Classification failed";
+        toast({ title: "Classification Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
+  const generateIntelligentDocument = useCallback(
+    async (options: {
+      sourceFile?: File;
+      sourceText?: string;
+      documentType: DocumentCategory;
+      requirements?: string[];
+      format?: "formal" | "technical" | "executive" | "academic";
+      targetLength?: "brief" | "standard" | "comprehensive";
+      includeAnswers?: boolean;
+    }) => {
+      try {
+        const form = new FormData();
+        if (options.sourceFile) form.append("sourceFile", options.sourceFile);
+        if (options.sourceText) form.append("sourceDocument", options.sourceText);
+        form.append("documentType", options.documentType);
+        if (options.requirements) form.append("requirements", JSON.stringify(options.requirements));
+        if (options.format) form.append("format", options.format);
+        if (options.targetLength) form.append("targetLength", options.targetLength);
+        if (options.includeAnswers !== undefined) form.append("includeAnswers", String(options.includeAnswers));
+        
+        const res = await systemFetch("/api/documents/generate-intelligent", { method: "POST", body: form });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Generation failed");
+        
+        toast({ title: "Document Generated", description: "Intelligent document ready" });
+        return data.document as IntelligentDocument;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Generation failed";
+        toast({ title: "Generation Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
+  const cloneDocument = useCallback(
+    async (file: File, cloneType: "exact" | "template" | "answer-filled") => {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("cloneType", cloneType);
+        
+        const res = await systemFetch("/api/documents/clone", { method: "POST", body: form });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Cloning failed");
+        
+        toast({ title: "Document Cloned", description: "Document cloned successfully" });
+        return data.document as IntelligentDocument;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Cloning failed";
+        toast({ title: "Cloning Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
+  const respondToTender = useCallback(
+    async (file: File) => {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        
+        const res = await systemFetch("/api/documents/respond-tender", { method: "POST", body: form });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Tender response failed");
+        
+        toast({ title: "Tender Response Generated", description: "Compliant response ready for download" });
+        return data.tenderResponse as IntelligentDocument;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Tender response failed";
+        toast({ title: "Tender Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
+  const generateAnswerKey = useCallback(
+    async (file: File) => {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        
+        const res = await systemFetch("/api/documents/generate-answers", { method: "POST", body: form });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Answer generation failed");
+        
+        toast({ title: "Answer Key Generated", description: "Comprehensive answers ready" });
+        return data.answerKey as IntelligentDocument;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Answer generation failed";
+        toast({ title: "Answer Generation Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
+  const validateCompliance = useCallback(
+    async (content: string, category: DocumentCategory) => {
+      try {
+        const res = await systemFetch("/api/documents/validate-compliance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, category }),
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || "Validation failed");
+        
+        return data.compliance as FormatCompliance;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Validation failed";
+        toast({ title: "Validation Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [toast]
+  );
+
   return {
     intel,
     setIntel,
@@ -257,5 +474,12 @@ export function useDocumentsIntelligence() {
     generateDocument,
     exportDocument,
     clearResults,
+    // Intelligent document functions
+    classifyDocument,
+    generateIntelligentDocument,
+    cloneDocument,
+    respondToTender,
+    generateAnswerKey,
+    validateCompliance,
   };
 }
