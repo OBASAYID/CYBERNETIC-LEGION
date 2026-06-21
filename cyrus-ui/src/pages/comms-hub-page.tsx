@@ -26,6 +26,9 @@ import {
 } from "../../../client/src/lib/comms-media-upload";
 import { dmSharedMediaSessionId } from "../../../client/src/lib/comms-shared-media";
 import { CommsMediaMessageBody } from "../../../client/src/components/comms/CommsMediaMessageBody";
+import { CommsMediaDropZone } from "../../../client/src/components/comms/CommsMediaDropZone";
+import { CommsUploadProgressBar } from "../../../client/src/components/comms/CommsUploadProgress";
+import { useCommsMediaPaste } from "../../../client/src/hooks/useCommsMediaPaste";
 
 /* ══════════════════════════════════════════════════════════════
    THEME — charcoal matte + red accent (Epic / launcher style)
@@ -667,6 +670,13 @@ function ChatPanel({ myId, myName, targetUser }:
     if (file) setAttachFile(file);
   };
 
+  const queueAttachment = useCallback((file: File) => {
+    if (uploading) return;
+    setAttachFile(file);
+  }, [uploading]);
+
+  useCommsMediaPaste(queueAttachment, Boolean(targetUser) && !uploading);
+
   if (!targetUser) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 opacity-40">
       <div className="h-14 w-14 flex items-center justify-center rounded-2xl"
@@ -678,7 +688,11 @@ function ChatPanel({ myId, myName, targetUser }:
   );
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <CommsMediaDropZone
+      enabled={!uploading}
+      onFile={queueAttachment}
+      className="flex flex-1 flex-col overflow-hidden"
+    >
       {/* Chat header — Activity panel style: bold "name" header */}
       <div className="flex items-center gap-3 px-5 py-3.5 shrink-0"
         style={{ borderBottom:`1px solid ${C.border}` }}>
@@ -778,9 +792,10 @@ function ChatPanel({ myId, myName, targetUser }:
           </div>
         )}
         {uploadProgress && uploading && (
-          <p className="text-[10px] text-white/35 font-mono">
-            Uploading… {uploadProgress.percent}%
-          </p>
+          <CommsUploadProgressBar
+            fileName={attachFile?.name}
+            progress={uploadProgress}
+          />
         )}
         <div className="flex items-center gap-2.5">
           <input ref={fileRef} type="file" accept={COMMS_MEDIA_FILE_ACCEPT} className="hidden" onChange={handleFilePick} />
@@ -808,7 +823,7 @@ function ChatPanel({ myId, myName, targetUser }:
           </button>
         </div>
       </div>
-    </div>
+    </CommsMediaDropZone>
   );
 }
 
