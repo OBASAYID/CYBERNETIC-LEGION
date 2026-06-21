@@ -356,3 +356,10 @@ export function sfuLeaveRoom(roomId: string, userId: string, socketId?: string) 
 export function resolveGroupSfuMode(): CyrusSfuMode {
   return sfuMode === "mediasoup" ? "mediasoup" : "star";
 }
+
+/** 1:1 calls: audio stays P2P; video uses mediasoup SFU when the worker is online. */
+export function resolveOneToOneCallMediaMode(callType: "audio" | "video"): "p2p" | "mediasoup" {
+  if (callType !== "video") return "p2p";
+  if (process.env.CYRUS_P2P_VIDEO_SFU === "false") return "p2p";
+  return sfuMode === "mediasoup" ? "mediasoup" : "p2p";
+}

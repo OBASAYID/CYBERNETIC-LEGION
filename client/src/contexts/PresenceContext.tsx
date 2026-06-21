@@ -24,6 +24,11 @@ import {
   tuneCommsPeerConnection,
   type CommsAcquiredMedia,
 } from "../lib/comms-call-media";
+import {
+  parseSignaledMediaMode,
+  resolveClientOneToOneMediaMode,
+  startOneToOneSfuSession,
+} from "../lib/comms-one-to-one-sfu";
 import { AudioProcessor } from "../lib/webrtc-config";
 import type { CallSessionStatus } from "@shared/calls/call-session-types";
 import { assertCallTransition } from "@shared/calls/call-fsm";
@@ -242,6 +247,8 @@ export interface ActiveCallState {
   isInitiator: boolean;
   /** Single source of truth for call UI + WebRTC lifecycle */
   status: CallSessionStatus;
+  /** p2p for audio; video uses mediasoup SFU when server worker is online */
+  mediaMode?: "p2p" | "mediasoup";
 }
 
 export interface MediaCallControls {
@@ -425,6 +432,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const webrtcSetupInFlightRef = useRef<string | null>(null);
   /** Single-flight promise per room — dedupes rehydrate/re-register setup storms. */
   const webrtcSetupPromiseByRoomRef = useRef<Map<string, Promise<void>>>(new Map());
+  const oneToOneSfuStopRef = useRef<(() => void) | null>(null);
   const remoteTrackWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTrackSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abrControllerRef = useRef<AdaptiveBitrateController | null>(null);
@@ -626,6 +634,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     webrtcSetupRoomRef.current = null;
     webrtcSetupInFlightRef.current = null;
     webrtcSetupPromiseByRoomRef.current.clear();
+    oneToOneSfuStopRef.current?.();
+    oneToOneSfuStopRef.current = null;
     if (abrControllerRef.current) {
       abrControllerRef.current.stop();
       abrControllerRef.current = null;
@@ -772,6 +782,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       isInitiator: boolean,
       socket: Socket,
       targetPeerId?: string,
+      mediaModeHint?: "p2p" | "mediasoup",
     ) => {
       const setupPromiseByRoom = webrtcSetupPromiseByRoomRef.current;
       const existingSetup = setupPromiseByRoom.get(roomId);
@@ -789,6 +800,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       }
 
       const healthyPc = peerConnectionRef.current;
+      if (webrtcSetupRoomRef.current === roomId && oneToOneSfuStopRef.current) {
+        // #region agent log
+        cyrusDebugLog({
+          location: "PresenceContext.tsx:setupWebRTCMedia",
+          message: "setup skipped duplicate",
+          hypothesisId: "H1",
+          data: { roomId, isInitiator, reason: "healthy_sfu" },
+        });
+        // #endregion
+        console.log("[WebRTC-Presence] setupWebRTCMedia reusing healthy SFU session for", roomId);
+        return;
+      }
       if (
         webrtcSetupRoomRef.current === roomId &&
         healthyPc &&
@@ -918,6 +941,81 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
         pendingCandidatesRef.current = [];
       };
+
+      const resolvedMediaMode = parseSignaledMediaMode(
+        callType,
+        mediaModeHint ?? activeCallRef.current?.mediaMode,
+      );
+
+      if (resolvedMediaMode === "mediasoup" && callType === "video") {
+        const selfId = currentUserIdRef.current;
+        if (selfId) {
+          let preAcquired: CommsAcquiredMedia | null = null;
+          const primed = primedCallMediaRef.current;
+          if (
+            primed &&
+            primed.callType === callType &&
+            primed.stream.getTracks().some((t) => t.readyState === "live")
+          ) {
+            primedCallMediaRef.current = null;
+            preAcquired = primed;
+          }
+
+          const sfuSession = await startOneToOneSfuSession({
+            socket,
+            roomId,
+            displayName: displayNameRef.current,
+            callType,
+            selfId,
+            preAcquired,
+            onRemoteStream: (stream) => {
+              if (!alive()) return;
+              const playback = publishRemotePlayback(stream, localStreamRef.current);
+              const out = playback ?? stream;
+              remoteStreamRef.current = out;
+              setRemoteStream(new MediaStream(out.getTracks()));
+              if (stream.getAudioTracks().length) {
+                void resumeCyrusAudioPipeline();
+              }
+              promoteMediaConnected();
+            },
+          });
+
+          if (sfuSession && alive()) {
+            oneToOneSfuStopRef.current = sfuSession.stop;
+            const stream = sfuSession.localStream;
+            stream.getAudioTracks().forEach((t) => {
+              t.enabled = true;
+            });
+            stream.getVideoTracks().forEach((t) => {
+              t.enabled = true;
+            });
+            setMediaControls({
+              isMuted: false,
+              isVideoEnabled: stream.getVideoTracks().length > 0,
+            });
+            localStreamRef.current = stream;
+            setLocalStream(stream);
+            setActiveCall((prev) =>
+              prev && prev.roomId === roomId
+                ? {
+                    ...prev,
+                    mediaMode: "mediasoup",
+                    status: assertCallTransition(prev.status, "negotiating"),
+                  }
+                : prev,
+            );
+            addNotification("info", "Video routed via SFU relay for reliability.");
+            promoteMediaConnected();
+            return;
+          }
+
+          if (preAcquired) {
+            primedCallMediaRef.current = { ...preAcquired, callType };
+          }
+          console.warn("[WebRTC-Presence] SFU session unavailable — falling back to P2P");
+        }
+      }
 
       try {
         iceRestartAttemptsRef.current = 0;
@@ -1843,13 +1941,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       console.log("[Presence] Call timeout set to 90 seconds (allows time for permissions)");
     });
 
-    socket.on('call-accepted', (data: { roomId: string; peerName: string; peerId: string; callType?: "audio" | "video" }) => {
+    socket.on('call-accepted', (data: { roomId: string; peerName: string; peerId: string; callType?: "audio" | "video"; sfuMode?: string }) => {
       console.log("[Presence] Call accepted by:", data.peerName, "type:", data.callType);
       if (callTimeoutRef.current) {
         clearTimeout(callTimeoutRef.current);
         callTimeoutRef.current = null;
       }
       const callType = data.callType || activeCallRef.current?.callType || "audio";
+      const mediaMode = parseSignaledMediaMode(callType, data.sfuMode);
       const nextCall: ActiveCallState = {
         roomId: data.roomId,
         peerName: data.peerName,
@@ -1857,6 +1956,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         callType,
         isInitiator: true,
         status: "connecting",
+        mediaMode,
       };
       setActiveCall((prev) => (prev ? { ...prev, ...nextCall } : nextCall));
       activeCallRef.current = nextCall;
@@ -1866,7 +1966,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       addNotification("success", `Connecting to ${data.peerName}…`);
       
       // CRITICAL FIX: Properly handle setupWebRTCMedia errors
-      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId).catch((err) => {
+      setupWebRTCMedia(data.roomId, callType, true, socket, data.peerId, mediaMode).catch((err) => {
         console.error("[Presence] WebRTC setup failed:", err);
         addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
         setActiveCall(null);
@@ -1875,27 +1975,30 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video" }) => {
+    socket.on('call-connected', (data: { roomId: string; peerName: string; peerId: string; isInitiator?: boolean; callType?: "audio" | "video"; sfuMode?: string }) => {
       console.log("[Presence] Call connected:", data.peerName, "type:", data.callType);
       // Skip if acceptCall() already started WebRTC for this room. The guard
       // must cover the whole setup window (not just after PC is created) so we
       // check webrtcSetupRoomRef which is set at the very start of setupWebRTCMedia.
       if (
         webrtcSetupRoomRef.current === data.roomId ||
-        webrtcSetupInFlightRef.current === data.roomId
+        webrtcSetupInFlightRef.current === data.roomId ||
+        oneToOneSfuStopRef.current
       ) {
         console.log("[Presence] call-connected: WebRTC already being set up via acceptCall — skip");
         return;
       }
       if (
-        peerConnectionRef.current &&
-        activeCallRef.current?.roomId === data.roomId &&
-        peerConnectionRef.current.connectionState !== "closed"
+        (peerConnectionRef.current &&
+          activeCallRef.current?.roomId === data.roomId &&
+          peerConnectionRef.current.connectionState !== "closed") ||
+        (activeCallRef.current?.roomId === data.roomId && activeCallRef.current.mediaMode === "mediasoup")
       ) {
         console.log("[Presence] call-connected: WebRTC session already active");
         return;
       }
       const callType = data.callType || "audio";
+      const mediaMode = parseSignaledMediaMode(callType, data.sfuMode);
       socket.emit("join-call-room", { roomId: data.roomId });
       setCallChatMessages([]);
       const nextCall: ActiveCallState = {
@@ -1905,6 +2008,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         callType,
         isInitiator: data.isInitiator || false,
         status: "connecting",
+        mediaMode,
       };
       setActiveCall(nextCall);
       activeCallRef.current = nextCall;
@@ -1912,7 +2016,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       incomingCallRef.current = null;
       addNotification("success", `Connecting to ${data.peerName}…`);
       
-      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId).catch((err) => {
+      setupWebRTCMedia(data.roomId, callType, false, socket, data.peerId, mediaMode).catch((err) => {
         console.error("[Presence] WebRTC setup failed:", err);
         addNotification("error", `Call setup failed: ${err.message || "Unknown error"}`);
         setActiveCall(null);
@@ -1979,8 +2083,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         peerName?: string;
         isInitiator?: boolean;
         needsMediaRecovery?: boolean;
+        sfuMode?: string;
       }) => {
         if (!data?.roomId) return;
+        const mediaMode = parseSignaledMediaMode(
+          data.callType || "audio",
+          data.sfuMode,
+        );
         const restored: typeof activeCallRef.current = {
           roomId: data.roomId,
           peerName: data.peerName || "Participant",
@@ -1988,6 +2097,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           callType: data.callType || "audio",
           isInitiator: Boolean(data.isInitiator),
           status: data.needsMediaRecovery ? "reconnecting" : "connecting",
+          mediaMode,
         };
         activeCallRef.current = restored;
         setActiveCall(restored);
@@ -1997,7 +2107,10 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           pc &&
           pc.connectionState !== "closed" &&
           pc.connectionState !== "failed";
-        if (pcHealthy && restored.roomId === data.roomId) {
+        if (
+          (pcHealthy || oneToOneSfuStopRef.current) &&
+          restored.roomId === data.roomId
+        ) {
           console.log("[Presence] call-state-rehydrate: media path still active — skip setup");
           return;
         }
@@ -2008,6 +2121,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             Boolean(data.isInitiator),
             socket,
             data.peerId || undefined,
+            mediaMode,
           ).catch((err) => {
             console.error("[Presence] Rehydrate media recovery failed:", err);
             addNotification("error", "Could not restore call media. Try rejoining the call.");
@@ -2238,6 +2352,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
 
     console.log("[Presence] Emitting accept-call for room:", call.roomId);
+    const mediaMode = await resolveClientOneToOneMediaMode(call.callType);
     setActiveCall({
       roomId: call.roomId,
       peerName: call.callerName,
@@ -2245,6 +2360,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       callType: call.callType,
       isInitiator: false,
       status: "connecting",
+      mediaMode,
     });
     activeCallRef.current = {
       roomId: call.roomId,
@@ -2253,6 +2369,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       callType: call.callType,
       isInitiator: false,
       status: "connecting",
+      mediaMode,
     };
     socketRef.current.emit('accept-call', {
       roomId: call.roomId,
@@ -2266,7 +2383,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     addNotification("success", `Connecting to ${call.callerName}...`);
 
     const sock = socketRef.current;
-    void setupWebRTCMedia(call.roomId, call.callType, false, sock, call.callerId).catch((err) => {
+    void setupWebRTCMedia(call.roomId, call.callType, false, sock, call.callerId, mediaMode).catch((err) => {
       console.error("[Presence] Callee WebRTC setup failed:", err);
       addNotification("error", `Call setup failed: ${err instanceof Error ? err.message : "Unknown error"}`);
     });
@@ -2393,6 +2510,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     const ms = remoteStreamRef.current;
     if (ms?.getTracks().length) {
       setRemoteStream(new MediaStream(ms.getTracks()));
+    }
+    if (peerConnectionRef.current && activeCallRef.current) {
+      await renegotiateCallMediaRef.current?.();
     }
     addNotification(
       "info",

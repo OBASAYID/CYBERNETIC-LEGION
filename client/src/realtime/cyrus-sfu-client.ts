@@ -48,6 +48,10 @@ export class CyrusSfuClient {
     private readonly displayName: string,
     private readonly callType: "audio" | "video",
     private readonly onRemote: (remote: SfuRemoteTrack) => void,
+    private readonly preAcquired?: {
+      stream: MediaStream;
+      disposeMediaPipeline: () => void;
+    } | null,
   ) {}
 
   getLocalStream(): MediaStream | null {
@@ -73,9 +77,14 @@ export class CyrusSfuClient {
     this.device = new Device();
     await this.device.load({ routerRtpCapabilities: join.rtpCapabilities as never });
 
-    const acquired = await acquireCommsUserMedia(this.callType);
-    this.localStream = acquired.stream;
-    this.disposeMediaPipeline = acquired.disposeMediaPipeline;
+    if (this.preAcquired?.stream.getTracks().some((t) => t.readyState === "live")) {
+      this.localStream = this.preAcquired.stream;
+      this.disposeMediaPipeline = this.preAcquired.disposeMediaPipeline;
+    } else {
+      const acquired = await acquireCommsUserMedia(this.callType);
+      this.localStream = acquired.stream;
+      this.disposeMediaPipeline = acquired.disposeMediaPipeline;
+    }
 
     await this.createSendTransport();
     await this.createRecvTransport();

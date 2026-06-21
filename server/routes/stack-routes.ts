@@ -7,7 +7,7 @@ import { getCyrusCommWebRtcConfigResponse } from "../comms/cyrus-comm-config.js"
 import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 import { getMcpIntegrationStatus } from "../mcp/mcp-registry.js";
 import { checkAllMcpHealth } from "../mcp/mcp-health.js";
-import { handleDebugSessionLogPost } from "../../shared/cyrus-debug-session-log.js";
+import { handleDebugSessionLogPost } from "../../shared/cyrus-debug-session-log.server.js";
 
 const router = Router();
 

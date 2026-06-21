@@ -1,11 +1,11 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { createCyrusCorsOriginAccess } from "../cors-trusted.js";
-import { resolveGroupSfuMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
+import { resolveGroupSfuMode, resolveOneToOneCallMediaMode, sfuLeaveRoom } from "./sfu/sfu-manager.js";
 import { registerSfuSocketHandlers } from "./sfu/register-sfu-handlers.js";
 import { sendIncomingCallPush } from "./push-call-service.js";
 import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
-import { cyrusDebugLogAwait } from "../../shared/cyrus-debug-session-log.js";
+import { cyrusDebugLogAwait } from "../../shared/cyrus-debug-session-log.server.js";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
 import { eq, ilike, sql } from "drizzle-orm";
@@ -1241,6 +1241,7 @@ export function initSocketSignaling(server: HttpServer) {
           peerId,
           peerName: peer?.displayName || "Participant",
           isInitiator: rehydrateCall.hostPeerId === commsUserId,
+          sfuMode: rehydrateCall.sfuMode ?? resolveOneToOneCallMediaMode(rehydrateCall.callType),
           needsMediaRecovery: true,
         });
       }
@@ -1417,7 +1418,7 @@ export function initSocketSignaling(server: HttpServer) {
         callType: pendingCall.callType,
         startedAt: new Date(),
         hostPeerId: pendingCall.callerId,
-        sfuMode: "p2p",
+        sfuMode: resolveOneToOneCallMediaMode(pendingCall.callType),
       };
       await saveActiveCall(data.roomId, activeCall);
 
@@ -1472,12 +1473,14 @@ export function initSocketSignaling(server: HttpServer) {
 
       const callType = pendingCall.callType;
       runtimeMetrics.callSetupSucceeded += 1;
+      const oneToOneMediaMode = activeCall.sfuMode ?? resolveOneToOneCallMediaMode(callType);
 
       await emitUserEventByCommsId(io, pendingCall.callerId, "call-accepted", {
         roomId: data.roomId,
         peerName: user.displayName,
         peerId: userId,
         callType,
+        sfuMode: oneToOneMediaMode,
       });
 
       const connectedEvt = await appendCommsUserEvent(userId, "call-connected", {
@@ -1486,6 +1489,7 @@ export function initSocketSignaling(server: HttpServer) {
         peerId: caller.id,
         isInitiator: false,
         callType,
+        sfuMode: oneToOneMediaMode,
       });
       socket.emit("call-connected", {
         roomId: data.roomId,
@@ -1493,6 +1497,7 @@ export function initSocketSignaling(server: HttpServer) {
         peerId: caller.id,
         isInitiator: false,
         callType,
+        sfuMode: oneToOneMediaMode,
       });
       socket.emit("comms:event", toCommsEnvelope(connectedEvt));
 
@@ -2977,7 +2982,7 @@ export function initSocketSignaling(server: HttpServer) {
         callType: pendingCall.callType,
         startedAt: new Date(),
         hostPeerId: pendingCall.callerId,
-        sfuMode: "p2p",
+        sfuMode: resolveOneToOneCallMediaMode(pendingCall.callType),
       };
       await saveActiveCall(data.roomId, activeCall);
 
@@ -3001,11 +3006,38 @@ export function initSocketSignaling(server: HttpServer) {
 
       const callType = pendingCall.callType;
       runtimeMetrics.callSetupSucceeded += 1;
+      const oneToOneMediaMode = activeCall.sfuMode ?? resolveOneToOneCallMediaMode(callType);
       // Emit both colon and hyphen variants for full compat
-      emitToCommsUser(io, pendingCall.callerId, "call:accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
-      emitToCommsUser(io, pendingCall.callerId, "call-accepted", { roomId: data.roomId, peerName: user.displayName, peerId: userId, callType });
-      socket.emit("call:connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
-      socket.emit("call-connected", { roomId: data.roomId, peerName: caller.displayName, peerId: caller.id, isInitiator: false, callType });
+      emitToCommsUser(io, pendingCall.callerId, "call:accepted", {
+        roomId: data.roomId,
+        peerName: user.displayName,
+        peerId: userId,
+        callType,
+        sfuMode: oneToOneMediaMode,
+      });
+      emitToCommsUser(io, pendingCall.callerId, "call-accepted", {
+        roomId: data.roomId,
+        peerName: user.displayName,
+        peerId: userId,
+        callType,
+        sfuMode: oneToOneMediaMode,
+      });
+      socket.emit("call:connected", {
+        roomId: data.roomId,
+        peerName: caller.displayName,
+        peerId: caller.id,
+        isInitiator: false,
+        callType,
+        sfuMode: oneToOneMediaMode,
+      });
+      socket.emit("call-connected", {
+        roomId: data.roomId,
+        peerName: caller.displayName,
+        peerId: caller.id,
+        isInitiator: false,
+        callType,
+        sfuMode: oneToOneMediaMode,
+      });
 
       await clearPendingCall(data.roomId);
       console.log(`[Socket.IO] call:accept ${caller.displayName} <-> ${user.displayName}`);
