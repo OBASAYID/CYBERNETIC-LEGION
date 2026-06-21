@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { locationRecords, trackedUsers, locationShares } from "../../shared/schema";
+import { locationRecords, trackedUsers, locationShares } from "../../shared/schema.js";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { geocodeReverse } from "./google-geospatial.js";
 import { haversineDistance, bearing } from "./geospatial.js";

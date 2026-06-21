@@ -90,7 +90,10 @@ ufw default allow outgoing
 ufw allow 22/tcp comment 'SSH'
 ufw allow 80/tcp comment 'HTTP'
 ufw allow 443/tcp comment 'HTTPS'
-ufw allow 10000:20000/udp comment 'WebRTC'
+ufw allow 3478/udp comment 'TURN'
+ufw allow 3478/tcp comment 'TURN TCP'
+ufw allow 40000:40100/udp comment 'CYRUS SFU mediasoup'
+ufw allow 49152:65535/udp comment 'TURN relay media'
 ufw --force enable
 print_success "Firewall configured"
 

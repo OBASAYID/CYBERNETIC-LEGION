@@ -2,8 +2,54 @@
 # Replace SITE_HOST in scripts/setup-hetzner-https.sh if your public IP changes.
 
 {$SITE_HOST} {
-	encode gzip
+	# Chunked comms uploads up to 512MB (+ headroom).
+	request_body {
+		max_size 600MB
+	}
+
+	# Socket.IO — keep WebSocket streams open (no buffering).
 	@socket path /cyrus-io*
-	reverse_proxy @socket app:3020
-	reverse_proxy app:3020
+	handle @socket {
+		reverse_proxy app:3020 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+				write_timeout 0
+			}
+		}
+	}
+
+	# Large uploads and live segment chunks — long read/write windows.
+	@uploads path /api/comms/upload* /api/comms/pshare/live/*
+	handle @uploads {
+		reverse_proxy app:3020 {
+			flush_interval -1
+			transport http {
+				read_timeout 30m
+				write_timeout 30m
+			}
+		}
+	}
+
+	# Media delivery — stream without compression.
+	@media path /api/comms/media/*
+	handle @media {
+		reverse_proxy app:3020 {
+			flush_interval -1
+			transport http {
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	handle {
+		encode gzip zstd
+		reverse_proxy app:3020 {
+			transport http {
+				read_timeout 5m
+				write_timeout 5m
+			}
+		}
+	}
 }

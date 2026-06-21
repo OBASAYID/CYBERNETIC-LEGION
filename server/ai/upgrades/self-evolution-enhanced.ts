@@ -3,7 +3,7 @@ import { experienceMemory, TaskExperience, KnowledgeConcept, EvolutionEvent } fr
 import { vectorKnowledgeBase } from './vector-knowledge-base.js';
 import { quantumBridge } from '../quantum-bridge-client.js';
 import { db } from '../../db';
-import { knowledgeGraph, performanceMetrics, evolutionLog } from '../../../shared/schema';
+import { knowledgeGraph, performanceMetrics, evolutionLog } from "../../../shared/schema.js";
 import { desc, sql } from 'drizzle-orm';
 
 function asNumber(value: string | number | null | undefined, fallback = 0): number {

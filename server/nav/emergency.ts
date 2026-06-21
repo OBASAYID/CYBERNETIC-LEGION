@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { emergencyAlerts } from "../../shared/schema";
+import { emergencyAlerts } from "../../shared/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { getAllUserLocations } from "./tracking.js";
 import { haversineDistance } from "./geospatial.js";

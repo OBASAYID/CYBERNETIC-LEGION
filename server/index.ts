@@ -15,6 +15,7 @@ import { pool } from "./db.js";
 import { logger } from "./observability/logger.js";
 import { recordApiRequest, getMetrics } from "./observability/metrics.js";
 import { syncFusedStackPortEnv } from "./config/fused-port-sync.js";
+import { setSystemReady } from "./config/system-state.js";
 import { formatStackStartupBanner, getServerBindHost, getWebPort } from "./config/stack-ports.js";
 import { parseExpressJsonBodyLimit } from "../shared/cyrus-document-limits.js";
 import { initSocketSignaling } from "./comms/socket-signaling.js";
@@ -269,11 +270,36 @@ app.get("/health/ready", async (_req, res) => {
   });
 });
 /** Same semantics as `/health/ready` for clients that only probe `/api/*` (single-channel stacks). */
-app.get("/api/ready", (_req, res) => {
-  res.status(systemReady ? 200 : 503).json({
-    status: systemReady ? "ready" : "initializing",
+app.get("/api/ready", async (_req, res) => {
+  if (!systemReady) {
+    return res.status(503).json({
+      status: "initializing",
+      channel: "api",
+      code: "SYSTEM_INITIALIZING",
+    });
+  }
+  let dbOk = false;
+  try {
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+  if (!dbOk) {
+    return res.status(503).json({
+      status: "degraded",
+      channel: "api",
+      code: "DATABASE_UNAVAILABLE",
+      database: "unavailable",
+    });
+  }
+  return res.json({
+    status: "ready",
     channel: "api",
-    code: systemReady ? "READY" : "SYSTEM_INITIALIZING",
+    code: "READY",
+    database: "connected",
   });
 });
 app.get("/api/status", (_req, res) => {
@@ -581,10 +607,11 @@ async function initializeSystem() {
   // Always use standalone (access-code) auth — the frontend's PasswordGate posts
   // username + code to /api/login and is not compatible with Replit OIDC redirects.
   try {
-    const { setupAuth, registerAuthRoutes, isAuthenticated } = await import("../standalone/auth-adapter.js");
+    const { setupAuth, registerAuthRoutes, isAuthenticated, attachSessionUserIfPresent } = await import("../standalone/auth-adapter.js");
     await setupAuth(app);
     registerAuthRoutes(app);
     isAuthenticatedMiddleware = isAuthenticated;
+    app.use("/api", attachSessionUserIfPresent);
     log("Standalone Auth initialized");
   } catch (e) {
     console.error("[Init] Auth setup failed:", e);
@@ -742,6 +769,7 @@ async function initializeSystem() {
   });
 
   systemReady = true;
+  setSystemReady(true);
   log("All systems initialized - accepting API traffic");
 
   if (!commsOnlyMode) {

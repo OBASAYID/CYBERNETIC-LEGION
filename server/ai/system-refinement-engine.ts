@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { db } from "../db.js";
-import { knowledgeGraph, performanceMetrics, evolutionLog } from "../../shared/schema";
+import { knowledgeGraph, performanceMetrics, evolutionLog } from "../../shared/schema.js";
 import { desc, sql } from "drizzle-orm";
 
 function toDbNumeric(value: number): string {

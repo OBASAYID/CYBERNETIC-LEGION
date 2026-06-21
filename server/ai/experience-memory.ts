@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { experienceLearning, knowledgeGraph, performanceMetrics, evolutionLog } from '../../shared/schema';
+import { experienceLearning, knowledgeGraph, performanceMetrics, evolutionLog } from "../../shared/schema.js";
 import { eq, and, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 

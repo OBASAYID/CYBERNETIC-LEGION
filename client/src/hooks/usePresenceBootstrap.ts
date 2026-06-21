@@ -3,6 +3,7 @@ import { usePresence } from "../contexts/PresenceContext";
 import { clearAccountUserIdCache } from "../lib/cyrus-identity";
 import { CYRUS_SESSION_TOKEN_KEY } from "@shared/cyrus-identity";
 import { systemFetch } from "@shared/cyrus-api-client";
+import { waitForStackLinkReady } from "@shared/cyrus-stack-link";
 
 /** Dispatched when login completes in the same tab (`persistAuthSession`). */
 export const CYRUS_AUTH_SESSION_CHANGED = "cyrus-auth-session-changed";
@@ -25,6 +26,9 @@ export function usePresenceBootstrap(enabled = true): void {
     const connect = () => connectPresence(readDisplayName());
 
     const waitForReady = async () => {
+      const link = await waitForStackLinkReady();
+      if (link?.chain.server.ok && link.chain.database.ok) return;
+
       for (let attempt = 0; attempt < 12; attempt++) {
         try {
           const res = await systemFetch("/api/ready", { cache: "no-store" });

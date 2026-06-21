@@ -23,6 +23,15 @@ async function main() {
     pass: Boolean(d.webrtc?.turnConfigured),
     detail: d.webrtc?.turnConfigured ? "yes" : "set TURN_URLS + TURN_SECRET",
   });
+  const link = await get("/api/stack/link");
+  const lc = link.body?.chain || {};
+  checks.push({
+    name: "stack link",
+    pass: link.ok && link.body?.ok !== false,
+    detail: link.ok
+      ? `server=${lc.server?.ok ? "ok" : "fail"} db=${lc.database?.ok ? "ok" : "fail"} redis=${lc.redis?.ok ? "ok" : "fail"}`
+      : `HTTP ${link.status}`,
+  });
   checks.push({
     name: "Redis signaling",
     pass: Boolean(d.webrtc?.redisSignaling),

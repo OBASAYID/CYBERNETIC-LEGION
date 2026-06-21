@@ -1,6 +1,6 @@
 import { ChromaClient } from "chromadb";
 import { db } from "../db.js";
-import { conversations, decisionLogs, missionLogs } from "../../shared/schema";
+import { conversations, decisionLogs, missionLogs } from "../../shared/schema.js";
 
 function toDbNumeric(value: number): string {
   return value.toString();

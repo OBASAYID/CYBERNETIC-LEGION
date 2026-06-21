@@ -401,6 +401,20 @@ export const isAuthenticated: RequestHandler = (req: any, res, next) => {
   res.status(401).json({ message: "Authentication required" });
 };
 
+/** Populate `req.user` from bearer/session token without rejecting anonymous requests. */
+export const attachSessionUserIfPresent: RequestHandler = (req: any, _res, next) => {
+  if (req.user?.id || req.session?.user) {
+    if (!req.user && req.session?.user) req.user = req.session.user;
+    return next();
+  }
+  const token = readSessionTokenFromRequest(req);
+  if (token) {
+    const tokenUser = verifySessionToken(token);
+    if (tokenUser) req.user = tokenUser;
+  }
+  next();
+};
+
 export function getSession() {
   const store = buildSessionStore();
   const cookieSecure = resolveSessionCookieSecure();

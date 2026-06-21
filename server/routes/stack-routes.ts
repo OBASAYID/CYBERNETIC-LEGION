@@ -3,6 +3,8 @@ import axios from "axios";
 
 import { getCyrusAiBaseUrl, getStackPortsPayload } from "../config/stack-ports.js";
 import { getDeploymentPayload } from "../config/deployment.js";
+import { buildStackLinkPayload } from "../config/stack-link.js";
+import { getSystemReady } from "../config/system-state.js";
 import { getCyrusCommWebRtcConfigResponse } from "../comms/cyrus-comm-config.js";
 import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 import { getMcpIntegrationStatus } from "../mcp/mcp-registry.js";
@@ -21,6 +23,20 @@ router.get("/stack/ports", (_req, res) => {
 
 router.get("/stack/deployment", (_req, res) => {
   res.json({ success: true, ...getDeploymentPayload(), ts: Date.now() });
+});
+
+router.get("/stack/link", async (req, res) => {
+  try {
+    const payload = await buildStackLinkPayload(req, { systemReady: getSystemReady() });
+    res.status(payload.ok ? 200 : 503).json({ success: payload.ok, ...payload });
+  } catch (e: unknown) {
+    res.status(500).json({
+      success: false,
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      ts: Date.now(),
+    });
+  }
 });
 
 router.get("/comms/webrtc-health", (_req, res) => {

@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { healthDeviceConnections, healthVitals, healthActivity, healthSleep, healthBodyMetrics } from "../../shared/schema";
+import { healthDeviceConnections, healthVitals, healthActivity, healthSleep, healthBodyMetrics } from "../../shared/schema.js";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 

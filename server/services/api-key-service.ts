@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db.js";
-import { apiKeys } from "../../shared/schema";
+import { apiKeys } from "../../shared/schema.js";
 import { decryptSecret, encryptSecret, maskSecret } from "../utils/encryption.js";
 
 export class ApiKeyService {

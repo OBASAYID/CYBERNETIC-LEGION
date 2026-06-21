@@ -134,7 +134,7 @@ async function loadDependencies() {
   try {
     const storageM = await import("./storage.js");
     storage = storageM.storage;
-    const schemaM = await import("../shared/schema");
+    const schemaM = await import("../shared/schema.js");
     insertConversationSchema = schemaM.insertConversationSchema;
     insertMemorySchema = schemaM.insertMemorySchema;
     insertUploadedFileSchema = schemaM.insertUploadedFileSchema;

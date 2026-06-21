@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db.js";
-import { trainingRuns } from "../../shared/schema";
+import { trainingRuns } from "../../shared/schema.js";
 import { cyrusBrain } from "../ai/cyrus-brain.js";
 import { learningSystem } from "../ai/learning-system.js";
 import { memoryService } from "./memory-service.js";

@@ -136,6 +136,12 @@ export function systemFetch(pathOrUrl: string, init?: RequestInit): Promise<Resp
         const deviceId = localStorage.getItem("cyrus_device_id") || localStorage.getItem("cyrus-device-id");
         if (deviceId) headers.set("X-Device-Id", deviceId);
       }
+      if (parsed.pathname.startsWith("/api") && !headers.has("X-User-Id")) {
+        const accountId =
+          localStorage.getItem("cyrus-user-id") ||
+          localStorage.getItem("cyrus_comm_user_id");
+        if (accountId?.trim()) headers.set("X-User-Id", accountId.trim());
+      }
     } catch {
       // Keep fetch resilient even if URL parsing fails.
     }
