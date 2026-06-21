@@ -288,7 +288,9 @@ export default function DocumentsIntelligence() {
       }
     >
         <div className="text-base">
-        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5">
+        {/* Side-by-side console layout: analysis input | generated output */}
+        <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
+          {/* LEFT CONSOLE: Document Analysis and Generation Input */}
           <div className="flex min-h-0 min-w-0 flex-col gap-4 sm:gap-5">
           <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
             <h2
