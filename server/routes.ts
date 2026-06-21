@@ -911,6 +911,22 @@ export async function registerRoutes(
   }
 
   try {
+    const { learningRouter } = await import("./ai/learning-routes.js");
+    app.use(learningRouter);
+    console.log("[Routes] Enhanced learning system API loaded");
+  } catch (e) {
+    console.warn("[Routes] learning system routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { cyrusMasterRouter } = await import("./ai/cyrus-master-routes.js");
+    app.use(cyrusMasterRouter);
+    console.log("[Routes] Cyrus Master Intelligence API loaded");
+  } catch (e) {
+    console.warn("[Routes] cyrus master intelligence routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
     const { visionRouter } = await import("./scan/vision-routes.js");
     app.use(visionRouter);
   } catch (e) {
