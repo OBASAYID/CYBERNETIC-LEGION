@@ -57,7 +57,11 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
       const data = await res.json();
       return Array.isArray(data.posts) ? data.posts : [];
     },
-    refetchInterval: 6000,
+    refetchInterval: (query) => {
+      const posts = query.state.data;
+      const hasLive = Array.isArray(posts) && posts.some((p) => p.postKind === "live" && p.liveStatus === "live");
+      return hasLive ? 3000 : 6000;
+    },
   });
 
   const clearMedia = useCallback(() => {

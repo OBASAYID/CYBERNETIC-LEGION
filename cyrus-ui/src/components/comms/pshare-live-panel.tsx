@@ -27,6 +27,7 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const broadcasterRef = useRef<PshareMobileLiveBroadcaster | null>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
 
   const [mode, setMode] = useState<"mobile" | "drone">("mobile");
   const [caption, setCaption] = useState("");
@@ -45,12 +46,19 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
   }, [myUserId]);
 
   const attachPreview = useCallback((stream: MediaStream) => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      void videoRef.current.play().catch(() => undefined);
-    }
+    previewStreamRef.current = stream;
     setPreviewReady(true);
   }, []);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    const stream = previewStreamRef.current ?? broadcasterRef.current?.getPreviewStream();
+    if (!el || !stream) return;
+    el.srcObject = stream;
+    el.muted = true;
+    el.playsInline = true;
+    void el.play().catch(() => undefined);
+  }, [previewReady, isLive]);
 
   const requestCamera = useMutation({
     mutationFn: async () => {
@@ -112,6 +120,7 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
       setIsLive(false);
       setLivePostId(null);
       setPreviewReady(false);
+      previewStreamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
       void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
     },
@@ -162,7 +171,7 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
         {mode === "mobile" ? (
           <>
             <div className="relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
-              <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
+              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
               {!previewReady && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/45">
                   <Camera className="h-8 w-8" />

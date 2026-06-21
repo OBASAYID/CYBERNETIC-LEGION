@@ -86,18 +86,27 @@ export function pshareBroadcastSourceLabel(source?: string | null): string {
   }
 }
 
-/** Pick recorder mime for mobile live segments. */
+/** Pick recorder mime for mobile live segments (Safari prefers mp4). */
 export function pshareLiveRecorderMime(): string {
-  if (typeof MediaRecorder !== "undefined") {
-    if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
-      return "video/webm;codecs=vp9,opus";
-    }
-    if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
-      return "video/webm;codecs=vp8,opus";
-    }
-    if (MediaRecorder.isTypeSupported("video/webm")) return "video/webm";
+  if (typeof MediaRecorder === "undefined") return "video/webm";
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+    "video/mp4;codecs=avc1,mp4a",
+    "video/mp4",
+  ];
+  for (const mime of candidates) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime;
   }
   return "video/webm";
+}
+
+export function pshareLiveFileExtension(mimeType: string): string {
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("webm")) return "webm";
+  return "webm";
 }
 
 export function isHlsOrDashUrl(url?: string | null): boolean {

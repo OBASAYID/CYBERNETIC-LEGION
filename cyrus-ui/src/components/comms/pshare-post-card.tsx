@@ -76,10 +76,32 @@ export function PsharePostCard({
   }, [post]);
 
   useEffect(() => {
-    if (local.postKind !== "live" || local.liveStatus !== "live" || !local.fileUrl) return;
-    const id = window.setInterval(() => setLiveRefreshKey((k) => k + 1), 4000);
-    return () => window.clearInterval(id);
-  }, [local.postKind, local.liveStatus, local.fileUrl]);
+    if (local.postKind !== "live" || local.liveStatus !== "live") return;
+    let cancelled = false;
+
+    const refreshLivePost = async () => {
+      try {
+        const res = await systemFetch(`/api/comms/pshare/posts/${local.id}`, {
+          headers: pshareHeaders(myUserId, userRole),
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { post?: PsharePost };
+        if (data.post && !cancelled) {
+          setLocal((prev) => ({ ...prev, ...data.post! }));
+          setLiveRefreshKey((k) => k + 1);
+        }
+      } catch {
+        // keep polling on transient errors
+      }
+    };
+
+    void refreshLivePost();
+    const id = window.setInterval(() => void refreshLivePost(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [local.id, local.postKind, local.liveStatus, myUserId, userRole]);
 
   const canDelete = local.authorId === myUserId || isAdmin || userRole === "admin";
 

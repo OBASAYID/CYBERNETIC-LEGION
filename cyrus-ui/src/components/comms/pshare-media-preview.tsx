@@ -27,10 +27,26 @@ export function PshareMediaPreview({
   className = "",
   liveRefreshKey = 0,
 }: PshareMediaPreviewProps) {
-  if (!post.fileUrl) return null;
+  const isLive = post.postKind === "live" && post.liveStatus === "live";
+  const isConsole = variant === "console";
+
+  if (!post.fileUrl) {
+    if (isLive) {
+      return (
+        <div
+          className={`flex aspect-video items-center justify-center gap-2 rounded-lg bg-black/70 ${
+            isConsole ? "min-h-[7.5rem]" : ""
+          } ${className}`}
+        >
+          <Radio className="h-4 w-4 animate-pulse text-rose-300" />
+          <p className="text-[10px] text-white/55">Connecting to live feed…</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const mime = guessCommsMediaMime(post.fileName, post.fileMimeType);
-  const isLive = post.postKind === "live" && post.liveStatus === "live";
   const kind = isLive || mime.startsWith("video/") || post.fileMimeType === "application/x-pshare-live"
     ? "video"
     : detectPshareMediaKind(post.fileName, mime);
@@ -40,7 +56,6 @@ export function PshareMediaPreview({
       ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}t=${liveRefreshKey}`
       : baseUrl;
   const downloadUrl = pshareMediaDownloadUrl(post.fileUrl);
-  const isConsole = variant === "console";
   const manifest = post.mediaManifest as { polishPreset?: PsharePolishPreset; polishIntensity?: number } | undefined;
   const preset = (post.polishPreset || manifest?.polishPreset || "clean") as PsharePolishPreset;
   const polish = polishCssFilter(preset, manifest?.polishIntensity ?? 65);
@@ -94,6 +109,10 @@ export function PshareMediaPreview({
           muted={isLive}
           playsInline
           preload={isLive ? "auto" : "metadata"}
+          onLoadedData={(e) => {
+            if (!isLive) return;
+            void (e.currentTarget as HTMLVideoElement).play().catch(() => undefined);
+          }}
           className={
             isConsole
               ? "max-h-full max-w-full object-contain"
