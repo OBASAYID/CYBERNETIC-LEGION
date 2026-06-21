@@ -6,6 +6,8 @@ import {
   type PshareBroadcastSource,
 } from "@shared/comms/pshare-engine";
 import { uploadCommsFileSmart } from "./comms-chunk-upload";
+import { acquireCommsUserMedia } from "./comms-call-media";
+import { parseMediaError } from "./media-permissions";
 import { getCommsDeviceId } from "./comms-device-id";
 
 export type PshareLiveSession = {
@@ -33,18 +35,20 @@ function detectNetworkType(): string | undefined {
   return conn?.effectiveType;
 }
 
-/** Request camera (+ mic) permission and return a preview stream. */
+/** Request camera (+ mic) with comms fallbacks (HTTPS check, constraint downgrade). */
 export async function requestPshareCameraAccess(
-  facingMode: "user" | "environment" = "environment",
+  _facingMode: "user" | "environment" = "environment",
 ): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode,
-      width: { ideal: 1280, max: 1280 },
-      height: { ideal: 720, max: 720 },
-    },
-    audio: true,
-  });
+  try {
+    const { stream } = await acquireCommsUserMedia("video");
+    if (!stream.getVideoTracks().length) {
+      throw new Error("No camera track available");
+    }
+    return stream;
+  } catch (err) {
+    const parsed = parseMediaError(err, "both");
+    throw new Error(parsed.error);
+  }
 }
 
 export class PshareMobileLiveBroadcaster {

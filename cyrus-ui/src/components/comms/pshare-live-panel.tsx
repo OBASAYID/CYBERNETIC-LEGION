@@ -5,10 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, Loader2, Plane, Radio, Square, Video } from "lucide-react";
 import {
-  PshareMobileLiveBroadcaster,
   startPshareDroneLive,
   stopPshareLivePost,
 } from "../../../../client/src/lib/pshare-live-broadcast";
+import {
+  attachMediaStreamToVideo,
+  getPshareLiveBroadcaster,
+  isPshareLiveBroadcasting,
+} from "../../../../client/src/lib/pshare-live-session";
 import { adviseLiveBroadcast, pshareBroadcastSourceLabel } from "@shared/comms/pshare-engine";
 
 const C = {
@@ -21,12 +25,12 @@ const C = {
 type PshareLivePanelProps = {
   myUserId: string;
   onLiveStarted?: () => void;
+  onLiveStopped?: () => void;
 };
 
-export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProps) {
+export function PshareLivePanel({ myUserId, onLiveStarted, onLiveStopped }: PshareLivePanelProps) {
   const qc = useQueryClient();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const broadcasterRef = useRef<PshareMobileLiveBroadcaster | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
 
   const [mode, setMode] = useState<"mobile" | "drone">("mobile");
@@ -37,36 +41,69 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
   const [livePostId, setLivePostId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tips, setTips] = useState<string[]>([]);
+  const [cameraPending, setCameraPending] = useState(false);
+
+  const syncFromBroadcaster = useCallback(() => {
+    const broadcaster = getPshareLiveBroadcaster(myUserId);
+    const session = broadcaster.getSession();
+    const stream = broadcaster.getPreviewStream();
+    if (stream) {
+      previewStreamRef.current = stream;
+      setPreviewReady(true);
+      attachMediaStreamToVideo(videoRef.current, stream);
+    }
+    if (session) {
+      setIsLive(true);
+      setLivePostId(session.postId);
+    }
+  }, [myUserId]);
 
   useEffect(() => {
-    broadcasterRef.current = new PshareMobileLiveBroadcaster(myUserId);
+    syncFromBroadcaster();
     return () => {
-      broadcasterRef.current?.stopTracks();
+      // Keep camera + recording alive while broadcasting if user switches Pshare tabs.
+      if (!isPshareLiveBroadcasting()) {
+        getPshareLiveBroadcaster(myUserId).stopTracks();
+      }
     };
-  }, [myUserId]);
+  }, [myUserId, syncFromBroadcaster]);
 
   const attachPreview = useCallback((stream: MediaStream) => {
     previewStreamRef.current = stream;
     setPreviewReady(true);
+    attachMediaStreamToVideo(videoRef.current, stream);
   }, []);
 
-  useEffect(() => {
-    const el = videoRef.current;
-    const stream = previewStreamRef.current ?? broadcasterRef.current?.getPreviewStream();
-    if (!el || !stream) return;
-    el.srcObject = stream;
-    el.muted = true;
-    el.playsInline = true;
-    void el.play().catch(() => undefined);
-  }, [previewReady, isLive]);
+  const bindPreviewVideo = useCallback(
+    (el: HTMLVideoElement | null) => {
+      videoRef.current = el;
+      attachMediaStreamToVideo(el, previewStreamRef.current ?? getPshareLiveBroadcaster(myUserId).getPreviewStream());
+    },
+    [myUserId],
+  );
+
+  const ensureCamera = useCallback(async () => {
+    const broadcaster = getPshareLiveBroadcaster(myUserId);
+    if (broadcaster.getPreviewStream()) {
+      attachPreview(broadcaster.getPreviewStream()!);
+      return broadcaster.getPreviewStream()!;
+    }
+    setCameraPending(true);
+    try {
+      const stream = await broadcaster.preparePreview();
+      attachPreview(stream);
+      const advice = adviseLiveBroadcast({ source: "mobile_camera" });
+      setTips(advice.tips);
+      return stream;
+    } finally {
+      setCameraPending(false);
+    }
+  }, [attachPreview, myUserId]);
 
   const requestCamera = useMutation({
     mutationFn: async () => {
       setError(null);
-      const stream = await broadcasterRef.current!.preparePreview();
-      attachPreview(stream);
-      const advice = adviseLiveBroadcast({ source: "mobile_camera" });
-      setTips(advice.tips);
+      await ensureCamera();
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Camera permission denied"),
   });
@@ -74,12 +111,15 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
   const goLiveMobile = useMutation({
     mutationFn: async () => {
       setError(null);
-      const session = await broadcasterRef.current!.goLive(caption, {
+      const broadcaster = getPshareLiveBroadcaster(myUserId);
+      await ensureCamera();
+      const session = await broadcaster.goLive(caption, {
         onPreview: attachPreview,
         onError: (msg) => setError(msg),
       });
       setLivePostId(session.postId);
       setIsLive(true);
+      attachPreview(broadcaster.getPreviewStream()!);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
@@ -111,7 +151,7 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
   const stopLive = useMutation({
     mutationFn: async () => {
       if (mode === "mobile") {
-        await broadcasterRef.current?.stopLive();
+        await getPshareLiveBroadcaster(myUserId).stopLive();
       } else if (livePostId) {
         await stopPshareLivePost(myUserId, livePostId);
       }
@@ -123,9 +163,17 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
       previewStreamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
       void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
+      onLiveStopped?.();
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Stop failed"),
   });
+
+  const busy =
+    requestCamera.isPending ||
+    goLiveMobile.isPending ||
+    goLiveDrone.isPending ||
+    stopLive.isPending ||
+    cameraPending;
 
   return (
     <div
@@ -166,29 +214,34 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
       <div className="space-y-3 p-3">
         <p className="text-[10px] text-white/50">
           Live posts stay on Pshare until you delete them. {pshareBroadcastSourceLabel(mode === "mobile" ? "mobile_camera" : "drone")} mode.
+          {isLive ? " Stay on this tab or switch tabs — your broadcast keeps running until you end it." : null}
         </p>
 
         {mode === "mobile" ? (
           <>
             <div className="relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-black">
-              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+              <video ref={bindPreviewVideo} autoPlay playsInline muted className="h-full w-full object-cover" />
               {!previewReady && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/45">
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/45">
                   <Camera className="h-8 w-8" />
-                  <p className="text-[10px]">Camera permission required to go live</p>
+                  <p className="text-[10px]">Tap below to turn on camera &amp; go live</p>
                 </div>
               )}
             </div>
-            {!previewReady && !isLive && (
+            {!isLive && (
               <button
                 type="button"
-                disabled={requestCamera.isPending}
+                disabled={busy || previewReady}
                 onClick={() => requestCamera.mutate()}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-semibold text-white/85"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-semibold text-white/85 disabled:opacity-40"
                 style={{ background: C.sidebarInput, border: `1px solid ${C.sidebarDivider}` }}
               >
-                {requestCamera.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                Enable camera &amp; microphone
+                {requestCamera.isPending || cameraPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
+                {previewReady ? "Camera on" : "Turn on camera (preview)"}
               </button>
             )}
           </>
@@ -230,28 +283,24 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
           {!isLive ? (
             <button
               type="button"
-              disabled={
-                goLiveMobile.isPending ||
-                goLiveDrone.isPending ||
-                (mode === "mobile" ? !previewReady : !droneUrl.trim())
-              }
+              disabled={busy || (mode === "drone" && !droneUrl.trim())}
               onClick={() => (mode === "mobile" ? goLiveMobile.mutate() : goLiveDrone.mutate())}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-bold text-rose-100 disabled:opacity-40"
               style={{ background: `${C.crimson}33`, border: `1px solid ${C.crimson}55` }}
             >
-              {goLiveMobile.isPending || goLiveDrone.isPending ? (
+              {goLiveMobile.isPending || goLiveDrone.isPending || cameraPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : mode === "mobile" ? (
                 <Video className="h-4 w-4" />
               ) : (
                 <Plane className="h-4 w-4" />
               )}
-              Go live
+              {mode === "mobile" ? "Turn on camera & go live" : "Go live"}
             </button>
           ) : (
             <button
               type="button"
-              disabled={stopLive.isPending}
+              disabled={busy}
               onClick={() => stopLive.mutate()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-bold text-white disabled:opacity-40"
               style={{ background: "rgba(127,29,29,0.45)", border: "1px solid rgba(248,113,113,0.35)" }}

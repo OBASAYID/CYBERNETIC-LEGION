@@ -220,7 +220,12 @@ export function PshareTabPanel({ myUserId }: PshareTabPanelProps) {
 
       {view === "live" ? (
         <div className="flex-1 overflow-y-auto py-3">
-          <PshareLivePanel myUserId={myUserId} onLiveStarted={() => setView("feed")} />
+          <PshareLivePanel
+            myUserId={myUserId}
+            onLiveStarted={() => {
+              void qc.invalidateQueries({ queryKey: ["/api/comms/pshare/posts"] });
+            }}
+          />
         </div>
       ) : null}
 
