@@ -895,6 +895,22 @@ export async function registerRoutes(
   }
 
   try {
+    const { evolutionRouter } = await import("./ai/evolution-routes.js");
+    app.use(evolutionRouter);
+    console.log("[Routes] Self-evolution API loaded");
+  } catch (e) {
+    console.warn("[Routes] self-evolution routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const { voiceRouter } = await import("./ai/voice-routes.js");
+    app.use(voiceRouter);
+    console.log("[Routes] Advanced voice interaction API loaded");
+  } catch (e) {
+    console.warn("[Routes] voice interaction routes failed (non-fatal):", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
     const { visionRouter } = await import("./scan/vision-routes.js");
     app.use(visionRouter);
   } catch (e) {
