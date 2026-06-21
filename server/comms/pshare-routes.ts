@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db.js";
-import { psharePosts, pshareComments, pshareLikes, onlineUsers, liveStreams } from "../../shared/schema";
+import { psharePosts, pshareComments, pshareLikes, onlineUsers, liveStreams } from "../../shared/models/comms.js";
 import {
   enrichPsharePostEngagement,
   PSHARE_REACTION_EMOJIS,
