@@ -73,6 +73,7 @@ interface CallViewProps {
   /** Dedicated remote MediaStream (P2P) — main stage uses video tracks from this, not localStream. */
   remoteStream?: MediaStream | null;
   onSendCallMedia?: (file: File, caption: string) => Promise<void>;
+  onDeleteCallChatMessage?: (messageId: string) => void;
   onSendReaction?: (emoji: string, x: number, y: number) => void;
   onShareLocation?: () => void;
   chatMessages?: { senderId: string; senderName: string; message: string; timestamp: string }[];
@@ -368,6 +369,7 @@ export function CallView({
   onSendChatMessage,
   remoteStream: remoteStreamProp,
   onSendCallMedia,
+  onDeleteCallChatMessage,
   onSendReaction,
   onShareLocation,
   chatMessages = [],
@@ -838,6 +840,7 @@ export function CallView({
             messages={chatMessages}
             onSendMessage={onSendChatMessage}
             onSendMedia={onSendCallMedia}
+            onDeleteMessage={onDeleteCallChatMessage}
             onClose={() => setShowChat(false)}
             socketRef={socketRef}
           />

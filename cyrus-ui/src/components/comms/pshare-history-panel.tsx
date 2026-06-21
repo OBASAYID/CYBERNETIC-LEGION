@@ -1,5 +1,5 @@
 /**
- * Pshare chat history — posts archived after the 24h live feed window.
+ * Pshare chat history — manually archived posts (optional archive flow).
  */
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
@@ -39,7 +39,7 @@ export function PshareHistoryPanel({ myUserId, isAdmin = false }: PshareHistoryP
         <History className="h-4 w-4 text-white/50" />
         <div>
           <p className="text-[11px] font-bold text-white">Chat history</p>
-          <p className="text-[10px] text-white/45">Broadcasts older than 24 hours move here automatically</p>
+          <p className="text-[10px] text-white/45">Posts you remove from the live feed appear here until deleted</p>
         </div>
       </div>
 

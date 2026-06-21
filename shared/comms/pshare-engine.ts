@@ -1,6 +1,7 @@
 /** Pshare engine — retention window, live broadcast sources, and media routing. */
 
-export const PSHARE_POST_TTL_MS = 24 * 60 * 60 * 1000;
+/** 0 = posts stay until the author deletes them (no auto-archive). */
+export const PSHARE_POST_TTL_MS = 0;
 
 export type PshareBroadcastSource = "mobile_camera" | "drone" | "webcam";
 
@@ -30,12 +31,14 @@ export const PSHARE_DRONE_VIDEO_PROFILE: PshareVideoProfile = {
   mobilePreferredFacing: "environment",
 };
 
-export function psharePostExpiresAt(createdAt: Date | string): Date {
-  const base = createdAt instanceof Date ? createdAt : new Date(createdAt);
+export function psharePostExpiresAt(_createdAt: Date | string): Date | null {
+  if (PSHARE_POST_TTL_MS <= 0) return null;
+  const base = _createdAt instanceof Date ? _createdAt : new Date(_createdAt);
   return new Date(base.getTime() + PSHARE_POST_TTL_MS);
 }
 
 export function isPsharePostExpired(createdAt: Date | string | null | undefined, now = Date.now()): boolean {
+  if (PSHARE_POST_TTL_MS <= 0) return false;
   if (!createdAt) return false;
   const base = createdAt instanceof Date ? createdAt : new Date(createdAt);
   if (Number.isNaN(base.getTime())) return false;
@@ -43,6 +46,7 @@ export function isPsharePostExpired(createdAt: Date | string | null | undefined,
 }
 
 export function pshareRetentionCutoff(now = Date.now()): Date {
+  if (PSHARE_POST_TTL_MS <= 0) return new Date(0);
   return new Date(now - PSHARE_POST_TTL_MS);
 }
 
@@ -129,7 +133,7 @@ export function adviseLiveBroadcast(input: {
     tips.push("Microphone off — viewers will see video-only broadcast.");
   }
 
-  tips.push("Posts auto-expire after 24 hours on Pshare.");
+  tips.push("Posts stay on Pshare until you delete them.");
 
   return { profile, tips };
 }

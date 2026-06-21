@@ -2,8 +2,10 @@
  * Unified comms delivery — resilient persistence + offline store-and-forward.
  */
 
-import { dbInsertMessage } from "./db-service.js";
+import { eq } from "drizzle-orm";
+import { dbInsertMessage, dbDeleteMessage } from "./db-service.js";
 import { directMessages } from "../../shared/models/comms.js";
+import { unlinkCommsMediaFile } from "./upload-paths.js";
 
 type MessageType =
   | "text"
@@ -121,6 +123,51 @@ export async function persistChatMessage(input: {
     replyToId: data.replyToId,
     groupId: data.groupId,
     targetUserId: data.targetUserId,
+  };
+}
+
+export async function deleteChatMessage(input: {
+  messageId: string;
+  actorId: string;
+}): Promise<
+  | { ok: true; message: PersistedMessagePayload & { recipientId?: string; groupId?: string | null } }
+  | { ok: false; error: string; status: number }
+> {
+  const { messageId, actorId } = input;
+  const { db } = await import("../db.js");
+  const [row] = await db
+    .select()
+    .from(directMessages)
+    .where(eq(directMessages.id, messageId))
+    .limit(1);
+  if (!row) {
+    return { ok: false, error: "Message not found", status: 404 };
+  }
+  if (row.senderId !== actorId) {
+    return { ok: false, error: "Only the sender can delete this message", status: 403 };
+  }
+  const deleted = await dbDeleteMessage(messageId);
+  if (!deleted.success) {
+    return { ok: false, error: deleted.error || "Delete failed", status: 500 };
+  }
+  unlinkCommsMediaFile(row.fileUrl);
+  return {
+    ok: true,
+    message: {
+      id: row.id,
+      senderId: row.senderId,
+      senderName: row.senderId,
+      message: row.content,
+      messageType: (row.messageType || "text") as MessageType,
+      timestamp: row.createdAt?.toISOString() || new Date().toISOString(),
+      fileUrl: row.fileUrl || undefined,
+      fileName: row.fileName || undefined,
+      fileMimeType: row.fileMimeType || undefined,
+      fileSizeBytes: row.fileSizeBytes ?? undefined,
+      recipientId: row.recipientId,
+      groupId: row.groupId ?? undefined,
+      targetUserId: row.recipientId,
+    },
   };
 }
 

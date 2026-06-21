@@ -10,6 +10,7 @@ import { useCommsMediaPaste } from "../../hooks/useCommsMediaPaste";
 import { formatCommsFileSize } from "@shared/comms/media-formats";
 
 export interface InCallChatMessage {
+  id?: string;
   senderId: string;
   senderName: string;
   message: string;
@@ -31,6 +32,7 @@ interface InCallChatProps {
     caption: string,
     onProgress?: (progress: CommsUploadProgress) => void,
   ) => Promise<void>;
+  onDeleteMessage?: (messageId: string) => void;
   onClose: () => void;
   socketRef?: React.MutableRefObject<any>;
 }
@@ -42,6 +44,7 @@ export function InCallChat({
   messages,
   onSendMessage,
   onSendMedia,
+  onDeleteMessage,
   onClose,
   socketRef,
 }: InCallChatProps) {
@@ -224,13 +227,14 @@ export function InCallChat({
             const isOwn = msg.senderId === currentUserId;
             const isCad =
               msg.messageType === "cad-3d" || isCommsCad3dFile(msg.fileName, msg.fileMimeType);
+            const msgKey = msg.id || `${msg.timestamp}-${idx}`;
             return (
-              <div key={`${msg.timestamp}-${idx}`} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+              <div key={msgKey} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
                 {!isOwn ? (
                   <span className="mb-0.5 px-1 text-[10px] text-cyan-400/80">{msg.senderName}</span>
                 ) : null}
                 <div
-                  className={`rounded-xl px-3 py-1.5 text-xs ${
+                  className={`relative rounded-xl px-3 py-1.5 text-xs ${
                     isCad ? "max-w-[min(100%,320px)]" : "max-w-[240px]"
                   } ${
                     isOwn
@@ -238,6 +242,16 @@ export function InCallChat({
                       : "rounded-bl-sm bg-gray-800/60 text-gray-200"
                   }`}
                 >
+                  {isOwn && msg.id && onDeleteMessage ? (
+                    <button
+                      type="button"
+                      title="Delete message"
+                      onClick={() => onDeleteMessage(msg.id!)}
+                      className="absolute -right-1 -top-1 rounded-full bg-red-600/90 p-0.5 text-white opacity-70 hover:opacity-100"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  ) : null}
                   {renderBody(msg)}
                 </div>
                 <span className="mt-0.5 px-1 text-[9px] text-gray-500">{formatTime(msg.timestamp)}</span>

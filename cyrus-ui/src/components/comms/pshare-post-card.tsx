@@ -232,6 +232,28 @@ export function PsharePostCard({
     },
   });
 
+  const deleteCommentMut = useMutation({
+    mutationFn: async (commentId: string) => {
+      const res = await systemFetch(
+        `/api/comms/pshare/posts/${local.id}/comments/${commentId}`,
+        {
+          method: "DELETE",
+          headers: pshareHeaders(myUserId, userRole),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Delete failed");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, commentId) => {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      patchPost({ commentCount: Math.max(0, (local.commentCount ?? 1) - 1) });
+      invalidate();
+    },
+  });
+
   useEffect(() => {
     if (!onInteractionHold) return;
     const holding =
@@ -365,7 +387,6 @@ export function PsharePostCard({
             {local.createdAt && (
               <span className="text-[9px] text-white/30">
                 {formatPshareRelativeTime(local.createdAt)}
-                {local.expiresAt ? " · 24h window" : ""}
               </span>
             )}
           </div>
@@ -521,15 +542,34 @@ export function PsharePostCard({
         >
           {loadingComments && <p className="mb-2 text-[10px] text-white/35">Loading…</p>}
           <ul className="mb-2 max-h-36 space-y-1.5 overflow-y-auto">
-            {comments.map((c) => (
+            {comments.map((c) => {
+              const canDeleteComment = c.authorId === myUserId || isAdmin || userRole === "admin";
+              return (
               <li key={c.id} className="rounded-lg px-2 py-1.5 text-[11px]" style={{ background: C.sidebarInput }}>
-                <span className="font-semibold text-rose-200/90">{c.authorName ?? "Operator"}</span>
-                <span className="ml-2 text-[9px] text-white/30">
-                  {c.createdAt ? formatPshareRelativeTime(c.createdAt) : ""}
-                </span>
-                <p className="mt-0.5 text-white/75">{c.body}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-semibold text-rose-200/90">{c.authorName ?? "Operator"}</span>
+                    <span className="ml-2 text-[9px] text-white/30">
+                      {c.createdAt ? formatPshareRelativeTime(c.createdAt) : ""}
+                    </span>
+                    <p className="mt-0.5 text-white/75">{c.body}</p>
+                  </div>
+                  {canDeleteComment && (
+                    <button
+                      type="button"
+                      title="Delete comment"
+                      disabled={deleteCommentMut.isPending}
+                      onClick={() => {
+                        if (window.confirm("Delete this comment?")) deleteCommentMut.mutate(c.id);
+                      }}
+                      className="shrink-0 rounded p-1 text-white/30 hover:text-rose-300"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </li>
-            ))}
+            );})}
             {!loadingComments && comments.length === 0 && (
               <p className="text-[10px] text-white/35">No comments yet.</p>
             )}

@@ -19,7 +19,7 @@ import { pshareRouter } from "./pshare-routes.js";
 import { gwaRouter } from "./gwa-routes.js";
 import { groupCallIntelligenceRouter } from "./group-call-intelligence-routes.js";
 import { pushCallRouter } from "./push-routes.js";
-import { getDeliveryHubStats } from "./delivery-hub.js";
+import { getDeliveryHubStats, deleteChatMessage } from "./delivery-hub.js";
 import { getCyrusCommWebRtcConfigResponse } from "./cyrus-comm-config.js";
 import {
   completeChunkUpload,
@@ -39,7 +39,7 @@ import { AVATAR_SERVE_MIME } from "../../shared/comms/avatar-image-formats.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { resolveCommsRecordingsDir, resolveCommsUploadDir } from "./upload-paths.js";
+import { resolveCommsRecordingsDir, resolveCommsUploadDir, unlinkCommsMediaFile } from "./upload-paths.js";
 
 const COMMS_UPLOAD_DIR = resolveCommsUploadDir();
 const COMMS_RECORDINGS_DIR = resolveCommsRecordingsDir(COMMS_UPLOAD_DIR);
@@ -221,6 +221,16 @@ function getUserId(req: any): string | null {
     (typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : null) ||
     (typeof req.headers["X-User-Id"] === "string" ? req.headers["X-User-Id"] : null) ||
     null
+  );
+}
+
+/** Account/comms user id for persisted chat threads (matches socket senderId). */
+function getMessageActorId(req: any): string | null {
+  return (
+    req.user?.claims?.sub ||
+    (typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"].trim() : null) ||
+    (typeof req.headers["X-User-Id"] === "string" ? req.headers["X-User-Id"].trim() : null) ||
+    getUserId(req)
   );
 }
 
@@ -459,7 +469,7 @@ router.get("/api/comms/messages", async (req: any, res) => {
 
 router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
   try {
-    const userId = getUserId(req);
+    const userId = getMessageActorId(req);
     const { recipientId } = req.params;
     const requestId = `comms-msg-read-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -517,6 +527,89 @@ router.get("/api/comms/messages/:recipientId", async (req: any, res) => {
     }
     console.error("Error fetching messages:", error);
     res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+router.delete("/api/comms/messages/:messageId", async (req: any, res) => {
+  try {
+    const actorId = getMessageActorId(req);
+    if (!actorId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const { messageId } = req.params;
+    const result = await deleteChatMessage({ messageId, actorId });
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json({ success: true, messageId, message: result.message });
+  } catch (error: any) {
+    console.error("Error deleting message:", error);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+router.get("/api/comms/calls/:roomId/messages", async (req: any, res) => {
+  try {
+    const userId = getMessageActorId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const { roomId } = req.params;
+    const rows = await db
+      .select()
+      .from(callMessages)
+      .where(and(eq(callMessages.callSessionId, roomId), eq(callMessages.isPrivate, false)))
+      .orderBy(asc(callMessages.createdAt))
+      .limit(500);
+
+    res.json({
+      messages: rows.map((m) => {
+        const mediaUrls = Array.isArray(m.mediaUrls) ? (m.mediaUrls as string[]) : [];
+        return {
+          id: m.id,
+          senderId: m.userId,
+          senderName: m.userName || m.userId,
+          message: m.content,
+          messageType: m.messageType || "text",
+          fileUrl: mediaUrls[0] || undefined,
+          fileName: undefined,
+          fileMimeType: undefined,
+          timestamp: m.createdAt?.toISOString() || new Date().toISOString(),
+          roomId,
+        };
+      }),
+    });
+  } catch (error: any) {
+    console.error("Error fetching call messages:", error);
+    res.status(500).json({ error: "Failed to fetch call messages" });
+  }
+});
+
+router.delete("/api/comms/calls/:roomId/messages/:messageId", async (req: any, res) => {
+  try {
+    const actorId = getMessageActorId(req);
+    if (!actorId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const { roomId, messageId } = req.params;
+    const [row] = await db
+      .select()
+      .from(callMessages)
+      .where(and(eq(callMessages.id, messageId), eq(callMessages.callSessionId, roomId)))
+      .limit(1);
+    if (!row) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+    if (row.userId !== actorId) {
+      return res.status(403).json({ error: "Only the sender can delete this message" });
+    }
+    const mediaUrls = Array.isArray(row.mediaUrls) ? (row.mediaUrls as string[]) : [];
+    for (const url of mediaUrls) unlinkCommsMediaFile(url);
+    await db.delete(callMessages).where(eq(callMessages.id, messageId));
+    res.json({ success: true, messageId, roomId });
+  } catch (error: any) {
+    console.error("Error deleting call message:", error);
+    res.status(500).json({ error: "Failed to delete call message" });
   }
 });
 

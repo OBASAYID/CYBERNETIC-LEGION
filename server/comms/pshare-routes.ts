@@ -13,11 +13,13 @@ import {
   psharePhotoFeedBoost,
   psharePostExpiresAt,
   pshareRetentionCutoff,
+  PSHARE_POST_TTL_MS,
   type PshareBroadcastSource,
 } from "../../shared/comms/pshare-engine.js";
 import { adviseStudioProject, normalizePostKind } from "../../shared/comms/pshare-studio.js";
 import { eq, and, or, desc, asc, sql, inArray, count, gte, lt, isNull, isNotNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { unlinkCommsMediaUrls } from "./upload-paths.js";
 
 const router = Router();
 
@@ -35,6 +37,7 @@ async function archiveExpiredPsharePosts(): Promise<number> {
 }
 
 async function maybeArchiveExpiredPsharePosts(): Promise<void> {
+  if (PSHARE_POST_TTL_MS <= 0) return;
   const now = Date.now();
   if (now - lastPshareArchiveAt < 5 * 60 * 1000) return;
   lastPshareArchiveAt = now;
@@ -44,6 +47,29 @@ async function maybeArchiveExpiredPsharePosts(): Promise<void> {
   } catch (e: any) {
     console.warn("[Pshare] archive (non-fatal):", e?.message || e);
   }
+}
+
+function collectPshareMediaUrls(post: {
+  fileUrl?: string | null;
+  audioUrl?: string | null;
+  mediaManifest?: unknown;
+}): string[] {
+  const urls: string[] = [];
+  if (post.fileUrl) urls.push(String(post.fileUrl));
+  if (post.audioUrl) urls.push(String(post.audioUrl));
+  const manifest = post.mediaManifest;
+  if (Array.isArray(manifest)) {
+    for (const item of manifest) {
+      if (item && typeof item === "object" && "url" in item && typeof (item as { url?: string }).url === "string") {
+        urls.push((item as { url: string }).url);
+      }
+    }
+  } else if (manifest && typeof manifest === "object") {
+    for (const value of Object.values(manifest as Record<string, unknown>)) {
+      if (typeof value === "string" && value.includes("/api/comms/media/")) urls.push(value);
+    }
+  }
+  return urls;
 }
 
 async function ensurePshareTables(): Promise<void> {
@@ -337,7 +363,7 @@ function mapPostRow(
     expiresAt:
       p.expiresAt instanceof Date
         ? p.expiresAt.toISOString()
-        : p.expiresAt ?? psharePostExpiresAt(p.createdAt).toISOString(),
+        : p.expiresAt ?? (PSHARE_POST_TTL_MS > 0 ? psharePostExpiresAt(p.createdAt)?.toISOString() ?? null : null),
     archivedAt: p.archivedAt instanceof Date ? p.archivedAt.toISOString() : p.archivedAt ?? null,
     hasPhoto: isPsharePhotoUpload(p.fileName, p.fileMimeType),
     isPhotoPriority: isPsharePhotoUpload(p.fileName, p.fileMimeType),
@@ -392,17 +418,19 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
     return res.status(401).json({ error: "Authentication required" });
   }
   try {
-    const cutoff = pshareRetentionCutoff();
+    const listWhere =
+      PSHARE_POST_TTL_MS > 0
+        ? and(
+            visibleToUserSafe(userId),
+            isNull(psharePosts.archivedAt),
+            gte(psharePosts.createdAt, pshareRetentionCutoff()),
+          )
+        : and(visibleToUserSafe(userId), isNull(psharePosts.archivedAt));
+
     const rows = await db
       .select()
       .from(psharePosts)
-      .where(
-        and(
-          visibleToUserSafe(userId),
-          isNull(psharePosts.archivedAt),
-          gte(psharePosts.createdAt, cutoff),
-        ),
-      )
+      .where(listWhere)
       .orderBy(desc(psharePosts.createdAt))
       .limit(200);
 
@@ -421,7 +449,7 @@ router.get("/api/comms/pshare/posts", async (req: any, res) => {
           Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)),
       );
 
-    res.json({ posts, retentionHours: 24 });
+    res.json({ posts, retentionHours: PSHARE_POST_TTL_MS > 0 ? PSHARE_POST_TTL_MS / (60 * 60 * 1000) : null });
   } catch (e: any) {
     console.error("[Pshare] list posts:", e);
     res.status(500).json({ error: "Failed to load posts" });
@@ -448,7 +476,7 @@ router.get("/api/comms/pshare/history", async (req: any, res) => {
 
     const posts = rows.map((p) => mapPostRow(p, names, maps));
 
-    res.json({ posts, label: "Chat history", retentionHours: 24 });
+    res.json({ posts, label: "Chat history", retentionHours: PSHARE_POST_TTL_MS > 0 ? PSHARE_POST_TTL_MS / (60 * 60 * 1000) : null });
   } catch (e: any) {
     console.error("[Pshare] list history:", e);
     res.status(500).json({ error: "Failed to load chat history" });
@@ -745,6 +773,7 @@ router.delete("/api/comms/pshare/posts/:id", async (req: any, res) => {
     if (!canDeletePsharePost(req, row.authorId, userId)) {
       return res.status(403).json({ error: "Only the author or an admin can delete this post" });
     }
+    unlinkCommsMediaUrls(collectPshareMediaUrls(row));
     await db.delete(psharePosts).where(eq(psharePosts.id, id));
     res.json({ success: true });
   } catch (e: any) {
@@ -833,6 +862,36 @@ router.post("/api/comms/pshare/posts/:id/comments", async (req: any, res) => {
   } catch (e: any) {
     console.error("[Pshare] add comment:", e);
     res.status(500).json({ error: "Failed to add comment" });
+  }
+});
+
+router.delete("/api/comms/pshare/posts/:postId/comments/:commentId", async (req: any, res) => {
+  const userId = getUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  const { postId, commentId } = req.params;
+  try {
+    const [comment] = await db
+      .select()
+      .from(pshareComments)
+      .where(and(eq(pshareComments.id, commentId), eq(pshareComments.postId, postId)))
+      .limit(1);
+    if (!comment) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const [post] = await db.select().from(psharePosts).where(eq(psharePosts.id, postId)).limit(1);
+    if (!post) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    if (!canDeletePsharePost(req, comment.authorId, userId)) {
+      return res.status(403).json({ error: "Only the author or an admin can delete this comment" });
+    }
+    await db.delete(pshareComments).where(eq(pshareComments.id, commentId));
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[Pshare] delete comment:", e);
+    res.status(500).json({ error: "Failed to delete comment" });
   }
 });
 

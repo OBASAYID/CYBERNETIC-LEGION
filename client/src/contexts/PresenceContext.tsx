@@ -4,6 +4,7 @@ import { getCommsDeviceId, resolveCyrusIdentity } from "../lib/cyrus-identity";
 import {
   resolveCyrusSocketIoOrigin,
   appendCommSignalingTokenToSearchParams,
+  systemFetch,
 } from "@shared/cyrus-api-client";
 import { cyrusDebugLog } from "@shared/cyrus-debug-session-log";
 import {
@@ -295,6 +296,7 @@ interface PresenceContextType {
   sendMessage: (targetUserId: string, message: string) => void;
   /** `conversationId` is a peer user id or `group_*` group thread id. */
   sendChatMessage: (conversationId: string, payload: ChatOutboundPayload) => void;
+  deleteMessage: (messageId: string, targetUserId?: string, groupId?: string) => void;
   clearNotification: (id: string) => void;
   wsRef: React.MutableRefObject<Socket | null>;
   callDiagnostics: CallDiagnosticsSnapshot | null;
@@ -308,6 +310,7 @@ interface PresenceContextType {
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => Promise<void>;
   sendCallChatMessage: (payload: ChatOutboundPayload) => void;
+  deleteCallChatMessage: (messageId: string) => void;
   callChatMessages: InCallChatMessage[];
   isCallRecording: boolean;
   isCallRecordingUploading: boolean;
@@ -524,6 +527,30 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     activeCallRef.current = activeCall;
   }, [activeCall]);
+
+  useEffect(() => {
+    if (!activeCall?.roomId) {
+      setCallChatMessages([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const actorId = currentUserIdRef.current;
+        if (!actorId) return;
+        const res = await systemFetch(
+          `/api/comms/calls/${encodeURIComponent(activeCall.roomId)}/messages`,
+          { headers: { "X-User-Id": actorId } },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { messages?: InCallChatMessage[] };
+        if (Array.isArray(data.messages)) {
+          setCallChatMessages(data.messages);
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+  }, [activeCall?.roomId]);
 
   const addNotification = useCallback((type: CallNotification["type"], message: string) => {
     const notif: CallNotification = {
@@ -2133,6 +2160,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     socket.on(
       "call-chat-message",
       (data: {
+        id?: string;
         senderId: string;
         senderName: string;
         message: string;
@@ -2147,6 +2175,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         if (!call || (data.roomId && data.roomId !== call.roomId)) return;
         setCallChatMessages((prev) => {
           const next: InCallChatMessage = {
+            id: data.id,
             senderId: data.senderId,
             senderName: data.senderName,
             message: data.message,
@@ -2156,10 +2185,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
             fileName: data.fileName,
             fileMimeType: data.fileMimeType,
           };
+          if (data.id && prev.some((m) => m.id === data.id)) return prev;
           const key = `${next.senderId}:${next.timestamp}:${next.message}`;
           if (prev.some((m) => `${m.senderId}:${m.timestamp}:${m.message}` === key)) return prev;
           return [...prev, next];
         });
+      },
+    );
+
+    socket.on(
+      "call-chat-message-deleted",
+      (data: { roomId?: string; messageId?: string }) => {
+        const call = activeCallRef.current;
+        if (!call || !data.messageId || (data.roomId && data.roomId !== call.roomId)) return;
+        setCallChatMessages((prev) => prev.filter((m) => m.id !== data.messageId));
       },
     );
 
@@ -2489,6 +2528,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     [sendChatMessage],
   );
 
+  const deleteMessage = useCallback(
+    (messageId: string, targetUserId?: string, groupId?: string) => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        addNotification("error", "Reconnecting — cannot delete message yet");
+        return;
+      }
+      socket.emit("delete-message", { messageId, targetUserId, groupId });
+    },
+    [addNotification],
+  );
+
   const reportRemoteMediaPlayback = useCallback((autoplayBlocked: boolean) => {
     webrtcDiagSessionRef.current?.reportRemotePlayback(autoplayBlocked);
     if (autoplayBlocked) {
@@ -2633,6 +2684,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       timestamp,
     });
   }, [addNotification]);
+
+  const deleteCallChatMessage = useCallback((messageId: string) => {
+    const call = activeCallRef.current;
+    const socket = socketRef.current;
+    if (!call || !socket?.connected) return;
+    setCallChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+    socket.emit("delete-call-chat-message", { roomId: call.roomId, messageId });
+  }, []);
 
   const sendCallMedia = useCallback(
     async (file: File, caption: string, onProgress?: (progress: CommsUploadProgress) => void) => {
@@ -2799,6 +2858,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         toggleVideo,
         sendMessage,
         sendChatMessage,
+        deleteMessage,
         clearNotification,
         wsRef: socketRef as any,
         callDiagnostics,
@@ -2810,6 +2870,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         startScreenShare,
         stopScreenShare,
         sendCallChatMessage,
+        deleteCallChatMessage,
         callChatMessages,
         isCallRecording,
         isCallRecordingUploading,

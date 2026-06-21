@@ -8,13 +8,14 @@ import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
 import { cyrusDebugLogAwait } from "../../shared/cyrus-debug-session-log.server.js";
 import { db } from "../db.js";
 import { onlineUsers, directMessages, groupChats, callSessions, callMessages, liveStreams, sharedMedia, calls, callLogs } from "../../shared/models/comms.js";
-import { eq, ilike, sql } from "drizzle-orm";
+import { eq, and, ilike, sql } from "drizzle-orm";
 import { commsIntelligence } from "./comms-intelligence.js";
 import { gwaEngine } from "./gwa-engine.js";
 import {
   flushPendingForUser,
   persistChatMessage,
   queueForOfflineRecipient,
+  deleteChatMessage,
 } from "./delivery-hub.js";
 import {
   deleteActiveCallState,
@@ -2036,6 +2037,33 @@ export function initSocketSignaling(server: HttpServer) {
       }
     });
 
+    socket.on("delete-message", async (data: { messageId?: string; targetUserId?: string; groupId?: string }) => {
+      const actorId = (socket as any).userId;
+      if (!actorId || !data?.messageId) return;
+
+      const result = await deleteChatMessage({ messageId: data.messageId, actorId });
+      if (!result.ok) {
+        socket.emit("message-delete-failed", { messageId: data.messageId, error: result.error });
+        return;
+      }
+
+      const payload = {
+        messageId: data.messageId,
+        senderId: actorId,
+        recipientId: result.message.recipientId,
+        groupId: result.message.groupId,
+        targetUserId: data.targetUserId || result.message.recipientId,
+      };
+
+      socket.emit("message-deleted", payload);
+
+      if (result.message.groupId) {
+        socket.to(`group_${result.message.groupId}`).emit("message-deleted", payload);
+      } else if (result.message.recipientId) {
+        await emitUserEventByCommsId(io, result.message.recipientId, "message-deleted", payload as Record<string, unknown>);
+      }
+    });
+
     socket.on(
       "message-delivered",
       async (data: { messageId?: string; senderId?: string; recipientId?: string }) => {
@@ -2440,8 +2468,9 @@ export function initSocketSignaling(server: HttpServer) {
       const msgType = data.messageType || "text";
       const mediaUrls = data.fileUrl ? [data.fileUrl] : [];
 
+      let messageId: string | undefined;
       try {
-        await db.insert(callMessages).values({
+        const [inserted] = await db.insert(callMessages).values({
           callSessionId: data.roomId,
           userId,
           userName: user.displayName,
@@ -2449,12 +2478,14 @@ export function initSocketSignaling(server: HttpServer) {
           messageType: msgType,
           mediaUrls,
           isPrivate: false,
-        });
+        }).returning({ id: callMessages.id });
+        messageId = inserted?.id;
       } catch (err) {
         console.error("[Socket.IO] Failed to persist call message:", err);
       }
 
       const chatPayload = {
+        id: messageId,
         senderId: userId,
         senderName: user.displayName,
         message: data.message,
@@ -2467,6 +2498,38 @@ export function initSocketSignaling(server: HttpServer) {
       };
 
       await emitToCallRoom(io, data.roomId, "call-chat-message", chatPayload);
+    });
+
+    socket.on("delete-call-chat-message", async (data: { roomId?: string; messageId?: string }) => {
+      const userId = (socket as any).userId;
+      if (!userId || !data?.roomId || !data?.messageId) return;
+
+      try {
+        const [row] = await db
+          .select()
+          .from(callMessages)
+          .where(eq(callMessages.id, data.messageId))
+          .limit(1);
+        if (!row || row.callSessionId !== data.roomId) {
+          socket.emit("call-chat-message-delete-failed", { messageId: data.messageId, error: "Not found" });
+          return;
+        }
+        if (row.userId !== userId) {
+          socket.emit("call-chat-message-delete-failed", { messageId: data.messageId, error: "Forbidden" });
+          return;
+        }
+        const mediaUrls = Array.isArray(row.mediaUrls) ? (row.mediaUrls as string[]) : [];
+        const { unlinkCommsMediaFile } = await import("./upload-paths.js");
+        for (const url of mediaUrls) unlinkCommsMediaFile(url);
+        await db.delete(callMessages).where(eq(callMessages.id, data.messageId));
+        await emitToCallRoom(io, data.roomId, "call-chat-message-deleted", {
+          roomId: data.roomId,
+          messageId: data.messageId,
+        });
+      } catch (err) {
+        console.error("[Socket.IO] Failed to delete call message:", err);
+        socket.emit("call-chat-message-delete-failed", { messageId: data.messageId, error: "Delete failed" });
+      }
     });
 
     socket.on("send-private-message", async (data: { roomId: string; message: string; privateRecipients: string[]; mediaUrls?: string[]; messageType?: string }) => {

@@ -18,6 +18,7 @@ import { CommsIncomingCallOverlay } from "@/components/comms/comms-call-chrome";
 import { PshareTabPanel } from "@/components/comms/PshareTabPanel";
 import { getAuthenticatedUserId } from "@/lib/auth-storage";
 import { systemFetch, systemApiUrl } from "@shared/cyrus-api-client";
+import { getCommsDeviceId } from "../../../client/src/lib/comms-device-id";
 import {
   COMMS_MEDIA_FILE_ACCEPT,
   uploadAndBuildCommsMediaPayload,
@@ -473,7 +474,7 @@ function UsersRail({ users, myId, myName, selectedUserId, onCallVoice, onCallVid
 ══════════════════════════════════════════════════════════════ */
 function ChatPanel({ myId, myName, targetUser }:
   { myId:string; myName:string; targetUser:{id:string;name:string}|null }) {
-  const { sendMessage, sendChatMessage, wsRef } = usePresence();
+  const { sendMessage, sendChatMessage, deleteMessage, wsRef } = usePresence();
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -483,8 +484,17 @@ function ChatPanel({ myId, myName, targetUser }:
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const commIdentityHeaders = useMemo(
-    () => ({ "x-device-id": myId, "x-user-id": myId }),
+    () => ({ "x-user-id": myId, "x-device-id": getCommsDeviceId() }),
     [myId],
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (!targetUser || !window.confirm("Delete this message and any attached media?")) return;
+      setMsgs((prev) => prev.filter((m) => m.id !== messageId));
+      deleteMessage(messageId, targetUser.id);
+    },
+    [targetUser, deleteMessage],
   );
 
   useEffect(() => {
@@ -615,9 +625,16 @@ function ChatPanel({ myId, myName, targetUser }:
 
     socket.on("new-message", onNewMessage);
     socket.on("message-sent", onMessageSent);
+    const onMessageDeleted = (data: { messageId?: string; senderId?: string; recipientId?: string }) => {
+      if (!data.messageId) return;
+      if (data.senderId !== targetUser.id && data.senderId !== myId && data.recipientId !== myId) return;
+      setMsgs((prev) => prev.filter((m) => m.id !== data.messageId));
+    };
+    socket.on("message-deleted", onMessageDeleted);
     return () => {
       socket.off("new-message", onNewMessage);
       socket.off("message-sent", onMessageSent);
+      socket.off("message-deleted", onMessageDeleted);
     };
   }, [targetUser?.id, myId, myName, targetUser, wsRef]);
 
@@ -753,6 +770,17 @@ function ChatPanel({ myId, myName, targetUser }:
                   <p className="text-[9px] text-white/30 shrink-0">{timeAgo(safeCreatedAt)}</p>
                 </div>
                 {renderDirectChatBody(msg)}
+                {mine && !msg.id.startsWith("opt-") && (
+                  <button
+                    type="button"
+                    title="Delete message"
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    className="mt-2 flex items-center gap-1 text-[10px] text-white/35 hover:text-rose-300 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+                )}
                 {/* Reply button — matches reference "Reply" link */}
                 {!mine && (
                   <button type="button"
@@ -944,6 +972,7 @@ function GroupCallHub({
   onAcceptGroupCall, onDeclineGroupCall, onEndGroupCall,
   onToggleMute, onToggleVideo, isMuted, isVideoEnabled,
   groupCallChatMessages, onSendGroupCallChatMessage, onSendGroupCallMedia,
+  onDeleteGroupCallChatMessage,
   wsRef,
 }: {
   myUserId:string; myName:string; users:OnlineUser[]; sfuMode:string;
@@ -960,6 +989,7 @@ function GroupCallHub({
     caption: string,
     onProgress?: (progress: CommsUploadProgress) => void,
   ) => Promise<void>;
+  onDeleteGroupCallChatMessage: (messageId: string) => void;
   wsRef: MutableRefObject<unknown>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -1178,6 +1208,7 @@ function GroupCallHub({
             messages={groupCallChatMessages}
             onSendMessage={onSendGroupCallChatMessage}
             onSendMedia={onSendGroupCallMedia}
+            onDeleteMessage={onDeleteGroupCallChatMessage}
             onClose={()=>setShowGroupChat(false)}
             socketRef={wsRef as MutableRefObject<any>}
           />
@@ -1646,7 +1677,7 @@ export default function CommsHubPage() {
     mediaControls, wsRef, isScreenSharing, screenShareStream,
     remoteScreenSharerName, startScreenShare, stopScreenShare,
     sendCallChatMessage, recoverCallMedia, reportRemoteMediaPlayback,
-    callChatMessages,
+    callChatMessages, deleteCallChatMessage,
     isCallRecording, isCallRecordingUploading, callRecordingDurationSec,
     remoteRecordingActive, remoteRecordingBy, toggleCallRecording,
     sendCallMedia,
@@ -1664,6 +1695,7 @@ export default function CommsHubPage() {
     acceptIncomingGroupCall, declineIncomingGroupCall,
     endGroupCall, toggleMute: toggleGroupMute, toggleVideo: toggleGroupVideo,
     groupCallChatMessages, sendGroupCallChatMessage, sendGroupCallMedia,
+    deleteGroupCallChatMessage,
   } = useCyrusGroupCall({ socketRef:wsRef, selfId:myId, displayName, isConnected });
 
   /* Tab state — support URL query param */
@@ -1788,6 +1820,7 @@ export default function CommsHubPage() {
           remoteRecordingBy={remoteRecordingBy}
           onToggleRecording={toggleCallRecording}
           onSendCallMedia={sendCallMedia}
+          onDeleteCallChatMessage={deleteCallChatMessage}
         />
       )}
 
@@ -1924,6 +1957,7 @@ export default function CommsHubPage() {
                   groupCallChatMessages={groupCallChatMessages}
                   onSendGroupCallChatMessage={sendGroupCallChatMessage}
                   onSendGroupCallMedia={sendGroupCallMedia}
+                  onDeleteGroupCallChatMessage={deleteGroupCallChatMessage}
                   wsRef={wsRef}
                 />
               )}

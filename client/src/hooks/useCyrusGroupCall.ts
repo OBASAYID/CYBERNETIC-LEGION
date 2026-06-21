@@ -252,6 +252,7 @@ export function useCyrusGroupCall({
 
   const appendGroupCallChatMessage = useCallback((msg: InCallChatMessage) => {
     setGroupCallChatMessages((prev) => {
+      if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
       const key = `${msg.senderId}:${msg.timestamp}:${msg.message}:${msg.fileUrl || ""}`;
       if (prev.some((m) => `${m.senderId}:${m.timestamp}:${m.message}:${m.fileUrl || ""}` === key)) {
         return prev;
@@ -387,6 +388,7 @@ export function useCyrusGroupCall({
     };
 
     const onCallChatMessage = (data: {
+      id?: string;
       senderId: string;
       senderName: string;
       message: string;
@@ -400,6 +402,7 @@ export function useCyrusGroupCall({
       const active = activeGroupCallRef.current;
       if (!active || data.roomId !== active.roomId) return;
       appendGroupCallChatMessage({
+        id: data.id,
         senderId: data.senderId,
         senderName: data.senderName,
         message: data.message,
@@ -411,6 +414,12 @@ export function useCyrusGroupCall({
       });
     };
 
+    const onCallChatMessageDeleted = (data: { roomId?: string; messageId?: string }) => {
+      const active = activeGroupCallRef.current;
+      if (!active || !data.messageId || data.roomId !== active.roomId) return;
+      setGroupCallChatMessages((prev) => prev.filter((m) => m.id !== data.messageId));
+    };
+
     socket.on("incoming-group-call", onIncoming);
     socket.on("group-call-joined", onJoined);
     socket.on("group-call-started", onJoined);
@@ -418,6 +427,7 @@ export function useCyrusGroupCall({
     socket.on("call-ended", onCallEnded);
     socket.on("peer-left", onPeerLeft);
     socket.on("call-chat-message", onCallChatMessage);
+    socket.on("call-chat-message-deleted", onCallChatMessageDeleted);
 
     return () => {
       socket.off("incoming-group-call", onIncoming);
@@ -427,8 +437,42 @@ export function useCyrusGroupCall({
       socket.off("call-ended", onCallEnded);
       socket.off("peer-left", onPeerLeft);
       socket.off("call-chat-message", onCallChatMessage);
+      socket.off("call-chat-message-deleted", onCallChatMessageDeleted);
     };
   }, [socketRef, isConnected, selfId, sfuStatus, startMediaSession, teardown, appendGroupCallChatMessage]);
+
+  useEffect(() => {
+    if (!activeGroupCall?.roomId || !selfId) {
+      setGroupCallChatMessages([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await systemFetch(
+          `/api/comms/calls/${encodeURIComponent(activeGroupCall.roomId)}/messages`,
+          { headers: { "X-User-Id": selfId } },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { messages?: InCallChatMessage[] };
+        if (Array.isArray(data.messages)) {
+          setGroupCallChatMessages(data.messages);
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+  }, [activeGroupCall?.roomId, selfId]);
+
+  const deleteGroupCallChatMessage = useCallback(
+    (messageId: string) => {
+      const active = activeGroupCallRef.current;
+      const socket = socketRef.current;
+      if (!active || !socket?.connected) return;
+      setGroupCallChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+      socket.emit("delete-call-chat-message", { roomId: active.roomId, messageId });
+    },
+    [socketRef],
+  );
 
   useEffect(() => () => teardown(), [teardown]);
 
@@ -449,5 +493,6 @@ export function useCyrusGroupCall({
     groupCallChatMessages,
     sendGroupCallChatMessage,
     sendGroupCallMedia,
+    deleteGroupCallChatMessage,
   };
 }

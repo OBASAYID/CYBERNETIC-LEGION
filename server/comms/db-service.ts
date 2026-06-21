@@ -319,6 +319,30 @@ export async function dbInsertMessage(
   }
 }
 
+export async function dbDeleteMessage(messageId: string): Promise<DbResult<{ id: string }>> {
+  if (isCircuitOpen()) {
+    if (fallbackMessages.has(messageId)) {
+      fallbackMessages.delete(messageId);
+      return { success: true, data: { id: messageId } };
+    }
+    return { success: false, error: "Message not found" };
+  }
+  try {
+    const [row] = await withRetry("deleteMessage", () =>
+      db.delete(directMessages).where(eq(directMessages.id, messageId)).returning({ id: directMessages.id }),
+    );
+    if (!row) return { success: false, error: "Message not found" };
+    fallbackMessages.delete(messageId);
+    return { success: true, data: row };
+  } catch (err) {
+    if (fallbackMessages.has(messageId)) {
+      fallbackMessages.delete(messageId);
+      return { success: true, data: { id: messageId } };
+    }
+    return { success: false, error: err instanceof Error ? err.message : "Delete failed" };
+  }
+}
+
 export async function dbGetConversation(
   userId: string,
   otherUserId: string,

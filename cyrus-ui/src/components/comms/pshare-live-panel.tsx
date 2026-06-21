@@ -156,7 +156,7 @@ export function PshareLivePanel({ myUserId, onLiveStarted }: PshareLivePanelProp
 
       <div className="space-y-3 p-3">
         <p className="text-[10px] text-white/50">
-          Live posts expire after 24 hours. {pshareBroadcastSourceLabel(mode === "mobile" ? "mobile_camera" : "drone")} mode.
+          Live posts stay on Pshare until you delete them. {pshareBroadcastSourceLabel(mode === "mobile" ? "mobile_camera" : "drone")} mode.
         </p>
 
         {mode === "mobile" ? (
