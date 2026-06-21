@@ -2,9 +2,9 @@
 # Replace SITE_HOST in scripts/setup-hetzner-https.sh if your public IP changes.
 
 {$SITE_HOST} {
-	# Chunked comms uploads up to 512MB (+ headroom).
+	# Per-request body cap (single chunk + multipart overhead; comms uses ~16 MiB chunks).
 	request_body {
-		max_size 600MB
+		max_size 32MB
 	}
 
 	# Socket.IO — keep WebSocket streams open (no buffering).
@@ -19,14 +19,14 @@
 		}
 	}
 
-	# Large uploads and live segment chunks — long read/write windows.
+	# Chunked comms uploads (2–4 GiB via many chunks) — long read/write windows.
 	@uploads path /api/comms/upload* /api/comms/pshare/live/*
 	handle @uploads {
 		reverse_proxy app:3020 {
 			flush_interval -1
 			transport http {
-				read_timeout 30m
-				write_timeout 30m
+				read_timeout 90m
+				write_timeout 90m
 			}
 		}
 	}
@@ -37,8 +37,8 @@
 		reverse_proxy app:3020 {
 			flush_interval -1
 			transport http {
-				read_timeout 10m
-				write_timeout 10m
+				read_timeout 30m
+				write_timeout 30m
 			}
 		}
 	}
@@ -47,8 +47,8 @@
 		encode gzip zstd
 		reverse_proxy app:3020 {
 			transport http {
-				read_timeout 5m
-				write_timeout 5m
+				read_timeout 10m
+				write_timeout 10m
 			}
 		}
 	}

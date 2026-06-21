@@ -1,6 +1,5 @@
 import { systemFetch } from "@shared/cyrus-api-client";
 import {
-  COMMS_DEFAULT_CHUNK_BYTES,
   COMMS_DIRECT_UPLOAD_MAX_BYTES,
 } from "@shared/comms/media-formats";
 import {
@@ -8,6 +7,7 @@ import {
   PSHARE_PHOTO_DIRECT_UPLOAD_MAX_BYTES,
 } from "@shared/comms/pshare-engine";
 import { getCommsDeviceId } from "./comms-device-id";
+import { loadCommsUploadCapabilities } from "./comms-upload-capabilities";
 
 export type CommsUploadProgress = {
   loaded: number;
@@ -23,6 +23,9 @@ export type ChunkedUploadResult = {
   fileSize: number;
 };
 
+const CHUNK_UPLOAD_RETRIES = 6;
+const COMPLETE_UPLOAD_TIMEOUT_MS = 60 * 60 * 1000;
+
 function commsUploadHeaders(userId: string, priority?: "photo" | "normal"): HeadersInit {
   const headers: Record<string, string> = {
     "X-Device-Id": getCommsDeviceId(),
@@ -32,7 +35,26 @@ function commsUploadHeaders(userId: string, priority?: "photo" | "normal"): Head
   return headers;
 }
 
-const COMMS_CHUNK_UPLOAD_CONCURRENCY = 4;
+function uploadConcurrency(totalBytes: number): number {
+  if (totalBytes >= 1024 * 1024 * 1024) return 2;
+  if (totalBytes >= 512 * 1024 * 1024) return 3;
+  return 4;
+}
+
+async function commsUploadFetch(
+  path: string,
+  init: RequestInit,
+  timeoutMs?: number,
+): Promise<Response> {
+  if (!timeoutMs) return systemFetch(path, init);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await systemFetch(path, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 async function uploadChunksParallel(
   file: File | Blob,
@@ -44,6 +66,7 @@ async function uploadChunksParallel(
 ): Promise<void> {
   let nextIndex = 0;
   let bytesLoaded = 0;
+  const workers = uploadConcurrency(total);
 
   const worker = async () => {
     while (nextIndex < init.totalChunks) {
@@ -56,14 +79,13 @@ async function uploadChunksParallel(
       onProgress?.({
         loaded: bytesLoaded,
         total,
-        percent: Math.min(100, Math.round((bytesLoaded / total) * 100)),
+        percent: Math.min(99, Math.round((bytesLoaded / total) * 100)),
         phase: "uploading",
       });
     }
   };
 
-  const workers = Math.min(COMMS_CHUNK_UPLOAD_CONCURRENCY, init.totalChunks);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(workers, init.totalChunks) }, () => worker()));
 }
 
 async function uploadChunkWithRetry(
@@ -72,7 +94,7 @@ async function uploadChunkWithRetry(
   blob: Blob,
   userId: string,
   priority?: "photo" | "normal",
-  retries = 3,
+  retries = CHUNK_UPLOAD_RETRIES,
 ): Promise<void> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -81,7 +103,7 @@ async function uploadChunkWithRetry(
       form.append("uploadId", uploadId);
       form.append("chunkIndex", String(chunkIndex));
       form.append("chunk", blob, `chunk-${chunkIndex}`);
-      const res = await systemFetch("/api/comms/upload/chunk", {
+      const res = await commsUploadFetch("/api/comms/upload/chunk", {
         method: "POST",
         body: form,
         headers: commsUploadHeaders(userId, priority),
@@ -93,7 +115,7 @@ async function uploadChunkWithRetry(
       return;
     } catch (err) {
       lastErr = err;
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
@@ -110,6 +132,7 @@ export async function uploadCommsFileChunked(
     onProgress?: (p: CommsUploadProgress) => void;
   },
 ): Promise<ChunkedUploadResult> {
+  const caps = await loadCommsUploadCapabilities();
   const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
   const mime =
     options.mimeType ||
@@ -118,11 +141,14 @@ export async function uploadCommsFileChunked(
   const priority =
     options.priority ?? (isPsharePhotoUpload(name, mime) ? "photo" : "normal");
   const total = file.size;
-  const chunkSize = options.chunkSize || COMMS_DEFAULT_CHUNK_BYTES;
+
+  if (total > caps.maxUploadBytes) {
+    throw new Error(`File exceeds server limit (${caps.maxUploadBytes} bytes)`);
+  }
 
   options.onProgress?.({ loaded: 0, total, percent: 0, phase: "init" });
 
-  const initRes = await systemFetch("/api/comms/upload/init", {
+  const initRes = await commsUploadFetch("/api/comms/upload/init", {
     method: "POST",
     headers: { ...commsUploadHeaders(options.userId, priority), "Content-Type": "application/json" },
     body: JSON.stringify({ fileName: name, fileSize: total, mimeType: mime, priority }),
@@ -138,27 +164,19 @@ export async function uploadCommsFileChunked(
     mimeType?: string;
   };
 
-  let loaded = 0;
-  await uploadChunksParallel(file, init, total, options.userId, priority, (p) => {
-    loaded = p.loaded;
-    options.onProgress?.(p);
-  });
-  if (loaded < total) {
-    options.onProgress?.({
-      loaded: total,
-      total,
-      percent: 100,
-      phase: "uploading",
-    });
-  }
+  await uploadChunksParallel(file, init, total, options.userId, priority, options.onProgress);
 
   options.onProgress?.({ loaded: total, total, percent: 100, phase: "completing" });
 
-  const completeRes = await systemFetch("/api/comms/upload/complete", {
-    method: "POST",
-    headers: { ...commsUploadHeaders(options.userId, priority), "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId: init.uploadId }),
-  });
+  const completeRes = await commsUploadFetch(
+    "/api/comms/upload/complete",
+    {
+      method: "POST",
+      headers: { ...commsUploadHeaders(options.userId, priority), "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId: init.uploadId }),
+    },
+    COMPLETE_UPLOAD_TIMEOUT_MS,
+  );
   if (!completeRes.ok) {
     const err = await completeRes.json().catch(() => ({}));
     throw new Error((err as { error?: string }).error || "Upload complete failed");
@@ -176,9 +194,10 @@ export async function uploadCommsFileChunked(
 export function shouldUseChunkedCommsUpload(
   fileSize: number,
   priority: "photo" | "normal" = "normal",
+  directMaxBytes = COMMS_DIRECT_UPLOAD_MAX_BYTES,
 ): boolean {
   const directMax =
-    priority === "photo" ? PSHARE_PHOTO_DIRECT_UPLOAD_MAX_BYTES : COMMS_DIRECT_UPLOAD_MAX_BYTES;
+    priority === "photo" ? PSHARE_PHOTO_DIRECT_UPLOAD_MAX_BYTES : directMaxBytes;
   return fileSize > directMax;
 }
 
@@ -196,7 +215,7 @@ async function uploadCommsFileDirect(
 
   const form = new FormData();
   form.append("file", file, options.fileName);
-  const res = await systemFetch("/api/comms/upload", {
+  const res = await commsUploadFetch("/api/comms/upload", {
     method: "POST",
     body: form,
     headers: commsUploadHeaders(options.userId, options.priority),
@@ -229,12 +248,17 @@ export async function uploadCommsFileSmart(
     onProgress?: (p: CommsUploadProgress) => void;
   },
 ): Promise<ChunkedUploadResult> {
+  const caps = await loadCommsUploadCapabilities();
   const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
   const mime = (file instanceof File ? file.type : "") || "application/octet-stream";
   const priority =
     options.priority ?? (isPsharePhotoUpload(name, mime) ? "photo" : "normal");
 
-  if (!shouldUseChunkedCommsUpload(file.size, priority)) {
+  if (file.size > caps.maxUploadBytes) {
+    throw new Error(`File exceeds server limit (${caps.maxUploadBytes} bytes)`);
+  }
+
+  if (!shouldUseChunkedCommsUpload(file.size, priority, caps.directUploadMaxBytes)) {
     return uploadCommsFileDirect(file, {
       userId: options.userId,
       fileName: name,
@@ -249,5 +273,6 @@ export async function uploadCommsFileSmart(
     fileName: name,
     mimeType: mime,
     priority,
+    chunkSize: caps.chunkSizeBytes,
   });
 }

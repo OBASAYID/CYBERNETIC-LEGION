@@ -17,6 +17,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/stack/deployment",
   "/api/stack/link",
   "/api/comms/webrtc-health",
+  "/api/comms/upload/capabilities",
   "/api/comms/push/status",
   "/api/algorithms/catalog",
   "/api/mcp/catalog",

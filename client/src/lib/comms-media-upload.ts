@@ -14,6 +14,7 @@ import {
   type CommsUploadProgress,
 } from "./comms-chunk-upload";
 import { registerCommsSharedMedia } from "./comms-shared-media";
+import { getCachedCommsUploadCapabilities, loadCommsUploadCapabilities } from "./comms-upload-capabilities";
 
 /** Shared accept string for chat + in-call media pickers */
 export const COMMS_MEDIA_FILE_ACCEPT = buildCommsMediaFileAccept();
@@ -56,12 +57,17 @@ export type CommsMediaUploadOptions = {
 export function validateCommsMediaFile(file: File | Blob, fileName?: string): string | null {
   const name = fileName || (file instanceof File ? file.name : "");
   if (file.size <= 0) return "File is empty";
-  const maxLabel = formatCommsFileSize(2 * 1024 * 1024 * 1024);
-  if (file.size > 2 * 1024 * 1024 * 1024) {
+  const maxBytes = getCachedCommsUploadCapabilities().maxUploadBytes;
+  const maxLabel = formatCommsFileSize(maxBytes);
+  if (file.size > maxBytes) {
     return `File exceeds maximum size (${maxLabel})`;
   }
   if (!name.trim()) return null;
   return null;
+}
+
+export async function prefetchCommsUploadCapabilities(): Promise<void> {
+  await loadCommsUploadCapabilities();
 }
 
 export async function uploadCommsMediaFile(
@@ -69,6 +75,7 @@ export async function uploadCommsMediaFile(
   options: CommsMediaUploadOptions,
 ): Promise<CommsUploadedMedia | null> {
   const name = options.fileName || (file instanceof File ? file.name : `upload_${Date.now()}`);
+  await loadCommsUploadCapabilities();
   const validationError = validateCommsMediaFile(file, name);
   if (validationError) {
     console.error("[comms] media validation:", validationError);

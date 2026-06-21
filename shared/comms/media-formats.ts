@@ -94,8 +94,10 @@ export const COMMS_MEDIA_MIME: Record<string, string> = {
   bz2: "application/x-bzip2",
 };
 
-export const COMMS_DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024;
+export const COMMS_DEFAULT_CHUNK_BYTES = 16 * 1024 * 1024;
 export const COMMS_DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+/** Upper bound when CYRUS_COMMS_MAX_UPLOAD_BYTES is unset on the server (4 GiB). */
+export const COMMS_HARD_MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
 export const COMMS_DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
 
 export function getCommsFileExtension(fileName?: string | null): string {

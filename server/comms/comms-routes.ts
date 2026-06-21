@@ -52,6 +52,7 @@ import {
   isAllowedAvatarImage,
 } from "../../shared/comms/avatar-image-formats.js";
 import { AVATAR_SERVE_MIME } from "../../shared/comms/avatar-image-formats.js";
+import { COMMS_DIRECT_UPLOAD_MAX_BYTES } from "../../shared/comms/media-formats.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1661,7 +1662,7 @@ router.get("/api/comms/upload/capabilities", (_req, res) => {
   res.json({
     maxUploadBytes: getCommsMaxUploadBytes(),
     chunkSizeBytes: getCommsChunkSizeBytes(),
-    directUploadMaxBytes: 6 * 1024 * 1024,
+    directUploadMaxBytes: COMMS_DIRECT_UPLOAD_MAX_BYTES,
     supportsChunkedUpload: true,
     supportsRangeStreaming: true,
   });

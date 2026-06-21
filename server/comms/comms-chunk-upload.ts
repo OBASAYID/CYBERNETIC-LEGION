@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import {
   COMMS_DEFAULT_CHUNK_BYTES,
   COMMS_DEFAULT_MAX_UPLOAD_BYTES,
+  COMMS_HARD_MAX_UPLOAD_BYTES,
   guessCommsMediaMime,
 } from "../../shared/comms/media-formats.js";
 
@@ -20,7 +21,8 @@ export type ChunkUploadSession = {
 };
 
 const sessions = new Map<string, ChunkUploadSession>();
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+/** Allow multi-hour uploads on slow links (resume via chunk status if interrupted). */
+const SESSION_TTL_MS = 72 * 60 * 60 * 1000;
 const loadedSessionIndexes = new Set<string>();
 
 type SerializedChunkSession = Omit<ChunkUploadSession, "receivedChunks"> & {
@@ -65,7 +67,7 @@ export function getCommsMaxUploadBytes(): number {
   const raw = process.env.CYRUS_COMMS_MAX_UPLOAD_BYTES;
   if (raw) {
     const n = parseInt(raw, 10);
-    if (Number.isFinite(n) && n > 0) return n;
+    if (Number.isFinite(n) && n > 0) return Math.min(n, COMMS_HARD_MAX_UPLOAD_BYTES);
   }
   return COMMS_DEFAULT_MAX_UPLOAD_BYTES;
 }
@@ -176,7 +178,7 @@ async function mergeChunksToFile(
   destPath: string,
 ): Promise<void> {
   const dir = sessionDir(chunksRoot, session.uploadId);
-  const writeStream = fs.createWriteStream(destPath);
+  const handle = await fs.promises.open(destPath, "w");
 
   try {
     for (let i = 0; i < session.totalChunks; i++) {
@@ -184,22 +186,12 @@ async function mergeChunksToFile(
       if (!fs.existsSync(chunkPath)) {
         throw new Error(`Missing chunk ${i}`);
       }
-      await new Promise<void>((resolve, reject) => {
-        const readStream = fs.createReadStream(chunkPath);
-        readStream.on("error", reject);
-        readStream.on("end", resolve);
-        readStream.pipe(writeStream, { end: false });
-      });
+      const data = await fs.promises.readFile(chunkPath);
+      await handle.write(data);
     }
-  } catch (err) {
-    writeStream.destroy();
-    throw err;
+  } finally {
+    await handle.close();
   }
-
-  await new Promise<void>((resolve, reject) => {
-    writeStream.end(() => resolve());
-    writeStream.on("error", reject);
-  });
 
   const stat = await fs.promises.stat(destPath);
   if (stat.size !== session.fileSize) {
