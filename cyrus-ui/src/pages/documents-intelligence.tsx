@@ -573,18 +573,20 @@ export default function DocumentsIntelligence() {
             </section>
           </div>
 
+          {/* RIGHT CONSOLE: Generated Documents and Analysis Results */}
           <aside
-            className="flex min-h-[300px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm"
-            aria-label="Output and generated documents"
+            className="flex min-h-[500px] min-w-0 flex-col overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-b from-emerald-950/40 via-slate-900/76 to-slate-950/88 shadow-[0_20px_42px_rgba(0,0,0,0.36)] backdrop-blur-sm"
+            aria-label="Generated documents and intelligence output"
           >
-            <div className="shrink-0 border-b border-white/10 px-4 py-3 sm:px-5">
+            <div className="shrink-0 border-b border-emerald-400/20 bg-gradient-to-r from-emerald-950/50 to-slate-950/50 px-4 py-3 sm:px-5">
               <h2
-                className="text-base font-semibold tracking-wide text-slate-100 sm:text-lg"
+                className="flex items-center gap-2 text-base font-semibold tracking-wide text-emerald-100 sm:text-lg"
                 style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
-                Output &amp; files
+                <Sparkles className="h-5 w-5 text-emerald-300" />
+                Generated Documents Console
               </h2>
-              <p className="text-sm leading-snug text-white/55">Analysis and generated text.</p>
+              <p className="text-sm leading-snug text-emerald-200/70">Intelligent output • AI-powered documents • Professional compliance</p>
             </div>
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
