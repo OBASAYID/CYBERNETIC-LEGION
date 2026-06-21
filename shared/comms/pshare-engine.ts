@@ -19,7 +19,7 @@ export const PSHARE_MOBILE_VIDEO_PROFILE: PshareVideoProfile = {
   maxWidth: 1280,
   maxHeight: 720,
   targetBitrateKbps: 2500,
-  chunkIntervalMs: 3000,
+  chunkIntervalMs: 2500,
   mobilePreferredFacing: "environment",
 };
 

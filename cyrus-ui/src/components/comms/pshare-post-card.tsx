@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clapperboard,
@@ -67,7 +67,7 @@ export function PsharePostCard({
   const [commentDraft, setCommentDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
-  const [liveRefreshKey, setLiveRefreshKey] = useState(0);
+  const refreshLivePostRef = useRef<(() => void) | null>(null);
   const isConsole = variant === "console";
   const compactConsole = isConsole && fixedLayout;
 
@@ -88,17 +88,21 @@ export function PsharePostCard({
         const data = (await res.json()) as { post?: PsharePost };
         if (data.post && !cancelled) {
           setLocal((prev) => ({ ...prev, ...data.post! }));
-          setLiveRefreshKey((k) => k + 1);
         }
       } catch {
         // keep polling on transient errors
       }
     };
 
+    refreshLivePostRef.current = () => {
+      void refreshLivePost();
+    };
+
     void refreshLivePost();
-    const id = window.setInterval(() => void refreshLivePost(), 2000);
+    const id = window.setInterval(() => void refreshLivePost(), 1200);
     return () => {
       cancelled = true;
+      refreshLivePostRef.current = null;
       window.clearInterval(id);
     };
   }, [local.id, local.postKind, local.liveStatus, myUserId, userRole]);
@@ -436,12 +440,12 @@ export function PsharePostCard({
         )}
       </div>
 
-      {local.fileUrl && (
+      {(local.fileUrl || isLivePost) && (
         <div className={`px-3 pb-2 ${compactConsole ? "min-h-0 flex-1 overflow-hidden" : ""}`}>
           <PshareMediaPreview
             post={local}
             variant={isConsole ? "console" : "feed"}
-            liveRefreshKey={liveRefreshKey}
+            onLiveNeedRefresh={() => refreshLivePostRef.current?.()}
           />
         </div>
       )}

@@ -233,44 +233,72 @@ export class PshareMobileLiveBroadcaster {
   private startSegmentLoop(callbacks: LiveCallbacks) {
     if (!this.recordStream || !this.session) return;
     const intervalMs = adviseLiveBroadcast({ source: "mobile_camera" }).profile.chunkIntervalMs;
-    let firstSegment = true;
 
-    const recordSegment = () => {
-      if (this.stopped || !this.recordStream || !this.session) return;
+    const loop = async () => {
+      while (!this.stopped && this.session && this.recordStream) {
+        const blob = await this.captureSegment(intervalMs);
+        if (blob && blob.size >= 256) {
+          this.enqueueSegment(blob, callbacks);
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    };
+
+    void loop();
+  }
+
+  /** One standalone clip per stop/start cycle (required for browser playback). */
+  private captureSegment(durationMs: number): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      if (this.stopped || !this.recordStream || !this.session) {
+        resolve(null);
+        return;
+      }
+
       const chunks: Blob[] = [];
       let recorder: MediaRecorder;
       try {
         recorder = this.createRecorder();
       } catch {
-        callbacks.onError?.("Recording not supported on this device");
+        resolve(null);
         return;
       }
+
+      let settled = false;
+      const finish = (blob: Blob | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(blob);
+      };
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
+      recorder.onerror = () => finish(null);
       recorder.onstop = () => {
-        if (chunks.length && this.session) {
-          const mime = this.recordedMime || chunks[0]?.type || "video/webm";
-          this.enqueueSegment(new Blob(chunks, { type: mime }), callbacks);
+        if (!chunks.length) {
+          finish(null);
+          return;
         }
-        if (!this.stopped) {
-          window.setTimeout(recordSegment, firstSegment ? 200 : 150);
-        }
-        firstSegment = false;
+        const mime = this.recordedMime || chunks[0]?.type || "video/webm";
+        finish(new Blob(chunks, { type: mime }));
       };
+
       try {
         recorder.start(250);
       } catch {
-        recorder.start();
+        try {
+          recorder.start();
+        } catch {
+          finish(null);
+          return;
+        }
       }
       this.recorder = recorder;
-      const segmentMs = firstSegment ? 1500 : intervalMs;
       window.setTimeout(() => {
         if (recorder.state === "recording") recorder.stop();
-      }, segmentMs);
-    };
-
-    recordSegment();
+      }, durationMs);
+    });
   }
 
   private enqueueSegment(blob: Blob, callbacks: LiveCallbacks) {

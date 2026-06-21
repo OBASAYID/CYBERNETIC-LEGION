@@ -9,6 +9,7 @@ import {
   resolvePshareMediaUrl,
 } from "../../../../client/src/lib/pshare-utils";
 import type { PsharePost } from "./pshare-types";
+import { PshareLiveViewerVideo } from "./pshare-live-viewer-video";
 
 type PshareMediaPreviewProps = {
   post: Pick<PsharePost, "fileUrl" | "fileName" | "fileMimeType" | "polishPreset" | "postKind" | "liveStatus" | "broadcastSource"> & {
@@ -17,15 +18,15 @@ type PshareMediaPreviewProps = {
   /** Full-width feed card vs compact command-console ticker. */
   variant?: "feed" | "console";
   className?: string;
-  /** Bust cache for live segment playback. */
-  liveRefreshKey?: number;
+  /** Poll for next live segment when the current clip ends. */
+  onLiveNeedRefresh?: () => void;
 };
 
 export function PshareMediaPreview({
   post,
   variant = "feed",
   className = "",
-  liveRefreshKey = 0,
+  onLiveNeedRefresh,
 }: PshareMediaPreviewProps) {
   const isLive = post.postKind === "live" && post.liveStatus === "live";
   const isConsole = variant === "console";
@@ -51,10 +52,7 @@ export function PshareMediaPreview({
     ? "video"
     : detectPshareMediaKind(post.fileName, mime);
   const baseUrl = resolvePshareMediaUrl(post.fileUrl);
-  const url =
-    isLive && liveRefreshKey > 0
-      ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}t=${liveRefreshKey}`
-      : baseUrl;
+  const url = baseUrl;
   const downloadUrl = pshareMediaDownloadUrl(post.fileUrl);
   const manifest = post.mediaManifest as { polishPreset?: PsharePolishPreset; polishIntensity?: number } | undefined;
   const preset = (post.polishPreset || manifest?.polishPreset || "clean") as PsharePolishPreset;
@@ -84,13 +82,25 @@ export function PshareMediaPreview({
 
   if (kind === "video" || isLive) {
     const hls = isHlsOrDashUrl(post.fileUrl);
+    if (isLive && !hls && baseUrl) {
+      return (
+        <PshareLiveViewerVideo
+          fileUrl={baseUrl}
+          broadcastSource={post.broadcastSource}
+          polish={polish}
+          isConsole={isConsole}
+          className={className}
+          onNeedRefresh={onLiveNeedRefresh}
+        />
+      );
+    }
     return (
       <div
         className={`relative overflow-hidden rounded-lg bg-black/50 ${
           isConsole ? "flex h-full min-h-[7.5rem] items-center justify-center" : ""
         } ${className}`}
       >
-        {isLive && (
+        {isLive && hls && (
           <span className="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-rose-400/40 bg-rose-600/80 px-2 py-0.5 text-[9px] font-bold uppercase text-white">
             <Radio className="h-3 w-3 animate-pulse" />
             Live
@@ -102,7 +112,6 @@ export function PshareMediaPreview({
           </span>
         )}
         <video
-          key={url}
           src={url}
           controls={!isLive}
           autoPlay={isLive}
