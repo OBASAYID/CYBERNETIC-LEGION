@@ -40,8 +40,8 @@ export class EnhancedLocalLLMClient {
   private models: ModelConfig[];
   private defaultModel: string;
   
-  constructor(baseUrl = 'http://localhost:11434') {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    this.baseUrl = (baseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
     this.defaultModel = process.env.OLLAMA_MODEL || 'cyrus-general';
     
     // Define specialized models

@@ -59,7 +59,8 @@ class CyrusMasterIntelligence {
 
     // Check all subsystems
     this.systemStatus.set('local-llm', await enhancedLocalLLM.isAvailable());
-    this.systemStatus.set('multi-model', true); // Always available with fallbacks
+    const multiStatus = multiModelIntelligence.getStatus();
+    this.systemStatus.set('multi-model', multiStatus.operational);
     this.systemStatus.set('voice', true); // Always available with fallbacks
     this.systemStatus.set('learning', true); // Always available
     this.systemStatus.set('evolution', true); // Always available
@@ -201,7 +202,7 @@ class CyrusMasterIntelligence {
     ];
 
     const response = await multiModelIntelligence.infer(messages, {
-      strategy: 'specialized'
+      strategy: (request.preferences?.strategy as any) || 'specialized',
     });
 
     // Extract code if present
@@ -239,7 +240,7 @@ class CyrusMasterIntelligence {
     ];
 
     const response = await multiModelIntelligence.infer(messages, {
-      strategy: 'specialized'
+      strategy: (request.preferences?.strategy as any) || 'specialized',
     });
 
     return {
@@ -332,7 +333,8 @@ class CyrusMasterIntelligence {
     
     // Check all subsystems
     systems['local-llm'] = await enhancedLocalLLM.isAvailable();
-    systems['multi-model'] = true;
+    const multiModelStatus = multiModelIntelligence.getStatus();
+    systems['multi-model'] = multiModelStatus.operational;
     systems['voice-stt'] = !!process.env.OPENAI_API_KEY;
     systems['voice-tts'] = !!(process.env.ELEVENLABS_API_KEY || process.env.OPENAI_API_KEY);
     systems['learning'] = true;
@@ -359,8 +361,6 @@ class CyrusMasterIntelligence {
     if (systems['evolution']) capabilities.push('Self-Evolution');
 
     // Get multi-model status
-    const multiModelStatus = multiModelIntelligence.getStatus();
-
     return {
       status,
       systems,

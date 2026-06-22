@@ -13,7 +13,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { enhancedLocalLLM } from './enhanced-local-llm.js';
-import { multiModelIntelligence } from './multi-model-intelligence.js';
+import { unifiedInfer } from './unified-inference.js';
 
 export interface UserProfile {
   userId: string;
@@ -192,11 +192,14 @@ class EnhancedLearningSystem {
     // Build personalized system prompt
     const systemPrompt = this.buildPersonalizedPrompt(profile, topic);
 
-    // Get response from multi-model intelligence
-    const response = await multiModelIntelligence.infer([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: query }
-    ]);
+    // Resilient multi-model path with cascade fallbacks
+    const response = await unifiedInfer(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query },
+      ],
+      { taskType: 'chat' },
+    );
 
     // Update interaction history
     profile.interactionHistory.totalInteractions++;
@@ -218,10 +221,10 @@ class EnhancedLearningSystem {
     await this.saveUserProfile(userId);
 
     // Log interaction for learning
-    this.logInteraction(userId, query, response.finalResponse, topic);
+    this.logInteraction(userId, query, response.response, topic);
 
     return {
-      response: response.finalResponse,
+      response: response.response,
       confidence: response.confidence,
       adaptations: [`Style: ${profile.preferences.communicationStyle}`, `Level: ${profile.preferences.expertiseLevel}`],
       learningOpportunities,

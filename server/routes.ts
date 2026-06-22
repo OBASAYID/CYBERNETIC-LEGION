@@ -2547,12 +2547,39 @@ Format your response in a clear, structured manner.`
         }
 
         if (!openAIClient) {
+          const { unifiedInfer, buildInferMessages } = await import("./ai/unified-inference.js");
+          const inferMessages = buildInferMessages({
+            systemPrompt: typeof systemContext === "string" ? systemContext : undefined,
+            userMessage: message,
+            conversationHistory: conversationHistory.map((c) => ({
+              role: c.role === "cyrus" ? "assistant" : c.role,
+              content: c.content,
+            })),
+          });
+          const multi = await unifiedInfer(inferMessages, { taskType: "chat" });
+          if (multi.response && multi.confidence > 0.1) {
+            return res.json({
+              response: stripEmojis(multi.response),
+              confidence: multi.confidence,
+              processingTime: 0,
+              branchesEngaged: multi.systemsUsed.length || 1,
+              quantumEnhanced: false,
+              multiModel: {
+                model: multi.model,
+                strategy: multi.strategy,
+                degraded: multi.degraded,
+                providers: multi.systemsUsed,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
           return res.json({
-            response: "Server AI engine is degraded. Please verify OPENAI_API_KEY and restart the server.",
-            confidence: 0.6,
+            response: multi.response || "Server AI engine is degraded. Please verify model API keys or Ollama and restart.",
+            confidence: multi.confidence,
             processingTime: 0,
             branchesEngaged: 1,
             quantumEnhanced: false,
+            degraded: true,
             timestamp: new Date().toISOString(),
           });
         }
@@ -3105,6 +3132,45 @@ Format your response in a clear, structured manner.`
       if (!openai) {
         const hasVisionImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
         const requiresCloudMedia = hasVisionImage || hasVideoUpload;
+        if (!requiresCloudMedia) {
+          const { unifiedInfer, buildInferMessages } = await import("./ai/unified-inference.js");
+          const systemPrompt = cyrusSoul.getSystemPrompt();
+          const enrichedMessage = await enrichCyrusMessageWithUploads(String(message), context);
+          const multi = await unifiedInfer(
+            buildInferMessages({
+              systemPrompt,
+              userMessage: enrichedMessage,
+              conversationHistory,
+            }),
+            { taskType: "chat" },
+          );
+          if (multi.response && multi.confidence > 0.1) {
+            cyrusSoul.processThought(message, context?.summary || "multi_model");
+            await adaptiveLearning.learnFromConversation(String(message), String(multi.response), {
+              moduleContext: "multi_model_inference",
+            });
+            await adaptiveLearning.endTaskTracking(
+              taskTrackingId,
+              true,
+              { responseLength: String(multi.response).length, multiModel: multi.model },
+              "unified_multi_model",
+            );
+            taskTrackingId = null;
+            const identity = cyrusSoul.getIdentity();
+            return res.json({
+              response: multi.response,
+              mode: multi.degraded ? "degraded" : "multi-model",
+              identity: { name: identity.name, designation: identity.designation },
+              operationalContext: cyrusSoul.getOperationalContext(),
+              multiModel: {
+                model: multi.model,
+                strategy: multi.strategy,
+                confidence: multi.confidence,
+                providers: multi.systemsUsed,
+              },
+            });
+          }
+        }
         await adaptiveLearning.learnFromConversation(String(message), "offline_mode_no_api_key", {
           moduleContext: "offline_mode",
         });
@@ -3191,7 +3257,45 @@ If you detect a command that requires physical device interaction, inform the op
         chatMessages.push({ role: "user", content: fullMessage });
       }
 
-      // Call OpenAI with gpt-4o model (supports vision)
+      // Text-only: unified multi-model intelligence (GPT, Claude, Gemini, Grok, local Ollama)
+      const hasVisionImage = !!(imageData && typeof imageData === "string" && imageData.startsWith("data:image"));
+      if (!hasVisionImage) {
+        const { unifiedInfer, buildInferMessages } = await import("./ai/unified-inference.js");
+        const multi = await unifiedInfer(
+          buildInferMessages({
+            systemPrompt: systemPrompt + "\n\n" + agentCapabilities,
+            userMessage: fullMessage,
+            conversationHistory,
+          }),
+          { taskType: "chat" },
+        );
+        if (multi.response && multi.confidence > 0.15 && !multi.degraded) {
+          cyrusSoul.processThought(message, context?.summary || "multi_model");
+          await adaptiveLearning.learnFromConversation(String(message), String(multi.response), {
+            moduleContext: context?.summary || "multi_model_inference",
+          });
+          await adaptiveLearning.endTaskTracking(
+            taskTrackingId,
+            true,
+            { responseLength: String(multi.response).length, model: multi.model },
+            "unified_multi_model",
+          );
+          taskTrackingId = null;
+          return res.json({
+            response: multi.response,
+            identity: { name: identity.name, designation: identity.designation },
+            operationalContext: cyrusSoul.getOperationalContext(),
+            multiModel: {
+              model: multi.model,
+              strategy: multi.strategy,
+              confidence: multi.confidence,
+              providers: multi.systemsUsed,
+            },
+          });
+        }
+      }
+
+      // Vision / fallback: OpenAI multimodal when available
       const completion = await getOpenAIClient().chat.completions.create({
         model: getCyrusChatModel(),
         messages: chatMessages,

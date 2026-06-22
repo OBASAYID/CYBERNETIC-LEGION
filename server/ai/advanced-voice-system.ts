@@ -410,22 +410,14 @@ class AdvancedVoiceSystem {
    * (This would integrate with the main Cyrus intelligence system)
    */
   private async processUserInput(text: string, context?: string): Promise<string> {
-    // Import the enhanced LLM for response generation
-    const { enhancedLocalLLM } = await import('./enhanced-local-llm.js');
+    const { unifiedInferText } = await import('./unified-inference.js');
 
-    const messages = [
-      {
-        role: 'system' as const,
-        content: `You are CYRUS, an advanced conversational AI. Respond naturally and helpfully to the user's voice input. ${context || ''}`
-      },
-      {
-        role: 'user' as const,
-        content: text
-      }
-    ];
+    const result = await unifiedInferText(text, {
+      taskType: 'voice',
+      systemPrompt: `You are CYRUS, an advanced conversational AI. Respond naturally and helpfully to the user's voice input. ${context || ''}`,
+    });
 
-    const response = await enhancedLocalLLM.chat(messages);
-    return response.response;
+    return result.response;
   }
 
   /**

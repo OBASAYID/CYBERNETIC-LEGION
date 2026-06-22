@@ -100,7 +100,7 @@ class MultiModelIntelligence {
           enabled: process.env.USE_LOCAL_LLM !== 'false',
         },
       },
-      strategy: (process.env.CYRUS_MULTI_MODEL_STRATEGY as any) || 'specialized',
+      strategy: (process.env.CYRUS_MULTI_MODEL_STRATEGY as MultiModelConfig['strategy']) || 'cascade',
     };
   }
 
@@ -254,6 +254,7 @@ class MultiModelIntelligence {
     messages: Array<{ role: string; content: string }>,
     options: any
   ): Promise<MultiModelResponse> {
+    try {
     const lastMessage = messages[messages.length - 1].content.toLowerCase();
 
     // Determine task type and select best model
@@ -301,10 +302,14 @@ class MultiModelIntelligence {
         selectedModel = () => this.queryGrok(messages, options);
         modelName = 'Grok';
         reasoning = 'Real-time info - using Grok for current data';
-      } else {
+      } else if (this.config.providers.openai?.enabled) {
         selectedModel = () => this.queryGPT(messages, options);
         modelName = 'GPT-4';
-        reasoning = 'Fallback to GPT-4';
+        reasoning = 'Real-time info - using GPT-4 (Gemini/Grok unavailable)';
+      } else {
+        selectedModel = () => this.queryLocal(messages, options);
+        modelName = 'Local';
+        reasoning = 'Real-time info - using local model';
       }
     } else {
       // Default to best available
@@ -336,6 +341,18 @@ class MultiModelIntelligence {
       confidence: response.confidence,
       reasoning,
     };
+  } catch (error) {
+    console.warn('[Multi-Model] Specialized routing failed, using cascade:', error instanceof Error ? error.message : String(error));
+    return this.cascadeInference(messages, options);
+  }
+}
+
+  private getOpenAIChatUrl(): string {
+    const base =
+      process.env.AI_INTEGRATIONS_OPENAI_BASE_URL?.trim() ||
+      process.env.OPENAI_BASE_URL?.trim() ||
+      "https://api.openai.com/v1";
+    return `${base.replace(/\/$/, "")}/chat/completions`;
   }
 
   /**
@@ -351,7 +368,7 @@ class MultiModelIntelligence {
       throw new Error('OpenAI not configured');
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(this.getOpenAIChatUrl(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.config.providers.openai.apiKey}`,
@@ -441,27 +458,33 @@ class MultiModelIntelligence {
       throw new Error('Google AI not configured');
     }
 
-    // Convert messages to Gemini format
+    // Convert messages to Gemini format (preserve system instruction)
+    const systemMessage = messages.find((m) => m.role === "system")?.content || "";
     const contents = messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
+      .filter((m) => m.role !== "system")
+      .map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
       }));
+
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        temperature: options.temperature ?? 0.7,
+        maxOutputTokens: options.maxTokens ?? 4000,
+      },
+    };
+    if (systemMessage) {
+      body.systemInstruction = { parts: [{ text: systemMessage }] };
+    }
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${this.config.providers.google.model}:generateContent?key=${this.config.providers.google.apiKey}`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: options.temperature ?? 0.7,
-            maxOutputTokens: options.maxTokens ?? 4000,
-          },
-        }),
-      }
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
     );
 
     if (!response.ok) {
@@ -595,11 +618,13 @@ Synthesized response:`;
     return {
       strategy: this.config.strategy,
       providers: enabledProviders,
+      operational: enabledProviders.length > 0,
       capabilities: {
         parallelProcessing: enabledProviders.length > 1,
         specializedRouting: true,
         modelSynthesis: this.config.providers.openai?.enabled || enabledProviders.length > 1,
         fallbackCascade: enabledProviders.length > 0,
+        resilientUnifiedInfer: true,
       },
     };
   }
