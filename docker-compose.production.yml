@@ -1,8 +1,22 @@
-# CYRUS production stack — API + Redis signaling + coturn TURN relay.
-# Scale path: run multiple `app` replicas behind a load balancer with sticky sessions;
-# open UDP CYRUS_SFU_RTC_MIN_PORT–CYRUS_SFU_RTC_MAX_PORT per replica for mediasoup.
+# CYRUS production stack — API + Redis signaling + coturn TURN relay + Postgres.
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cyrus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cyrus_ai
+      POSTGRES_USER: cyrus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyrus_secure_password_2026}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyrus -d cyrus_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -34,6 +48,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "${CYRUS_LIVE_PORT:-3020}:3020"
       - "40000-40100:40000-40100/udp"
@@ -42,6 +58,7 @@ services:
       PORT: 3020
       CYRUS_LIVE_PORT: 3020
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cyrus:cyrus_secure_password_2026@postgres:5432/cyrus_ai}
       CYRUS_COMM_PUBLIC_TURN: "false"
       CYRUS_SFU_RTC_MIN_PORT: 40000
       CYRUS_SFU_RTC_MAX_PORT: 40100
@@ -53,8 +70,7 @@ services:
       TURN_USERNAME: ${TURN_USERNAME:-}
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
       CYRUS_SFU_ANNOUNCED_IP: ${CYRUS_SFU_ANNOUNCED_IP:-}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      DATABASE_URL: ${DATABASE_URL:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://167-233-36-99.sslip.io}
       SESSION_SECRET: ${SESSION_SECRET:-}
       CYRUS_COMMS_MAX_UPLOAD_BYTES: ${CYRUS_COMMS_MAX_UPLOAD_BYTES:-4294967296}
       CYRUS_COMMS_CHUNK_BYTES: ${CYRUS_COMMS_CHUNK_BYTES:-16777216}
@@ -71,3 +87,5 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
+
