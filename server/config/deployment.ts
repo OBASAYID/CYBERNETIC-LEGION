@@ -4,6 +4,7 @@
  */
 import { getCyrusLivePort, getServerBindHost, getCyrusFusedOrigin } from "./stack-ports.js";
 import { getCyrusScaleLimits } from "../../shared/comms/scale-config.js";
+import { buildMobileShellPayload } from "../../shared/cyrus-mobile-shell.js";
 import { pushCallServiceConfigured } from "../comms/push-call-service.js";
 
 function trimSlash(s: string): string {
@@ -88,7 +89,9 @@ export function getDeploymentPayload() {
       pushConfigured: pushCallServiceConfigured(),
     },
     scale: getCyrusScaleLimits(),
+    mobileShell: buildMobileShellPayload(publicBaseUrl),
     hints: [
+      "Mobile: install PWA from publicBaseUrl — UI caches on device; AI/comms/DB stay on server.",
       "Set PUBLIC_BASE_URL to your public HTTPS origin — not 127.0.0.1 — for cookies and WebRTC on mobile/LAN.",
       "Same account on multiple devices: log in on each; deviceId stays per-browser, userId follows session.",
       "Production: REDIS_URL + horizontal replicas, TURN_URLS/TURN_SECRET, CYRUS_SFU_ANNOUNCED_IP, UDP 40000-40100 per pod.",

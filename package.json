@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.server.json && vite build",
+    "build:mobile-pwa": "NODE_ENV=production npm run build",
+    "deploy:mobile-pwa": "bash scripts/deploy-mobile-pwa.sh",
     "typecheck": "tsc --noEmit -p tsconfig.server.json",
     "typecheck:ui": "tsc --noEmit -p cyrus-ui/tsconfig.json",
     "typecheck:all": "npm run typecheck && npm run typecheck:ui && node scripts/validate-json-configs.mjs",

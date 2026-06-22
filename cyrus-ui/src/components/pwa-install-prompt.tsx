@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { systemFetch } from "@/lib/system-api";
 
 const DISMISS_KEY = "cyrus-pwa-install-dismissed";
 
@@ -22,7 +23,7 @@ function isIosSafari(): boolean {
 }
 
 /**
- * Optional install banner for PWA (Chromium `beforeinstallprompt`) and iOS Add to Home Screen hint.
+ * Install banner for mobile PWA: local UI shell, production server for AI/comms/DB.
  */
 export function PwaInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
@@ -34,9 +35,22 @@ export function PwaInstallPrompt() {
     }
   });
   const [iosHint, setIosHint] = useState(false);
+  const [installOrigin, setInstallOrigin] = useState(() =>
+    typeof window !== "undefined" ? window.location.origin : "",
+  );
 
   useEffect(() => {
     if (isStandaloneDisplay()) return;
+
+    void systemFetch("/api/stack/mobile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { publicBaseUrl?: string } | null) => {
+        const url = data?.publicBaseUrl?.trim();
+        if (url) setInstallOrigin(url.replace(/\/+$/, ""));
+      })
+      .catch(() => {
+        /* keep window.location.origin */
+      });
 
     if (isIosSafari()) {
       setIosHint(true);
@@ -71,6 +85,14 @@ export function PwaInstallPrompt() {
 
   if (dismissed || isStandaloneDisplay()) return null;
 
+  const subtitle = (
+    <>
+      Install once (~3&nbsp;MB). UI runs on your device; AI, comms, and data stay on{" "}
+      <span className="text-cyan-300/90">{installOrigin || "the server"}</span> — only small API
+      payloads transfer after install.
+    </>
+  );
+
   if (deferred) {
     return (
       <div
@@ -84,10 +106,8 @@ export function PwaInstallPrompt() {
         <div className="mx-auto flex max-w-lg items-start gap-3">
           <Download className="mt-0.5 h-5 w-5 shrink-0 text-cyan-400" aria-hidden />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white">Install CYRUS</p>
-            <p className="mt-0.5 text-xs text-white/70">
-              Add to your home screen for a full-screen app experience with faster launch.
-            </p>
+            <p className="text-sm font-semibold text-white">Install CYRUS on this device</p>
+            <p className="mt-0.5 text-xs text-white/70">{subtitle}</p>
           </div>
           <button
             type="button"
@@ -124,7 +144,7 @@ export function PwaInstallPrompt() {
         <Share className="h-4 w-4 shrink-0 text-amber-300/90" aria-hidden />
         <p className="min-w-0 flex-1">
           On iPhone/iPad: tap <strong className="text-white/90">Share</strong>, then{" "}
-          <strong className="text-white/90">Add to Home Screen</strong> to install CYRUS.
+          <strong className="text-white/90">Add to Home Screen</strong>. {subtitle}
         </p>
         <button
           type="button"

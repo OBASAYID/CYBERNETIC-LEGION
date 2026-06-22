@@ -25,6 +25,16 @@ router.get("/stack/deployment", (_req, res) => {
   res.json({ success: true, ...getDeploymentPayload(), ts: Date.now() });
 });
 
+router.get("/stack/mobile", (_req, res) => {
+  const deployment = getDeploymentPayload();
+  res.json({
+    success: true,
+    ts: Date.now(),
+    publicBaseUrl: deployment.publicBaseUrl,
+    mobileShell: deployment.mobileShell,
+  });
+});
+
 router.get("/stack/link", async (req, res) => {
   try {
     const payload = await buildStackLinkPayload(req, { systemReady: getSystemReady() });

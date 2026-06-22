@@ -96,8 +96,32 @@ export default defineConfig({
           /^\/uploads\//,
           /^\/images\//,
           /^\/videos\//,
+          /^\/ws$/,
+          /^\/cyrus-io\//,
         ],
         runtimeCaching: [
+          // API, health, and realtime — always network (minimal payload, no stale data).
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkOnly",
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/health/"),
+            handler: "NetworkOnly",
+          },
+          {
+            urlPattern: ({ url }) => url.pathname === "/ws" || url.pathname.startsWith("/cyrus-io"),
+            handler: "NetworkOnly",
+          },
+          // Static dashboard art — cache locally after first load.
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/images/"),
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "cyrus-static-images",
+              expiration: { maxEntries: 48, maxAgeSeconds: 60 * 60 * 24 * 7 },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
             handler: "CacheFirst",
