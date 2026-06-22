@@ -23,43 +23,9 @@ t = Path('deploy/caddy/Caddyfile').read_text()
 Path('deploy/caddy/Caddyfile.generated').write_text(t.replace('{\$SITE_HOST}', host))
 "
 
-if ! grep -q 'cyrus-caddy' docker-compose.yml 2>/dev/null; then
-  python3 <<'PY'
-from pathlib import Path
-compose = Path("docker-compose.yml")
-text = compose.read_text()
-caddy = '''
-  caddy:
-    image: caddy:2-alpine
-    container_name: cyrus-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/caddy/Caddyfile.generated:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    networks:
-      - cyrus-network
-
-'''
-if "caddy:" not in text:
-    marker = "\n  coturn:"
-    if marker not in text:
-        marker = "\n  app:"
-    text = text.replace(marker, caddy + marker, 1)
-    if "caddy_data:" not in text:
-        text = text.replace(
-            "volumes:\n  postgres_data:",
-            "volumes:\n  caddy_data:\n  caddy_config:\n  postgres_data:",
-            1,
-        )
-    compose.write_text(text)
-    print("Added caddy service to docker-compose.yml")
-PY
+if ! grep -q 'caddy:' docker-compose.production.yml 2>/dev/null; then
+  echo "Add caddy service to docker-compose.production.yml first" >&2
+  exit 1
 fi
 
 touch .env
@@ -71,8 +37,8 @@ upsert PUBLIC_BASE_URL "$HTTPS_URL"
 upsert BASE_URL "$HTTPS_URL"
 upsert CYRUS_HTTPS_HOST "$SITE_HOST"
 
-docker compose up -d caddy
-docker compose up -d --force-recreate app
+docker compose -f docker-compose.production.yml up -d caddy
+docker compose -f docker-compose.production.yml up -d --force-recreate app
 
 echo ""
 echo "HTTPS enabled."

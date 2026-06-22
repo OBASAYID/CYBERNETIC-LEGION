@@ -50,7 +50,7 @@ grep -q '^PUBLIC_BASE_URL=' .env 2>/dev/null && \
   echo "PUBLIC_BASE_URL=${PUBLIC_BASE_URL}" >> .env
 
 docker compose -f docker-compose.production.yml pull redis postgres 2>/dev/null || true
-docker compose -f docker-compose.production.yml up -d --build --force-recreate app
+docker compose -f docker-compose.production.yml up -d --build --force-recreate app caddy
 
 echo "==> Health check"
 sleep 8
