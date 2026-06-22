@@ -44,6 +44,7 @@ function collectProductionAllowlistOrigins(): string[] {
   };
 
   add(process.env.BASE_URL);
+  add(process.env.PUBLIC_BASE_URL);
 
   const inferred = inferredOriginFromPublicEnv();
   if (inferred) out.add(inferred);
@@ -129,6 +130,15 @@ export function warnIfCorsMisconfigured(resolvedBaseUrl?: string): void {
   if (process.env.NODE_ENV !== "production") return;
   if (parseExplicitOrigins().length > 0) return;
   if (baseUrlOrigin()) return;
+  const publicBase = process.env.PUBLIC_BASE_URL?.trim();
+  if (publicBase) {
+    try {
+      void new URL(publicBase).origin;
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
   if (resolvedBaseUrl) {
     try {
       void new URL(resolvedBaseUrl).origin;

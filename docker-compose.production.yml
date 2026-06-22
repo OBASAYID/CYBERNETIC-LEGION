@@ -53,6 +53,8 @@ services:
     ports:
       - "${CYRUS_LIVE_PORT:-3020}:3020"
       - "40000-40100:40000-40100/udp"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: 3020
@@ -71,6 +73,8 @@ services:
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
       CYRUS_SFU_ANNOUNCED_IP: ${CYRUS_SFU_ANNOUNCED_IP:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://167-233-36-99.sslip.io}
+      BASE_URL: ${BASE_URL:-https://167-233-36-99.sslip.io}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://167-233-36-99.sslip.io}
       ADMIN_ACCESS_CODE: ${ADMIN_ACCESS_CODE:-71580019}
       USER_ACCESS_CODE: ${USER_ACCESS_CODE:-170392}
       SESSION_SECRET: ${SESSION_SECRET:-}
