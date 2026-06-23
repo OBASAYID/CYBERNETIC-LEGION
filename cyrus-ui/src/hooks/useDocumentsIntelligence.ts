@@ -149,6 +149,20 @@ const defaultIntel: IntelOptions = {
   maxChunks: Math.min(1024, parseMaxAnalysisChunks()),
 };
 
+export type FusedPipelineResult = {
+  classification: DocumentClassification;
+  intelligenceBrief: IntelligentDocument;
+  analysisSummary: {
+    executiveBrief: string;
+    keyFindings: string[];
+    interpretation: string;
+    documentType: string;
+    pageCount?: number;
+  };
+  document: GeneratedDocument;
+  fusedContextLength: number;
+};
+
 function appendFormFields(form: FormData, o: IntelOptions) {
   form.set("jurisdiction", o.jurisdiction);
   if (o.mode) form.set("mode", o.mode);
@@ -492,6 +506,56 @@ export function useDocumentsIntelligence() {
     [toast]
   );
 
+  const runFusedProfessionalDraft = useCallback(
+    async (
+      file: File,
+      options: {
+        docType?: string;
+        audience?: string;
+        purpose?: string;
+        targetPages?: number;
+        includeImages?: boolean;
+        imageStyle?: "realistic_3d" | "graphical" | "schematic";
+        intelOverride?: Partial<IntelOptions>;
+      } = {},
+    ) => {
+      const o = { ...intel, ...options.intelOverride };
+      setIntel(o);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        appendFormFields(form, o);
+        if (options.docType) form.append("docType", options.docType);
+        if (options.audience) form.append("audience", options.audience);
+        if (options.purpose) form.append("purpose", options.purpose);
+        if (options.targetPages) form.append("targetPages", String(options.targetPages));
+        form.append("includeImages", String(options.includeImages ?? false));
+        if (options.imageStyle) form.append("imageStyle", options.imageStyle);
+
+        const res = await systemFetch("/api/documents/fuse-draft", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || "Fused draft failed");
+
+        const result = data as FusedPipelineResult & { success?: boolean };
+        const words = result.document?.wordCount ?? 0;
+        if (words < 200) {
+          throw new Error("Fused pipeline returned insufficient content. Check AI provider keys.");
+        }
+
+        toast({
+          title: "Fused professional draft ready",
+          description: `${words.toLocaleString()} words · ${result.document.estimatedPages} pages · ${result.classification.category}`,
+        });
+        return result;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Fused draft failed";
+        toast({ title: "Fused Pipeline Error", description: msg, variant: "destructive" });
+        throw e;
+      }
+    },
+    [intel, toast],
+  );
+
   return {
     intel,
     setIntel,
@@ -513,5 +577,6 @@ export function useDocumentsIntelligence() {
     respondToTender,
     generateAnswerKey,
     validateCompliance,
+    runFusedProfessionalDraft,
   };
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { systemFetch } from "@/lib/system-api";
 import { FileText, Loader2, ScrollText, Sparkles } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
 import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
+import { readHandoff } from "@shared/module-handoff";
 
 type Mode = "full" | "convert" | "assist";
 
@@ -48,6 +49,22 @@ export default function DocumentBuilder() {
   const [data, setData] = useState("");
   const [result, setResult] = useState<GeneratedDoc | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("handoff") !== "1") return;
+    const h = readHandoff(true);
+    if (!h?.text?.trim()) return;
+    setRawText(h.text);
+    if (h.title?.trim()) setTopic(h.title);
+    if (h.note?.trim()) setPurpose(h.note);
+    setMode("convert");
+    toast({
+      title: "Pipeline content loaded",
+      description: `Imported from ${h.sourceModule}. Refine and regenerate.`,
+    });
+  }, [toast]);
 
   const generate = async () => {
     setLoading(true);

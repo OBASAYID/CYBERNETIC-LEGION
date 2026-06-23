@@ -1,9 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
-import { useDocumentsIntelligence, type IntelOptions } from "@/hooks/useDocumentsIntelligence";
+import { useDocumentsIntelligence, type IntelOptions, type FusedPipelineResult } from "@/hooks/useDocumentsIntelligence";
 import { Button } from "@/components/ui/button";
 import {
   Brain,
   ChevronDown,
+  ExternalLink,
   FileText,
   Gavel,
   Loader2,
@@ -15,6 +16,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import {
   encodeFileAsHandoffAttachment,
   readCommandSearchShare,
@@ -22,6 +24,7 @@ import {
   registerLargeHandoffFile,
   resolveHandoffPayloadToFiles,
   revokeHandoffPayloadBlobs,
+  saveHandoff,
   type ModuleHandoffAttachment,
   type ModuleHandoffLargeRef,
 } from "@shared/module-handoff";
@@ -79,8 +82,27 @@ const EXPORT_FORMATS: Array<{ value: "pdf" | "docx" | "html" | "md" | "txt" | "j
   { value: "json", label: "Structured JSON (.json)" },
 ];
 
+function buildAnalysisContext(parts: {
+  executiveBrief?: string;
+  extractedSummary?: string;
+  keyFindings?: string[];
+  interpretation?: string;
+  intelligenceContent?: string;
+}): string {
+  const blocks: string[] = [];
+  if (parts.executiveBrief?.trim()) blocks.push(`## Executive brief\n\n${parts.executiveBrief.trim()}`);
+  if (parts.extractedSummary?.trim()) blocks.push(`## Extracted summary\n\n${parts.extractedSummary.trim()}`);
+  if (parts.keyFindings?.length) {
+    blocks.push(`## Key findings\n\n${parts.keyFindings.map((f) => `- ${f}`).join("\n")}`);
+  }
+  if (parts.interpretation?.trim()) blocks.push(`## Interpretation\n\n${parts.interpretation.trim()}`);
+  if (parts.intelligenceContent?.trim()) blocks.push(`## Intelligent draft\n\n${parts.intelligenceContent.trim()}`);
+  return blocks.join("\n\n");
+}
+
 export default function DocumentsIntelligence() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const {
     intel,
     setIntel,
@@ -101,6 +123,7 @@ export default function DocumentsIntelligence() {
     respondToTender,
     generateAnswerKey,
     validateCompliance,
+    runFusedProfessionalDraft,
   } = useDocumentsIntelligence();
 
   const [category, setCategory] = useState("auto");
@@ -124,6 +147,7 @@ export default function DocumentsIntelligence() {
   const [intelligentFile, setIntelligentFile] = useState<File | null>(null);
   const [classification, setClassification] = useState<any | null>(null);
   const [intelligentDoc, setIntelligentDoc] = useState<any | null>(null);
+  const [fusedResult, setFusedResult] = useState<FusedPipelineResult | null>(null);
   const [isProcessingIntelligent, setIsProcessingIntelligent] = useState(false);
   const intelligentFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,7 +182,50 @@ export default function DocumentsIntelligence() {
     setIntelligentFile(null);
     setClassification(null);
     setIntelligentDoc(null);
+    setFusedResult(null);
     clearResults();
+  };
+
+  const activePipelineFile = stagedAnalyseFile ?? intelligentFile ?? currentFile;
+
+  const openInDocumentBuilder = (text: string, title?: string) => {
+    saveHandoff({
+      text,
+      sourceModule: "documents-intelligence",
+      title: title || "CYRUS document draft",
+      note: "Opened from Document Intelligence fused pipeline. Refine structure and export from Document Builder.",
+    });
+    setLocation("/document-builder?handoff=1");
+  };
+
+  const handleFusedProfessionalDraft = async () => {
+    if (!activePipelineFile) {
+      toast({
+        title: "Upload required",
+        description: "Stage a file for analysis or intelligent processing first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsProcessingIntelligent(true);
+    try {
+      const result = await runFusedProfessionalDraft(activePipelineFile, {
+        docType: genType,
+        audience: genAudience,
+        purpose: genPurpose || undefined,
+        targetPages: Math.max(12, Math.min(maxDocgenTargetPages(), targetPages)),
+        includeImages,
+        imageStyle,
+      });
+      setFusedResult(result);
+      setClassification(result.classification);
+      setIntelligentDoc(result.intelligenceBrief);
+      setGenBody(result.document.rendered.slice(0, 120_000));
+    } catch {
+      // handled in hook
+    } finally {
+      setIsProcessingIntelligent(false);
+    }
   };
 
   // Intelligent processing handlers
@@ -267,6 +334,43 @@ export default function DocumentsIntelligence() {
       });
     },
   });
+
+  const displayLongDoc = fusedResult?.document ?? genMut.data;
+
+  useEffect(() => {
+    if (syncReport && !genBody.trim()) {
+      setGenBody(
+        buildAnalysisContext({
+          executiveBrief: syncReport.extractedSummary,
+          extractedSummary: syncReport.sourceDescription,
+          keyFindings: syncReport.keyFindings,
+          interpretation: syncReport.interpretation,
+        }),
+      );
+    }
+  }, [syncReport]);
+
+  useEffect(() => {
+    if (job?.status === "completed" && job.result?.analysis && !genBody.trim()) {
+      setGenBody(
+        buildAnalysisContext({
+          executiveBrief: job.result.analysis.executiveBrief,
+          keyFindings: job.result.analysis.keyFindings,
+          interpretation: job.result.analysis.interpretation,
+        }),
+      );
+    }
+  }, [job?.status, job?.result?.analysis]);
+
+  useEffect(() => {
+    if (intelligentDoc?.content && !genBody.trim()) {
+      setGenBody(
+        buildAnalysisContext({
+          intelligenceContent: intelligentDoc.content,
+        }),
+      );
+    }
+  }, [intelligentDoc?.content]);
 
   const fileForPipelineHandoff = stagedAnalyseFile ?? currentFile;
 
@@ -652,11 +756,32 @@ export default function DocumentsIntelligence() {
                 Generate long output
               </h2>
               <p className="mb-3 text-sm leading-relaxed text-white/60">
-                Long-form draft — target pages up to{" "}
+                Fused pipeline: analysis + intelligent processing + long-form docgen. Target pages up to{" "}
                 <code className="rounded bg-indigo-950/50 px-1.5 py-0.5 text-sm text-indigo-200/90">
                   CYRUS_DOCGEN_MAX_PAGES
                 </code>{" "}
                 (cap {maxDocgenTargetPages()}).
+              </p>
+              <Button
+                type="button"
+                className="mb-3 h-11 w-full bg-gradient-to-r from-emerald-500/25 to-sky-400/30 text-base text-white shadow-md shadow-black/25 disabled:opacity-50"
+                disabled={!activePipelineFile || isProcessingIntelligent}
+                onClick={() => void handleFusedProfessionalDraft()}
+              >
+                {isProcessingIntelligent ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Fusing intelligence pipeline…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Generate fused professional draft
+                  </>
+                )}
+              </Button>
+              <p className="mb-3 text-xs text-white/45">
+                Runs extract → classify → analysis → intelligent brief → long-form document builder output.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                 <div>
@@ -863,6 +988,18 @@ export default function DocumentsIntelligence() {
                       size="sm"
                       className="border-emerald-400/30 text-sm text-emerald-200"
                       onClick={() =>
+                        openInDocumentBuilder(intelligentDoc.content, intelligentDoc.title)
+                      }
+                    >
+                      <ExternalLink className="mr-1.5 h-4 w-4" />
+                      Document Builder
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-emerald-400/30 text-sm text-emerald-200"
+                      onClick={() =>
                         downloadText(`${intelligentDoc.title || "intelligent-doc"}.md`, intelligentDoc.content)
                       }
                     >
@@ -950,16 +1087,28 @@ export default function DocumentsIntelligence() {
                 </section>
               )}
 
-              {genMut.data && (
+              {displayLongDoc && (
                 <section className="flex min-h-0 flex-col gap-2 rounded-xl border border-sky-300/25 bg-slate-950/55 p-3.5 sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3
                       className="text-base font-medium text-indigo-100"
                       style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
                     >
-                      Generated document
+                      {fusedResult ? "Fused professional document" : "Generated document"}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/10"
+                        onClick={() =>
+                          openInDocumentBuilder(displayLongDoc.rendered, displayLongDoc.title)
+                        }
+                      >
+                        <ExternalLink className="mr-1.5 h-4 w-4" />
+                        Document Builder
+                      </Button>
                       <div className="relative">
                         <select
                           value={exportFormat}
@@ -983,7 +1132,7 @@ export default function DocumentsIntelligence() {
                         onClick={async () => {
                           try {
                             setIsExporting(true);
-                            const file = await exportDocument(exportFormat, genMut.data);
+                            const file = await exportDocument(exportFormat, displayLongDoc);
                             downloadBlob(file.filename, file.blob);
                             toast({ title: "Download ready", description: `Exported as ${exportFormat.toUpperCase()}` });
                           } catch (e: unknown) {
@@ -998,31 +1147,39 @@ export default function DocumentsIntelligence() {
                       </Button>
                     </div>
                   </div>
-                  <p className="text-sm text-white/70">{genMut.data.title}</p>
+                  {fusedResult && (
+                    <p className="text-xs text-indigo-200/70">
+                      Fused pipeline · {displayLongDoc.wordCount.toLocaleString()} words · {displayLongDoc.estimatedPages}{" "}
+                      pages · {fusedResult.classification.category}
+                    </p>
+                  )}
+                  <p className="text-sm text-white/70">{displayLongDoc.title}</p>
                   <div className="min-h-0 max-h-[min(28dvh,260px)] flex-1 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2.5 sm:p-3">
                     <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/90">
-                      {genMut.data.rendered.length > 200_000
-                        ? `${genMut.data.rendered.slice(0, 200_000)}\n\n… (truncated for display; download the file for the full text.)`
-                        : genMut.data.rendered}
+                      {displayLongDoc.rendered.length > 200_000
+                        ? `${displayLongDoc.rendered.slice(0, 200_000)}\n\n… (truncated for display; download the file for the full text.)`
+                        : displayLongDoc.rendered}
                     </pre>
                   </div>
                 </section>
               )}
 
-              {genMut.isPending && (
+              {genMut.isPending || isProcessingIntelligent ? (
                 <div className="flex items-center gap-2.5 rounded-xl border border-indigo-500/25 bg-indigo-950/25 p-3.5 text-sm text-indigo-100/90">
                   <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
-                  Generating document…
+                  {isProcessingIntelligent ? "Running fused intelligence pipeline…" : "Generating document…"}
                 </div>
-              )}
+              ) : null}
 
               {!syncReport &&
-                !genMut.data &&
+                !displayLongDoc &&
                 !isSubmitting &&
                 !genMut.isPending &&
+                !isProcessingIntelligent &&
                 job?.status !== "failed" &&
                 (!job || ["completed", "failed"].includes(job.status)) &&
-                !job?.result?.analysis && (
+                !job?.result?.analysis &&
+                !intelligentDoc && (
                   <div className="flex min-h-[8rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-400/20 bg-emerald-950/20 px-3 py-6 text-center text-sm leading-relaxed text-emerald-100/70">
                     <Sparkles className="h-10 w-10 text-emerald-400/50" />
                     <p className="font-semibold text-emerald-200">AI-Powered Document Intelligence</p>

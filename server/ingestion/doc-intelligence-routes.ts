@@ -23,6 +23,7 @@ import { extractFile } from "./extract.js";
 import { performFullAnalysis } from "./full-analysis.js";
 import { resolveDocumentText, extractionFailureMessage } from "./resolve-document-text.js";
 import { parseMaxUploadFileBytes } from "../../shared/cyrus-document-limits.js";
+import { runFusedProfessionalDraft } from "./fused-document-pipeline.js";
 
 const router = Router();
 const upload = multer({
@@ -361,6 +362,55 @@ router.post("/api/documents/analyze-intelligent", upload.single("file"), async (
     console.error("[Doc Intelligence] Intelligent analysis error:", error);
     res.status(500).json({
       error: "Intelligent analysis failed",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// =====================================
+// Fused Intelligence + Long-Form Draft
+// =====================================
+
+router.post("/api/documents/fuse-draft", upload.single("file"), async (req: any, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Document file required for fused pipeline" });
+    }
+
+    const targetPages = req.body.targetPages ? parseInt(String(req.body.targetPages), 10) : undefined;
+    const maxChunks = req.body.maxChunks ? parseInt(String(req.body.maxChunks), 10) : undefined;
+
+    const result = await runFusedProfessionalDraft({
+      buffer: req.file.buffer,
+      mimetype: req.file.mimetype,
+      fileName: req.file.originalname,
+      docType: req.body.docType,
+      audience: req.body.audience,
+      purpose: req.body.purpose,
+      targetPages: Number.isFinite(targetPages) ? targetPages : undefined,
+      includeImages: req.body.includeImages === "true" || req.body.includeImages === true,
+      imageStyle: req.body.imageStyle,
+      jurisdiction: req.body.jurisdiction,
+      mode: req.body.mode,
+      strictLegalReview: req.body.strictLegalReview === "true" || req.body.strictLegalReview === true,
+      maxChunks: Number.isFinite(maxChunks) ? maxChunks : undefined,
+      analysisCommand: req.body.analysisCommand,
+      docHint: req.body.docHint,
+    });
+
+    res.json({
+      success: true,
+      ...result,
+      userId,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[Doc Intelligence] Fused draft error:", error);
+    res.status(500).json({
+      error: "Fused professional draft failed",
       message: error instanceof Error ? error.message : String(error),
     });
   }
