@@ -93,6 +93,7 @@ export default function DocumentsIntelligence() {
     runAsync,
     generateDocument,
     exportDocument,
+    exportIntelligentDocument,
     clearResults,
     classifyDocument,
     generateIntelligentDocument,
@@ -112,7 +113,9 @@ export default function DocumentsIntelligence() {
   const [includeImages, setIncludeImages] = useState(false);
   const [imageStyle, setImageStyle] = useState<"realistic_3d" | "graphical" | "schematic">("schematic");
   const [exportFormat, setExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
+  const [intelligentExportFormat, setIntelligentExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
   const [isExporting, setIsExporting] = useState(false);
+  const [isIntelligentExporting, setIsIntelligentExporting] = useState(false);
   const analyseFileInputRef = useRef<HTMLInputElement>(null);
   const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
   const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
@@ -808,15 +811,64 @@ export default function DocumentsIntelligence() {
                       Compliance: {intelligentDoc.metadata.complianceChecks.join(" • ")}
                     </p>
                   )}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="mt-3 text-sm"
-                    onClick={() => downloadText(`${intelligentDoc.title || "intelligent-doc"}.md`, intelligentDoc.content)}
-                  >
-                    Download Document
-                  </Button>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <select
+                        value={intelligentExportFormat}
+                        onChange={(e) =>
+                          setIntelligentExportFormat(e.target.value as (typeof EXPORT_FORMATS)[number]["value"])
+                        }
+                        className="h-9 appearance-none rounded-md border border-emerald-400/30 bg-slate-900 pl-3 pr-8 text-sm text-emerald-100"
+                      >
+                        {EXPORT_FORMATS.map((fmt) => (
+                          <option key={fmt.value} value={fmt.value}>
+                            {fmt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-200/80" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="text-sm"
+                      disabled={isIntelligentExporting}
+                      onClick={async () => {
+                        try {
+                          setIsIntelligentExporting(true);
+                          const file = await exportIntelligentDocument(intelligentExportFormat, intelligentDoc);
+                          downloadBlob(file.filename, file.blob);
+                          toast({
+                            title: "Download ready",
+                            description: `Exported as ${intelligentExportFormat.toUpperCase()}`,
+                          });
+                        } catch (e: unknown) {
+                          const msg = e instanceof Error ? e.message : "Export failed";
+                          toast({ title: "Export failed", description: msg, variant: "destructive" });
+                        } finally {
+                          setIsIntelligentExporting(false);
+                        }
+                      }}
+                    >
+                      {isIntelligentExporting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        `Download ${intelligentExportFormat.toUpperCase()}`
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-emerald-400/30 text-sm text-emerald-200"
+                      onClick={() =>
+                        downloadText(`${intelligentDoc.title || "intelligent-doc"}.md`, intelligentDoc.content)
+                      }
+                    >
+                      Quick .md
+                    </Button>
+                  </div>
                 </section>
               )}
 

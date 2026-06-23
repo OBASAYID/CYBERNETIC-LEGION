@@ -15,11 +15,13 @@ import {
   generateIntelligentDocument,
   cloneDocument,
   validateDocumentCompliance,
+  generateTenderResponse,
   type DocumentGenerationOptions,
   type DocumentCloneOptions,
 } from "./doc-intelligence-engine.js";
 import { extractFile } from "./extract.js";
 import { performFullAnalysis } from "./full-analysis.js";
+import { resolveDocumentText, extractionFailureMessage } from "./resolve-document-text.js";
 import { parseMaxUploadFileBytes } from "../../shared/cyrus-document-limits.js";
 
 const router = Router();
@@ -52,7 +54,8 @@ router.post("/api/documents/classify", upload.single("file"), async (req: any, r
 
     if (req.file) {
       const extracted = await extractFile(req.file.buffer, req.file.mimetype);
-      text = extracted.text || extracted.ocrText || extracted.transcript || "";
+      const resolved = resolveDocumentText(extracted);
+      text = resolved?.text || "";
       fileName = req.file.originalname;
       pageCount = extracted.pageCount;
     }
@@ -90,7 +93,7 @@ router.post("/api/documents/generate-intelligent", upload.single("sourceFile"), 
     let sourceDocument: string | undefined;
     if (req.file) {
       const extracted = await extractFile(req.file.buffer, req.file.mimetype);
-      sourceDocument = extracted.text || extracted.ocrText || extracted.transcript || "";
+      sourceDocument = resolveDocumentText(extracted)?.text || "";
     } else if (req.body.sourceDocument) {
       sourceDocument = req.body.sourceDocument;
     }
@@ -137,14 +140,18 @@ router.post("/api/documents/clone", upload.single("file"), async (req: any, res)
     }
 
     const extracted = await extractFile(req.file.buffer, req.file.mimetype);
-    const sourceDocument = extracted.text || extracted.ocrText || extracted.transcript || "";
+    const resolved = resolveDocumentText(extracted);
 
-    if (!sourceDocument.trim()) {
-      return res.status(400).json({ error: "Could not extract text from source document" });
+    if (!resolved) {
+      return res.status(400).json({
+        error: extractionFailureMessage(extracted),
+        attempted: extracted.attempted,
+        warnings: extracted.warnings,
+      });
     }
 
     const options: DocumentCloneOptions = {
-      sourceDocument,
+      sourceDocument: resolved.text,
       sourceMetadata: {
         fileName: req.file.originalname,
         pageCount: extracted.pageCount,
@@ -184,22 +191,25 @@ router.post("/api/documents/respond-tender", upload.single("file"), async (req: 
     }
 
     const extracted = await extractFile(req.file.buffer, req.file.mimetype);
-    const tenderDocument = extracted.text || extracted.ocrText || extracted.transcript || "";
+    const resolved = resolveDocumentText(extracted);
 
-    if (!tenderDocument.trim()) {
-      return res.status(400).json({ error: "Could not extract text from tender document" });
+    if (!resolved) {
+      return res.status(400).json({
+        error: extractionFailureMessage(extracted),
+        attempted: extracted.attempted,
+        warnings: extracted.warnings,
+      });
     }
 
-    const options: DocumentCloneOptions = {
-      sourceDocument: tenderDocument,
-      sourceMetadata: {
-        fileName: req.file.originalname,
-        pageCount: extracted.pageCount,
-      },
-      cloneType: "answer-filled",
-    };
+    const classification = await classifyDocument(resolved.text, {
+      fileName: req.file.originalname,
+      pageCount: extracted.pageCount,
+    });
 
-    const response = await cloneDocument(options);
+    const response = await generateTenderResponse(resolved.text, classification, {
+      fileName: req.file.originalname,
+      pageCount: extracted.pageCount,
+    });
 
     res.json({
       success: true,
@@ -230,14 +240,18 @@ router.post("/api/documents/generate-answers", upload.single("file"), async (req
     }
 
     const extracted = await extractFile(req.file.buffer, req.file.mimetype);
-    const examDocument = extracted.text || extracted.ocrText || extracted.transcript || "";
+    const resolved = resolveDocumentText(extracted);
 
-    if (!examDocument.trim()) {
-      return res.status(400).json({ error: "Could not extract text from examination document" });
+    if (!resolved) {
+      return res.status(400).json({
+        error: extractionFailureMessage(extracted),
+        attempted: extracted.attempted,
+        warnings: extracted.warnings,
+      });
     }
 
     const options: DocumentCloneOptions = {
-      sourceDocument: examDocument,
+      sourceDocument: resolved.text,
       sourceMetadata: {
         fileName: req.file.originalname,
         pageCount: extracted.pageCount,

@@ -301,6 +301,26 @@ export function useDocumentsIntelligence() {
     return { blob, filename };
   }, []);
 
+  const exportIntelligentDocument = useCallback(
+    async (format: "pdf" | "docx" | "html" | "md" | "txt" | "json", doc: IntelligentDocument) => {
+      const score = doc.metadata?.confidence ?? 0;
+      const confidence: "High" | "Medium" | "Low" =
+        score >= 0.75 ? "High" : score >= 0.5 ? "Medium" : "Low";
+      return exportDocument(format, {
+        title: doc.title,
+        rendered: doc.content,
+        htmlRendered: doc.htmlContent,
+        docType: doc.category,
+        audience: doc.format,
+        confidence,
+        sections: doc.sections,
+        wordCount: doc.metadata?.wordCount,
+        estimatedPages: doc.metadata?.pageCount,
+      });
+    },
+    [exportDocument],
+  );
+
   const clearResults = useCallback(() => {
     setSyncReport(null);
     setActiveJobId(null);
@@ -405,9 +425,20 @@ export function useDocumentsIntelligence() {
         const data = await res.json();
         
         if (!res.ok) throw new Error(data.error || "Tender response failed");
-        
-        toast({ title: "Tender Response Generated", description: "Compliant response ready for download" });
-        return data.tenderResponse as IntelligentDocument;
+
+        const tenderResponse = data.tenderResponse as IntelligentDocument;
+        const words = tenderResponse?.metadata?.wordCount ?? tenderResponse?.content?.split(/\s+/).filter(Boolean).length ?? 0;
+        if (!tenderResponse?.content?.trim() || words < 50) {
+          throw new Error(
+            "Proposal generation returned empty or insufficient content. Check AI provider keys on the server and retry.",
+          );
+        }
+
+        toast({
+          title: "Tender Response Generated",
+          description: `${words.toLocaleString()} words · ready for PDF/Word export`,
+        });
+        return tenderResponse;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Tender response failed";
         toast({ title: "Tender Error", description: msg, variant: "destructive" });
@@ -473,6 +504,7 @@ export function useDocumentsIntelligence() {
     runAsync,
     generateDocument,
     exportDocument,
+    exportIntelligentDocument,
     clearResults,
     // Intelligent document functions
     classifyDocument,

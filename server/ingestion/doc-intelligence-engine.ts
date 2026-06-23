@@ -10,12 +10,250 @@
  */
 
 import OpenAI from "openai";
+import { unifiedInferText, hasAnyInferenceProvider } from "../ai/unified-inference.js";
 import type { ExtractionResult } from "./extract.js";
 import type { AnalysisResult } from "./analyze.js";
 
 const openaiApiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
 const openaiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
 const llmClient = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl }) : null;
+
+const TENDER_SYSTEM_PROMPT = `You are CYRUS Document Intelligence — an elite tender and procurement response architect.
+
+Produce a submission-ready professional proposal that:
+1. Mirrors the tender's section structure and numbering
+2. Addresses every requirement, deliverable, and evaluation criterion explicitly
+3. Includes executive summary, company profile, technical approach, methodology, team, timeline, pricing framework, compliance matrix, and appendices where relevant
+4. Uses formal business language with measurable commitments
+5. Flags assumptions and clarifications professionally
+
+Output ONLY valid JSON:
+{
+  "title": "string",
+  "sections": [{"title": "string", "content": "string", "type": "optional"}],
+  "metadata": {"confidence": 0.0-1.0, "complianceChecks": ["string"]}
+}`;
+
+function parseGeneratedJson(raw: string): Record<string, unknown> {
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence?.[1]) {
+      try {
+        return JSON.parse(fence[1].trim()) as Record<string, unknown>;
+      } catch {
+        // fall through to markdown payload
+      }
+    }
+    return {
+      title: "CYRUS Generated Document",
+      content: trimmed,
+      sections: splitMarkdownSections(trimmed),
+      metadata: { confidence: 0.75, complianceChecks: ["structure", "content"] },
+    };
+  }
+}
+
+type NormalizedSection = { title: string; content: string; type?: string };
+
+function normalizeSection(raw: unknown): NormalizedSection | null {
+  if (!raw || typeof raw !== "object") return null;
+  const s = raw as Record<string, unknown>;
+  const title = String(s.title || s.heading || s.name || s.section || s.label || "").trim();
+  const content = String(
+    s.content || s.body || s.text || s.value || s.description || s.details || "",
+  ).trim();
+  if (!title && !content) return null;
+  return {
+    title: title || "Section",
+    content,
+    type: typeof s.type === "string" ? s.type : undefined,
+  };
+}
+
+function splitMarkdownSections(markdown: string): NormalizedSection[] {
+  const trimmed = markdown.trim();
+  if (!trimmed) return [];
+
+  if (!/^##\s+/m.test(trimmed)) {
+    const titleMatch = trimmed.match(/^#\s+(.+)$/m);
+    const title = titleMatch?.[1]?.trim() || "Proposal";
+    const content = titleMatch ? trimmed.replace(/^#\s+.+\n?/, "").trim() : trimmed;
+    return [{ title, content }];
+  }
+
+  return trimmed
+    .split(/^##\s+/m)
+    .filter(Boolean)
+    .map((part) => {
+      const lines = part.split("\n");
+      const title = lines[0]?.trim() || "Section";
+      const content = lines.slice(1).join("\n").trim();
+      return { title, content };
+    })
+    .filter((s) => s.title || s.content);
+}
+
+function collectSectionArrays(raw: Record<string, unknown>): unknown[] {
+  const keys = ["sections", "outline", "parts", "chapters", "proposal_sections", "items", "components"];
+  for (const key of keys) {
+    const val = raw[key];
+    if (Array.isArray(val) && val.length > 0) return val;
+  }
+  return [];
+}
+
+function normalizeGeneratedPayload(raw: Record<string, unknown>): {
+  title?: string;
+  sections: NormalizedSection[];
+  metadata?: Record<string, unknown>;
+  content?: string;
+  attachments?: GeneratedIntelligentDocument["attachments"];
+} {
+  const metadata =
+    raw.metadata && typeof raw.metadata === "object"
+      ? (raw.metadata as Record<string, unknown>)
+      : undefined;
+
+  const title = String(
+    raw.title || raw.documentTitle || raw.name || raw.subject || "",
+  ).trim() || undefined;
+
+  const stringFields = ["content", "proposal", "response", "document", "body", "text", "markdown", "rendered"];
+  for (const key of stringFields) {
+    const val = raw[key];
+    if (typeof val === "string" && val.trim().length > 80) {
+      const sections = splitMarkdownSections(val);
+      return {
+        title: title || sections[0]?.title,
+        sections: sections.length > 0 ? sections : [{ title: title || "Document", content: val.trim() }],
+        metadata,
+        content: val.trim(),
+        attachments: Array.isArray(raw.attachments) ? (raw.attachments as any) : undefined,
+      };
+    }
+  }
+
+  const rawSections = collectSectionArrays(raw);
+  const sections = rawSections
+    .map(normalizeSection)
+    .filter((s): s is NormalizedSection => s !== null);
+
+  if (sections.length > 0) {
+    const content = sections.map((s) => `## ${s.title}\n\n${s.content}`).join("\n\n");
+    return { title, sections, metadata, content, attachments: Array.isArray(raw.attachments) ? (raw.attachments as any) : undefined };
+  }
+
+  return { title, sections: [], metadata, content: "" };
+}
+
+function payloadWordCount(payload: ReturnType<typeof normalizeGeneratedPayload>): number {
+  const text = payload.content || payload.sections.map((s) => `${s.title} ${s.content}`).join(" ");
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+function hasSubstantivePayload(payload: ReturnType<typeof normalizeGeneratedPayload>, minWords = 80): boolean {
+  return payloadWordCount(payload) >= minWords;
+}
+
+async function inferRawText(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+  jsonMode: boolean,
+): Promise<string> {
+  if (llmClient) {
+    const response = await llmClient.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+      temperature: 0.65,
+      max_tokens: maxTokens,
+    });
+    return response.choices[0]?.message?.content?.trim() || "";
+  }
+
+  if (hasAnyInferenceProvider()) {
+    const result = await unifiedInferText(userMessage, {
+      systemPrompt,
+      taskType: "document",
+      maxTokens,
+      temperature: 0.65,
+    });
+    if (result.degraded && !result.response.trim()) {
+      throw new Error("Document generation failed — all AI providers unavailable.");
+    }
+    return result.response.trim();
+  }
+
+  throw new Error("No AI provider configured. Set OPENAI_API_KEY or enable Ollama/local models.");
+}
+
+async function inferDocumentMarkdown(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+): Promise<ReturnType<typeof normalizeGeneratedPayload>> {
+  const markdownPrompt = `${systemPrompt}
+
+IMPORTANT: Do NOT output JSON. Write the complete professional document in Markdown.
+Use a single # title line, then ## for each major section.
+Write full, detailed section bodies — minimum 2,500 words total for tender proposals.`;
+
+  const raw = await inferRawText(markdownPrompt, userMessage, maxTokens, false);
+  if (!raw) {
+    throw new Error("Document generation returned empty content from all providers.");
+  }
+
+  const sections = splitMarkdownSections(raw);
+  const titleMatch = raw.match(/^#\s+(.+)$/m);
+  return {
+    title: titleMatch?.[1]?.trim() || sections[0]?.title || "CYRUS Proposal",
+    sections: sections.length > 0 ? sections : [{ title: "Proposal", content: raw }],
+    content: raw,
+    metadata: { confidence: 0.8, complianceChecks: ["markdown-fallback", "structure", "content"] },
+  };
+}
+
+async function inferDocumentJson(systemPrompt: string, userMessage: string, maxTokens = 8000): Promise<ReturnType<typeof normalizeGeneratedPayload>> {
+  if (!hasAnyInferenceProvider() && !llmClient) {
+    throw new Error("No AI provider configured. Set OPENAI_API_KEY or enable Ollama/local models.");
+  }
+
+  // Pass 1: structured JSON (OpenAI json_object when available — most reliable)
+  try {
+    const jsonRaw = await inferRawText(systemPrompt, userMessage, maxTokens, !!llmClient);
+    const parsed = normalizeGeneratedPayload(parseGeneratedJson(jsonRaw));
+    if (hasSubstantivePayload(parsed)) {
+      return parsed;
+    }
+    console.warn("[Doc Intelligence] JSON generation under minimum word count; retrying as Markdown.");
+  } catch (err) {
+    console.warn("[Doc Intelligence] JSON generation failed:", err instanceof Error ? err.message : String(err));
+  }
+
+  // Pass 2: Markdown fallback for models that ignore JSON or return empty shells
+  const markdown = await inferDocumentMarkdown(systemPrompt, userMessage, maxTokens);
+  if (!hasSubstantivePayload(markdown, 50)) {
+    throw new Error(
+      "Proposal generation produced insufficient content. Verify AI provider keys and retry with a clearer tender PDF.",
+    );
+  }
+  return markdown;
+}
+
+function tenderContextSlice(text: string, maxChars = 120_000): string {
+  if (text.length <= maxChars) return text;
+  const head = text.slice(0, Math.floor(maxChars * 0.65));
+  const tail = text.slice(-Math.floor(maxChars * 0.35));
+  return `${head}\n\n[… middle sections truncated for context window …]\n\n${tail}`;
+}
 
 // =====================================
 // Document Type Classification (ML)
@@ -194,34 +432,14 @@ export interface GeneratedIntelligentDocument {
 export async function generateIntelligentDocument(
   options: DocumentGenerationOptions
 ): Promise<GeneratedIntelligentDocument> {
-  const { documentType, format = "formal", targetLength = "standard", sourceDocument } = options;
-  
-  if (!llmClient) {
-    throw new Error("LLM client not available. Set OPENAI_API_KEY to enable document generation.");
-  }
+  const { documentType, format = "formal", targetLength = "standard" } = options;
 
-  // Build intelligent prompt based on document type and requirements
   const systemPrompt = buildSystemPrompt(documentType, format);
   const userPrompt = buildUserPrompt(options);
 
   try {
-    const response = await llmClient.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 4000,
-    });
-
-    const generated = JSON.parse(response.choices[0]?.message?.content || "{}");
-    
-    // Post-process and enhance the generated content
-    const enhanced = await enhanceDocumentQuality(generated, options);
-    
-    return enhanced;
+    const generated = await inferDocumentJson(systemPrompt, userPrompt, targetLength === "comprehensive" ? 12000 : 8000);
+    return await enhanceDocumentQuality(generated, options);
   } catch (err) {
     console.error("[Doc Intelligence] Generation failed:", err);
     throw new Error(`Document generation failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -286,30 +504,44 @@ function buildUserPrompt(options: DocumentGenerationOptions): string {
 }
 
 async function enhanceDocumentQuality(
-  generated: any,
+  generated: ReturnType<typeof normalizeGeneratedPayload>,
   options: DocumentGenerationOptions
 ): Promise<GeneratedIntelligentDocument> {
-  const content = Array.isArray(generated.sections)
-    ? generated.sections.map((s: any) => `## ${s.title}\n\n${s.content}`).join("\n\n")
-    : (generated.content || "");
-  
+  const sections = generated.sections?.length
+    ? generated.sections
+    : generated.content
+      ? splitMarkdownSections(generated.content)
+      : [];
+
+  const content =
+    generated.content?.trim() ||
+    sections.map((s) => `## ${s.title}\n\n${s.content}`).join("\n\n").trim();
+
   const wordCount = content.split(/\s+/).filter(Boolean).length;
-  const pageCount = Math.ceil(wordCount / 300);
-  
+  const pageCount = Math.max(1, Math.ceil(wordCount / 300));
+
+  if (wordCount < 50) {
+    throw new Error("Generated document has insufficient content. Retry or check AI provider configuration.");
+  }
+
+  const meta = generated.metadata || {};
+
   return {
     content,
-    htmlContent: convertToHTML(generated.sections || []),
+    htmlContent: convertToHTML(sections),
     title: generated.title || `Generated ${options.documentType}`,
     category: options.documentType,
     format: options.format || "formal",
-    sections: generated.sections || [],
+    sections,
     metadata: {
       generatedAt: new Date().toISOString(),
       wordCount,
       pageCount,
-      confidence: generated.metadata?.confidence || 0.85,
-      complianceChecks: generated.metadata?.complianceChecks || ["format", "grammar", "structure"],
-      qualityScore: calculateQualityScore(generated),
+      confidence: typeof meta.confidence === "number" ? meta.confidence : 0.85,
+      complianceChecks: Array.isArray(meta.complianceChecks)
+        ? (meta.complianceChecks as string[])
+        : ["format", "grammar", "structure"],
+      qualityScore: calculateQualityScore({ ...generated, sections, content }),
     },
     attachments: generated.attachments || [],
   };
@@ -407,28 +639,10 @@ async function generateAnswerKey(
   examDocument: string,
   classification: DocumentClassification
 ): Promise<GeneratedIntelligentDocument> {
-  if (!llmClient) {
-    throw new Error("LLM required for answer generation");
-  }
-
-  const response = await llmClient.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: "You are an expert educator. Generate comprehensive answers for the examination questions provided. Include explanations, workings, and key points. Output as JSON with sections array."
-      },
-      {
-        role: "user",
-        content: `Generate answers for this examination:\n\n${examDocument.slice(0, 8000)}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 4000,
-  });
-
-  const result = JSON.parse(response.choices[0]?.message?.content || "{}");
-  
+  const systemPrompt =
+    "You are CYRUS examination intelligence. Generate comprehensive answers for every question. Include explanations, workings, and marking guidance. Output ONLY valid JSON with title, sections array, and metadata.";
+  const userMessage = `Generate a complete answer key for this examination:\n\n${tenderContextSlice(examDocument, 80_000)}`;
+  const result = await inferDocumentJson(systemPrompt, userMessage, 8000);
   return enhanceDocumentQuality(result, {
     documentType: classification.category,
     format: "academic",
@@ -436,36 +650,30 @@ async function generateAnswerKey(
   });
 }
 
-async function generateTenderResponse(
+export async function generateTenderResponse(
   tenderDocument: string,
-  classification: DocumentClassification
+  classification: DocumentClassification,
+  metadata?: { fileName?: string; pageCount?: number },
 ): Promise<GeneratedIntelligentDocument> {
-  if (!llmClient) {
-    throw new Error("LLM required for tender response");
-  }
+  const context = tenderContextSlice(tenderDocument);
+  const userMessage = [
+    `Analyze this tender document and produce a complete, submission-ready professional proposal.`,
+    metadata?.fileName ? `Source file: ${metadata.fileName}` : "",
+    metadata?.pageCount ? `Pages: ${metadata.pageCount}` : "",
+    `Classification: ${classification.category} (confidence ${(classification.confidence * 100).toFixed(0)}%)`,
+    classification.characteristics.length ? `Characteristics: ${classification.characteristics.join(", ")}` : "",
+    `\n--- TENDER DOCUMENT ---\n${context}\n--- END ---`,
+    `\nGenerate a high-grade proposal that would score highly on technical and compliance evaluation.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  const response = await llmClient.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: "You are a professional tender response specialist. Create a compliant, comprehensive response to the tender requirements. Include all required sections, pricing structure, qualifications, and compliance statements. Output as JSON."
-      },
-      {
-        role: "user",
-        content: `Generate a compliant tender response for:\n\n${tenderDocument.slice(0, 8000)}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 4000,
-  });
-
-  const result = JSON.parse(response.choices[0]?.message?.content || "{}");
-  
+  const result = await inferDocumentJson(TENDER_SYSTEM_PROMPT, userMessage, 12000);
   return enhanceDocumentQuality(result, {
     documentType: "tender",
     format: "formal",
     sourceDocument: tenderDocument,
+    targetLength: "comprehensive",
   });
 }
 
