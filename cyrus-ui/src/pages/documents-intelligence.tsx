@@ -30,7 +30,9 @@ import {
 } from "@shared/module-handoff";
 import { maxDocgenTargetPages, parseLargeUploadThresholdBytes, parseMaxAnalysisChunks } from "@shared/cyrus-document-limits";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { MediaUploadZone } from "@/components/media-upload-zone";
 import { useToast } from "@/hooks/use-toast";
+import { CYRUS_MEDIA_FORMAT_LABELS } from "@shared/cyrus-media-upload";
 import { TSODILO_HUNT_SYMBOLS_URL } from "@/lib/dashboard-backdrop";
 
 const DOC_CATEGORIES: { value: string; label: string }[] = [
@@ -139,7 +141,6 @@ export default function DocumentsIntelligence() {
   const [intelligentExportFormat, setIntelligentExportFormat] = useState<(typeof EXPORT_FORMATS)[number]["value"]>("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const [isIntelligentExporting, setIsIntelligentExporting] = useState(false);
-  const analyseFileInputRef = useRef<HTMLInputElement>(null);
   const [handoffEncoded, setHandoffEncoded] = useState<ModuleHandoffAttachment[] | undefined>();
   const [handoffLargeRefs, setHandoffLargeRefs] = useState<ModuleHandoffLargeRef[]>([]);
   
@@ -149,28 +150,38 @@ export default function DocumentsIntelligence() {
   const [intelligentDoc, setIntelligentDoc] = useState<any | null>(null);
   const [fusedResult, setFusedResult] = useState<FusedPipelineResult | null>(null);
   const [isProcessingIntelligent, setIsProcessingIntelligent] = useState(false);
-  const intelligentFileInputRef = useRef<HTMLInputElement>(null);
+
+  const activePipelineFile = stagedAnalyseFile ?? intelligentFile ?? currentFile;
 
   const docHintText =
     category === "auto"
       ? ""
       : `Primary document class: ${DOC_CATEGORIES.find((c) => c.value === category)?.label ?? category}. Apply jurisdiction-aware reading and long-form structure where relevant.`;
 
-  const onStagedFileSelected = (fileList: FileList | null) => {
-    const f = fileList?.[0];
-    if (!f) return;
-    setStagedAnalyseFile(f);
+  const stagePipelineFile = (file: File | null) => {
+    if (!file) {
+      setStagedAnalyseFile(null);
+      setIntelligentFile(null);
+      setHandoffStagedFile(null);
+      return;
+    }
+    setStagedAnalyseFile(file);
+    setIntelligentFile(file);
+    setHandoffStagedFile(file);
+    setClassification(null);
+    setIntelligentDoc(null);
+    setFusedResult(null);
     setIntel((s) => ({ ...s, docHint: docHintText }));
   };
 
   /** Single merged override so the click uses current intel + category hint (no stale closure). */
   const runStagedAnalyse = () => {
-    if (!stagedAnalyseFile) return;
+    if (!activePipelineFile) return;
     const override: Partial<IntelOptions> = { ...intel, docHint: docHintText };
-    if (stagedAnalyseFile.size > parseLargeUploadThresholdBytes()) {
-      void runAsync(stagedAnalyseFile, override);
+    if (activePipelineFile.size > parseLargeUploadThresholdBytes()) {
+      void runAsync(activePipelineFile, override);
     } else {
-      void runSyncFull(stagedAnalyseFile, override);
+      void runSyncFull(activePipelineFile, override);
     }
   };
 
@@ -185,8 +196,6 @@ export default function DocumentsIntelligence() {
     setFusedResult(null);
     clearResults();
   };
-
-  const activePipelineFile = stagedAnalyseFile ?? intelligentFile ?? currentFile;
 
   const openInDocumentBuilder = (text: string, title?: string) => {
     saveHandoff({
@@ -472,6 +481,27 @@ export default function DocumentsIntelligence() {
         <div className="grid min-h-0 grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
           {/* LEFT CONSOLE: Document Analysis and Generation Input */}
           <div className="flex min-h-0 min-w-0 flex-col gap-4 sm:gap-5">
+            <section className="shrink-0 rounded-2xl border border-sky-400/25 bg-gradient-to-b from-sky-950/40 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
+              <h2
+                className="mb-2 flex items-center gap-2.5 text-base font-semibold text-sky-100 sm:text-lg"
+                style={{ fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                <Upload className="h-5 w-5 text-sky-300" />
+                Media & document upload
+              </h2>
+              <p className="mb-3 text-sm text-white/60">
+                One upload powers analysis, intelligent processing, fused drafts, and Document Builder handoff.
+                Supported: {CYRUS_MEDIA_FORMAT_LABELS}.
+              </p>
+              <MediaUploadZone
+                file={activePipelineFile}
+                onFileSelected={stagePipelineFile}
+                uploading={isSubmitting || isProcessingIntelligent}
+                title="Source file"
+                variant="cyan"
+              />
+            </section>
+
           <section className="shrink-0 rounded-2xl border border-white/14 bg-gradient-to-b from-slate-700/58 via-slate-900/76 to-slate-950/88 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.36)] sm:p-5">
             <h2
               className="mb-3 flex items-center gap-2.5 text-base font-semibold text-slate-100 sm:text-lg"
@@ -581,30 +611,13 @@ export default function DocumentsIntelligence() {
 
                 <div className="rounded-xl border border-dashed border-sky-300/28 bg-slate-950/45 p-4">
                   <p className="mb-2 text-xs font-mono uppercase tracking-widest text-cyan-200/85">Source file</p>
-                  <input
-                    ref={analyseFileInputRef}
-                    type="file"
-                    className="sr-only"
-                    accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp"
-                    onChange={(e) => {
-                      onStagedFileSelected(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    className="h-11 w-full border border-cyan-500/40 bg-cyan-500/15 px-4 text-base text-cyan-50 hover:bg-cyan-500/25"
-                    onClick={() => analyseFileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-5 w-5" />
-                    Upload document (PDF, Word, text, image)
-                  </Button>
-                  {(stagedAnalyseFile || currentFile) && (
-                    <p className="mt-2 text-sm text-white/75">
+                  {activePipelineFile ? (
+                    <p className="text-sm text-white/75">
                       <FileText className="mr-1.5 inline h-4 w-4" />
-                      {(stagedAnalyseFile || currentFile)!.name} ·{" "}
-                      {((stagedAnalyseFile || currentFile)!.size / 1024 / 1024).toFixed(2)} MB
+                      {activePipelineFile.name} · {(activePipelineFile.size / 1024 / 1024).toFixed(2)} MB
                     </p>
+                  ) : (
+                    <p className="text-sm text-white/50">Upload a file in the Media & document upload section above.</p>
                   )}
                 </div>
 
@@ -612,7 +625,7 @@ export default function DocumentsIntelligence() {
                   <Button
                     type="button"
                     className="h-11 w-full bg-gradient-to-r from-slate-300/25 to-sky-300/35 text-base text-white shadow-md shadow-black/25 disabled:opacity-50"
-                    disabled={!stagedAnalyseFile || isSubmitting}
+                    disabled={!activePipelineFile || isSubmitting}
                     onClick={runStagedAnalyse}
                   >
                     {isSubmitting ? (
@@ -646,39 +659,18 @@ export default function DocumentsIntelligence() {
               </p>
 
               <div className="rounded-xl border border-dashed border-emerald-400/25 bg-slate-950/45 p-4">
-                <p className="mb-2 text-xs font-mono uppercase tracking-widest text-emerald-200/85">Upload for intelligent processing</p>
-                <input
-                  ref={intelligentFileInputRef}
-                  type="file"
-                  className="sr-only"
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setIntelligentFile(f);
-                      setClassification(null);
-                      setIntelligentDoc(null);
-                    }
-                    e.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  className="h-11 w-full border border-emerald-500/40 bg-emerald-500/15 px-4 text-base text-emerald-50 hover:bg-emerald-500/25"
-                  onClick={() => intelligentFileInputRef.current?.click()}
-                >
-                  <Upload className="mr-2 h-5 w-5" />
-                  Upload document
-                </Button>
-                {intelligentFile && (
-                  <p className="mt-2 text-sm text-emerald-100/75">
+                <p className="mb-2 text-xs font-mono uppercase tracking-widest text-emerald-200/85">Source file</p>
+                {activePipelineFile ? (
+                  <p className="text-sm text-emerald-100/75">
                     <FileText className="mr-1.5 inline h-4 w-4" />
-                    {intelligentFile.name} · {(intelligentFile.size / 1024 / 1024).toFixed(2)} MB
+                    {activePipelineFile.name} · {(activePipelineFile.size / 1024 / 1024).toFixed(2)} MB
                   </p>
+                ) : (
+                  <p className="text-sm text-emerald-200/60">Upload a file in the Media & document upload section above.</p>
                 )}
               </div>
 
-              {intelligentFile && (
+              {activePipelineFile && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button
                     type="button"

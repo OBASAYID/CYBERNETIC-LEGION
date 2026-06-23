@@ -6,6 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { systemFetch } from "@/lib/system-api";
 import { getSessionToken } from "@/lib/auth-storage";
+import {
+  CYRUS_MEDIA_FILE_ACCEPT,
+  CYRUS_MEDIA_FORMAT_LABELS,
+  cyrusMaxUploadLabel,
+} from "@shared/cyrus-media-upload";
 
 interface UploadedFile {
   id: string;
@@ -151,6 +156,7 @@ export function FileUpload({ onFileSelect, onAnalyze, compact = false }: FileUpl
             ref={fileInputRef}
             type="file"
             multiple
+            accept={CYRUS_MEDIA_FILE_ACCEPT}
             className="hidden"
             onChange={handleFileSelect}
             data-testid="file-upload-input"
@@ -214,6 +220,7 @@ export function FileUpload({ onFileSelect, onAnalyze, compact = false }: FileUpl
             ref={fileInputRef}
             type="file"
             multiple
+            accept={CYRUS_MEDIA_FILE_ACCEPT}
             className="hidden"
             onChange={handleFileSelect}
             data-testid="file-upload-input-full"
@@ -223,7 +230,7 @@ export function FileUpload({ onFileSelect, onAnalyze, compact = false }: FileUpl
             {uploadMutation.isPending ? "Uploading..." : "Drag & drop files here"}
           </p>
           <p className="text-xs text-slate-500">
-            or click to browse (Images, Videos, PDFs, up to 50MB)
+            {CYRUS_MEDIA_FORMAT_LABELS} · up to {cyrusMaxUploadLabel()}
           </p>
         </div>
 

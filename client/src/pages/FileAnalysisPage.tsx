@@ -11,6 +11,7 @@ import {
   type ModuleHandoffAttachment,
   type ModuleHandoffLargeRef,
 } from "@shared/module-handoff";
+import { CYRUS_MEDIA_FILE_ACCEPT, CYRUS_MEDIA_FORMAT_LABELS } from "@shared/cyrus-media-upload";
 import { CyrusHumanoid } from "../components/CyrusHumanoid";
 import {
   FileUp,
@@ -221,7 +222,7 @@ export function FileAnalysisPage() {
                   type="file"
                   onChange={handleFileSelect}
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp"
+                  accept={CYRUS_MEDIA_FILE_ACCEPT}
                 />
 
                 <button
@@ -243,7 +244,7 @@ export function FileAnalysisPage() {
                         Click to upload file for analysis
                       </span>
                       <span className="text-xs text-gray-500">
-                        PDF, DOCX, TXT, Images
+                        {CYRUS_MEDIA_FORMAT_LABELS}
                       </span>
                     </>
                   )}
