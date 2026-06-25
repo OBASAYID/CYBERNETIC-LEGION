@@ -1,5 +1,5 @@
 import OpenAI, { AzureOpenAI } from 'openai';
-import { db } from '../../db';
+import { db } from '../../db.js';
 import { knowledgeGraph } from "../../../shared/schema.js";
 import { eq, sql, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';

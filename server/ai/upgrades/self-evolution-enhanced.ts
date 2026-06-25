@@ -2,7 +2,7 @@ import OpenAI, { AzureOpenAI } from 'openai';
 import { experienceMemory, TaskExperience, KnowledgeConcept, EvolutionEvent } from '../experience-memory.js';
 import { vectorKnowledgeBase } from './vector-knowledge-base.js';
 import { quantumBridge } from '../quantum-bridge-client.js';
-import { db } from '../../db';
+import { db } from '../../db.js';
 import { knowledgeGraph, performanceMetrics, evolutionLog } from "../../../shared/schema.js";
 import { desc, sql } from 'drizzle-orm';
 
