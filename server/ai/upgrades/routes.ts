@@ -21,7 +21,7 @@ async function ensureUpgradesLoaded() {
   if (upgradesLoaded) return;
   const tick = (ms = 10): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-  const idx = await import("./index");
+  const idx = await import("./index.js");
   vectorKnowledgeBase = idx.vectorKnowledgeBase;
   emotionalCognition = idx.emotionalCognition;
   universalLanguage = idx.universalLanguage;
@@ -38,7 +38,7 @@ async function ensureUpgradesLoaded() {
   getAdvancedUpgradesStatus = idx.getAdvancedUpgradesStatus;
   await tick();
 
-  const moM = await import("./module-orchestrator");
+  const moM = await import("./module-orchestrator.js");
   moduleOrchestrator = moM.moduleOrchestrator;
   await moduleOrchestrator.init();
   await tick();

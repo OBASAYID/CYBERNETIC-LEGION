@@ -20,20 +20,20 @@ async function ensureModules() {
   if (modulesLoaded) return;
   try {
     const [vkb, ec, ul, di, eg, se, qnn, ase, cda, ns, hr, bni, ahc, iotNtn] = await Promise.all([
-      import("./vector-knowledge-base"),
-      import("./emotional-cognition"),
-      import("./universal-language"),
-      import("./decentralized-intelligence"),
-      import("./ethical-governance"),
-      import("./self-evolution-enhanced"),
-      import("./quantum-neural-networks"),
-      import("./ai-simulations-engine"),
-      import("./cross-dimensional-ai"),
-      import("./nanotechnology-simulation"),
-      import("./hyperlinked-reality"),
-      import("./bio-neural-interface"),
-      import("./adaptive-hardware-controller"),
-      import("./iot-ntn-connectivity"),
+      import("./vector-knowledge-base.js"),
+      import("./emotional-cognition.js"),
+      import("./universal-language.js"),
+      import("./decentralized-intelligence.js"),
+      import("./ethical-governance.js"),
+      import("./self-evolution-enhanced.js"),
+      import("./quantum-neural-networks.js"),
+      import("./ai-simulations-engine.js"),
+      import("./cross-dimensional-ai.js"),
+      import("./nanotechnology-simulation.js"),
+      import("./hyperlinked-reality.js"),
+      import("./bio-neural-interface.js"),
+      import("./adaptive-hardware-controller.js"),
+      import("./iot-ntn-connectivity.js"),
     ]);
     modulesRef.vectorKnowledgeBase = vkb.vectorKnowledgeBase;
     modulesRef.emotionalCognition = ec.emotionalCognition;
@@ -51,11 +51,11 @@ async function ensureModules() {
     modulesRef.iotNtnConnectivity = iotNtn.iotNtnConnectivity;
 
     const [es, md, ri, tm, bs] = await Promise.all([
-      import("../interactive/environmental-sensing"),
-      import("../interactive/medical-diagnostics"),
-      import("../interactive/robotic-integration"),
-      import("../interactive/teaching-module"),
-      import("../interactive/blood-sampling-system"),
+      import("../interactive/environmental-sensing.js"),
+      import("../interactive/medical-diagnostics.js"),
+      import("../interactive/robotic-integration.js"),
+      import("../interactive/teaching-module.js"),
+      import("../interactive/blood-sampling-system.js"),
     ]);
     modulesRef.biologyModule = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.environmentalSensing = es.environmentalSensing;
@@ -65,7 +65,7 @@ async function ensureModules() {
     modulesRef.securityEncryption = { getStatus: () => ({ enabled: false, reason: "removed" }) };
     modulesRef.bloodSamplingSystem = bs.bloodSamplingSystem;
 
-    const qbM = await import("../quantum-bridge-client");
+    const qbM = await import("../quantum-bridge-client.js");
     modulesRef.quantumBridge = qbM.quantumBridge;
 
     modulesLoaded = true;

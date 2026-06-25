@@ -14,26 +14,26 @@ const REMOVE_SECURITY_MODULE = true;
 async function ensureInteractiveLoaded() {
   if (interactiveLoaded) return;
   if (!REMOVE_BIOLOGY_MODULE) {
-    const m1 = await import("./biology-module");
+    const m1 = await import("./biology-module.js");
     biologyModule = m1.biologyModule;
   } else {
     biologyModule = { getStatus: () => ({ enabled: false, reason: "removed" }) };
   }
-  const m2 = await import("./environmental-sensing");
+  const m2 = await import("./environmental-sensing.js");
   environmentalSensing = m2.environmentalSensing;
-  const m3 = await import("./medical-diagnostics");
+  const m3 = await import("./medical-diagnostics.js");
   medicalDiagnostics = m3.medicalDiagnostics;
-  const m4 = await import("./robotic-integration");
+  const m4 = await import("./robotic-integration.js");
   roboticIntegration = m4.roboticIntegration;
-  const m5 = await import("./teaching-module");
+  const m5 = await import("./teaching-module.js");
   teachingModule = m5.teachingModule;
   if (!REMOVE_SECURITY_MODULE) {
-    const m6 = await import("./security-encryption");
+    const m6 = await import("./security-encryption.js");
     securityEncryption = m6.securityEncryption;
   } else {
     securityEncryption = { getStatus: () => ({ enabled: false, reason: "removed" }) };
   }
-  const m7 = await import("./blood-sampling-system");
+  const m7 = await import("./blood-sampling-system.js");
   bloodSamplingSystem = m7.bloodSamplingSystem;
   interactiveLoaded = true;
 }
