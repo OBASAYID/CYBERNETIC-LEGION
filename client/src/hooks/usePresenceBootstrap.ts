@@ -27,7 +27,10 @@ export function usePresenceBootstrap(enabled = true): void {
 
     const waitForReady = async () => {
       const link = await waitForStackLinkReady();
-      if (link?.chain.server.ok && link.chain.database.ok) return;
+      if (link?.chain.server.ok && link.chain.database.ok) {
+        connect();
+        return;
+      }
 
       for (let attempt = 0; attempt < 12; attempt++) {
         try {
