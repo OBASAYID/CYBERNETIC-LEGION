@@ -1,9 +1,20 @@
 {
   "mcpServers": {
-    "cyrus-asset-ingest": {
-      "command": "node_modules/.bin/tsx",
+    "github": {
+      "command": "docker",
       "args": [
-        "server/mcp/cyrus-asset-ingest-server.ts"
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN=${env:GITHUB_PERSONAL_ACCESS_TOKEN}",
+        "ghcr.io/github/github-mcp-server:0.33.0"
+      ]
+    },
+    "cyrus-asset-ingest": {
+      "command": "${workspaceFolder}/node_modules/.bin/tsx",
+      "args": [
+        "${workspaceFolder}/server/mcp/cyrus-asset-ingest-server.ts"
       ],
       "env": {
         "CYRUS_ML_ASSETS": "true",
@@ -12,18 +23,18 @@
       }
     },
     "cyrus-data-collection": {
-      "command": "node_modules/.bin/tsx",
+      "command": "${workspaceFolder}/node_modules/.bin/tsx",
       "args": [
-        "server/mcp/cyrus-data-collection-server.ts"
+        "${workspaceFolder}/server/mcp/cyrus-data-collection-server.ts"
       ],
       "env": {
         "CYRUS_INGEST_SCRAPED_ASSETS": "true"
       }
     },
     "cyrus-intelligence": {
-      "command": "node_modules/.bin/tsx",
+      "command": "${workspaceFolder}/node_modules/.bin/tsx",
       "args": [
-        "server/mcp/cyrus-intelligence-server.ts"
+        "${workspaceFolder}/server/mcp/cyrus-intelligence-server.ts"
       ],
       "env": {
         "CYRUS_INTELLIGENCE_AUTO": "0",
