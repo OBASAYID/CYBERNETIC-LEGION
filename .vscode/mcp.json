@@ -2,8 +2,8 @@
   "servers": {
     "cyrus-asset-ingest": {
       "type": "stdio",
-      "command": "node_modules/.bin/tsx",
-      "args": ["server/mcp/cyrus-asset-ingest-server.ts"],
+      "command": "${workspaceFolder}/node_modules/.bin/tsx",
+      "args": ["${workspaceFolder}/server/mcp/cyrus-asset-ingest-server.ts"],
       "env": {
         "CYRUS_ML_ASSETS": "true",
         "CYRUS_OPENAI_INDEPENDENT": "true",
@@ -12,8 +12,8 @@
     },
     "cyrus-data-collection": {
       "type": "stdio",
-      "command": "node_modules/.bin/tsx",
-      "args": ["server/mcp/cyrus-data-collection-server.ts"],
+      "command": "${workspaceFolder}/node_modules/.bin/tsx",
+      "args": ["${workspaceFolder}/server/mcp/cyrus-data-collection-server.ts"],
       "env": {
         "CYRUS_INGEST_SCRAPED_ASSETS": "true"
       }

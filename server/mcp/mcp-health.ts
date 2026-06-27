@@ -218,17 +218,38 @@ export async function checkAllMcpHealth(): Promise<{
 /** Ensure .cursor/mcp.json contains all CYRUS registry servers. */
 export function syncMcpCursorConfig(): { updated: boolean; path: string } {
   const configPath = path.join(REPO_ROOT, ".cursor", "mcp.json");
-  const tsxBin = fs.existsSync(path.join(REPO_ROOT, "node_modules", ".bin", "tsx"))
-    ? "node_modules/.bin/tsx"
-    : "npx";
+  const hasLocalTsx = fs.existsSync(path.join(REPO_ROOT, "node_modules", ".bin", "tsx"));
+  const cyrusIds = new Set(CYRUS_MCP_SERVERS.map((s) => s.id));
 
-  const mcpServers: Record<string, unknown> = {};
+  let existing: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as {
+        mcpServers?: Record<string, unknown>;
+      };
+      existing = parsed.mcpServers ?? {};
+    }
+  } catch {
+    existing = {};
+  }
+
+  const preserved = Object.fromEntries(
+    Object.entries(existing).filter(([id]) => !cyrusIds.has(id)),
+  );
+
+  const mcpServers: Record<string, unknown> = { ...preserved };
   for (const s of CYRUS_MCP_SERVERS) {
-    mcpServers[s.id] = {
-      command: tsxBin,
-      args: tsxBin === "npx" ? ["tsx", `server/mcp/${s.id}-server.ts`] : [`server/mcp/${s.id}-server.ts`],
-      env: s.env,
-    };
+    mcpServers[s.id] = hasLocalTsx
+      ? {
+          command: "${workspaceFolder}/node_modules/.bin/tsx",
+          args: [`\${workspaceFolder}/server/mcp/${s.id}-server.ts`],
+          env: s.env,
+        }
+      : {
+          command: "npx",
+          args: ["tsx", `\${workspaceFolder}/server/mcp/${s.id}-server.ts`],
+          env: s.env,
+        };
   }
 
   const next = { mcpServers };
