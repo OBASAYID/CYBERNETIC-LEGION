@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { ModuleWorkspacePageShell } from "@/components/command-center/module-workspace-page-shell";
+import { VoiceConversation } from "@/components/comms/VoiceConversation";
 import {
   useAssetCatalog,
   useAssetSearch,
@@ -112,7 +113,7 @@ export function IntelligenceHubPage() {
       kicker="Platform intelligence"
       title="Intelligence Hub"
       icon={Brain}
-      subtitle="Mine open-web knowledge and assets, run autonomous cycles, and execute cross-domain missions — OpenAI-free when CYRUS_OPENAI_INDEPENDENT is set."
+      subtitle="Mine open-web knowledge and assets, run autonomous cycles, execute cross-domain missions — and talk to CYRUS via voice."
       headerEnd={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Link href="/files">
@@ -140,6 +141,11 @@ export function IntelligenceHubPage() {
           <StatCard label="Calibrated models" value={`${modelCount}/4`} hint="GWA · doc · vision · assets" />
           <StatCard label="MCP servers" value={`${mcpActive}/${mcpTotal || 3}`} hint="Agent tooling" />
         </div>
+
+        {/* Voice Conversation Widget */}
+        <section className="rounded-2xl p-5" style={{ background: "rgba(34,197,94,0.05)", border: "1px solid rgba(34,197,94,0.15)" }}>
+          <VoiceConversation />
+        </section>
 
         {/* Mission */}
         <section className="rounded-2xl p-5" style={{ background: "rgba(225,29,72,0.05)", border: "1px solid rgba(225,29,72,0.15)" }}>
