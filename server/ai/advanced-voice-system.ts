@@ -163,19 +163,18 @@ class AdvancedVoiceSystem {
 
   /**
    * Local speech-to-text (using Whisper.cpp or similar)
+   * Now fails loudly instead of silently returning fake transcription
    */
   private async localSpeechToText(
     audioBuffer: Buffer,
     options: SpeechToTextOptions
   ): Promise<VoiceResponse> {
-    // This would integrate with local Whisper model
-    // For now, return a placeholder
-    console.warn('[Voice System] Using fallback STT - install Whisper for production use');
-    
-    return {
-      text: '[Audio transcription requires Whisper API key or local Whisper installation]',
-      confidence: 0.1,
-    };
+    console.error('[Voice System] STT Error: OpenAI Whisper API key not configured');
+    throw new Error(
+      'Speech-to-Text requires OPENAI_API_KEY to be set in environment. ' +
+      'Configure your OpenAI API key to enable voice recognition. ' +
+      'Alternatively, install local Whisper support for offline transcription.'
+    );
   }
 
   /**
@@ -235,7 +234,8 @@ class AdvancedVoiceSystem {
   }
 
   /**
-   * ElevenLabs TTS (Highest quality, natural voices)
+   * ElevenLabs TTS with emotion-tuned voice parameters
+   * Highest quality, natural voices with emotional prosody
    */
   private async elevenLabsTextToSpeech(
     text: string,
@@ -246,6 +246,18 @@ class AdvancedVoiceSystem {
     }
 
     const voiceId = options.voice || process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Default voice
+    
+    // Emotion-to-voice-parameter mapping for natural prosody
+    const emotionMap: Record<string, { stability: number; similarity_boost: number; style: number }> = {
+      'neutral': { stability: 0.65, similarity_boost: 0.75, style: 0.5 },
+      'happy': { stability: 0.45, similarity_boost: 0.8, style: 0.8 },
+      'sad': { stability: 0.75, similarity_boost: 0.7, style: 0.3 },
+      'angry': { stability: 0.4, similarity_boost: 0.85, style: 0.9 },
+      'fearful': { stability: 0.55, similarity_boost: 0.72, style: 0.6 },
+      'surprised': { stability: 0.5, similarity_boost: 0.82, style: 0.7 },
+    };
+
+    const emotionSettings = emotionMap[options.emotion || 'neutral'] || emotionMap['neutral'];
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -258,11 +270,11 @@ class AdvancedVoiceSystem {
         },
         body: JSON.stringify({
           text,
-          model_id: options.model || 'eleven_monolingual_v1',
+          model_id: options.model || 'eleven_turbo_v2_5',
           voice_settings: {
-            stability: 0.75,
-            similarity_boost: 0.75,
-            style: 0.5,
+            stability: emotionSettings.stability,
+            similarity_boost: emotionSettings.similarity_boost,
+            style: emotionSettings.style,
             use_speaker_boost: true,
           },
         }),
