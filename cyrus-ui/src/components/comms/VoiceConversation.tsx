@@ -31,7 +31,6 @@ export function VoiceConversation() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [cyrusText, setCyrusText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<Array<{ role: 'user' | 'cyrus'; text: string }>>([]);
 
@@ -64,7 +63,7 @@ export function VoiceConversation() {
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (err) {
-      setError(`Microphone access denied: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Failed to access microphone: ${err instanceof Error ? err.message : String(err)}`);
       console.error('[Voice] Recording start failed:', err);
     }
   };
@@ -116,7 +115,6 @@ export function VoiceConversation() {
 
       if (result.text) {
         const text = result.text;
-        setCyrusText(text);
         setTranscript((prev) => [...prev, { role: 'cyrus', text }]);
       }
 
@@ -178,7 +176,6 @@ export function VoiceConversation() {
    */
   const clearConversation = () => {
     setTranscript([]);
-    setCyrusText('');
     setError(null);
   };
 
