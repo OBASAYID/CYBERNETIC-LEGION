@@ -11,6 +11,19 @@ import { Mic, Square, Volume2, Loader2, AlertCircle } from 'lucide-react';
 import { systemFetch } from '@shared/cyrus-api-client';
 import { getAuthenticatedUserId } from '@/lib/auth-storage';
 
+interface VoiceApiErrorResponse {
+  message?: string;
+}
+
+interface VoiceApiResponse {
+  /** Server-side transcription of the user's spoken audio. */
+  transcription?: string;
+  /** CYRUS text reply. */
+  text?: string;
+  /** Base64 data URL for the synthesized audio reply. */
+  audio?: string;
+}
+
 export function VoiceConversation() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -89,20 +102,20 @@ export function VoiceConversation() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json() as any;
+        const errorData = await response.json() as VoiceApiErrorResponse;
         throw new Error(errorData.message || `Server error: ${response.status}`);
       }
 
-      const result = await response.json() as any;
+      const result = await response.json() as VoiceApiResponse;
 
       // Add the server's transcription of the user's speech to the transcript
       if (result.transcription?.trim()) {
-        setTranscript((prev) => [...prev, { role: 'user', text: result.transcription as string }]);
+        setTranscript((prev) => [...prev, { role: 'user', text: result.transcription! }]);
       }
 
       if (result.text) {
         setCyrusText(result.text);
-        setTranscript((prev) => [...prev, { role: 'cyrus', text: result.text }]);
+        setTranscript((prev) => [...prev, { role: 'cyrus', text: result.text! }]);
       }
 
       // Play audio response if available
