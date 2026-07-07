@@ -1,13 +1,15 @@
 /**
  * Voice Conversation Component
- * 
- * Real working voice-to-voice interface for CYRUS
+ *
+ * Real working voice-to-voice interface for CYRUS.
  * Records audio, sends to /api/voice/conversation endpoint,
- * receives transcription + synthesized response
+ * receives transcription + synthesized response.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Mic, Square, Volume2, Loader2, AlertCircle } from 'lucide-react';
+import { systemFetch } from '@shared/cyrus-api-client';
+import { getAuthenticatedUserId } from '@/lib/auth-storage';
 
 export function VoiceConversation() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -78,10 +80,9 @@ export function VoiceConversation() {
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('context', 'General conversation with CYRUS');
 
-      // Get user ID from session or headers
-      const userId = localStorage.getItem('userId') || 'anonymous';
+      const userId = getAuthenticatedUserId();
 
-      const response = await fetch('/api/voice/conversation', {
+      const response = await systemFetch('/api/voice/conversation', {
         method: 'POST',
         headers: {
           'X-User-Id': userId,
