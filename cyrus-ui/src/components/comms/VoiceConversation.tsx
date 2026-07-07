@@ -110,12 +110,14 @@ export function VoiceConversation() {
 
       // Add the server's transcription of the user's speech to the transcript
       if (result.transcription?.trim()) {
-        setTranscript((prev) => [...prev, { role: 'user', text: result.transcription! }]);
+        const transcription = result.transcription;
+        setTranscript((prev) => [...prev, { role: 'user', text: transcription }]);
       }
 
       if (result.text) {
-        setCyrusText(result.text);
-        setTranscript((prev) => [...prev, { role: 'cyrus', text: result.text! }]);
+        const text = result.text;
+        setCyrusText(text);
+        setTranscript((prev) => [...prev, { role: 'cyrus', text }]);
       }
 
       // Play audio response if available
