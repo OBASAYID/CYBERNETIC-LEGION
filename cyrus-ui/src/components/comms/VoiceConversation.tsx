@@ -13,13 +13,11 @@ import { getAuthenticatedUserId } from '@/lib/auth-storage';
 
 export function VoiceConversation() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [userText, setUserText] = useState('');
   const [cyrusText, setCyrusText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<Array<{ role: 'user' | 'cyrus'; text: string }>>([]);
@@ -97,10 +95,9 @@ export function VoiceConversation() {
 
       const result = await response.json() as any;
 
-      // Update transcripts
-      if (userText.trim()) {
-        setTranscript((prev) => [...prev, { role: 'user', text: userText }]);
-        setUserText('');
+      // Add the server's transcription of the user's speech to the transcript
+      if (result.transcription?.trim()) {
+        setTranscript((prev) => [...prev, { role: 'user', text: result.transcription as string }]);
       }
 
       if (result.text) {
@@ -166,7 +163,6 @@ export function VoiceConversation() {
    */
   const clearConversation = () => {
     setTranscript([]);
-    setUserText('');
     setCyrusText('');
     setError(null);
   };
