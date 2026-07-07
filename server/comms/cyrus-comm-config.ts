@@ -96,6 +96,14 @@ export function getProductionIceServers(): CyrusCommIceServer[] {
   return base;
 }
 
+/** Warn loudly at boot if production has no TURN relay — calls across real networks will fail. */
+if (process.env.NODE_ENV === "production" && !relayIsConfigured(CYRUS_COMM_ICE_SERVERS)) {
+  console.error(
+    "[CYRUS COMMS] ⚠️  TURN RELAY NOT CONFIGURED — cross-network calls will fail on symmetric NAT. " +
+      "Set TURN_URLS and TURN_SECRET in .env (or allow CYRUS_COMM_PUBLIC_TURN=true for the public backup relay).",
+  );
+}
+
 export const CYRUS_COMM_SFU = {
   mode: "p2p" as const,
   mediasoup: { workerCount: 0, rtcMinPort: 0, rtcMaxPort: 0 },
