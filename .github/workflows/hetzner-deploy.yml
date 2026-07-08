@@ -13,7 +13,7 @@ on:
 
 jobs:
   deploy:
-    name: SSH Deploy → cyrus@167.233.36.99
+    name: SSH Deploy to Production
     runs-on: ubuntu-latest
     environment: production
     concurrency:
@@ -61,8 +61,12 @@ jobs:
 
             # ── 2. Ensure .env exists ────────────────────
             if [ ! -f .env ]; then
-              echo "▸ Creating .env from template…"
-              cp .env.example .env 2>/dev/null || touch .env
+              if [ -f .env.example ]; then
+                echo "▸ Creating .env from .env.example…"
+                cp .env.example .env
+              else
+                echo "✗ Neither .env nor .env.example found — aborting" >&2; exit 1
+              fi
             fi
 
             # ── 3. Helper: upsert key=value in .env ──────
@@ -84,7 +88,12 @@ jobs:
 
             # ── 5. HTTPS / Caddyfile ─────────────────────
             # Derive sslip.io hostname from the server's public IP.
-            PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org)"
+            PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org \
+                         || curl -fsS --max-time 5 https://ifconfig.me \
+                         || hostname -I | awk '{print $1}')"
+            if [ -z "$PUBLIC_IP" ]; then
+              echo "✗ Could not determine public IP — aborting" >&2; exit 1
+            fi
             SITE_HOST="${PUBLIC_IP//./-}.sslip.io"
             upsert PUBLIC_BASE_URL  "https://${SITE_HOST}"
             upsert BASE_URL         "https://${SITE_HOST}"
@@ -96,15 +105,16 @@ jobs:
             if [ ! -f "$CADDY_SRC" ]; then
               echo "✗ $CADDY_SRC not found — aborting" >&2; exit 1
             fi
-            if ! grep -q '{\$SITE_HOST}' "$CADDY_SRC"; then
-              echo "✗ Placeholder {\$SITE_HOST} not found in $CADDY_SRC" >&2; exit 1
+            if ! grep -qF '{$SITE_HOST}' "$CADDY_SRC"; then
+              echo "✗ Placeholder {\\$SITE_HOST} not found in $CADDY_SRC" >&2; exit 1
             fi
-            sed "s|{\\\$SITE_HOST}|${SITE_HOST}|g" "$CADDY_SRC" > "$CADDY_GEN"
+            sed 's|{$SITE_HOST}|'"${SITE_HOST}"'|g' "$CADDY_SRC" > "$CADDY_GEN"
             echo "▸ Caddyfile.generated written for ${SITE_HOST}"
 
             # ── 6. Pull base images ───────────────────────
             echo "▸ Pulling latest base images…"
-            $COMPOSE pull --ignore-pull-failures postgres redis caddy 2>/dev/null || true
+            $COMPOSE pull --ignore-pull-failures postgres redis caddy || \
+              echo "  ⚠ Some image pulls failed — continuing with cached images"
 
             # ── 7. Build app image ────────────────────────
             BUILD_ARGS=""
@@ -119,8 +129,10 @@ jobs:
             $COMPOSE up -d postgres redis
 
             echo "▸ Waiting for postgres to be healthy…"
-            PG_USER="$(grep '^POSTGRES_USER=' .env | cut -d= -f2 || echo 'cyrus')"
-            PG_DB="$(grep '^POSTGRES_DB=' .env | cut -d= -f2 || echo 'cyrus_ai')"
+            PG_USER="$(grep -m1 '^POSTGRES_USER=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo 'cyrus')"
+            PG_DB="$(grep -m1 '^POSTGRES_DB=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo 'cyrus_ai')"
+            PG_USER="${PG_USER:-cyrus}"
+            PG_DB="${PG_DB:-cyrus_ai}"
             for i in $(seq 1 30); do
               if $COMPOSE exec -T postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
                 echo "  postgres ready (user=${PG_USER} db=${PG_DB})"
