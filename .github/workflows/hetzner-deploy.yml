@@ -23,10 +23,14 @@ jobs:
     steps:
       - name: Deploy to Hetzner via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_REPO: ${{ github.repository }}
+          FORCE_REBUILD: ${{ github.event.inputs.force_rebuild }}
         with:
-          host: 167.233.36.99
-          username: cyrus
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USERNAME }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
+          envs: GH_REPO,FORCE_REBUILD
           script_stop: true
           timeout: 20m
           command_timeout: 20m
@@ -49,7 +53,7 @@ jobs:
             else
               echo "▸ First-time clone…"
               mkdir -p "$APP_DIR"
-              git clone https://github.com/OBASAYID/CYBERNETIC-LEGION.git "$APP_DIR"
+              git clone "https://github.com/${GH_REPO}.git" "$APP_DIR"
               cd "$APP_DIR"
             fi
 
@@ -61,7 +65,7 @@ jobs:
               cp .env.example .env 2>/dev/null || touch .env
             fi
 
-            # ── 3. Hybrid AI (Ollama) config ─────────────
+            # ── 3. Helper: upsert key=value in .env ──────
             upsert() {
               local k="$1" v="$2"
               if grep -q "^${k}=" .env 2>/dev/null; then
@@ -70,48 +74,56 @@ jobs:
                 echo "${k}=${v}" >> .env
               fi
             }
-            upsert USE_LOCAL_LLM           "true"
-            upsert OLLAMA_BASE_URL         "http://localhost:11434"
-            upsert OLLAMA_MODEL            "llama3.1:8b"
+
+            # ── 4. Hybrid AI (Ollama) config ─────────────
+            upsert USE_LOCAL_LLM              "true"
+            upsert OLLAMA_BASE_URL            "http://localhost:11434"
+            upsert OLLAMA_MODEL               "llama3.1:8b"
             upsert CYRUS_MULTI_MODEL_STRATEGY "cascade"
             echo "▸ Hybrid AI (Ollama) config set"
 
-            # ── 4. HTTPS / Caddyfile ─────────────────────
-            PUBLIC_IP="167.233.36.99"
+            # ── 5. HTTPS / Caddyfile ─────────────────────
+            # Derive sslip.io hostname from the server's public IP.
+            PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org)"
             SITE_HOST="${PUBLIC_IP//./-}.sslip.io"
-            upsert PUBLIC_BASE_URL "https://${SITE_HOST}"
-            upsert BASE_URL        "https://${SITE_HOST}"
+            upsert PUBLIC_BASE_URL  "https://${SITE_HOST}"
+            upsert BASE_URL         "https://${SITE_HOST}"
             upsert CYRUS_HTTPS_HOST "$SITE_HOST"
 
+            CADDY_SRC="deploy/caddy/Caddyfile"
+            CADDY_GEN="deploy/caddy/Caddyfile.generated"
             mkdir -p deploy/caddy
-            python3 -c "
-            from pathlib import Path
-            host = '${SITE_HOST}'
-            t = Path('deploy/caddy/Caddyfile').read_text()
-            Path('deploy/caddy/Caddyfile.generated').write_text(t.replace('{\$SITE_HOST}', host))
-            "
+            if [ ! -f "$CADDY_SRC" ]; then
+              echo "✗ $CADDY_SRC not found — aborting" >&2; exit 1
+            fi
+            if ! grep -q '{\$SITE_HOST}' "$CADDY_SRC"; then
+              echo "✗ Placeholder {\$SITE_HOST} not found in $CADDY_SRC" >&2; exit 1
+            fi
+            sed "s|{\\\$SITE_HOST}|${SITE_HOST}|g" "$CADDY_SRC" > "$CADDY_GEN"
             echo "▸ Caddyfile.generated written for ${SITE_HOST}"
 
-            # ── 5. Pull base images ───────────────────────
+            # ── 6. Pull base images ───────────────────────
             echo "▸ Pulling latest base images…"
             $COMPOSE pull --ignore-pull-failures postgres redis caddy 2>/dev/null || true
 
-            # ── 6. Build app image ────────────────────────
+            # ── 7. Build app image ────────────────────────
             BUILD_ARGS=""
-            if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            if [ "${FORCE_REBUILD:-false}" = "true" ]; then
               BUILD_ARGS="--no-cache"
             fi
-            echo "▸ Building app image… (force_rebuild=${{ github.event.inputs.force_rebuild }})"
+            echo "▸ Building app image… (force_rebuild=${FORCE_REBUILD:-false})"
             $COMPOSE build $BUILD_ARGS app
 
-            # ── 7. Start / restart services ──────────────
+            # ── 8. Start / restart services ──────────────
             echo "▸ Starting postgres + redis (if not running)…"
             $COMPOSE up -d postgres redis
 
             echo "▸ Waiting for postgres to be healthy…"
+            PG_USER="$(grep '^POSTGRES_USER=' .env | cut -d= -f2 || echo 'cyrus')"
+            PG_DB="$(grep '^POSTGRES_DB=' .env | cut -d= -f2 || echo 'cyrus_ai')"
             for i in $(seq 1 30); do
-              if $COMPOSE exec -T postgres pg_isready -U cyrus -d cyrus_ai >/dev/null 2>&1; then
-                echo "  postgres ready"
+              if $COMPOSE exec -T postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+                echo "  postgres ready (user=${PG_USER} db=${PG_DB})"
                 break
               fi
               sleep 2
@@ -120,7 +132,7 @@ jobs:
             echo "▸ Restarting app + caddy…"
             $COMPOSE up -d --force-recreate app caddy
 
-            # ── 8. Health check ───────────────────────────
+            # ── 9. Health check ───────────────────────────
             echo "▸ Waiting for app to pass health check…"
             READY=0
             for i in $(seq 1 40); do
@@ -139,7 +151,7 @@ jobs:
               exit 1
             fi
 
-            # ── 9. Status summary ─────────────────────────
+            # ── 10. Status summary ────────────────────────
             echo ""
             echo "══════════════════════════════════════════"
             echo "  ✓ Deployment complete!"
