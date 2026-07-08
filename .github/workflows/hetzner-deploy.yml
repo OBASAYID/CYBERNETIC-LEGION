@@ -1,0 +1,148 @@
+name: Deploy to Hetzner
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force full Docker rebuild (--no-cache)"
+        required: false
+        default: "false"
+        type: boolean
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    name: SSH Deploy → cyrus@167.233.36.99
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: hetzner-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy to Hetzner via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 167.233.36.99
+          username: cyrus
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script_stop: true
+          timeout: 20m
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            APP_DIR=~/cyrus-ai
+            COMPOSE="docker compose -f $APP_DIR/docker-compose.production.yml"
+
+            echo "──────────────────────────────────────────"
+            echo "  CYRUS — Hetzner Production Deployment"
+            echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "──────────────────────────────────────────"
+
+            # ── 1. Clone or update code ──────────────────
+            if [ -d "$APP_DIR/.git" ]; then
+              echo "▸ Pulling latest code from main…"
+              cd "$APP_DIR"
+              git fetch origin
+              git reset --hard origin/main
+            else
+              echo "▸ First-time clone…"
+              mkdir -p "$APP_DIR"
+              git clone https://github.com/OBASAYID/CYBERNETIC-LEGION.git "$APP_DIR"
+              cd "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+
+            # ── 2. Ensure .env exists ────────────────────
+            if [ ! -f .env ]; then
+              echo "▸ Creating .env from template…"
+              cp .env.example .env 2>/dev/null || touch .env
+            fi
+
+            # ── 3. Hybrid AI (Ollama) config ─────────────
+            upsert() {
+              local k="$1" v="$2"
+              if grep -q "^${k}=" .env 2>/dev/null; then
+                sed -i "s|^${k}=.*|${k}=${v}|" .env
+              else
+                echo "${k}=${v}" >> .env
+              fi
+            }
+            upsert USE_LOCAL_LLM           "true"
+            upsert OLLAMA_BASE_URL         "http://localhost:11434"
+            upsert OLLAMA_MODEL            "llama3.1:8b"
+            upsert CYRUS_MULTI_MODEL_STRATEGY "cascade"
+            echo "▸ Hybrid AI (Ollama) config set"
+
+            # ── 4. HTTPS / Caddyfile ─────────────────────
+            PUBLIC_IP="167.233.36.99"
+            SITE_HOST="${PUBLIC_IP//./-}.sslip.io"
+            upsert PUBLIC_BASE_URL "https://${SITE_HOST}"
+            upsert BASE_URL        "https://${SITE_HOST}"
+            upsert CYRUS_HTTPS_HOST "$SITE_HOST"
+
+            mkdir -p deploy/caddy
+            python3 -c "
+            from pathlib import Path
+            host = '${SITE_HOST}'
+            t = Path('deploy/caddy/Caddyfile').read_text()
+            Path('deploy/caddy/Caddyfile.generated').write_text(t.replace('{\$SITE_HOST}', host))
+            "
+            echo "▸ Caddyfile.generated written for ${SITE_HOST}"
+
+            # ── 5. Pull base images ───────────────────────
+            echo "▸ Pulling latest base images…"
+            $COMPOSE pull --ignore-pull-failures postgres redis caddy 2>/dev/null || true
+
+            # ── 6. Build app image ────────────────────────
+            BUILD_ARGS=""
+            if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+              BUILD_ARGS="--no-cache"
+            fi
+            echo "▸ Building app image… (force_rebuild=${{ github.event.inputs.force_rebuild }})"
+            $COMPOSE build $BUILD_ARGS app
+
+            # ── 7. Start / restart services ──────────────
+            echo "▸ Starting postgres + redis (if not running)…"
+            $COMPOSE up -d postgres redis
+
+            echo "▸ Waiting for postgres to be healthy…"
+            for i in $(seq 1 30); do
+              if $COMPOSE exec -T postgres pg_isready -U cyrus -d cyrus_ai >/dev/null 2>&1; then
+                echo "  postgres ready"
+                break
+              fi
+              sleep 2
+            done
+
+            echo "▸ Restarting app + caddy…"
+            $COMPOSE up -d --force-recreate app caddy
+
+            # ── 8. Health check ───────────────────────────
+            echo "▸ Waiting for app to pass health check…"
+            READY=0
+            for i in $(seq 1 40); do
+              if curl -fsSk "https://${SITE_HOST}/health/ready" >/dev/null 2>&1 || \
+                 curl -fsS  "http://localhost:3020/health/ready" >/dev/null 2>&1; then
+                READY=1
+                echo "  ✓ Health check passed (attempt ${i})"
+                break
+              fi
+              sleep 5
+            done
+
+            if [ $READY -eq 0 ]; then
+              echo "✗ Health check timed out — dumping app logs:"
+              $COMPOSE logs --tail=50 app || true
+              exit 1
+            fi
+
+            # ── 9. Status summary ─────────────────────────
+            echo ""
+            echo "══════════════════════════════════════════"
+            echo "  ✓ Deployment complete!"
+            echo "  🌐 https://${SITE_HOST}"
+            echo "══════════════════════════════════════════"
+            $COMPOSE ps
