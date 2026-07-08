@@ -154,6 +154,32 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
 
         {/* ══ NAV ══ */}
         <nav className="relative flex-1 overflow-x-hidden overflow-y-auto py-2" style={{ scrollbarWidth: "none" }}>
+          {!collapsed && displayName && (
+            <div
+              className="mx-2 mb-1.5 rounded-xl border px-3 py-2.5"
+              style={{
+                borderColor: "rgba(245,158,11,0.35)",
+                background:
+                  "linear-gradient(148deg, rgba(245,158,11,0.12) 0%, rgba(12,14,18,0.78) 48%, rgba(255,255,255,0.04) 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 20px rgba(0,0,0,0.35)",
+              }}
+            >
+              <p
+                className="text-[9px] font-black uppercase tracking-[0.26em]"
+                style={{ color: "rgba(255,241,214,0.85)", fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                Welcome,
+              </p>
+              <p
+                className="mt-1 truncate text-sm font-black uppercase tracking-[0.08em]"
+                style={{ color: "#F8F5EE", fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                title={displayName}
+              >
+                {displayName}
+              </p>
+            </div>
+          )}
+
           {NAV_GROUPS.map((group) => {
             const items = group.paths.map((p) => navByPath[p]).filter(Boolean);
             if (!items.length) return null;
