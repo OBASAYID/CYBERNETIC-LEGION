@@ -1,10 +1,26 @@
 "use client";
-import { ROOSTER_SMOKE_INTERFACE_ARTWORK_URL } from "@/lib/dashboard-backdrop";
+import { ROOSTER_SMOKE_TEXTURE_URL } from "@/lib/dashboard-backdrop";
 
 /**
- * Global interface backdrop using the requested rooster + smoke artwork.
+ * Global interface backdrop using the requested rooster + smoke artwork,
+ * layered with subtle grading, vignette, and ceremonial sweeps so content stays legible.
  */
+function resolveSafeBackdropUrl(sourceUrl: string): string {
+  try {
+    const parsed = new URL(sourceUrl);
+    const allowedHosts = new Set(["github.com", "user-attachments.githubusercontent.com"]);
+    if (parsed.protocol !== "https:" || !allowedHosts.has(parsed.hostname)) {
+      return "/images/botswana-dashboard-wildlife.jpg";
+    }
+    return sourceUrl;
+  } catch {
+    return "/images/botswana-dashboard-wildlife.jpg";
+  }
+}
+
 export function AtmosphericSmokeBackground() {
+  const backdropUrl = resolveSafeBackdropUrl(ROOSTER_SMOKE_TEXTURE_URL);
+
   return (
     <div
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
@@ -14,7 +30,7 @@ export function AtmosphericSmokeBackground() {
       <div
         className="absolute inset-0 bg-cover bg-right-center"
         style={{
-          backgroundImage: `url("${ROOSTER_SMOKE_INTERFACE_ARTWORK_URL}")`,
+          backgroundImage: `url("${backdropUrl}")`,
           filter: "saturate(0.95) contrast(1.02)",
           transform: "scale(1.015)",
           transformOrigin: "center",
