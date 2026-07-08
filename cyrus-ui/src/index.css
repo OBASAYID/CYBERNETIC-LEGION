@@ -601,11 +601,11 @@
     background: rgba(255,255,255,0.02);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(225,29,72,0.3);
+    background: rgba(201,165,90,0.3);
     border-radius: 2px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(225,29,72,0.6);
+    background: rgba(201,165,90,0.6);
   }
 }
 
@@ -1376,6 +1376,145 @@
   inset: 0;
   opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── DIAMOND / GOLD THEME — CYRUS v4 ─────────────────────────────────── */
+
+:root {
+  --gold: #C9A55A;
+  --gold-light: #D4B254;
+  --gold-bright: #F0CF7A;
+  --gold-dim: #8B6914;
+  --gold-glow: rgba(201,165,90,0.45);
+  --gold-glow-soft: rgba(201,165,90,0.18);
+  --diamond-dark: #080808;
+}
+
+@keyframes cyrus-glow-pulse-a {
+  0%, 100% { opacity: 0.18; transform: scale(1); }
+  50% { opacity: 0.32; transform: scale(1.06); }
+}
+@keyframes cyrus-glow-pulse-b {
+  0%, 100% { opacity: 0.10; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.20; transform: scale(1.08) rotate(-3deg); }
+}
+@keyframes cyrus-glow-pulse-c {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.22; }
+}
+
+/* Waveform bars for CYRUS AI bottom bar */
+@keyframes cyrus-wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.cyrus-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+
+.cyrus-waveform-bar {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gold);
+  transform-origin: center bottom;
+  animation: cyrus-wave-bar 0.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Stagger delays for waveform bars */
+.cyrus-waveform-bar:nth-child(1)  { animation-delay: 0.00s; }
+.cyrus-waveform-bar:nth-child(2)  { animation-delay: 0.06s; }
+.cyrus-waveform-bar:nth-child(3)  { animation-delay: 0.12s; }
+.cyrus-waveform-bar:nth-child(4)  { animation-delay: 0.18s; }
+.cyrus-waveform-bar:nth-child(5)  { animation-delay: 0.24s; }
+.cyrus-waveform-bar:nth-child(6)  { animation-delay: 0.30s; }
+.cyrus-waveform-bar:nth-child(7)  { animation-delay: 0.36s; }
+.cyrus-waveform-bar:nth-child(8)  { animation-delay: 0.42s; }
+.cyrus-waveform-bar:nth-child(9)  { animation-delay: 0.48s; }
+.cyrus-waveform-bar:nth-child(10) { animation-delay: 0.54s; }
+.cyrus-waveform-bar:nth-child(11) { animation-delay: 0.48s; }
+.cyrus-waveform-bar:nth-child(12) { animation-delay: 0.42s; }
+.cyrus-waveform-bar:nth-child(13) { animation-delay: 0.36s; }
+.cyrus-waveform-bar:nth-child(14) { animation-delay: 0.30s; }
+.cyrus-waveform-bar:nth-child(15) { animation-delay: 0.24s; }
+.cyrus-waveform-bar:nth-child(16) { animation-delay: 0.18s; }
+.cyrus-waveform-bar:nth-child(17) { animation-delay: 0.12s; }
+.cyrus-waveform-bar:nth-child(18) { animation-delay: 0.06s; }
+
+/* Diamond sparkle keyframe */
+@keyframes cyrus-diamond-float {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); opacity: 0.6; }
+  33%  { transform: translateY(-8px) rotate(10deg) scale(1.05); opacity: 0.9; }
+  66%  { transform: translateY(4px) rotate(-5deg) scale(0.95); opacity: 0.5; }
+}
+
+.cyrus-diamond-float {
+  animation: cyrus-diamond-float 6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Gold ambient glow for sidebar */
+@keyframes cyrus-gold-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(201,165,90,0.15); }
+  50% { box-shadow: 0 0 24px rgba(201,165,90,0.35); }
+}
+
+.cyrus-gold-glow {
+  animation: cyrus-gold-pulse 4s ease-in-out infinite;
+}
+
+/* Circular gauge progress animation */
+@keyframes cyrus-gauge-fill {
+  from { stroke-dashoffset: 251.2; }
+}
+
+.cyrus-gauge-arc {
+  animation: cyrus-gauge-fill 1.2s ease-out forwards;
+}
+
+/* AI bar status pulse */
+@keyframes cyrus-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.cyrus-status-dot {
+  animation: cyrus-status-pulse 2.5s ease-in-out infinite;
+}
+
+/* Diamond home bottom padding to clear the AI bar */
+.cyrus-diamond-home-content {
+  padding-bottom: 96px;
+}
+
+@media (max-width: 768px) {
+  .cyrus-diamond-home-content {
+    padding-bottom: 88px;
+  }
+}
+
+/* Gold active nav indicator */
+@keyframes cyrus-gold-slide-in {
+  from { transform: translateY(-50%) scaleY(0); }
+  to   { transform: translateY(-50%) scaleY(1); }
+}
+
+/* Sidebar clock glow */
+.cyrus-sidebar-clock {
+  text-shadow: 0 0 20px rgba(201,165,90,0.5);
+}
+
+/* Responsive sidebar widths for diamond theme */
+.cyrus-diamond-sidebar-expanded {
+  width: 200px;
+}
+.cyrus-diamond-sidebar-collapsed {
+  width: 70px;
 }
 
 .comms-premium-nav {

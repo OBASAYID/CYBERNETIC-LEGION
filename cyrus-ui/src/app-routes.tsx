@@ -7,8 +7,9 @@ import { commsRouteElements } from "./comms-routes";
 import { commandCenterRouteElements } from "./command-center-routes";
 import NotFound from "@/pages/not-found";
 import { ApiKeyTriggerButton } from "@/components/ApiKeyModal";
+import { CyrusAiBar } from "@/components/cyrus-ai-bar";
 
-const DashboardFresh = lazy(() => import("@/pages/dashboard-fresh"));
+const DiamondHome = lazy(() => import("@/pages/diamond-home"));
 
 interface AppRoutesProps {
   onOpenApiKeyModal?: () => void;
@@ -16,7 +17,7 @@ interface AppRoutesProps {
 }
 
 function DashboardFallback() {
-  return <div className="min-h-screen min-h-dvh bg-white" aria-hidden="true" />;
+  return <div className="min-h-screen min-h-dvh bg-[#080808]" aria-hidden="true" />;
 }
 
 export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRoutesProps) {
@@ -25,20 +26,22 @@ export function AppRoutes({ onOpenApiKeyModal, apiKeyConfigured = false }: AppRo
       <StackLinkBootstrap />
       <CommsPresenceBootstrap />
       {onOpenApiKeyModal && (
-        <div className="fixed bottom-4 right-4 z-[90]">
+        <div className="fixed bottom-24 right-4 z-[90]">
           <ApiKeyTriggerButton onClick={onOpenApiKeyModal} isConfigured={apiKeyConfigured} />
         </div>
       )}
       <Switch>
         <Route path="/">
           <Suspense fallback={<DashboardFallback />}>
-            <DashboardFresh />
+            <DiamondHome />
           </Suspense>
         </Route>
         {commsRouteElements}
         {commandCenterRouteElements}
         <Route component={NotFound} />
       </Switch>
+      {/* Persistent CYRUS AI bottom bar */}
+      <CyrusAiBar />
     </PresenceProvider>
   );
 }
