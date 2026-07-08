@@ -106,7 +106,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthenticated]);
 
-  const sidebarW = isMobile ? "0px" : sidebarCollapsed ? "76px" : "clamp(17rem, 19vw, 17rem)";
+  const sidebarW = isMobile ? "0px" : sidebarCollapsed ? "70px" : "200px";
 
   return (
     <ThemeProvider>
@@ -147,7 +147,7 @@ function App() {
                           type="button"
                           onClick={() => setMobileSidebarOpen(true)}
                           aria-label="Open navigation"
-                          className="fixed left-2 top-2 z-[200] flex h-10 w-10 items-center justify-center rounded-xl border border-rose-500/45 bg-rose-500/15 text-rose-400 md:hidden cyrus-xs-mobile-nav"
+                          className="fixed left-2 top-2 z-[200] flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/45 bg-amber-500/15 text-amber-400 md:hidden cyrus-xs-mobile-nav"
                         >
                           <Menu className="h-4 w-4" />
                         </button>

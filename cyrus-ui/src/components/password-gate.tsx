@@ -246,10 +246,10 @@ export function PasswordGate({
       <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80 pointer-events-none" />
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-amber-600/5 rounded-full blur-3xl" />
 
         <div className="absolute top-4 left-4 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -270,14 +270,14 @@ export function PasswordGate({
               <img
                 src="/images/cyrus-logo.png"
                 alt="CYRUS"
-                className="w-full h-full object-cover drop-shadow-[0_0_30px_rgba(34,211,238,0.7)] scale-125"
+                className="w-full h-full object-cover drop-shadow-[0_0_30px_rgba(201,165,90,0.7)] scale-125"
                 style={{ clipPath: "circle(42% at center)" }}
               />
               <div className="absolute -left-8 top-1/2 -translate-y-1/2 pointer-events-none">
-                <div className="w-12 h-14 border-l-2 border-t-2 border-b-2 border-cyan-500/70 rounded-l-lg" />
+                <div className="w-12 h-14 border-l-2 border-t-2 border-b-2 border-amber-500/70 rounded-l-lg" />
               </div>
               <div className="absolute -right-8 top-1/2 -translate-y-1/2 pointer-events-none">
-                <div className="w-12 h-14 border-r-2 border-t-2 border-b-2 border-cyan-500/70 rounded-r-lg" />
+                <div className="w-12 h-14 border-r-2 border-t-2 border-b-2 border-amber-500/70 rounded-r-lg" />
               </div>
             </div>
           </div>
@@ -291,13 +291,13 @@ export function PasswordGate({
             </span>
             <span className="text-white/60 text-lg ml-1 align-super">™</span>
           </h1>
-          <p className="text-cyan-400/90 text-sm font-semibold tracking-[0.3em] uppercase mb-1">
+          <p className="text-amber-400/90 text-sm font-semibold tracking-[0.3em] uppercase mb-1">
             Command Your Responsive Unified System
           </p>
           <div className="flex items-center justify-center gap-2 mt-4">
-            <div className="h-px w-12 bg-gradient-to-r from-transparent to-cyan-500/50" />
+            <div className="h-px w-12 bg-gradient-to-r from-transparent to-amber-500/50" />
             <span className="text-white/30 text-xs tracking-widest font-mono">MILITARY GRADE AI</span>
-            <div className="h-px w-12 bg-gradient-to-l from-transparent to-cyan-500/50" />
+            <div className="h-px w-12 bg-gradient-to-l from-transparent to-amber-500/50" />
           </div>
         </div>
 
@@ -370,7 +370,7 @@ export function PasswordGate({
 
           <Button
             type="submit"
-            className="w-full h-16 bg-gradient-to-r from-cyan-600 via-cyan-500 to-cyan-600 hover:from-cyan-500 hover:via-cyan-400 hover:to-cyan-500 text-white font-bold text-lg tracking-[0.2em] rounded-lg shadow-lg shadow-cyan-500/25 transition-colors duration-300 hover:shadow-cyan-500/40 border border-cyan-400/20"
+            className="w-full h-16 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:via-amber-400 hover:to-amber-500 text-black font-bold text-lg tracking-[0.2em] rounded-lg shadow-lg shadow-amber-500/25 transition-colors duration-300 hover:shadow-amber-500/40 border border-amber-400/20"
             style={{ fontFamily: "'Orbitron', sans-serif" }}
             disabled={!username.trim() || !password.trim() || isLoading}
             data-testid="button-submit-password"
@@ -396,7 +396,7 @@ export function PasswordGate({
               <span className="text-[10px] text-white/30 tracking-wider">SECURE</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 cyrus-status-dot" />
               <span className="text-[10px] text-white/30 tracking-wider">ENCRYPTED</span>
             </div>
             <div className="flex items-center gap-1.5">
