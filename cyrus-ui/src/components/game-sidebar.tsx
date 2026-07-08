@@ -52,8 +52,6 @@ const NAV_GROUPS = [
 export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMobileClose }: GameSidebarProps) {
   const [location] = useLocation();
   const role = useUserRole();
-  const nowHour = new Date().getHours();
-  const timeGreeting = nowHour < 12 ? "Good morning" : nowHour < 18 ? "Good afternoon" : "Good evening";
 
   const handleLogout = () => {
     clearAuthSessionStorage();
@@ -170,7 +168,7 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
                 className="text-[9px] font-black uppercase tracking-[0.26em]"
                 style={{ color: "rgba(255,241,214,0.85)", fontFamily: "'Orbitron', system-ui, sans-serif" }}
               >
-                {timeGreeting},
+                Welcome,
               </p>
               <p
                 className="mt-1 truncate text-sm font-black uppercase tracking-[0.08em]"

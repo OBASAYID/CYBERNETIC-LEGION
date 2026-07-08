@@ -1,11 +1,9 @@
 "use client";
+import { ROOSTER_SMOKE_INTERFACE_ARTWORK_URL } from "@/lib/dashboard-backdrop";
 
 /**
  * Global interface backdrop using the requested rooster + smoke artwork.
  */
-const ROOSTER_SMOKE_ARTWORK_URL =
-  "https://github.com/user-attachments/assets/ad30bcef-486e-468e-a4a0-e9e85c6c786a";
-
 export function AtmosphericSmokeBackground() {
   return (
     <div
@@ -16,7 +14,7 @@ export function AtmosphericSmokeBackground() {
       <div
         className="absolute inset-0 bg-cover bg-right-center"
         style={{
-          backgroundImage: `url("${ROOSTER_SMOKE_ARTWORK_URL}")`,
+          backgroundImage: `url("${ROOSTER_SMOKE_INTERFACE_ARTWORK_URL}")`,
           filter: "saturate(0.95) contrast(1.02)",
           transform: "scale(1.015)",
           transformOrigin: "center",
