@@ -21,6 +21,31 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Validate required secrets
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USERNAME: ${{ secrets.HETZNER_USERNAME }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          missing=()
+          [ -z "$HETZNER_HOST" ]     && missing+=(HETZNER_HOST)
+          [ -z "$HETZNER_USERNAME" ] && missing+=(HETZNER_USERNAME)
+          [ -z "$HETZNER_SSH_KEY" ]  && missing+=(HETZNER_SSH_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            echo ""
+            echo "Add the following secrets to the 'production' environment"
+            echo "in Settings → Environments → production → Environment secrets:"
+            echo ""
+            for s in "${missing[@]}"; do
+              echo "  • $s"
+            done
+            echo ""
+            echo "See DEPLOYMENT.md for full setup instructions."
+            exit 1
+          fi
+          echo "All required secrets are present."
+
       - name: Deploy to Hetzner via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
