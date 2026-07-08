@@ -61,7 +61,7 @@ services:
       CYRUS_LIVE_PORT: 3020
       REDIS_URL: redis://redis:6379
       DATABASE_URL: ${DATABASE_URL:-postgresql://cyrus:cyrus_secure_password_2026@postgres:5432/cyrus_ai}
-      CYRUS_COMM_PUBLIC_TURN: "false"
+      CYRUS_COMM_PUBLIC_TURN: ${CYRUS_COMM_PUBLIC_TURN:-}
       CYRUS_SFU_RTC_MIN_PORT: 40000
       CYRUS_SFU_RTC_MAX_PORT: 40100
       CYRUS_SFU_WORKER_COUNT: ${CYRUS_SFU_WORKER_COUNT:-2}

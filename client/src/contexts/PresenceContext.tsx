@@ -1185,6 +1185,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         const rtcConfig = await fetchCyrusCommRtcConfiguration();
         if (!alive()) return;
 
+        // Warn if no TURN relay in the ICE config — calls across real networks (mobile data,
+        // corporate NAT) will fail silently without relay. See TURN_URLS / TURN_SECRET in .env.
+        const iceEntries = rtcConfig.iceServers ?? [];
+        const hasRelay = iceEntries.some((s) => {
+          const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+          return urls.some((u) => String(u).startsWith("turn:") || String(u).startsWith("turns:"));
+        });
+        if (!hasRelay) {
+          console.warn(
+            "[WebRTC-Presence] No TURN relay in ICE config — calls across different networks may fail. " +
+              "Set TURN_URLS/TURN_SECRET on the server or enable CYRUS_COMM_PUBLIC_TURN.",
+          );
+        }
+
         const networkMode = getCyrusCommsNetworkMode();
         try {
           const devs = await navigator.mediaDevices.enumerateDevices();
