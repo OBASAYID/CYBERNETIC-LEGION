@@ -124,8 +124,14 @@ export function CyrusAiBar() {
       setCurrentTranscript(interimTranscript);
       if (finalTranscript.trim()) {
         const lower = finalTranscript.toLowerCase().trim();
-        if (lower.includes("cyrus") || lower.startsWith("hey") || responseText) {
-          const clean = finalTranscript.replace(/hey cyrus/gi,"").replace(/ok cyrus/gi,"").replace(/cyrus/gi,"").trim() || "status report";
+        // Activate on explicit wake word ("cyrus", "hey", "ok cyrus") only
+        const hasWakeWord = lower.includes("cyrus") || lower.startsWith("hey ") || lower.startsWith("ok ");
+        if (hasWakeWord) {
+          const clean = finalTranscript
+            .replace(/hey cyrus/gi, "")
+            .replace(/ok cyrus/gi, "")
+            .replace(/cyrus/gi, "")
+            .trim() || "status report";
           setCurrentTranscript("");
           handleSend(clean);
         }
