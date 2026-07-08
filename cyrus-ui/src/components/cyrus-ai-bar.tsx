@@ -91,6 +91,7 @@ export function CyrusAiBar() {
 
   const initRecognition = useCallback(() => {
     if (typeof window === "undefined") return;
+    // ISpeechRecognition is declared globally in types/speech-recognition.d.ts
     const API = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!API) return;
     const r = new API();
@@ -101,7 +102,13 @@ export function CyrusAiBar() {
     r.onend = () => {
       setIsListening(false);
       if (shouldAutoRestartRef.current && recognitionRef.current) {
-        setTimeout(() => { try { recognitionRef.current?.start(); } catch {} }, 100);
+        setTimeout(() => {
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            console.debug("[CyrusAiBar] Recognition restart skipped:", e);
+          }
+        }, 100);
       } else {
         setStatus("idle");
       }

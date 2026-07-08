@@ -373,7 +373,7 @@ export default function DiamondHome() {
   };
 
   return (
-    <div className="relative min-h-screen min-h-dvh overflow-x-hidden cyrus-diamond-home-content" style={{ background: "#080808" }}>
+    <div className="relative min-h-dvh overflow-x-hidden cyrus-diamond-home-content" style={{ background: "#080808" }}>
 
       {/* ── HERO SECTION — diamond crystal background ── */}
       <section className="relative h-[42vh] min-h-[260px] max-h-[420px] overflow-hidden">

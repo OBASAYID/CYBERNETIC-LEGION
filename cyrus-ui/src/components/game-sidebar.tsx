@@ -306,9 +306,8 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
           {/* Separator */}
           <div className="mx-3 my-2 h-px" style={{ background: G.border }} />
 
-          {/* VIDEO CALL SHORTCUT */}
+          {/* VIDEO CALL SHORTCUT — always shown with gold highlight, always routes to /comms */}
           {(() => {
-            const isActive = location === VIDEO_SHORTCUT.path && typeof window !== "undefined" && window.location.search.includes("mode=video");
             return (
               <Link href={VIDEO_SHORTCUT.path} onClick={() => onMobileClose?.()}>
                 <div
