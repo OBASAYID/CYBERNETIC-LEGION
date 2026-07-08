@@ -232,6 +232,32 @@ export function GameSidebar({ collapsed, onToggle, displayName, mobileOpen, onMo
 
         {/* ══ NAV ══ */}
         <nav className="relative flex-1 overflow-x-hidden overflow-y-auto py-2" style={{ scrollbarWidth: "none" }}>
+          {!collapsed && displayName && (
+            <div
+              className="mx-2 mb-1.5 rounded-xl border px-3 py-2.5"
+              style={{
+                borderColor: G.border,
+                background:
+                  "linear-gradient(148deg, rgba(201,165,90,0.10) 0%, rgba(12,10,8,0.78) 48%, rgba(201,165,90,0.03) 100%)",
+                boxShadow: `inset 0 1px 0 rgba(201,165,90,0.08), 0 8px 20px rgba(0,0,0,0.35)`,
+              }}
+            >
+              <p
+                className="text-[9px] font-black uppercase tracking-[0.26em]"
+                style={{ color: G.textMuted, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+              >
+                Welcome,
+              </p>
+              <p
+                className="mt-1 truncate text-sm font-black uppercase tracking-[0.08em]"
+                style={{ color: G.text, fontFamily: "'Orbitron', system-ui, sans-serif" }}
+                title={displayName}
+              >
+                {displayName}
+              </p>
+            </div>
+          )}
+
           {DIAMOND_NAV.map((item) => {
             const isActive = location === item.path;
             return (

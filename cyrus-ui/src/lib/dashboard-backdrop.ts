@@ -2,6 +2,9 @@
 export const DASHBOARD_CRACK_TEXTURE_URL = "/dashboard-crack-texture.png";
 /** User-provided smoke vortex reference image for atmospheric layer styling. */
 export const SMOKE_VORTEX_TEXTURE_URL = "/smoke-vortex.png";
+/** User-provided rooster + smoke interface texture artwork (hosted source URL). */
+export const ROOSTER_SMOKE_TEXTURE_URL =
+  "https://github.com/user-attachments/assets/ad30bcef-486e-468e-a4a0-e9e85c6c786a";
 /** User-provided warm ribbon reference image for module lighting treatment. */
 export const MODULE_RIBBON_LIGHT_URL = "/module-ribbon-light.png";
 /** Main modules icon (folder) provided by user and polished in UI styling. */
