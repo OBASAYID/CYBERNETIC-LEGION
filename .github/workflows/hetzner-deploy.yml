@@ -1,0 +1,175 @@
+name: Deploy to Hetzner
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force full Docker rebuild (--no-cache)"
+        required: false
+        default: "false"
+        type: boolean
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    name: SSH Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: hetzner-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy to Hetzner via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_REPO: ${{ github.repository }}
+          FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || 'false' }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USERNAME }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          envs: GH_REPO,FORCE_REBUILD
+          script_stop: true
+          timeout: 20m
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            APP_DIR=~/cyrus-ai
+            COMPOSE="docker compose -f $APP_DIR/docker-compose.production.yml"
+
+            echo "──────────────────────────────────────────"
+            echo "  CYRUS — Hetzner Production Deployment"
+            echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "──────────────────────────────────────────"
+
+            # ── 1. Clone or update code ──────────────────
+            if [ -d "$APP_DIR/.git" ]; then
+              echo "▸ Pulling latest code from main…"
+              cd "$APP_DIR"
+              git fetch origin
+              git reset --hard origin/main
+            else
+              echo "▸ First-time clone…"
+              mkdir -p "$APP_DIR"
+              git clone "https://github.com/${GH_REPO}.git" "$APP_DIR"
+              cd "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+
+            # ── 2. Ensure .env exists ────────────────────
+            if [ ! -f .env ]; then
+              if [ -f .env.example ]; then
+                echo "▸ Creating .env from .env.example…"
+                cp .env.example .env
+              else
+                echo "✗ Neither .env nor .env.example found — aborting" >&2; exit 1
+              fi
+            fi
+
+            # ── 3. Helper: upsert key=value in .env ──────
+            upsert() {
+              local k="$1" v="$2"
+              if grep -q "^${k}=" .env 2>/dev/null; then
+                sed -i "s|^${k}=.*|${k}=${v}|" .env
+              else
+                echo "${k}=${v}" >> .env
+              fi
+            }
+
+            # ── 4. Hybrid AI (Ollama) config ─────────────
+            upsert USE_LOCAL_LLM              "true"
+            upsert OLLAMA_BASE_URL            "http://localhost:11434"
+            upsert OLLAMA_MODEL               "llama3.1:8b"
+            upsert CYRUS_MULTI_MODEL_STRATEGY "cascade"
+            echo "▸ Hybrid AI (Ollama) config set"
+
+            # ── 5. HTTPS / Caddyfile ─────────────────────
+            # Derive sslip.io hostname from the server's public IP.
+            PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org \
+                         || curl -fsS --max-time 5 https://ifconfig.me \
+                         || hostname -I | awk '{print $1}')"
+            if [ -z "$PUBLIC_IP" ]; then
+              echo "✗ Could not determine public IP — aborting" >&2; exit 1
+            fi
+            SITE_HOST="${PUBLIC_IP//./-}.sslip.io"
+            upsert PUBLIC_BASE_URL  "https://${SITE_HOST}"
+            upsert BASE_URL         "https://${SITE_HOST}"
+            upsert CYRUS_HTTPS_HOST "$SITE_HOST"
+
+            CADDY_SRC="deploy/caddy/Caddyfile"
+            CADDY_GEN="deploy/caddy/Caddyfile.generated"
+            mkdir -p deploy/caddy
+            if [ ! -f "$CADDY_SRC" ]; then
+              echo "✗ $CADDY_SRC not found — aborting" >&2; exit 1
+            fi
+            if ! grep -qF '{$SITE_HOST}' "$CADDY_SRC"; then
+              echo "✗ Placeholder {$SITE_HOST} not found in $CADDY_SRC" >&2; exit 1
+            fi
+            sed 's|{$SITE_HOST}|'"${SITE_HOST}"'|g' "$CADDY_SRC" > "$CADDY_GEN"
+            echo "▸ Caddyfile.generated written for ${SITE_HOST}"
+
+            # ── 6. Pull base images ───────────────────────
+            echo "▸ Pulling latest base images…"
+            for SVC in postgres redis caddy; do
+              $COMPOSE pull "$SVC" || echo "  ⚠ Failed to pull ${SVC} — continuing with cached image"
+            done
+
+            # ── 7. Build app image ────────────────────────
+            BUILD_ARGS=""
+            if [ "${FORCE_REBUILD:-false}" = "true" ]; then
+              BUILD_ARGS="--no-cache"
+            fi
+            echo "▸ Building app image… (force_rebuild=${FORCE_REBUILD:-false})"
+            $COMPOSE build $BUILD_ARGS app
+
+            # ── 8. Start / restart services ──────────────
+            echo "▸ Starting postgres + redis (if not running)…"
+            $COMPOSE up -d postgres redis
+
+            echo "▸ Waiting for postgres to be healthy…"
+            PG_USER="$(grep -m1 '^POSTGRES_USER=' .env 2>/dev/null | cut -d= -f2 | tr -d '"')"
+            PG_DB="$(grep -m1 '^POSTGRES_DB=' .env 2>/dev/null | cut -d= -f2 | tr -d '"')"
+            PG_USER="${PG_USER:-cyrus}"
+            PG_DB="${PG_DB:-cyrus_ai}"
+            for i in $(seq 1 30); do
+              if $COMPOSE exec -T postgres pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+                echo "  postgres ready (user=${PG_USER} db=${PG_DB})"
+                break
+              fi
+              sleep 2
+            done
+
+            echo "▸ Restarting app + caddy…"
+            $COMPOSE up -d --force-recreate app caddy
+
+            # ── 9. Health check ───────────────────────────
+            APP_PORT="$(grep -m1 '^CYRUS_LIVE_PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '"')"
+            APP_PORT="${APP_PORT:-3020}"
+            echo "▸ Waiting for app to pass health check (port ${APP_PORT})…"
+            READY=0
+            for i in $(seq 1 40); do
+              if curl -fsSk "https://${SITE_HOST}/health/ready" >/dev/null 2>&1 || \
+                 curl -fsS  "http://localhost:${APP_PORT}/health/ready" >/dev/null 2>&1; then
+                READY=1
+                echo "  ✓ Health check passed (attempt ${i})"
+                break
+              fi
+              sleep 5
+            done
+
+            if [ $READY -eq 0 ]; then
+              echo "✗ Health check timed out — dumping app logs:"
+              $COMPOSE logs --tail=50 app || true
+              exit 1
+            fi
+
+            # ── 10. Status summary ────────────────────────
+            echo ""
+            echo "══════════════════════════════════════════"
+            echo "  ✓ Deployment complete!"
+            echo "  🌐 https://${SITE_HOST}"
+            echo "══════════════════════════════════════════"
+            $COMPOSE ps
